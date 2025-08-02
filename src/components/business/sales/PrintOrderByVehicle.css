@@ -1,75 +1,149 @@
-/* Print Order By Vehicle Styles */
-.print-order-vehicle-container {
-  display: grid;
-  grid-template-columns: 350px 1fr;
-  grid-template-rows: 1fr 1fr;
-  gap: 15px;
-  height: calc(100vh - 120px);
+/* Print Order By Vehicle Page Layout */
+.print-order-vehicle-page {
+  display: flex;
+  height: calc(100vh - 60px);
+  gap: 12px;
   background-color: #f5f5f5;
-  padding: 15px;
+  padding: 12px;
+  overflow: hidden;
   box-sizing: border-box;
 }
 
 /* Left Panel - Danh sách in đơn hàng */
-.order-list-panel {
-  grid-row: 1 / 3;
+.orders-list-panel {
+  width: 25%;
+  min-width: 300px;
   background: white;
   border-radius: 8px;
+  overflow: hidden;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
   display: flex;
   flex-direction: column;
-  overflow: hidden;
 }
 
-.order-list-header {
+.panel-header {
   padding: 15px 20px;
   background: #f8f9fa;
   border-bottom: 1px solid #e9ecef;
   display: flex;
   justify-content: space-between;
-  align-items: center;
+  align-items: flex-start;
+  flex-direction: column;
+  gap: 10px;
 }
 
-.order-list-header h2 {
+.panel-header h2 {
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: #2c3e50;
 }
 
-.order-list-stats {
-  padding: 10px 20px;
-  font-size: 14px;
-  color: #6c757d;
-  border-bottom: 1px solid #e9ecef;
+.header-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
 }
 
-.order-list-filters {
+.header-info span {
+  font-size: 12px;
+  color: #6c757d;
+}
+
+.header-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.header-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: background-color 0.2s;
+}
+
+.search-btn {
+  background: #007bff;
+  color: white;
+}
+
+.add-btn {
+  background: #28a745;
+  color: white;
+}
+
+.close-btn {
+  background: #dc3545;
+  color: white;
+}
+
+.header-btn:hover {
+  opacity: 0.8;
+}
+
+/* Date Filter Section */
+.date-filter {
   padding: 15px 20px;
   border-bottom: 1px solid #e9ecef;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
 }
 
 .filter-row {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 10px;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
 }
 
 .filter-row label {
-  font-size: 12px;
+  min-width: 60px;
   font-weight: 500;
   color: #495057;
 }
 
-.filter-input {
-  padding: 6px 10px;
+.filter-row input {
+  flex: 1;
+  padding: 6px 8px;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 12px;
 }
 
-.order-list-content {
+.filter-actions {
+  display: flex;
+  gap: 5px;
+}
+
+.action-btn {
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  background: #6c757d;
+  color: white;
+  transition: background-color 0.2s;
+}
+
+.action-btn:hover {
+  background: #545b62;
+}
+
+/* Orders List */
+.orders-list {
   flex: 1;
   overflow-y: auto;
   min-height: 0;
@@ -80,7 +154,9 @@
   border-bottom: 1px solid #e9ecef;
   cursor: pointer;
   transition: background-color 0.2s;
-  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 
 .order-item:hover {
@@ -92,65 +168,57 @@
   border-left: 4px solid #2196f3;
 }
 
-.order-date {
+.order-dates {
+  display: flex;
+  gap: 10px;
   font-size: 11px;
   color: #6c757d;
-  margin-bottom: 3px;
 }
 
 .order-number {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   color: #2c3e50;
-  margin-bottom: 2px;
 }
 
 .order-actions {
-  position: absolute;
-  top: 8px;
-  right: 15px;
   display: flex;
-  gap: 3px;
+  gap: 5px;
+  justify-content: flex-end;
 }
 
-.action-icon {
+.edit-btn, .delete-btn, .expand-btn {
   width: 20px;
   height: 20px;
   border: none;
-  border-radius: 3px;
+  background: none;
   cursor: pointer;
-  font-size: 10px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  border-radius: 3px;
+  font-size: 11px;
   transition: background-color 0.2s;
 }
 
-.edit-action {
-  background: #fff3cd;
-  color: #856404;
+.edit-btn:hover {
+  background-color: #fff3cd;
 }
 
-.edit-action:hover {
-  background: #ffeaa7;
+.delete-btn:hover {
+  background-color: #f8d7da;
 }
 
-.delete-action {
-  background: #f8d7da;
-  color: #721c24;
+.expand-btn:hover {
+  background-color: #e2e3e5;
 }
 
-.delete-action:hover {
-  background: #f5c6cb;
-}
-
-.list-pagination {
+/* Pagination */
+.pagination {
   padding: 12px 20px;
   border-top: 1px solid #e9ecef;
   display: flex;
   justify-content: space-between;
   align-items: center;
-  font-size: 12px;
+  font-size: 11px;
+  color: #6c757d;
 }
 
 .pagination-controls {
@@ -159,7 +227,7 @@
   align-items: center;
 }
 
-.pagination-btn {
+.pagination-controls button {
   width: 24px;
   height: 24px;
   border: 1px solid #ddd;
@@ -169,17 +237,28 @@
   font-size: 11px;
 }
 
-/* Right Top Panel - Phiếu giao hàng */
-.delivery-slip-panel {
-  background: white;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+.pagination-controls span {
+  font-size: 11px;
+}
+
+/* Right Panel - Delivery Panel */
+.delivery-panel {
+  width: 75%;
   display: flex;
   flex-direction: column;
+  gap: 12px;
   overflow: hidden;
 }
 
-.delivery-slip-header {
+/* Phiếu giao hàng - Tìm kiếm */
+.delivery-search-section {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  flex-shrink: 0;
+}
+
+.section-header {
   padding: 15px 20px;
   background: #f8f9fa;
   border-bottom: 1px solid #e9ecef;
@@ -188,343 +267,457 @@
   align-items: center;
 }
 
-.delivery-slip-header h2 {
+.section-header h2,
+.section-header h3 {
   margin: 0;
-  font-size: 16px;
+  font-size: 14px;
   font-weight: 600;
   color: #2c3e50;
 }
 
-.header-actions {
-  display: flex;
-  gap: 8px;
-}
-
-.action-btn {
-  padding: 6px 12px;
+.search-toggle-btn {
+  background: #007bff;
+  color: white;
   border: none;
+  padding: 6px 12px;
   border-radius: 4px;
   font-size: 12px;
   cursor: pointer;
-  display: flex;
-  align-items: center;
-  gap: 5px;
-  transition: all 0.2s;
 }
 
-.btn-add {
-  background: #007bff;
-  color: white;
-}
-
-.btn-add:hover {
-  background: #0056b3;
-}
-
-.delivery-slip-content {
-  flex: 1;
-  padding: 15px 20px;
-  overflow-y: auto;
-}
-
-.slip-form {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 15px;
-  margin-bottom: 15px;
-}
-
-.form-group {
+.search-form {
+  padding: 20px;
   display: flex;
   flex-direction: column;
+  gap: 15px;
 }
 
-.form-group label {
+.search-row {
+  display: flex;
+  gap: 15px;
+  align-items: flex-end;
+}
+
+.search-field {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.search-field label {
   font-size: 12px;
   font-weight: 500;
   color: #495057;
-  margin-bottom: 4px;
 }
 
-.form-group input,
-.form-group select {
-  padding: 6px 10px;
+.search-field input {
+  padding: 8px 12px;
   border: 1px solid #ddd;
   border-radius: 4px;
-  font-size: 12px;
-  background: #f8f9fa;
+  font-size: 13px;
 }
 
-.slip-table {
-  width: 100%;
-  border-collapse: collapse;
-  font-size: 12px;
+.search-field input:focus {
+  outline: none;
+  border-color: #007bff;
+  box-shadow: 0 0 0 2px rgba(0,123,255,0.25);
 }
 
-.slip-table th {
-  background: #f8f9fa;
-  padding: 8px 6px;
-  text-align: left;
-  font-weight: 600;
-  color: #495057;
-  border: 1px solid #e9ecef;
-  font-size: 11px;
-}
-
-.slip-table td {
-  padding: 6px;
-  border: 1px solid #e9ecef;
-  font-size: 11px;
-}
-
-.slip-table tbody tr:hover {
-  background-color: #f8f9fa;
-}
-
-/* Right Bottom Panel - Phiếu đem theo thu nợ */
-.debt-collection-panel {
+/* Phiếu giao hàng - Nội dung */
+.delivery-content-section {
   background: white;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  flex: 1;
   display: flex;
   flex-direction: column;
-  overflow: hidden;
+  min-height: 0;
 }
 
-.debt-collection-header {
-  padding: 15px 20px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
+.content-actions {
   display: flex;
-  justify-content: space-between;
+  gap: 8px;
   align-items: center;
 }
 
-.debt-collection-header h2 {
-  margin: 0;
-  font-size: 16px;
-  font-weight: 600;
-  color: #2c3e50;
+.total-info {
+  font-size: 12px;
+  color: #6c757d;
+  margin-right: auto;
 }
 
-.debt-collection-content {
-  flex: 1;
-  padding: 15px 20px;
-  overflow-y: auto;
+.blue-btn {
+  background: #007bff !important;
+  color: white !important;
 }
 
+.pink-btn {
+  background: #e91e63 !important;
+  color: white !important;
+}
+
+.red-btn {
+  background: #dc3545 !important;
+  color: white !important;
+}
+
+.gray-btn {
+  background: #6c757d !important;
+  color: white !important;
+}
+
+.expand-btn {
+  background: #f8f9fa;
+  border: 1px solid #ddd;
+  color: #495057;
+}
+
+/* Tables */
+.delivery-table,
 .debt-table {
+  flex: 1;
+  overflow: auto;
+  min-height: 0;
+}
+
+.delivery-table table,
+.debt-table table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  min-width: 1000px;
 }
 
-.debt-table th {
-  background: #f8f9fa;
-  padding: 8px 6px;
+.delivery-table th,
+.delivery-table td,
+.debt-table th,
+.debt-table td {
+  padding: 10px 8px;
   text-align: left;
+  border-bottom: 1px solid #e9ecef;
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.delivery-table th,
+.debt-table th {
+  background-color: #f8f9fa;
   font-weight: 600;
   color: #495057;
-  border: 1px solid #e9ecef;
-  font-size: 11px;
+  position: sticky;
+  top: 0;
+  z-index: 1;
 }
 
-.debt-table td {
-  padding: 6px;
-  border: 1px solid #e9ecef;
-  font-size: 11px;
+.no-data {
+  text-align: center;
+  padding: 40px;
+  color: #6c757d;
 }
 
-.debt-table tbody tr:hover {
-  background-color: #f8f9fa;
+.no-data .empty-icon {
+  font-size: 32px;
+  margin-bottom: 10px;
+  opacity: 0.5;
 }
 
-/* Bottom Action Bar */
-.action-bar {
-  position: fixed;
-  bottom: 20px;
-  right: 20px;
+/* Phiếu đem theo thu nợ */
+.debt-collection-section {
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  flex: 1;
   display: flex;
-  gap: 10px;
-  z-index: 1000;
+  flex-direction: column;
+  min-height: 0;
 }
 
-.action-bar .btn {
+/* Horizontal Scroll Indicator */
+.horizontal-scroll-indicator {
+  padding: 8px 20px;
+  border-top: 1px solid #e9ecef;
+}
+
+.scroll-track {
+  height: 6px;
+  background: #e9ecef;
+  border-radius: 3px;
+  position: relative;
+}
+
+.scroll-thumb {
+  height: 100%;
+  width: 30%;
+  background: #007bff;
+  border-radius: 3px;
+}
+
+/* Bottom Actions */
+.bottom-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  padding: 15px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  flex-shrink: 0;
+}
+
+.action-button {
   padding: 10px 20px;
   border: none;
   border-radius: 6px;
   font-size: 14px;
   font-weight: 500;
   cursor: pointer;
+  transition: all 0.2s;
   display: flex;
   align-items: center;
   gap: 8px;
-  transition: all 0.2s;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.15);
 }
 
-.btn-save {
-  background: #28a745;
+.save-btn {
+  background-color: #007bff;
   color: white;
 }
 
-.btn-save:hover {
-  background: #1e7e34;
-  transform: translateY(-1px);
+.save-btn:hover {
+  background-color: #0056b3;
 }
 
-.btn-print {
-  background: #6f42c1;
+.print-btn {
+  background-color: #6f42c1;
   color: white;
 }
 
-.btn-print:hover {
-  background: #5a3296;
-  transform: translateY(-1px);
+.print-btn:hover {
+  background-color: #5a3296;
 }
 
-.btn-excel {
-  background: #17a2b8;
+.export-btn {
+  background-color: #28a745;
   color: white;
 }
 
-.btn-excel:hover {
-  background: #138496;
-  transform: translateY(-1px);
-}
-
-/* Empty State */
-.empty-content {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  color: #6c757d;
-  font-size: 14px;
-}
-
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 10px;
-  opacity: 0.5;
+.export-btn:hover {
+  background-color: #1e7e34;
 }
 
 /* Responsive Design */
+@media (max-width: 1400px) {
+  .orders-list-panel {
+    width: 30%;
+    min-width: 280px;
+  }
+  
+  .delivery-panel {
+    width: 70%;
+  }
+}
+
 @media (max-width: 1200px) {
-  .print-order-vehicle-container {
-    grid-template-columns: 300px 1fr;
-    gap: 12px;
-    padding: 12px;
+  .search-row {
+    gap: 10px;
   }
   
-  .order-list-header h2,
-  .delivery-slip-header h2,
-  .debt-collection-header h2 {
-    font-size: 15px;
+  .search-field input {
+    padding: 6px 10px;
+    font-size: 12px;
   }
   
-  .slip-table th,
-  .slip-table td,
+  .delivery-table th,
+  .delivery-table td,
   .debt-table th,
   .debt-table td {
-    padding: 5px 4px;
-    font-size: 10px;
+    padding: 8px 6px;
+    font-size: 11px;
   }
 }
 
 @media (max-width: 1024px) {
-  .print-order-vehicle-container {
-    grid-template-columns: 1fr;
-    grid-template-rows: 250px 1fr 1fr;
+  .print-order-vehicle-page {
+    flex-direction: column;
     height: auto;
-    min-height: calc(100vh - 120px);
+    gap: 10px;
+    padding: 10px;
   }
   
-  .order-list-panel {
-    grid-row: 1;
+  .orders-list-panel {
+    width: 100%;
+    order: 2;
+    min-width: auto;
+    max-height: 300px;
   }
   
-  .slip-form {
-    grid-template-columns: 1fr;
+  .delivery-panel {
+    width: 100%;
+    order: 1;
     gap: 10px;
   }
   
-  .action-bar {
-    position: static;
-    margin-top: 20px;
+  .search-row {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .search-field {
+    min-width: 150px;
+  }
+  
+  .bottom-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .action-button {
+    flex: 1;
+    min-width: 120px;
     justify-content: center;
-    padding: 0 15px;
   }
 }
 
 @media (max-width: 768px) {
-  .print-order-vehicle-container {
-    grid-template-rows: 200px 1fr 1fr;
-    gap: 8px;
+  .print-order-vehicle-page {
     padding: 8px;
+    gap: 8px;
   }
   
-  .order-list-header,
-  .delivery-slip-header,
-  .debt-collection-header {
+  .panel-header,
+  .section-header {
     padding: 12px 15px;
   }
   
-  .order-list-content,
-  .delivery-slip-content,
-  .debt-collection-content {
-    padding: 12px 15px;
+  .panel-header h2,
+  .section-header h2,
+  .section-header h3 {
+    font-size: 13px;
   }
   
-  .header-actions {
+  .search-form {
+    padding: 15px;
+  }
+  
+  .search-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .search-field {
+    width: 100%;
+    min-width: auto;
+  }
+  
+  .delivery-table,
+  .debt-table {
+    overflow-x: auto;
+  }
+  
+  .delivery-table table,
+  .debt-table table {
+    min-width: 800px;
+  }
+  
+  .content-actions {
+    flex-wrap: wrap;
     gap: 5px;
   }
   
   .action-btn {
-    padding: 5px 8px;
+    width: 28px;
+    height: 28px;
     font-size: 11px;
   }
   
-  .action-bar .btn {
+  .bottom-actions {
+    padding: 12px;
+  }
+  
+  .action-button {
     padding: 8px 16px;
     font-size: 13px;
-  }
-  
-  .slip-table,
-  .debt-table {
-    font-size: 10px;
-  }
-  
-  .slip-table th,
-  .slip-table td,
-  .debt-table th,
-  .debt-table td {
-    padding: 4px 3px;
-    font-size: 9px;
   }
 }
 
 @media (max-width: 480px) {
-  .print-order-vehicle-container {
-    grid-template-rows: 180px 1fr 1fr;
-    gap: 5px;
+  .print-order-vehicle-page {
     padding: 5px;
+    gap: 5px;
   }
   
-  .order-list-header h2,
-  .delivery-slip-header h2,
-  .debt-collection-header h2 {
-    font-size: 14px;
+  .orders-list-panel {
+    max-height: 250px;
   }
   
-  .action-bar {
+  .panel-header,
+  .section-header {
+    padding: 10px 12px;
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .header-info {
     flex-direction: column;
-    width: calc(100% - 10px);
+    align-items: flex-start;
+    gap: 5px;
   }
   
-  .action-bar .btn {
+  .content-actions {
     width: 100%;
+    justify-content: flex-end;
+  }
+  
+  .search-form {
+    padding: 12px;
+  }
+  
+  .filter-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 5px;
+  }
+  
+  .filter-row label {
+    min-width: auto;
+    font-size: 11px;
+  }
+  
+  .filter-row input {
+    padding: 5px 8px;
+    font-size: 11px;
+  }
+  
+  .order-item {
+    padding: 10px 12px;
+  }
+  
+  .pagination {
+    padding: 10px 12px;
+    flex-direction: column;
+    gap: 8px;
+    align-items: stretch;
+  }
+  
+  .pagination-controls {
     justify-content: center;
+  }
+  
+  .delivery-table th,
+  .delivery-table td,
+  .debt-table th,
+  .debt-table td {
+    padding: 6px 4px;
+    font-size: 10px;
+  }
+  
+  .bottom-actions {
+    flex-direction: column;
+    padding: 10px;
+  }
+  
+  .action-button {
+    width: 100%;
+    padding: 10px;
+    font-size: 12px;
   }
 }
