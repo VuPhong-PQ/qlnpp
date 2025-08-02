@@ -279,10 +279,29 @@
   background: #007bff;
   color: white;
   border: none;
-  padding: 6px 12px;
+  padding: 8px 16px;
   border-radius: 4px;
-  font-size: 12px;
   cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.search-toggle-btn:hover,
+.create-new-btn {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background-color 0.2s;
+}
+
+.create-new-btn:hover {
+  background: #0056b3;
 }
 
 .search-form {
@@ -311,14 +330,21 @@
   color: #495057;
 }
 
-.search-field input {
+.required-field label .required {
+  color: #dc3545;
+}
+
+.search-field input,
+.search-field select {
   padding: 8px 12px;
   border: 1px solid #ddd;
   border-radius: 4px;
   font-size: 13px;
+  background: white;
 }
 
-.search-field input:focus {
+.search-field input:focus,
+.search-field select:focus {
   outline: none;
   border-color: #007bff;
   box-shadow: 0 0 0 2px rgba(0,123,255,0.25);

@@ -124,28 +124,32 @@ const PrintOrderByVehicle = () => {
         <div className="delivery-search-section">
           <div className="section-header">
             <h2>PHIẾU GIAO HÀNG</h2>
-            <button className="search-toggle-btn">Tìm kiếm</button>
+            <button className="create-new-btn">+ Tạo mới</button>
           </div>
           
           <div className="search-form">
             <div className="search-row">
-              <div className="search-field">
-                <label>Số phiếu</label>
-                <input type="text" placeholder="DHV24080002-000743" />
+              <div className="search-field required-field">
+                <label>Số phiếu <span className="required">*</span></label>
+                <input type="text" placeholder="DTX250802-000743" />
               </div>
               <div className="search-field">
                 <label>Tuyến</label>
                 <input type="text" />
               </div>
-              <div className="search-field">
-                <label>Xe</label>
-                <input type="text" />
+              <div className="search-field required-field">
+                <label>Xe <span className="required">*</span></label>
+                <select>
+                  <option value="">Chọn xe</option>
+                  <option value="xe1">Xe 1</option>
+                  <option value="xe2">Xe 2</option>
+                </select>
               </div>
             </div>
             
             <div className="search-row">
-              <div className="search-field">
-                <label>Ngày lập</label>
+              <div className="search-field required-field">
+                <label>Ngày lập <span className="required">*</span></label>
                 <input type="date" defaultValue="2025-08-02" />
               </div>
               <div className="search-field">
@@ -153,11 +157,19 @@ const PrintOrderByVehicle = () => {
               </div>
               <div className="search-field">
                 <label>Nhân viên giao hàng 1</label>
-                <input type="text" placeholder="Chọn nhân viên giao hàng" />
+                <select>
+                  <option value="">Chọn nhân viên giao hàng</option>
+                  <option value="nv1">Nhân viên 1</option>
+                  <option value="nv2">Nhân viên 2</option>
+                </select>
               </div>
               <div className="search-field">
                 <label>Nhân viên giao hàng 2</label>
-                <input type="text" placeholder="Chọn nhân viên giao hàng" />
+                <select>
+                  <option value="">Chọn nhân viên giao hàng</option>
+                  <option value="nv1">Nhân viên 1</option>
+                  <option value="nv2">Nhân viên 2</option>
+                </select>
               </div>
             </div>
           </div>
@@ -186,8 +198,8 @@ const PrintOrderByVehicle = () => {
                   <th>Số tiền</th>
                   <th>Nhân viên giao</th>
                   <th>STT in</th>
-                  <th>Gía giao</th>
-                  <th>Số xe</th>
+                  <th>Giờ giao</th>
+                  <th>Số KG</th>
                   <th>Số khối</th>
                   <th>Ghi chú (khác)</th>
                   <th>Lên xe</th>
@@ -197,8 +209,8 @@ const PrintOrderByVehicle = () => {
               <tbody>
                 <tr>
                   <td colSpan="11" className="no-data">
-                    <div className="empty-icon">�</div>
-                    <div>Không có dữ liệu</div>
+                    <div className="empty-icon">📋</div>
+                    <div>Trống</div>
                   </td>
                 </tr>
               </tbody>
