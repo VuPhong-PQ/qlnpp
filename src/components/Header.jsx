@@ -51,7 +51,7 @@ const Header = () => {
             { name: 'In đơn hàng theo xe', path: '/business/sales/print-order-by-vehicle' }
           ]
         },
-        { name: 'Phiếu thu', path: '/business/receipts' },
+        { name: 'Phiếu thu', path: '/business/accounting/receipt-voucher' },
         { name: 'Phiếu chi', path: '/business/payments' },
         { name: 'Tính giá vốn', path: '/business/cost-calculation' },
         { name: 'Xuất kho', path: '/business/exports' },
