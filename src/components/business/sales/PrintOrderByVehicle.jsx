@@ -4,12 +4,92 @@ import './PrintOrderByVehicle.css';
 
 const PrintOrderByVehicle = () => {
   const [selectedOrders, setSelectedOrders] = useState([]);
+  const [showModal, setShowModal] = useState(false);
+  const [modalType, setModalType] = useState(''); // 'fromDate' hoặc 'toDate'
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
+  const [modalSearchData, setModalSearchData] = useState({
+    fromDate: '04/08/2025',
+    toDate: '',
+    viewAll: false
+  });
+  const [columnVisibility, setColumnVisibility] = useState({
+    fromDate: true,
+    toDate: true,
+    orderNumber: true,
+    vehicle: true,
+    totalInvoice: true,
+    totalAmount: true,
+    totalWeight: true,
+    totalVolume: true,
+    actions: true
+  });
   const [searchCriteria, setSearchCriteria] = useState({
     fromDate: '',
     toDate: '',
     deliveryStaff1: '',
     deliveryStaff2: ''
   });
+
+  // Hàm mở modal tìm kiếm ngày
+  const openDateModal = (type) => {
+    setModalType(type);
+    setShowModal(true);
+  };
+
+  // Hàm đóng modal
+  const closeModal = () => {
+    setShowModal(false);
+    setModalType('');
+  };
+
+  // Hàm xử lý tìm kiếm trong modal
+  const handleModalSearch = () => {
+    console.log('Tìm kiếm với dữ liệu:', modalSearchData);
+    closeModal();
+  };
+
+  // Hàm toggle column settings
+  const toggleColumnSettings = () => {
+    setShowColumnSettings(!showColumnSettings);
+  };
+
+  // Hàm đóng column settings khi click outside
+  const handleClickOutside = (e) => {
+    if (showColumnSettings && !e.target.closest('.column-settings-dropdown') && !e.target.closest('.settings-btn')) {
+      setShowColumnSettings(false);
+    }
+  };
+
+  // Add event listener for click outside
+  React.useEffect(() => {
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [showColumnSettings]);
+
+  // Hàm toggle column visibility
+  const toggleColumnVisibility = (columnKey) => {
+    setColumnVisibility(prev => ({
+      ...prev,
+      [columnKey]: !prev[columnKey]
+    }));
+  };
+
+  // Hàm reset column settings
+  const resetColumnSettings = () => {
+    setColumnVisibility({
+      fromDate: true,
+      toDate: true,
+      orderNumber: true,
+      vehicle: true,
+      totalInvoice: true,
+      totalAmount: true,
+      totalWeight: true,
+      totalVolume: true,
+      actions: true
+    });
+  };
 
   // Mock data cho danh sách đơn hàng
   const ordersList = [
@@ -61,48 +141,183 @@ const PrintOrderByVehicle = () => {
             <div className="header-actions">
               <button className="header-btn search-btn" title="Tìm kiếm">🔍</button>
               <button className="header-btn add-btn" title="Thêm">+</button>
+              <button 
+                className="header-btn settings-btn" 
+                title="Cài đặt cột hiển thị"
+                onClick={toggleColumnSettings}
+              >⚙️</button>
               <button className="header-btn close-btn" title="Đóng">×</button>
             </div>
           </div>
         </div>
 
-        <div className="date-filter">
-          <div className="filter-row">
-            <label>Từ ngày</label>
-            <input type="date" defaultValue="2025-08-02" />
-          </div>
-          <div className="filter-row">
-            <label>Đến ngày</label>
-            <input type="date" defaultValue="2025-08-02" />
-          </div>
-          <div className="filter-row">
-            <label>Số phiếu</label>
-            <input type="text" placeholder="Nhập số phiếu" />
-          </div>
-          <div className="filter-row">
-            <label>Thao tác</label>
-            <div className="filter-actions">
-              <button className="action-btn">🔍</button>
-              <button className="action-btn">📋</button>
+        {/* Column Settings Dropdown cho header */}
+        {showColumnSettings && (
+          <div className="column-settings-dropdown header-dropdown">
+            <div className="settings-header">
+              <span>Cột hiển thị</span>
+              <button className="reset-btn" onClick={resetColumnSettings}>
+                Làm lại
+              </button>
+            </div>
+
+            <div className="settings-sections">
+              <div className="settings-section">
+                <div className="section-title">Chưa có định</div>
+                <div className="section-content">
+                  {/* Không có items */}
+                </div>
+              </div>
+
+              <div className="settings-section">
+                <div className="section-title">Có định phải</div>
+                <div className="section-content">
+                  <label className="column-checkbox">
+                    <input 
+                      type="checkbox" 
+                      checked={columnVisibility.fromDate}
+                      onChange={() => toggleColumnVisibility('fromDate')}
+                    />
+                    Từ ngày
+                  </label>
+                  <label className="column-checkbox">
+                    <input 
+                      type="checkbox" 
+                      checked={columnVisibility.toDate}
+                      onChange={() => toggleColumnVisibility('toDate')}
+                    />
+                    Đến ngày
+                  </label>
+                  <label className="column-checkbox">
+                    <input 
+                      type="checkbox" 
+                      checked={columnVisibility.orderNumber}
+                      onChange={() => toggleColumnVisibility('orderNumber')}
+                    />
+                    Số phiếu
+                  </label>
+                  <label className="column-checkbox">
+                    <input 
+                      type="checkbox" 
+                      checked={columnVisibility.vehicle}
+                      onChange={() => toggleColumnVisibility('vehicle')}
+                    />
+                    Xe
+                  </label>
+                  <label className="column-checkbox">
+                    <input 
+                      type="checkbox" 
+                      checked={columnVisibility.totalInvoice}
+                      onChange={() => toggleColumnVisibility('totalInvoice')}
+                    />
+                    Tổng hóa đơn
+                  </label>
+                  <label className="column-checkbox">
+                    <input 
+                      type="checkbox" 
+                      checked={columnVisibility.totalAmount}
+                      onChange={() => toggleColumnVisibility('totalAmount')}
+                    />
+                    Tổng tiền
+                  </label>
+                  <label className="column-checkbox">
+                    <input 
+                      type="checkbox" 
+                      checked={columnVisibility.totalWeight}
+                      onChange={() => toggleColumnVisibility('totalWeight')}
+                    />
+                    Tổng số kg
+                  </label>
+                  <label className="column-checkbox">
+                    <input 
+                      type="checkbox" 
+                      checked={columnVisibility.totalVolume}
+                      onChange={() => toggleColumnVisibility('totalVolume')}
+                    />
+                    Tổng số khối
+                  </label>
+                  <label className="column-checkbox">
+                    <input 
+                      type="checkbox" 
+                      checked={columnVisibility.actions}
+                      onChange={() => toggleColumnVisibility('actions')}
+                    />
+                    Thao tác
+                  </label>
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         <div className="orders-list">
-          {ordersList.map((order) => (
-            <div key={order.id} className="order-item">
-              <div className="order-dates">
-                <span>{order.fromDate}</span>
-                <span>{order.toDate}</span>
-              </div>
-              <div className="order-number">{order.orderNumber}</div>
-              <div className="order-actions">
-                <button className="edit-btn" title="Sửa">✏️</button>
-                <button className="delete-btn" title="Xóa">🗑️</button>
-                <button className="expand-btn" title="Mở rộng">▲</button>
-              </div>
+          <div className="orders-table-container">
+            <table className="orders-table">
+              <thead>
+                <tr>
+                  {columnVisibility.fromDate && <th>Từ ngày</th>}
+                  {columnVisibility.toDate && <th>Đến ngày</th>}
+                  {columnVisibility.orderNumber && <th>Số phiếu</th>}
+                  {columnVisibility.vehicle && <th>Xe</th>}
+                  {columnVisibility.totalInvoice && <th>Tổng hóa đơn</th>}
+                  {columnVisibility.totalAmount && <th>Tổng tiền</th>}
+                  {columnVisibility.totalWeight && <th>Tổng số kg</th>}
+                  {columnVisibility.totalVolume && <th>Tổng số khối</th>}
+                  {columnVisibility.actions && <th>Thao tác</th>}
+                </tr>
+              </thead>
+              <tbody>
+                {ordersList.map((order) => (
+                  <tr key={order.id} className="order-row">
+                    {columnVisibility.fromDate && (
+                      <td>
+                        <div className="date-cell-with-modal">
+                          <span>{order.fromDate}</span>
+                          <button 
+                            className="cell-modal-btn" 
+                            title="Tìm kiếm"
+                            onClick={() => openDateModal('fromDate')}
+                          >🔍</button>
+                        </div>
+                      </td>
+                    )}
+                    {columnVisibility.toDate && (
+                      <td>
+                        <div className="date-cell-with-modal">
+                          <span>{order.toDate}</span>
+                          <button 
+                            className="cell-modal-btn" 
+                            title="Tìm kiếm"
+                            onClick={() => openDateModal('toDate')}
+                          >🔍</button>
+                        </div>
+                      </td>
+                    )}
+                    {columnVisibility.orderNumber && <td className="order-number">{order.orderNumber}</td>}
+                    {columnVisibility.vehicle && <td>Xe 01</td>}
+                    {columnVisibility.totalInvoice && <td>25</td>}
+                    {columnVisibility.totalAmount && <td>1,500,000</td>}
+                    {columnVisibility.totalWeight && <td>75</td>}
+                    {columnVisibility.totalVolume && <td>12.5</td>}
+                    {columnVisibility.actions && (
+                      <td>
+                        <div className="order-actions">
+                          <button className="edit-btn" title="Sửa (gọi phiếu giao hàng lên sửa)">✏️</button>
+                          <button className="delete-btn" title="Xóa (xóa danh sách in)">🗑️</button>
+                        </div>
+                      </td>
+                    )}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          
+          <div className="horizontal-scroll-indicator">
+            <div className="scroll-track">
+              <div className="scroll-thumb"></div>
             </div>
-          ))}
+          </div>
         </div>
 
         <div className="pagination">
@@ -276,6 +491,172 @@ const PrintOrderByVehicle = () => {
           <button className="action-button export-btn">📊 Xuất Excel</button>
         </div>
       </div>
+
+      {/* Modal tìm kiếm ngày */}
+      {showModal && (
+        <div className="modal-overlay" onClick={closeModal}>
+          <div className="date-search-modal" onClick={(e) => e.stopPropagation()}>
+            {/* Header */}
+            <div className="modal-header">
+              <div className="modal-title-section">
+                <h2>DANH SÁCH IN ĐƠN HÀNG</h2>
+                <span className="total-count">Tổng 1700</span>
+              </div>
+              <div className="modal-actions">
+                <button className="modal-action-btn btn-c">C</button>
+                <button className="modal-action-btn btn-i">I</button>
+                <button 
+                  className="modal-action-btn btn-settings"
+                  onClick={toggleColumnSettings}
+                >⚙️</button>
+                <button className="modal-close-btn" onClick={closeModal}>×</button>
+              </div>
+            </div>
+
+            {/* Column Settings Dropdown */}
+            {showColumnSettings && (
+              <div className="column-settings-dropdown">
+                <div className="settings-header">
+                  <span>Cột hiển thị</span>
+                  <button className="reset-btn" onClick={resetColumnSettings}>
+                    Làm lại
+                  </button>
+                </div>
+
+                <div className="settings-sections">
+                  <div className="settings-section">
+                    <div className="section-title">Chưa có định</div>
+                    <div className="section-content">
+                      {/* Không có items */}
+                    </div>
+                  </div>
+
+                  <div className="settings-section">
+                    <div className="section-title">Có định phải</div>
+                    <div className="section-content">
+                      <label className="column-checkbox">
+                        <input 
+                          type="checkbox" 
+                          checked={columnVisibility.fromDate}
+                          onChange={() => toggleColumnVisibility('fromDate')}
+                        />
+                        Từ ngày
+                      </label>
+                      <label className="column-checkbox">
+                        <input 
+                          type="checkbox" 
+                          checked={columnVisibility.toDate}
+                          onChange={() => toggleColumnVisibility('toDate')}
+                        />
+                        Đến ngày
+                      </label>
+                      <label className="column-checkbox">
+                        <input 
+                          type="checkbox" 
+                          checked={columnVisibility.orderNumber}
+                          onChange={() => toggleColumnVisibility('orderNumber')}
+                        />
+                        Số phiếu
+                      </label>
+                      <label className="column-checkbox">
+                        <input 
+                          type="checkbox" 
+                          checked={columnVisibility.vehicle}
+                          onChange={() => toggleColumnVisibility('vehicle')}
+                        />
+                        Xe
+                      </label>
+                      <label className="column-checkbox">
+                        <input 
+                          type="checkbox" 
+                          checked={columnVisibility.totalInvoice}
+                          onChange={() => toggleColumnVisibility('totalInvoice')}
+                        />
+                        Tổng hóa đơn
+                      </label>
+                      <label className="column-checkbox">
+                        <input 
+                          type="checkbox" 
+                          checked={columnVisibility.totalAmount}
+                          onChange={() => toggleColumnVisibility('totalAmount')}
+                        />
+                        Tổng tiền
+                      </label>
+                      <label className="column-checkbox">
+                        <input 
+                          type="checkbox" 
+                          checked={columnVisibility.totalWeight}
+                          onChange={() => toggleColumnVisibility('totalWeight')}
+                        />
+                        Tổng số kg
+                      </label>
+                      <label className="column-checkbox">
+                        <input 
+                          type="checkbox" 
+                          checked={columnVisibility.totalVolume}
+                          onChange={() => toggleColumnVisibility('totalVolume')}
+                        />
+                        Tổng số khối
+                      </label>
+                      <label className="column-checkbox">
+                        <input 
+                          type="checkbox" 
+                          checked={columnVisibility.actions}
+                          onChange={() => toggleColumnVisibility('actions')}
+                        />
+                        Thao tác
+                      </label>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Search Form */}
+            <div className="modal-search-form">
+              <div className="search-row">
+                <label>Từ ngày</label>
+                <input 
+                  type="text" 
+                  value={modalSearchData.fromDate}
+                  onChange={(e) => setModalSearchData({...modalSearchData, fromDate: e.target.value})}
+                  className="date-input"
+                />
+              </div>
+
+              <div className="search-row">
+                <label>Đến ngày</label>
+                <div className="date-input-with-calendar">
+                  <input 
+                    type="date" 
+                    value={modalSearchData.toDate}
+                    onChange={(e) => setModalSearchData({...modalSearchData, toDate: e.target.value})}
+                    className="date-input"
+                  />
+                  <span className="calendar-icon">📅</span>
+                </div>
+              </div>
+
+              <div className="search-row">
+                <label className="checkbox-label">
+                  <input 
+                    type="checkbox" 
+                    checked={modalSearchData.viewAll}
+                    onChange={(e) => setModalSearchData({...modalSearchData, viewAll: e.target.checked})}
+                  />
+                  Xem tất cả
+                </label>
+              </div>
+
+              <div className="search-row">
+                <button className="modal-search-btn" onClick={handleModalSearch}>
+                  🔍 Tìm
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
