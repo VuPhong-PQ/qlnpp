@@ -7,10 +7,19 @@ const PrintOrderByVehicle = () => {
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState(''); // 'fromDate' hoặc 'toDate'
   const [showColumnSettings, setShowColumnSettings] = useState(false);
+  const [showCreateReceiptModal, setShowCreateReceiptModal] = useState(false);
   const [modalSearchData, setModalSearchData] = useState({
     fromDate: '04/08/2025',
     toDate: '',
     viewAll: false
+  });
+  const [createReceiptData, setCreateReceiptData] = useState({
+    fromDate: '02/08/2025',
+    toDate: '',
+    customer: '',
+    paymentType: '',
+    exchangeRate: '',
+    totalAmount: ''
   });
   const [columnVisibility, setColumnVisibility] = useState({
     fromDate: true,
@@ -29,6 +38,31 @@ const PrintOrderByVehicle = () => {
     deliveryStaff1: '',
     deliveryStaff2: ''
   });
+
+  // Hàm mở modal tạo phiếu thu
+  const openCreateReceiptModal = () => {
+    setShowCreateReceiptModal(true);
+  };
+
+  // Hàm đóng modal tạo phiếu thu
+  const closeCreateReceiptModal = () => {
+    setShowCreateReceiptModal(false);
+  };
+
+  // Hàm xử lý thay đổi dữ liệu form tạo phiếu thu
+  const handleCreateReceiptDataChange = (field, value) => {
+    setCreateReceiptData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Hàm xử lý tạo phiếu thu
+  const handleCreateReceipt = () => {
+    console.log('Tạo phiếu thu với dữ liệu:', createReceiptData);
+    // Logic tạo phiếu thu
+    closeCreateReceiptModal();
+  };
 
   // Hàm mở modal tìm kiếm ngày
   const openDateModal = (type) => {
@@ -154,7 +188,11 @@ const PrintOrderByVehicle = () => {
             <span>Tổng: 1700</span>
             <div className="header-actions">
               <button className="header-btn search-btn" title="Tìm kiếm">🔍</button>
-              <button className="header-btn add-btn" title="Thêm">+</button>
+              <button 
+                className="header-btn add-btn" 
+                title="Thêm"
+                onClick={openCreateReceiptModal}
+              >+</button>
               <button 
                 className="header-btn settings-btn" 
                 title="Cài đặt cột hiển thị"
@@ -682,6 +720,147 @@ const PrintOrderByVehicle = () => {
                   🔍 Tìm
                 </button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tạo phiếu thu từ phiếu bán hàng */}
+      {showCreateReceiptModal && (
+        <div className="modal-overlay">
+          <div className="create-receipt-modal">
+            <div className="modal-header">
+              <div className="modal-title-section">
+                <h2>TẠO PHIẾU THU TỪ PHIẾU BÁN HÀNG</h2>
+                <div className="create-receipt-header-actions">
+                  <button className="modal-action-btn btn-chon-don-hang">Chọn đơn hàng</button>
+                </div>
+              </div>
+              <button 
+                className="modal-close-btn" 
+                onClick={closeCreateReceiptModal}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Form nhập liệu */}
+            <div className="create-receipt-form">
+              {/* Dòng 1: Từ ngày, Đến ngày, Khách hàng */}
+              <div className="form-row">
+                <div className="form-field">
+                  <label>Từ ngày</label>
+                  <div className="date-input-with-modal">
+                    <input 
+                      type="text" 
+                      value={createReceiptData.fromDate}
+                      onChange={(e) => handleCreateReceiptDataChange('fromDate', e.target.value)}
+                    />
+                    <button className="modal-search-btn">📅</button>
+                  </div>
+                </div>
+                <div className="form-field">
+                  <label>Đến ngày</label>
+                  <div className="date-input-with-modal">
+                    <input 
+                      type="text" 
+                      value={createReceiptData.toDate}
+                      onChange={(e) => handleCreateReceiptDataChange('toDate', e.target.value)}
+                    />
+                    <button className="modal-search-btn">📅</button>
+                  </div>
+                </div>
+                <div className="form-field">
+                  <label>Khách hàng</label>
+                  <div className="select-input-with-modal">
+                    <select 
+                      value={createReceiptData.customer}
+                      onChange={(e) => handleCreateReceiptDataChange('customer', e.target.value)}
+                    >
+                      <option value="">[Tất cả]</option>
+                      <option value="kh001">Khách hàng 1</option>
+                      <option value="kh002">Khách hàng 2</option>
+                    </select>
+                    <button className="modal-search-btn">🔍</button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dòng 2: Loại TT, Tỷ giá, Tổng tiền */}
+              <div className="form-row">
+                <div className="form-field">
+                  <label>Loại TT</label>
+                  <select 
+                    value={createReceiptData.paymentType}
+                    onChange={(e) => handleCreateReceiptDataChange('paymentType', e.target.value)}
+                  >
+                    <option value="">[Tất cả]</option>
+                    <option value="tm">Tiền mặt</option>
+                    <option value="ck">Chuyển khoản</option>
+                  </select>
+                </div>
+                <div className="form-field">
+                  <label>Tỷ giá</label>
+                  <input 
+                    type="text" 
+                    value={createReceiptData.exchangeRate}
+                    onChange={(e) => handleCreateReceiptDataChange('exchangeRate', e.target.value)}
+                  />
+                </div>
+                <div className="form-field">
+                  <label>Tổng tiền</label>
+                  <input 
+                    type="text" 
+                    value={createReceiptData.totalAmount}
+                    onChange={(e) => handleCreateReceiptDataChange('totalAmount', e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Bảng dữ liệu */}
+            <div className="create-receipt-table-container">
+              <table className="create-receipt-table">
+                <thead>
+                  <tr>
+                    <th>Số hóa đơn</th>
+                    <th>Ngày hóa đơn</th>
+                    <th>Nhân viên sale</th>
+                    <th>Tên khách hàng</th>
+                    <th>Chỉ chụ hd</th>
+                    <th>Trạng thái</th>
+                    <th>Phải thu</th>
+                    <th>Tiền thu</th>
+                    <th>Còn lại</th>
+                    <th>Ngày thu</th>
+                    <th>Người nộp</th>
+                    <th>Mã NV</th>
+                    <th>Người nhận tiền</th>
+                    <th>Quỷ</th>
+                    <th>Số tài khoản</th>
+                    <th>Tên chủ TK</th>
+                    <th>Tên ngân hàng</th>
+                    <th>Chỉ chụ thu</th>
+                    <th>Loại nghiệp vụ</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td colSpan="19" className="no-data">No data</td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+
+            {/* Nút hành động */}
+            <div className="create-receipt-actions">
+              <button className="action-button blue-btn">Xem lưu</button>
+              <button 
+                className="action-button pink-btn"
+                onClick={handleCreateReceipt}
+              >
+                Quay lại
+              </button>
             </div>
           </div>
         </div>
