@@ -24,7 +24,12 @@ const Header = () => {
         { name: 'Tài khoản quỹ & Nợ ngân hàng', path: '/setup/accounts-funds' },
         { name: 'Nhóm khách hàng', path: '/setup/customer-groups' },
         { name: 'Khách hàng', path: '/setup/customers' },
-        { name: 'Nhà cung cấp', path: '/setup/suppliers' }
+        { name: 'Nhà cung cấp', path: '/setup/suppliers' },
+        { name: 'Danh sách loại hàng', path: '/setup/product-categories' },
+        { name: 'Danh sách hàng hóa', path: '/setup/products' },
+        { name: 'Danh sách đơn vị tính', path: '/setup/units' },
+        { name: 'Nội dung thu, chi, xuất, nhập', path: '/setup/transaction-contents' },
+        { name: 'Danh sách kho hàng', path: '/setup/warehouses' }
       ]
     },
     {
@@ -32,11 +37,20 @@ const Header = () => {
       title: 'Quản lý nghiệp vụ',
       icon: '💼',
       items: [
-        { name: 'Bảng báo giá', path: '/business/quotes' },
+        { name: 'Bảng báo giá', path: '/business/quotation-table' },
         { name: 'Đặt hàng NCC', path: '/business/purchase-orders' },
-        { name: 'Nhập hàng', path: '/business/imports' },
-        { name: 'Chuyển kho', path: '/business/transfers' },
-        { name: 'Bán hàng', path: '/business/sales' },
+        { name: 'Nhập hàng', path: '/business/import-goods' },
+        { name: 'Chuyển kho', path: '/business/warehouse-transfer' },
+        { 
+          name: 'Bán hàng', 
+          path: '/business/sales',
+          submenu: [
+            { name: 'Tạo đơn hàng', path: '/business/sales/create-order' },
+            { name: 'Quản lý đơn hàng', path: '/business/sales/order-management' },
+            { name: 'In đơn hàng', path: '/business/sales/print-order' },
+            { name: 'In đơn hàng theo xe', path: '/business/sales/print-order-by-vehicle' }
+          ]
+        },
         { name: 'Phiếu thu', path: '/business/receipts' },
         { name: 'Phiếu chi', path: '/business/payments' },
         { name: 'Tính giá vốn', path: '/business/cost-calculation' },
@@ -104,14 +118,32 @@ const Header = () => {
             {activeDropdown === menu.id && (
               <div className="dropdown-menu">
                 {menu.items.map((item, index) => (
-                  <Link 
-                    key={index} 
-                    to={item.path}
-                    className={`dropdown-item ${isActiveRoute(item.path) ? 'active' : ''}`}
-                    onClick={() => setActiveDropdown(null)}
-                  >
-                    {item.name}
-                  </Link>
+                  item.submenu ? (
+                    <div key={index} className="dropdown-submenu">
+                      <div className="dropdown-item-header">{item.name}</div>
+                      <div className="submenu-items">
+                        {item.submenu.map((subitem, subindex) => (
+                          <Link 
+                            key={subindex} 
+                            to={subitem.path}
+                            className={`dropdown-item submenu-item ${isActiveRoute(subitem.path) ? 'active' : ''}`}
+                            onClick={() => setActiveDropdown(null)}
+                          >
+                            {subitem.name}
+                          </Link>
+                        ))}
+                      </div>
+                    </div>
+                  ) : (
+                    <Link 
+                      key={index} 
+                      to={item.path}
+                      className={`dropdown-item ${isActiveRoute(item.path) ? 'active' : ''}`}
+                      onClick={() => setActiveDropdown(null)}
+                    >
+                      {item.name}
+                    </Link>
+                  )
                 ))}
               </div>
             )}

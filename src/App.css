@@ -65,3 +65,46 @@ body {
 .mt-20 {
   margin-top: 20px;
 }
+
+/* Responsive Design for App */
+@media (max-width: 768px) {
+  body {
+    font-size: 14px;
+  }
+  
+  .main-content {
+    padding: 0 10px;
+  }
+  
+  .mb-20 {
+    margin-bottom: 15px;
+  }
+  
+  .mt-20 {
+    margin-top: 15px;
+  }
+}
+
+@media (max-width: 480px) {
+  body {
+    font-size: 13px;
+  }
+  
+  .main-content {
+    padding: 0 8px;
+  }
+  
+  .mb-20 {
+    margin-bottom: 10px;
+  }
+  
+  .mt-20 {
+    margin-top: 10px;
+  }
+  
+  /* Hide scrollbars on mobile for cleaner look */
+  ::-webkit-scrollbar {
+    width: 4px;
+    height: 4px;
+  }
+}

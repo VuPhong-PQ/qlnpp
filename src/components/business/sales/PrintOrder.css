@@ -1,0 +1,331 @@
+/* =================== PRINT ORDER PAGE =================== */
+
+/* Print Order Page Layout */
+.print-order-page {
+  padding: 20px;
+  background-color: #f8f9fa;
+  min-height: 100vh;
+}
+
+/* Action Header */
+.action-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: white;
+  padding: 10px 20px;
+  border-radius: 8px;
+  margin-bottom: 10px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.total-info {
+  font-size: 14px;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.action-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.btn-export {
+  background: #28a745;
+  color: white;
+}
+
+.btn-export:hover {
+  background: #1e7e34;
+}
+
+.btn-print {
+  background: #17a2b8;
+  color: white;
+}
+
+.btn-print:hover {
+  background: #138496;
+}
+
+.btn-settings {
+  background: #6c757d;
+  color: white;
+}
+
+.btn-settings:hover {
+  background: #545b62;
+}
+
+/* Print Orders Table */
+.print-orders-table.full-width {
+  min-width: 1600px;
+}
+
+.order-link {
+  color: #007bff;
+  text-decoration: none;
+  font-weight: 500;
+}
+
+.order-link:hover {
+  text-decoration: underline;
+}
+
+/* Status Badges for Print Orders */
+.status-merged {
+  background: #fff3cd;
+  color: #856404;
+}
+
+.status-completed {
+  background: #d1ecf1;
+  color: #0c5460;
+}
+
+.status-printed {
+  background: #d4edda;
+  color: #155724;
+}
+
+.status-not-printed {
+  background: #f8d7da;
+  color: #721c24;
+}
+
+/* Print Order Responsive Design */
+@media (max-width: 1400px) {
+  .print-orders-table.full-width {
+    min-width: 1400px;
+  }
+}
+
+@media (max-width: 1200px) {
+  .print-order-page {
+    padding: 15px;
+  }
+  
+  .action-header {
+    padding: 8px 15px;
+  }
+  
+  .action-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+  
+  .print-orders-table.full-width {
+    min-width: 1200px;
+  }
+  
+  .print-order-page .data-table {
+    font-size: 11px;
+  }
+  
+  .print-order-page .data-table th,
+  .print-order-page .data-table td {
+    padding: 8px 6px;
+  }
+}
+
+@media (max-width: 1024px) {
+  .print-order-page {
+    padding: 12px;
+  }
+  
+  .action-btn {
+    width: 30px;
+    height: 30px;
+    font-size: 13px;
+  }
+  
+  .print-orders-table.full-width {
+    min-width: 1000px;
+  }
+  
+  .print-order-page .data-table {
+    font-size: 10px;
+  }
+  
+  .print-order-page .data-table th,
+  .print-order-page .data-table td {
+    padding: 6px 4px;
+  }
+}
+
+@media (max-width: 768px) {
+  .print-order-page {
+    padding: 10px;
+  }
+  
+  .print-order-page .search-header h1 {
+    font-size: 16px;
+  }
+  
+  .print-order-page .search-row {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .print-order-page .search-group,
+  .print-order-page .date-range {
+    width: 100%;
+    min-width: auto;
+  }
+  
+  .action-header {
+    flex-direction: column;
+    gap: 10px;
+    text-align: center;
+  }
+  
+  .action-buttons {
+    justify-content: center;
+  }
+  
+  .print-orders-table.full-width {
+    min-width: 1200px;
+  }
+  
+  .print-order-page .data-table {
+    font-size: 9px;
+  }
+  
+  .print-order-page .data-table th,
+  .print-order-page .data-table td {
+    padding: 4px 3px;
+    white-space: nowrap;
+  }
+  
+  .print-order-page .pagination-container {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .print-order-page .pagination-controls {
+    width: 100%;
+    justify-content: center;
+    flex-wrap: wrap;
+  }
+}
+
+@media (max-width: 480px) {
+  .print-order-page {
+    padding: 8px;
+  }
+  
+  .print-order-page .search-header {
+    padding: 12px;
+  }
+  
+  .print-order-page .search-header h1 {
+    font-size: 14px;
+  }
+  
+  .action-header {
+    padding: 8px 10px;
+  }
+  
+  .action-btn {
+    width: 28px;
+    height: 28px;
+    font-size: 12px;
+  }
+  
+  .total-info {
+    font-size: 12px;
+  }
+  
+  .print-orders-table.full-width {
+    min-width: 1000px;
+  }
+  
+  .print-order-page .data-table {
+    font-size: 8px;
+  }
+  
+  .print-order-page .data-table th,
+  .print-order-page .data-table td {
+    padding: 3px 2px;
+  }
+  
+  .checkbox-col {
+    width: 25px;
+  }
+  
+  .print-order-page .data-table input[type="checkbox"] {
+    width: 12px;
+    height: 12px;
+  }
+  
+  .print-order-page .pagination-info,
+  .print-order-page .items-per-page {
+    font-size: 11px;
+  }
+  
+  .print-order-page .page-btn {
+    width: 26px;
+    height: 26px;
+    font-size: 11px;
+  }
+}
+
+/* Print Status Specific Styles */
+.print-order-page .status-badge {
+  font-size: 10px;
+  padding: 3px 6px;
+}
+
+.print-order-page .table-actions {
+  gap: 3px;
+}
+
+.print-order-page .btn-view {
+  width: 24px;
+  height: 24px;
+  font-size: 11px;
+}
+
+/* Currency and Number Formatting */
+.print-order-page .data-table td:nth-child(13),
+.print-order-page .data-table td:nth-child(14) {
+  text-align: right;
+  font-weight: 500;
+  color: #28a745;
+}
+
+.print-order-page .data-table td:nth-child(15),
+.print-order-page .data-table td:nth-child(16) {
+  text-align: right;
+  font-weight: 500;
+  color: #6c757d;
+}
+
+/* Print Count Column */
+.print-order-page .data-table td:nth-child(19) {
+  text-align: center;
+  font-weight: bold;
+  color: #007bff;
+}
+
+/* Print Date Column */
+.print-order-page .data-table td:nth-child(20) {
+  color: #6c757d;
+  font-size: 11px;
+}
+
+/* End Print Order Styles */
