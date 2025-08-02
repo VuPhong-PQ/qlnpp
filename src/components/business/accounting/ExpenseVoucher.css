@@ -1,0 +1,499 @@
+/* Expense Voucher Styles */
+.expense-voucher-page {
+  padding: 20px;
+  background-color: #f5f5f5;
+  min-height: 100vh;
+}
+
+.page-header {
+  background: white;
+  padding: 15px 20px;
+  border-radius: 8px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.page-header h1 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: bold;
+  color: #333;
+  text-align: center;
+}
+
+/* Search Filter */
+.search-filter {
+  background: white;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.filter-row {
+  display: flex;
+  align-items: center;
+  gap: 15px;
+  margin-bottom: 15px;
+}
+
+.filter-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+
+.filter-group label {
+  font-size: 12px;
+  color: #666;
+  font-weight: 500;
+}
+
+.filter-group input,
+.filter-group select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  min-width: 120px;
+}
+
+.search-btn {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  margin-top: 20px;
+}
+
+.search-btn:hover {
+  background: #0056b3;
+}
+
+.filter-bottom {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+}
+
+.total-info {
+  font-size: 13px;
+  color: #666;
+}
+
+.header-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.action-btn {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  cursor: pointer;
+  font-size: 12px;
+  transition: background-color 0.2s;
+}
+
+.action-btn:hover {
+  background: #f8f9fa;
+}
+
+.add-btn {
+  background: #28a745;
+  color: white;
+  border-color: #28a745;
+}
+
+.add-btn:hover {
+  background: #218838;
+}
+
+.print-btn {
+  background: #6c757d;
+  color: white;
+  border-color: #6c757d;
+}
+
+.print-btn:hover {
+  background: #545b62;
+}
+
+.export-btn {
+  background: #17a2b8;
+  color: white;
+  border-color: #17a2b8;
+}
+
+.export-btn:hover {
+  background: #138496;
+}
+
+.refresh-btn {
+  background: #fd7e14;
+  color: white;
+  border-color: #fd7e14;
+}
+
+.refresh-btn:hover {
+  background: #e55a00;
+}
+
+.settings-btn {
+  background: #6f42c1;
+  color: white;
+  border-color: #6f42c1;
+}
+
+.settings-btn:hover {
+  background: #5a2a9a;
+}
+
+/* Column Settings Dropdown */
+.column-settings-dropdown {
+  position: absolute;
+  right: 20px;
+  top: 280px;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  padding: 15px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+  z-index: 1000;
+  width: 250px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+  font-weight: bold;
+  font-size: 14px;
+}
+
+.reset-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+}
+
+.reset-btn:hover {
+  background: #c82333;
+}
+
+.settings-section {
+  margin-bottom: 15px;
+}
+
+.section-title {
+  font-weight: bold;
+  font-size: 12px;
+  margin-bottom: 8px;
+  color: #333;
+}
+
+.section-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.column-checkbox {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.column-checkbox input[type="checkbox"] {
+  margin: 0;
+}
+
+/* Data Table */
+.data-table-container {
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.data-table th,
+.data-table td {
+  padding: 10px 8px;
+  text-align: left;
+  border-bottom: 1px solid #eee;
+  white-space: nowrap;
+}
+
+.data-table th {
+  background: #f8f9fa;
+  font-weight: bold;
+  color: #333;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.data-table tbody tr:hover {
+  background: #f8f9fa;
+}
+
+.header-with-modal {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 5px;
+}
+
+.header-modal-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  padding: 2px;
+  border-radius: 3px;
+  font-size: 10px;
+}
+
+.header-modal-btn:hover {
+  background: #e9ecef;
+}
+
+.action-buttons {
+  display: flex;
+  gap: 5px;
+}
+
+.action-buttons .action-btn {
+  padding: 4px 6px;
+  font-size: 11px;
+  min-width: auto;
+}
+
+.edit-btn:hover {
+  background: #28a745;
+  color: white;
+}
+
+.delete-btn:hover {
+  background: #dc3545;
+  color: white;
+}
+
+/* Modal Styles */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.search-modal {
+  background: white;
+  border-radius: 8px;
+  width: 500px;
+  max-height: 80vh;
+  overflow-y: auto;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.3);
+}
+
+.modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 15px 20px;
+  border-bottom: 1px solid #eee;
+  background: #f8f9fa;
+  border-radius: 8px 8px 0 0;
+}
+
+.modal-title-section h2 {
+  margin: 0;
+  font-size: 16px;
+  color: #333;
+}
+
+.modal-actions {
+  display: flex;
+  gap: 5px;
+  align-items: center;
+}
+
+.modal-action-btn {
+  width: 25px;
+  height: 25px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  background: white;
+  cursor: pointer;
+  font-size: 11px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.btn-c {
+  background: #28a745;
+  color: white;
+  border-color: #28a745;
+}
+
+.btn-i {
+  background: #dc3545;
+  color: white;
+  border-color: #dc3545;
+}
+
+.btn-settings {
+  background: #6c757d;
+  color: white;
+  border-color: #6c757d;
+}
+
+.modal-close-btn {
+  width: 25px;
+  height: 25px;
+  border-radius: 4px;
+  border: 1px solid #ddd;
+  background: white;
+  cursor: pointer;
+  font-size: 16px;
+  font-weight: bold;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 10px;
+}
+
+.modal-close-btn:hover {
+  background: #f8f9fa;
+}
+
+.modal-search-form {
+  padding: 20px;
+}
+
+.search-row {
+  display: flex;
+  align-items: center;
+  margin-bottom: 15px;
+  gap: 10px;
+}
+
+.search-row label {
+  min-width: 80px;
+  font-size: 13px;
+  color: #333;
+}
+
+.date-input-with-calendar {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.date-input {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  width: 150px;
+}
+
+.calendar-icon {
+  margin-left: 8px;
+  font-size: 14px;
+}
+
+.checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  cursor: pointer;
+  min-width: auto !important;
+}
+
+.checkbox-label input[type="checkbox"] {
+  margin: 0;
+}
+
+.modal-search-btn {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.modal-search-btn:hover {
+  background: #0056b3;
+}
+
+/* Responsive */
+@media (max-width: 1200px) {
+  .data-table {
+    font-size: 11px;
+  }
+  
+  .data-table th,
+  .data-table td {
+    padding: 8px 6px;
+  }
+}
+
+@media (max-width: 768px) {
+  .expense-voucher-page {
+    padding: 10px;
+  }
+  
+  .filter-row {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  
+  .header-actions {
+    flex-wrap: wrap;
+  }
+  
+  .data-table-container {
+    overflow-x: auto;
+  }
+  
+  .column-settings-dropdown {
+    right: 10px;
+    width: 200px;
+  }
+  
+  .search-modal {
+    width: 90%;
+    margin: 0 10px;
+  }
+}

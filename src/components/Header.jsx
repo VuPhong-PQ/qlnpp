@@ -52,7 +52,7 @@ const Header = () => {
           ]
         },
         { name: 'Phiếu thu', path: '/business/accounting/receipt-voucher' },
-        { name: 'Phiếu chi', path: '/business/payments' },
+        { name: 'Phiếu chi', path: '/business/accounting/expense-voucher' },
         { name: 'Tính giá vốn', path: '/business/cost-calculation' },
         { name: 'Xuất kho', path: '/business/exports' },
         { name: 'Điều chỉnh kho', path: '/business/adjustments' },

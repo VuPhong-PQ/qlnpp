@@ -20,6 +20,7 @@ import OrderManagement from './components/business/sales/OrderManagement'
 import PrintOrder from './components/business/sales/PrintOrder'
 import PrintOrderByVehicle from './components/business/sales/PrintOrderByVehicle'
 import ReceiptVoucher from './components/business/accounting/ReceiptVoucher'
+import ExpenseVoucher from './components/business/accounting/ExpenseVoucher'
 import './App.css'
 
 function App() {
@@ -49,6 +50,7 @@ function App() {
             <Route path="/business/sales/print-order" element={<PrintOrder />} />
             <Route path="/business/sales/print-order-by-vehicle" element={<PrintOrderByVehicle />} />
             <Route path="/business/accounting/receipt-voucher" element={<ReceiptVoucher />} />
+            <Route path="/business/accounting/expense-voucher" element={<ExpenseVoucher />} />
           </Routes>
         </main>
       </div>
