@@ -12,7 +12,46 @@ const ExpenseVoucher = () => {
   const [showModal, setShowModal] = useState(false);
   const [modalType, setModalType] = useState('');
   const [showColumnSettings, setShowColumnSettings] = useState(false);
+  const [showCreateExpenseModal, setShowCreateExpenseModal] = useState(false);
   const columnSettingsRef = useRef(null);
+
+  // State cho form tạo phiếu chi
+  const [expenseFormData, setExpenseFormData] = useState({
+    expenseDate: '02/08/2025',
+    voucherNumber: 'PC250802-012407',
+    expenseStaff: 'admin 66',
+    recipient: '',
+    expenseContent: '',
+    amount: '0',
+    fund: '',
+    accountNumber: '',
+    accountHolder: '',
+    bankName: '',
+    salaryAdvanceCode: '',
+    expenseType: '',
+    industryCode: '',
+    expenseCode: ''
+  });
+
+  // Hàm chuyển đổi format ngày từ DD/MM/YYYY sang YYYY-MM-DD
+  const formatDateForInput = (dateStr) => {
+    if (!dateStr) return '';
+    const parts = dateStr.split('/');
+    if (parts.length === 3) {
+      return `${parts[2]}-${parts[1].padStart(2, '0')}-${parts[0].padStart(2, '0')}`;
+    }
+    return '';
+  };
+
+  // Hàm chuyển đổi format ngày từ YYYY-MM-DD sang DD/MM/YYYY
+  const formatDateFromInput = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    return `${day}/${month}/${year}`;
+  };
 
   // State cho cột hiển thị
   const [columnVisibility, setColumnVisibility] = useState({
@@ -49,6 +88,31 @@ const ExpenseVoucher = () => {
   // Hàm toggle column settings
   const toggleColumnSettings = () => {
     setShowColumnSettings(!showColumnSettings);
+  };
+
+  // Hàm mở modal tạo phiếu chi
+  const openCreateExpenseModal = () => {
+    setShowCreateExpenseModal(true);
+  };
+
+  // Hàm đóng modal tạo phiếu chi
+  const closeCreateExpenseModal = () => {
+    setShowCreateExpenseModal(false);
+  };
+
+  // Hàm xử lý thay đổi dữ liệu form
+  const handleExpenseFormDataChange = (field, value) => {
+    setExpenseFormData(prev => ({
+      ...prev,
+      [field]: value
+    }));
+  };
+
+  // Hàm xử lý lưu phiếu chi
+  const handleSaveExpense = () => {
+    console.log('Saving expense:', expenseFormData);
+    // Xử lý lưu dữ liệu ở đây
+    closeCreateExpenseModal();
   };
 
   // Hàm toggle column visibility
@@ -253,7 +317,10 @@ const ExpenseVoucher = () => {
             <span>Tổng: {expensesList.length} phiếu</span>
           </div>
           <div className="header-actions">
-            <button className="action-btn add-btn">+ Thêm</button>
+            <button 
+              className="action-btn add-btn"
+              onClick={openCreateExpenseModal}
+            >+ Thêm</button>
             <button className="action-btn print-btn">🖨️ In</button>
             <button className="action-btn export-btn">📊 Export Excel</button>
             <button className="action-btn refresh-btn">🔄 Làm mới</button>
@@ -518,6 +585,244 @@ const ExpenseVoucher = () => {
               <div className="search-row">
                 <button className="modal-search-btn">🔍 Tìm kiếm</button>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Tạo phiếu chi */}
+      {showCreateExpenseModal && (
+        <div className="modal-overlay" onClick={closeCreateExpenseModal}>
+          <div className="create-expense-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="modal-header">
+              <div className="modal-title-section">
+                <h2>THÔNG TIN PHIẾU CHI</h2>
+              </div>
+              <button 
+                className="modal-close-btn" 
+                onClick={closeCreateExpenseModal}
+              >
+                ×
+              </button>
+            </div>
+
+            {/* Form nhập liệu phiếu chi */}
+            <div className="create-expense-form">
+              {/* Dòng 1: Ngày lập, Số phiếu chi */}
+              <div className="form-row">
+                <div className="form-field">
+                  <label>Ngày lập</label>
+                  <div className="date-input-container">
+                    <input 
+                      type="date" 
+                      value={formatDateForInput(expenseFormData.expenseDate)}
+                      onChange={(e) => {
+                        const formattedDate = formatDateFromInput(e.target.value);
+                        handleExpenseFormDataChange('expenseDate', formattedDate);
+                      }}
+                    />
+                  </div>
+                </div>
+                <div className="form-field">
+                  <label>Số phiếu chi</label>
+                  <div className="voucher-number-field">
+                    <input 
+                      type="text" 
+                      value={expenseFormData.voucherNumber}
+                      onChange={(e) => handleExpenseFormDataChange('voucherNumber', e.target.value)}
+                      placeholder="PC250802-012407"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Dòng 2: Nhân viên chi */}
+              <div className="form-row">
+                <div className="form-field full-width">
+                  <label>Nhân viên chi</label>
+                  <div className="staff-select-field">
+                    <select 
+                      value={expenseFormData.expenseStaff}
+                      onChange={(e) => handleExpenseFormDataChange('expenseStaff', e.target.value)}
+                    >
+                      <option value="admin 66">admin 66</option>
+                      <option value="staff1">Nhân viên 1</option>
+                      <option value="staff2">Nhân viên 2</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dòng 3: Người nhận tiền */}
+              <div className="form-row">
+                <div className="form-field full-width">
+                  <label>
+                    <span className="required-star">*</span> Người nhận tiền
+                  </label>
+                  <div className="recipient-select-field">
+                    <select 
+                      value={expenseFormData.recipient}
+                      onChange={(e) => handleExpenseFormDataChange('recipient', e.target.value)}
+                    >
+                      <option value=""></option>
+                      <option value="recipient1">Người nhận 1</option>
+                      <option value="recipient2">Người nhận 2</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dòng 4: Nội dung chi */}
+              <div className="form-row">
+                <div className="form-field full-width">
+                  <label>Nội dung chi</label>
+                  <textarea 
+                    value={expenseFormData.expenseContent}
+                    onChange={(e) => handleExpenseFormDataChange('expenseContent', e.target.value)}
+                    rows="3"
+                    placeholder="Nhập nội dung chi..."
+                  />
+                </div>
+              </div>
+
+              {/* Dòng 5: Tiền chi, Quỹ */}
+              <div className="form-row">
+                <div className="form-field">
+                  <label>
+                    <span className="required-star">*</span> Tiền chi
+                  </label>
+                  <input 
+                    type="text" 
+                    value={expenseFormData.amount}
+                    onChange={(e) => handleExpenseFormDataChange('amount', e.target.value)}
+                    placeholder="0"
+                  />
+                </div>
+                <div className="form-field">
+                  <label>
+                    <span className="required-star">*</span> Quỹ
+                  </label>
+                  <div className="fund-select-field">
+                    <select 
+                      value={expenseFormData.fund}
+                      onChange={(e) => handleExpenseFormDataChange('fund', e.target.value)}
+                    >
+                      <option value="">loại quỹ</option>
+                      <option value="cash">Quỹ tiền mặt</option>
+                      <option value="bank">Ngân hàng</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dòng 6: Số tài khoản, Tên chủ tài khoản, Tên ngân hàng */}
+              <div className="form-row">
+                <div className="form-field">
+                  <label>Số tài khoản</label>
+                  <input 
+                    type="text" 
+                    value={expenseFormData.accountNumber}
+                    onChange={(e) => handleExpenseFormDataChange('accountNumber', e.target.value)}
+                  />
+                </div>
+                <div className="form-field">
+                  <label>Tên chủ tài khoản</label>
+                  <input 
+                    type="text" 
+                    value={expenseFormData.accountHolder}
+                    onChange={(e) => handleExpenseFormDataChange('accountHolder', e.target.value)}
+                  />
+                </div>
+                <div className="form-field">
+                  <label>Tên ngân hàng</label>
+                  <input 
+                    type="text" 
+                    value={expenseFormData.bankName}
+                    onChange={(e) => handleExpenseFormDataChange('bankName', e.target.value)}
+                  />
+                </div>
+              </div>
+
+              {/* Dòng 7: Mã ứng lương, Loại chi */}
+              <div className="form-row">
+                <div className="form-field">
+                  <label>Mã ứng lương</label>
+                  <div className="salary-code-field">
+                    <select 
+                      value={expenseFormData.salaryAdvanceCode}
+                      onChange={(e) => handleExpenseFormDataChange('salaryAdvanceCode', e.target.value)}
+                    >
+                      <option value=""></option>
+                      <option value="UL001">UL001</option>
+                      <option value="UL002">UL002</option>
+                    </select>
+                  </div>
+                </div>
+                <div className="form-field">
+                  <label>
+                    <span className="required-star">*</span> Loại chi
+                  </label>
+                  <div className="expense-type-field">
+                    <select 
+                      value={expenseFormData.expenseType}
+                      onChange={(e) => handleExpenseFormDataChange('expenseType', e.target.value)}
+                    >
+                      <option value="">loại chi</option>
+                      <option value="transport">Chi phí vận chuyển</option>
+                      <option value="office">Chi phí văn phòng</option>
+                      <option value="salary">Ứng lương</option>
+                    </select>
+                  </div>
+                </div>
+              </div>
+
+              {/* Dòng 8: Mã ngành, Mã chi */}
+              <div className="form-row">
+                <div className="form-field">
+                  <label>Mã ngành</label>
+                  <input 
+                    type="text" 
+                    value={expenseFormData.industryCode}
+                    onChange={(e) => handleExpenseFormDataChange('industryCode', e.target.value)}
+                  />
+                </div>
+                <div className="form-field">
+                  <label>Mã chi</label>
+                  <input 
+                    type="text" 
+                    value={expenseFormData.expenseCode}
+                    onChange={(e) => handleExpenseFormDataChange('expenseCode', e.target.value)}
+                  />
+                </div>
+              </div>
+            </div>
+
+            {/* Nút hành động */}
+            <div className="create-expense-actions">
+              <button 
+                className="action-button blue-btn"
+                onClick={handleSaveExpense}
+              >
+                💾 Lưu
+              </button>
+              <button 
+                className="action-button green-btn"
+                onClick={handleSaveExpense}
+              >
+                ➕ Thêm mới
+              </button>
+              <button 
+                className="action-button print-btn"
+                onClick={() => console.log('Print expense')}
+              >
+                🖨️ In
+              </button>
+              <button 
+                className="action-button red-btn"
+                onClick={closeCreateExpenseModal}
+              >
+                ❌ Đóng
+              </button>
             </div>
           </div>
         </div>
