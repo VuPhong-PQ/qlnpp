@@ -91,6 +91,20 @@ const PrintOrderByVehicle = () => {
     });
   };
 
+  // Hàm xử lý sửa đơn hàng
+  const handleEditOrder = (orderId) => {
+    console.log('Sửa đơn hàng:', orderId);
+    // Logic sửa đơn hàng
+  };
+
+  // Hàm xử lý xóa đơn hàng
+  const handleDeleteOrder = (orderId) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa đơn hàng này khỏi danh sách in?')) {
+      console.log('Xóa đơn hàng:', orderId);
+      // Logic xóa đơn hàng
+    }
+  };
+
   // Mock data cho danh sách đơn hàng
   const ordersList = [
     {
@@ -267,7 +281,9 @@ const PrintOrderByVehicle = () => {
                 </tr>
               </thead>
               <tbody>
-                {ordersList.map((order) => (
+                {ordersList.map((order) => {
+                  console.log('Rendering order:', order.id, 'Actions visible:', columnVisibility.actions);
+                  return (
                   <tr key={order.id} className="order-row">
                     {columnVisibility.fromDate && (
                       <td>
@@ -302,13 +318,26 @@ const PrintOrderByVehicle = () => {
                     {columnVisibility.actions && (
                       <td>
                         <div className="order-actions">
-                          <button className="edit-btn" title="Sửa (gọi phiếu giao hàng lên sửa)">✏️</button>
-                          <button className="delete-btn" title="Xóa (xóa danh sách in)">🗑️</button>
+                          <button 
+                            className="action-btn edit-btn" 
+                            title="Sửa"
+                            onClick={() => handleEditOrder(order.id)}
+                          >
+                            ✏️
+                          </button>
+                          <button 
+                            className="action-btn delete-btn" 
+                            title="Xóa"
+                            onClick={() => handleDeleteOrder(order.id)}
+                          >
+                            🗑️
+                          </button>
                         </div>
                       </td>
                     )}
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
