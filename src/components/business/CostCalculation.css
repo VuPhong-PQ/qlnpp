@@ -95,146 +95,409 @@
   border-color: #4a90e2;
 }
 
-/* Calendar Dropdown */
+/* Ant Design Style Date Range Picker */
 .calendar-dropdown {
   position: absolute;
   top: 100%;
   left: 0;
   background: white;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
-  z-index: 1000;
+  border: 1px solid #d9d9d9;
+  border-radius: 6px;
+  box-shadow: 0 6px 16px 0 rgba(0, 0, 0, 0.08), 0 3px 6px -4px rgba(0, 0, 0, 0.12), 0 9px 28px 8px rgba(0, 0, 0, 0.05);
+  z-index: 1050;
   margin-top: 4px;
   min-width: 280px;
 }
 
+.ant-picker-panel-container {
+  display: inline-block;
+  vertical-align: top;
+  background: #fff;
+  border-radius: 6px;
+  outline: none;
+}
+
+.ant-picker-panel {
+  display: inline-flex;
+  flex-direction: column;
+  text-align: center;
+  background: #fff;
+  border-radius: 6px;
+  outline: none;
+}
+
+.ant-picker-content {
+  width: 280px;
+}
+
+.ant-picker-header {
+  display: flex;
+  padding: 0 8px;
+  color: rgba(0, 0, 0, 0.88);
+  border-bottom: 1px solid #f0f0f0;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ant-picker-header-view {
+  flex: auto;
+  font-weight: 500;
+  line-height: 40px;
+  text-align: center;
+  cursor: pointer;
+  transition: color 0.3s;
+}
+
+.ant-picker-prev-icon,
+.ant-picker-next-icon {
+  position: relative;
+  display: inline-block;
+  font-size: 12px;
+  font-weight: bold;
+  width: 28px;
+  height: 28px;
+  color: rgba(0, 0, 0, 0.25);
+  line-height: 28px;
+  cursor: pointer;
+  transition: color 0.3s;
+  border-radius: 4px;
+  background: transparent;
+  border: none;
+}
+
+.ant-picker-prev-icon:hover,
+.ant-picker-next-icon:hover {
+  color: rgba(0, 0, 0, 0.88);
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.ant-picker-body {
+  padding: 8px 12px;
+}
+
+.ant-picker-body table {
+  text-align: center;
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.ant-picker-body th {
+  height: 30px;
+  color: rgba(0, 0, 0, 0.88);
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 30px;
+  text-align: center;
+}
+
+.ant-picker-body td {
+  position: relative;
+  min-width: 24px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background 0.2s;
+  border-radius: 4px;
+}
+
+.ant-picker-cell {
+  position: relative;
+  display: inline-block;
+  min-width: 24px;
+  height: 24px;
+  line-height: 22px;
+  text-align: center;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  transition: background 0.2s, border 0.2s;
+  cursor: pointer;
+  margin: 2px;
+}
+
+.ant-picker-cell:hover {
+  background: #e6f4ff;
+}
+
+.ant-picker-cell-today {
+  border-color: #1677ff;
+}
+
+.ant-picker-cell-selected {
+  background: #1677ff;
+  color: #fff;
+}
+
+.ant-picker-cell-in-range {
+  background: #e6f4ff;
+  border-radius: 0;
+}
+
+.ant-picker-cell-range-start {
+  background: #1677ff;
+  color: #fff;
+  border-start-start-radius: 4px;
+  border-end-start-radius: 4px;
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.ant-picker-cell-range-end {
+  background: #1677ff;
+  color: #fff;
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  border-start-end-radius: 4px;
+  border-end-end-radius: 4px;
+}
+
+.ant-picker-cell-disabled {
+  color: rgba(0, 0, 0, 0.25);
+  background: transparent;
+  cursor: not-allowed;
+}
+
+.ant-picker-footer {
+  width: min-content;
+  min-width: 100%;
+  line-height: 38px;
+  text-align: center;
+  border-top: 1px solid #f0f0f0;
+  padding: 4px 12px;
+}
+
+.ant-picker-footer-extra {
+  padding: 0 12px;
+  line-height: 38px;
+  text-align: center;
+}
+
+.ant-btn {
+  display: inline-block;
+  font-weight: 400;
+  text-align: center;
+  background-image: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+  user-select: none;
+  touch-action: manipulation;
+  line-height: 1.5714285714285714;
+  position: relative;
+  color: rgba(0, 0, 0, 0.88);
+  background: #fff;
+  border-color: #d9d9d9;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.02);
+  height: 32px;
+  padding: 4px 15px;
+  font-size: 14px;
+  border-radius: 6px;
+  margin: 0 4px;
+}
+
+.ant-btn-primary {
+  color: #fff;
+  background: #1677ff;
+  border-color: #1677ff;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 0 rgba(5, 145, 255, 0.1);
+}
+
+.ant-btn:hover {
+  color: #4096ff;
+  border-color: #4096ff;
+}
+
+.ant-btn-primary:hover {
+  color: #fff;
+  background: #4096ff;
+  border-color: #4096ff;
+}
+
+/* Update existing calendar structure to use Ant Design classes */
 .calendar-container {
-  padding: 15px;
+  padding: 0;
 }
 
 .calendar-header {
   display: flex;
-  justify-content: space-between;
+  padding: 0 8px;
+  color: rgba(0, 0, 0, 0.88);
+  border-bottom: 1px solid #f0f0f0;
   align-items: center;
-  margin-bottom: 15px;
+  justify-content: space-between;
+  height: 40px;
 }
 
 .calendar-nav-btn {
-  background: none;
+  background: transparent;
   border: none;
-  padding: 8px 12px;
+  width: 28px;
+  height: 28px;
+  color: rgba(0, 0, 0, 0.25);
   cursor: pointer;
   border-radius: 4px;
-  font-size: 18px;
-  color: #666;
-  transition: all 0.2s;
+  font-size: 12px;
+  font-weight: bold;
+  transition: all 0.3s;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .calendar-nav-btn:hover {
-  background: #f8f9fa;
-  color: #4a90e2;
+  color: rgba(0, 0, 0, 0.88);
+  background: rgba(0, 0, 0, 0.04);
 }
 
 .calendar-month-year {
+  flex: auto;
+  font-weight: 500;
+  line-height: 40px;
+  text-align: center;
+  cursor: pointer;
   font-size: 14px;
-  font-weight: 600;
-  color: #333;
+  color: rgba(0, 0, 0, 0.88);
 }
 
 .calendar-weekdays {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
-  margin-bottom: 8px;
+  margin-bottom: 0;
+  padding: 0 12px;
 }
 
 .calendar-weekdays div {
+  height: 30px;
+  color: rgba(0, 0, 0, 0.88);
+  font-weight: 400;
+  font-size: 12px;
+  line-height: 30px;
   text-align: center;
-  font-size: 11px;
-  font-weight: 600;
-  color: #666;
-  padding: 6px 4px;
 }
 
 .calendar-days {
   display: grid;
   grid-template-columns: repeat(7, 1fr);
-  gap: 2px;
+  gap: 0;
+  padding: 0 12px 8px 12px;
 }
 
 .calendar-day {
-  aspect-ratio: 1;
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 12px;
-  cursor: pointer;
+  min-width: 24px;
+  height: 24px;
+  margin: 2px;
+  font-size: 14px;
+  line-height: 22px;
+  text-align: center;
+  background: transparent;
+  border: 1px solid transparent;
   border-radius: 4px;
+  cursor: pointer;
   transition: all 0.2s;
-  border: none;
-  background: none;
-  min-height: 32px;
+  color: rgba(0, 0, 0, 0.88);
 }
 
 .calendar-day:hover {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: #e6f4ff;
 }
 
 .calendar-day.empty {
   cursor: default;
+  background: transparent;
+}
+
+.calendar-day.empty:hover {
+  background: transparent;
 }
 
 .calendar-day.today {
-  background: #fff3cd;
-  color: #856404;
+  border-color: #1677ff;
   font-weight: 600;
 }
 
 .calendar-day.selected {
-  background: #e3f2fd;
-  color: #1976d2;
+  background: #e6f4ff;
 }
 
 .calendar-day.range-start,
 .calendar-day.range-end {
-  background: #4a90e2;
-  color: white;
+  background: #1677ff;
+  color: #fff;
   font-weight: 600;
 }
 
+.calendar-day.range-start {
+  border-start-start-radius: 4px;
+  border-end-start-radius: 4px;
+  border-start-end-radius: 0;
+  border-end-end-radius: 0;
+}
+
+.calendar-day.range-end {
+  border-start-start-radius: 0;
+  border-end-start-radius: 0;
+  border-start-end-radius: 4px;
+  border-end-end-radius: 4px;
+}
+
 .calendar-actions {
+  width: min-content;
+  min-width: 100%;
+  line-height: 38px;
+  text-align: center;
+  border-top: 1px solid #f0f0f0;
+  padding: 4px 12px;
   display: flex;
-  justify-content: space-between;
-  gap: 10px;
-  margin-top: 15px;
-  padding-top: 15px;
-  border-top: 1px solid #eee;
+  justify-content: center;
+  gap: 8px;
+}
+
+.calendar-confirm-btn,
+.calendar-cancel-btn {
+  display: inline-block;
+  font-weight: 400;
+  text-align: center;
+  background-image: none;
+  border: 1px solid transparent;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.645, 0.045, 0.355, 1);
+  user-select: none;
+  height: 32px;
+  padding: 4px 15px;
+  font-size: 14px;
+  border-radius: 6px;
+  line-height: 1.5714285714285714;
+  position: relative;
 }
 
 .calendar-confirm-btn {
-  background: #28a745;
-  color: white;
-  border: none;
-  padding: 8px 20px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  flex: 1;
+  color: #fff;
+  background: #1677ff;
+  border-color: #1677ff;
+  text-shadow: 0 -1px 0 rgba(0, 0, 0, 0.12);
+  box-shadow: 0 2px 0 rgba(5, 145, 255, 0.1);
+}
+
+.calendar-confirm-btn:hover {
+  color: #fff;
+  background: #4096ff;
+  border-color: #4096ff;
 }
 
 .calendar-cancel-btn {
-  background: #6c757d;
-  color: white;
-  border: none;
-  padding: 8px 20px;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  flex: 1;
+  color: rgba(0, 0, 0, 0.88);
+  background: #fff;
+  border-color: #d9d9d9;
+  box-shadow: 0 2px 0 rgba(0, 0, 0, 0.02);
+}
+
+.calendar-cancel-btn:hover {
+  color: #4096ff;
+  border-color: #4096ff;
 }
 
 /* Search Button */
@@ -486,6 +749,11 @@
   background-color: white;
   height: 38px;
   transition: border-color 0.2s;
+  cursor: pointer;
+}
+
+.datetime-picker-container:hover {
+  border-color: #4a90e2;
 }
 
 .datetime-picker-container:focus-within {
@@ -501,6 +769,12 @@
   background: transparent;
   cursor: pointer;
   outline: none;
+  color: #333;
+}
+
+.datetime-display-input::placeholder {
+  color: #999;
+  font-style: italic;
 }
 
 .calendar-trigger-btn {
@@ -512,11 +786,24 @@
   color: #666;
   border-left: 1px solid #ddd;
   transition: all 0.2s;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .calendar-trigger-btn:hover {
   background-color: #f8f9fa;
   color: #4a90e2;
+}
+
+/* Calendar dropdown positioning for voucher section */
+.form-group .calendar-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  min-width: 280px;
 }
 
 /* Cost Calculation Button */

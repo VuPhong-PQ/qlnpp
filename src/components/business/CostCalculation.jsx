@@ -119,7 +119,11 @@ const CostCalculation = () => {
 
     // Add empty cells for days before the first day of the month
     for (let i = 0; i < firstDayWeekday; i++) {
-      days.push(<div key={`empty-${i}`} className="calendar-day empty"></div>);
+      days.push(
+        <td key={`empty-${i}`}>
+          <div className="ant-picker-cell ant-picker-cell-disabled calendar-day empty"></div>
+        </td>
+      );
     }
 
     // Add days of the month
@@ -131,67 +135,93 @@ const CostCalculation = () => {
       const isRangeStart = selectedRange.start && date.getTime() === selectedRange.start.getTime();
       const isRangeEnd = selectedRange.end && date.getTime() === selectedRange.end.getTime();
 
+      let cellClasses = 'ant-picker-cell calendar-day';
+      if (isToday) cellClasses += ' ant-picker-cell-today today';
+      if (isSelected && !isRangeStart && !isRangeEnd) cellClasses += ' ant-picker-cell-in-range selected';
+      if (isRangeStart) cellClasses += ' ant-picker-cell-range-start range-start';
+      if (isRangeEnd) cellClasses += ' ant-picker-cell-range-end range-end';
+
       days.push(
-        <button
-          key={day}
-          className={`calendar-day ${isToday ? 'today' : ''} ${isSelected ? 'selected' : ''} ${isRangeStart ? 'range-start' : ''} ${isRangeEnd ? 'range-end' : ''}`}
-          onClick={() => handleDateClick(date)}
-        >
-          {day}
-        </button>
+        <td key={day}>
+          <div
+            className={cellClasses}
+            onClick={() => handleDateClick(date)}
+          >
+            {day}
+          </div>
+        </td>
+      );
+    }
+
+    // Group days into weeks (rows of 7)
+    const weeks = [];
+    for (let i = 0; i < days.length; i += 7) {
+      weeks.push(
+        <tr key={`week-${i / 7}`}>
+          {days.slice(i, i + 7)}
+        </tr>
       );
     }
 
     return (
-      <div className="calendar-container">
-        <div className="calendar-header">
-          <button 
-            className="calendar-nav-btn"
-            onClick={() => setCurrentCalendarMonth(new Date(currentYear, currentMonth - 1, 1))}
-          >
-            &#8249;
-          </button>
-          <span className="calendar-month-year">
-            {monthNames[currentMonth]} {currentYear}
-          </span>
-          <button 
-            className="calendar-nav-btn"
-            onClick={() => setCurrentCalendarMonth(new Date(currentYear, currentMonth + 1, 1))}
-          >
-            &#8250;
-          </button>
-        </div>
-        
-        <div className="calendar-weekdays">
-          <div>CN</div>
-          <div>T2</div>
-          <div>T3</div>
-          <div>T4</div>
-          <div>T5</div>
-          <div>T6</div>
-          <div>T7</div>
-        </div>
-        
-        <div className="calendar-days">
-          {days}
-        </div>
+      <div className="ant-picker-panel-container">
+        <div className="ant-picker-panel">
+          <div className="ant-picker-content">
+            <div className="ant-picker-header">
+              <button 
+                className="ant-picker-prev-icon calendar-nav-btn"
+                onClick={() => setCurrentCalendarMonth(new Date(currentYear, currentMonth - 1, 1))}
+              >
+                &#8249;
+              </button>
+              <div className="ant-picker-header-view calendar-month-year">
+                {monthNames[currentMonth]} {currentYear}
+              </div>
+              <button 
+                className="ant-picker-next-icon calendar-nav-btn"
+                onClick={() => setCurrentCalendarMonth(new Date(currentYear, currentMonth + 1, 1))}
+              >
+                &#8250;
+              </button>
+            </div>
+            
+            <div className="ant-picker-body">
+              <table>
+                <thead>
+                  <tr>
+                    <th>CN</th>
+                    <th>T2</th>
+                    <th>T3</th>
+                    <th>T4</th>
+                    <th>T5</th>
+                    <th>T6</th>
+                    <th>T7</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {weeks}
+                </tbody>
+              </table>
+            </div>
 
-        <div className="calendar-actions">
-          <button 
-            className="calendar-confirm-btn"
-            onClick={confirmDateSelection}
-          >
-            Xác nhận
-          </button>
-          <button 
-            className="calendar-cancel-btn"
-            onClick={() => {
-              setShowSearchCalendar(false);
-              setShowVoucherCalendar(false);
-            }}
-          >
-            Hủy
-          </button>
+            <div className="ant-picker-footer calendar-actions">
+              <button 
+                className="ant-btn ant-btn-primary calendar-confirm-btn"
+                onClick={confirmDateSelection}
+              >
+                Xác nhận
+              </button>
+              <button 
+                className="ant-btn calendar-cancel-btn"
+                onClick={() => {
+                  setShowSearchCalendar(false);
+                  setShowVoucherCalendar(false);
+                }}
+              >
+                Hủy
+              </button>
+            </div>
+          </div>
         </div>
       </div>
     );
