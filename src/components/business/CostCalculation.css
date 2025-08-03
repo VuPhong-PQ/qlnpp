@@ -1,0 +1,741 @@
+/* Cost Calculation Page */
+.cost-calculation-page {
+  padding: 10px;
+  background-color: #f5f5f5;
+  min-height: 100vh;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+}
+
+.cost-calculation-container {
+  display: flex;
+  height: calc(100vh - 20px);
+  gap: 10px;
+}
+
+/* Left Panel - Search */
+.search-panel {
+  width: 380px;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.search-header {
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+  padding: 15px 20px;
+  border-radius: 8px 8px 0 0;
+  text-align: center;
+}
+
+.search-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  letter-spacing: 1px;
+}
+
+.search-content {
+  padding: 20px;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+/* Date Range Section */
+.date-range {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  position: relative;
+}
+
+.date-field {
+  flex: 1;
+}
+
+.date-field input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 12px;
+  text-align: center;
+  background: white;
+  cursor: pointer;
+}
+
+.date-field input:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+.arrow {
+  font-size: 14px;
+  color: #666;
+  margin: 0 5px;
+}
+
+.calendar-btn {
+  background: #f8f9fa;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 8px 10px;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.calendar-btn:hover {
+  background: #e9ecef;
+  border-color: #4a90e2;
+}
+
+/* Calendar Dropdown */
+.calendar-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  background: white;
+  border: 1px solid #ddd;
+  border-radius: 8px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  margin-top: 4px;
+  min-width: 280px;
+}
+
+.calendar-container {
+  padding: 15px;
+}
+
+.calendar-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 15px;
+}
+
+.calendar-nav-btn {
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  font-size: 18px;
+  color: #666;
+  transition: all 0.2s;
+}
+
+.calendar-nav-btn:hover {
+  background: #f8f9fa;
+  color: #4a90e2;
+}
+
+.calendar-month-year {
+  font-size: 14px;
+  font-weight: 600;
+  color: #333;
+}
+
+.calendar-weekdays {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
+.calendar-weekdays div {
+  text-align: center;
+  font-size: 11px;
+  font-weight: 600;
+  color: #666;
+  padding: 6px 4px;
+}
+
+.calendar-days {
+  display: grid;
+  grid-template-columns: repeat(7, 1fr);
+  gap: 2px;
+}
+
+.calendar-day {
+  aspect-ratio: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  cursor: pointer;
+  border-radius: 4px;
+  transition: all 0.2s;
+  border: none;
+  background: none;
+  min-height: 32px;
+}
+
+.calendar-day:hover {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.calendar-day.empty {
+  cursor: default;
+}
+
+.calendar-day.today {
+  background: #fff3cd;
+  color: #856404;
+  font-weight: 600;
+}
+
+.calendar-day.selected {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.calendar-day.range-start,
+.calendar-day.range-end {
+  background: #4a90e2;
+  color: white;
+  font-weight: 600;
+}
+
+.calendar-actions {
+  display: flex;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 15px;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+}
+
+.calendar-confirm-btn {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  flex: 1;
+}
+
+.calendar-cancel-btn {
+  background: #6c757d;
+  color: white;
+  border: none;
+  padding: 8px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  flex: 1;
+}
+
+/* Search Button */
+.search-btn {
+  background: #4a90e2;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.search-btn:hover {
+  background: #357abd;
+  transform: translateY(-1px);
+}
+
+.total-info {
+  font-size: 13px;
+  color: #666;
+  text-align: center;
+  padding: 8px 0;
+  background: #f8f9fa;
+  border-radius: 4px;
+}
+
+/* Action Buttons */
+.search-actions {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+}
+
+.action-btn {
+  width: 30px;
+  height: 30px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: bold;
+  color: white;
+  transition: all 0.2s;
+}
+
+.action-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.green-btn { background: #28a745; }
+.purple-btn { background: #6f42c1; }
+.pink-btn { background: #e83e8c; }
+.gray-btn { background: #6c757d; }
+.blue-btn { background: #007bff; }
+
+/* Products List */
+.products-list {
+  flex: 1;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+  min-height: 200px;
+  display: flex;
+  flex-direction: column;
+}
+
+.list-header {
+  background: #f8f9fa;
+  padding: 8px 10px;
+  display: grid;
+  grid-template-columns: 70px 1fr 70px;
+  gap: 8px;
+  font-size: 11px;
+  font-weight: bold;
+  color: #333;
+  border-bottom: 1px solid #ddd;
+}
+
+.list-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 150px;
+}
+
+.empty-state {
+  text-align: center;
+  color: #999;
+}
+
+.empty-icon {
+  font-size: 48px;
+  margin-bottom: 10px;
+  opacity: 0.5;
+}
+
+/* Slider */
+.slider-container {
+  margin-top: auto;
+}
+
+.slider {
+  width: 100%;
+  height: 4px;
+  border-radius: 2px;
+  background: #ddd;
+  outline: none;
+  -webkit-appearance: none;
+  cursor: pointer;
+}
+
+.slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #4a90e2;
+  cursor: pointer;
+}
+
+.slider::-moz-range-thumb {
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  background: #4a90e2;
+  cursor: pointer;
+  border: none;
+}
+
+/* Right Panel - Voucher */
+.voucher-panel {
+  flex: 1;
+  background: white;
+  border-radius: 8px;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+.voucher-header {
+  background: linear-gradient(135deg, #4a90e2 0%, #357abd 100%);
+  padding: 15px 20px;
+  border-radius: 8px 8px 0 0;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.voucher-header h2 {
+  margin: 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: white;
+  letter-spacing: 1px;
+}
+
+.add-btn {
+  background: #17a2b8;
+  color: white;
+  border: none;
+  padding: 8px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: all 0.2s;
+}
+
+.add-btn:hover {
+  background: #138496;
+  transform: translateY(-1px);
+}
+
+.voucher-content {
+  flex: 1;
+  padding: 20px;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  overflow-y: auto;
+}
+
+/* Form Section */
+.form-section {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 15px;
+  background: #fafafa;
+}
+
+.form-row {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 15px;
+  align-items: flex-end;
+}
+
+.form-row:last-child {
+  margin-bottom: 0;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  flex: 1;
+  position: relative;
+}
+
+.form-group.full-width {
+  flex: 1 1 100%;
+}
+
+.form-group label {
+  font-size: 12px;
+  color: #333;
+  font-weight: 500;
+}
+
+.form-group input {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  height: 38px;
+  box-sizing: border-box;
+  transition: border-color 0.2s;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+/* DateTime Picker */
+.datetime-picker-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  height: 38px;
+  transition: border-color 0.2s;
+}
+
+.datetime-picker-container:focus-within {
+  border-color: #4a90e2;
+  box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+}
+
+.datetime-display-input {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  font-size: 13px;
+  background: transparent;
+  cursor: pointer;
+  outline: none;
+}
+
+.calendar-trigger-btn {
+  background: none;
+  border: none;
+  padding: 8px 12px;
+  cursor: pointer;
+  font-size: 14px;
+  color: #666;
+  border-left: 1px solid #ddd;
+  transition: all 0.2s;
+}
+
+.calendar-trigger-btn:hover {
+  background-color: #f8f9fa;
+  color: #4a90e2;
+}
+
+/* Cost Calculation Button */
+.time-calc-btn {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+  height: 38px;
+  transition: all 0.2s;
+}
+
+.time-calc-btn:hover {
+  background: #218838;
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+/* Product Details Section */
+.product-details {
+  flex: 1;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: white;
+  display: flex;
+  flex-direction: column;
+}
+
+.section-label {
+  background: #f8f9fa;
+  padding: 10px 15px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 1px solid #ddd;
+}
+
+.filter-section {
+  padding: 15px;
+  border-bottom: 1px solid #ddd;
+}
+
+.filter-row {
+  display: flex;
+  gap: 15px;
+  margin-bottom: 10px;
+  align-items: flex-end;
+}
+
+.filter-row:last-child {
+  margin-bottom: 0;
+}
+
+.filter-group {
+  flex: 1;
+}
+
+.filter-input {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  height: 38px;
+  box-sizing: border-box;
+}
+
+.filter-input.number-input {
+  text-align: center;
+}
+
+.filter-btn {
+  background: #007bff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  height: 38px;
+  white-space: nowrap;
+}
+
+.summary-info {
+  padding: 10px 15px;
+  background: #f8f9fa;
+  font-size: 12px;
+  color: #666;
+  border-bottom: 1px solid #ddd;
+}
+
+.product-actions {
+  padding: 10px 15px;
+  display: flex;
+  gap: 8px;
+  border-bottom: 1px solid #ddd;
+}
+
+/* Product Table */
+.product-table {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+}
+
+.table-header {
+  background: #f8f9fa;
+  padding: 10px 15px;
+  display: grid;
+  grid-template-columns: 1fr 2fr 100px 120px 80px;
+  gap: 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #333;
+  border-bottom: 1px solid #ddd;
+}
+
+.table-content {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 200px;
+}
+
+.empty-table-state {
+  text-align: center;
+  color: #999;
+}
+
+/* Bottom Actions */
+.bottom-actions {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  padding-top: 15px;
+  border-top: 1px solid #eee;
+}
+
+.main-actions {
+  display: flex;
+  gap: 10px;
+}
+
+.main-btn {
+  padding: 8px 16px;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: white;
+  transition: all 0.2s;
+}
+
+.main-btn:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive Design */
+@media (max-width: 1200px) {
+  .cost-calculation-container {
+    flex-direction: column;
+    height: auto;
+  }
+  
+  .search-panel {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  .form-row {
+    flex-wrap: wrap;
+  }
+  
+  .form-group {
+    min-width: 200px;
+  }
+}
+
+@media (max-width: 768px) {
+  .cost-calculation-page {
+    padding: 5px;
+  }
+  
+  .form-row {
+    flex-direction: column;
+  }
+  
+  .date-range {
+    flex-direction: column;
+    gap: 10px;
+  }
+  
+  .filter-row {
+    flex-direction: column;
+  }
+  
+  .table-header {
+    grid-template-columns: 1fr;
+    gap: 5px;
+  }
+  
+  .calendar-dropdown {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 90vw;
+    max-width: 300px;
+  }
+}
