@@ -1,3 +1,18 @@
+.col-resizer {
+  display: inline-block;
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 6px;
+  height: 100%;
+  cursor: col-resize;
+  z-index: 2;
+  background: transparent;
+  transition: background 0.2s;
+}
+.col-resizer:hover {
+  background: #1677ff33;
+}
 /* Setup Page Common Styles */
 .setup-page {
   padding: 30px;

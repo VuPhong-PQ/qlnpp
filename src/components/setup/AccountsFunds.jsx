@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import './SetupPage.css';
 
 const AccountsFunds = () => {
@@ -7,7 +7,104 @@ const AccountsFunds = () => {
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Sample data for funds
+  // Độ rộng mặc định cho bảng quỹ tiền
+  const defaultFundWidths = [90, 120, 120, 120, 120, 120, 110, 110, 100, 90];
+  const [fundColWidths, setFundColWidths] = useState(defaultFundWidths);
+  const fundTableRef = useRef(null);
+
+  // Cột hiển thị cho bảng quỹ tiền
+  const fundColumns = [
+    { key: 'code', label: 'Mã quỹ' },
+    { key: 'name', label: 'Tên quỹ' },
+    { key: 'accountHolder', label: 'Chủ tài khoản' },
+    { key: 'accountNumber', label: 'Số tài khoản' },
+    { key: 'bank', label: 'Ngân hàng' },
+    { key: 'branch', label: 'Chi nhánh' },
+    { key: 'initialBalance', label: 'Số dư ban đầu' },
+    { key: 'note', label: 'Ghi chú' },
+    { key: 'status', label: 'Ngưng hoạt động' },
+    { key: 'actions', label: 'Thao tác', fixed: true }
+  ];
+  const defaultFundVisible = fundColumns.map(col => col.key);
+  const [fundVisibleCols, setFundVisibleCols] = useState(defaultFundVisible);
+  const [showFundColSetting, setShowFundColSetting] = useState(false);
+
+  // Độ rộng mặc định cho bảng khoản vay
+  const defaultLoanWidths = [120, 140, 110, 110, 110, 100, 120, 120, 90, 90, 90];
+  const [loanColWidths, setLoanColWidths] = useState(defaultLoanWidths);
+  const loanTableRef = useRef(null);
+
+  // Cột hiển thị cho bảng khoản vay
+  const loanColumns = [
+    { key: 'accountNumber', label: 'Số tài khoản' },
+    { key: 'loanName', label: 'Tên khoản nợ NH' },
+    { key: 'loanDate', label: 'Ngày vay' },
+    { key: 'dueDate', label: 'Ngày đáo hạn' },
+    { key: 'interestPeriod', label: 'Kỳ trả lãi' },
+    { key: 'interestCost', label: 'CP lãi' },
+    { key: 'principalPayment', label: 'Trả gốc hàng kỳ' },
+    { key: 'principalAmount', label: 'Tiền trả gốc' },
+    { key: 'note', label: 'Ghi chú (%)' },
+    { key: 'status', label: 'Tình trạng' },
+    { key: 'actions', label: 'Thao tác', fixed: true }
+  ];
+  const defaultLoanVisible = loanColumns.map(col => col.key);
+  const [loanVisibleCols, setLoanVisibleCols] = useState(defaultLoanVisible);
+  const [showLoanColSetting, setShowLoanColSetting] = useState(false);
+
+  // Hàm xử lý kéo cột cho bảng quỹ tiền (kéo mép trái/phải)
+  const handleFundMouseDown = (index, e, edge) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidths = [...fundColWidths];
+    const onMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      setFundColWidths((widths) => {
+        const newWidths = [...widths];
+        if (edge === 'right' && index < widths.length - 1) {
+          newWidths[index] = Math.max(50, startWidths[index] + delta);
+          newWidths[index + 1] = Math.max(50, startWidths[index + 1] - delta);
+        } else if (edge === 'left' && index > 0) {
+          newWidths[index] = Math.max(50, startWidths[index] - delta);
+          newWidths[index - 1] = Math.max(50, startWidths[index - 1] + delta);
+        }
+        return newWidths;
+      });
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
+  // Hàm xử lý kéo cột cho bảng khoản vay (kéo mép trái/phải)
+  const handleLoanMouseDown = (index, e, edge) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidths = [...loanColWidths];
+    const onMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      setLoanColWidths((widths) => {
+        const newWidths = [...widths];
+        if (edge === 'right' && index < widths.length - 1) {
+          newWidths[index] = Math.max(50, startWidths[index] + delta);
+          newWidths[index + 1] = Math.max(50, startWidths[index + 1] - delta);
+        } else if (edge === 'left' && index > 0) {
+          newWidths[index] = Math.max(50, startWidths[index] - delta);
+          newWidths[index - 1] = Math.max(50, startWidths[index - 1] + delta);
+        }
+        return newWidths;
+      });
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
   const [funds, setFunds] = useState([
     {
       id: 1,
@@ -184,77 +281,162 @@ const AccountsFunds = () => {
       {/* Funds Tab */}
       {activeTab === 'funds' && (
         <div className="data-table-container">
-          <div className="table-header">
-            <input
-              type="text"
-              placeholder="Tìm kiếm theo tên hoặc mã quỹ..."
-              className="search-box"
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-            />
-            <div className="table-actions">
-              <button 
-                className="btn btn-primary"
-                onClick={() => {
-                  resetForm();
-                  setShowModal(true);
-                  setEditingItem(null);
-                }}
-              >
-                + Thêm quỹ
-              </button>
-              <button className="btn btn-success">📤 Export Excel</button>
-              <button className="btn btn-secondary">📥 Import Excel</button>
+      <div className="table-header" style={{ position: 'relative' }}>
+        <input
+          type="text"
+          placeholder="Tìm kiếm theo tên hoặc mã quỹ..."
+          className="search-box"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+        <div className="table-actions">
+          <button 
+            className="btn btn-primary"
+            onClick={() => {
+              resetForm();
+              setShowModal(true);
+              setEditingItem(null);
+            }}
+          >
+            + Thêm quỹ
+          </button>
+          <button className="btn btn-success">📤 Export Excel</button>
+          <button className="btn btn-secondary">📥 Import Excel</button>
+          <button
+            className="btn btn-settings"
+            style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}
+            title="Cài đặt cột hiển thị"
+            onClick={() => setShowFundColSetting(v => !v)}
+          >
+            <span role="img" aria-label="settings">⚙️</span>
+          </button>
+        </div>
+
+        {/* Popup chọn cột hiển thị */}
+        {showFundColSetting && (
+          <div style={{
+            position: 'fixed',
+            top: '80px', // hoặc điều chỉnh phù hợp với header
+            right: '40px', // căn sát mép phải màn hình, có thể chỉnh lại nếu cần
+            background: '#fff',
+            border: '1px solid #eee',
+            borderRadius: 8,
+            boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+            zIndex: 9999,
+            minWidth: 240,
+            padding: 14
+          }}>
+            <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+              <input
+                type="checkbox"
+                checked={fundVisibleCols.length === fundColumns.length}
+                onChange={e => setFundVisibleCols(e.target.checked ? defaultFundVisible : [])}
+                style={{ marginRight: 6 }}
+              />
+              <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
+              <button
+                style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
+                onClick={() => setFundVisibleCols(defaultFundVisible)}
+              >Làm lại</button>
+            </div>
+            <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
+            {fundColumns.filter(col => !col.fixed).map(col => (
+              <div key={col.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
+                <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
+                <input
+                  type="checkbox"
+                  checked={fundVisibleCols.includes(col.key)}
+                  onChange={e => {
+                    if (e.target.checked) setFundVisibleCols(cols => [...cols, col.key]);
+                    else setFundVisibleCols(cols => cols.filter(k => k !== col.key));
+                  }}
+                  style={{ marginRight: 6 }}
+                />
+                <span>{col.label}</span>
+              </div>
+            ))}
+            <div style={{ fontSize: 13, color: '#888', margin: '6px 0 2px' }}>Cố định phải</div>
+            <div style={{ display: 'flex', alignItems: 'center', opacity: 0.7 }}>
+              <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
+              <input type="checkbox" checked disabled style={{ marginRight: 6 }} />
+              <span>Thao tác</span>
             </div>
           </div>
+        )}
+      </div>
 
-          <table className="data-table">
+          <table className="data-table" ref={fundTableRef}>
+            <colgroup>
+              {fundColWidths.map((w, i) => (
+                fundVisibleCols.includes(fundColumns[i].key) ? <col key={i} style={{ width: w }} /> : null
+              ))}
+            </colgroup>
             <thead>
               <tr>
-                <th>Mã quỹ</th>
-                <th>Tên quỹ</th>
-                <th>Chủ tài khoản</th>
-                <th>Số tài khoản</th>
-                <th>Ngân hàng</th>
-                <th>Chi nhánh</th>
-                <th>Số dư đầu</th>
-                <th>Ghi chú</th>
-                <th>Tình trạng</th>
-                <th>Thao tác</th>
+                {fundColumns.map((col, idx, arr) => (
+                  fundVisibleCols.includes(col.key) ? (
+                    <th key={col.key} style={{ position: 'relative' }}>
+                      {/* Mép trái */}
+                      {idx > 0 && fundVisibleCols.includes(arr[idx - 1].key) && (
+                        <span
+                          className="col-resizer left"
+                          onMouseDown={e => handleFundMouseDown(idx, e, 'left')}
+                          style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                        />
+                      )}
+                      {col.label}
+                      {/* Mép phải */}
+                      {idx < arr.length - 1 && fundVisibleCols.includes(arr[idx + 1].key) && (
+                        <span
+                          className="col-resizer right"
+                          onMouseDown={e => handleFundMouseDown(idx, e, 'right')}
+                          style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                        />
+                      )}
+                    </th>
+                  ) : null
+                ))}
               </tr>
             </thead>
             <tbody>
               {filteredFunds.map((fund) => (
                 <tr key={fund.id}>
-                  <td>{fund.code}</td>
-                  <td>{fund.name}</td>
-                  <td>{fund.accountHolder}</td>
-                  <td>{fund.accountNumber}</td>
-                  <td>{fund.bank}</td>
-                  <td>{fund.branch}</td>
-                  <td>{formatCurrency(fund.initialBalance)}</td>
-                  <td>{fund.note}</td>
-                  <td>
-                    <span className={`status-badge ${fund.status === 'active' ? 'status-active' : 'status-inactive'}`}>
-                      {fund.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="action-buttons">
-                      <button 
-                        className="btn btn-secondary btn-small"
-                        onClick={() => handleEdit(fund)}
-                      >
-                        Sửa
-                      </button>
-                      <button 
-                        className="btn btn-danger btn-small"
-                        onClick={() => handleDelete(fund.id)}
-                      >
-                        Xóa
-                      </button>
-                    </div>
-                  </td>
+                  {fundColumns.map((col, idx) => {
+                    if (!fundVisibleCols.includes(col.key)) return null;
+                    if (col.key === 'status') {
+                      return (
+                        <td key={col.key}>
+                          <span className={`status-badge ${fund.status === 'active' ? 'status-active' : 'status-inactive'}`}>
+                            {fund.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
+                          </span>
+                        </td>
+                      );
+                    }
+                    if (col.key === 'initialBalance') {
+                      return <td key={col.key}>{formatCurrency(fund.initialBalance)}</td>;
+                    }
+                    if (col.key === 'actions') {
+                      return (
+                        <td key={col.key}>
+                          <div className="action-buttons">
+                            <button 
+                              className="btn btn-secondary btn-small"
+                              onClick={() => handleEdit(fund)}
+                            >
+                              Sửa
+                            </button>
+                            <button 
+                              className="btn btn-danger btn-small"
+                              onClick={() => handleDelete(fund.id)}
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        </td>
+                      );
+                    }
+                    return <td key={col.key}>{fund[col.key]}</td>;
+                  })}
                 </tr>
               ))}
             </tbody>
@@ -265,7 +447,7 @@ const AccountsFunds = () => {
       {/* Bank Loans Tab */}
       {activeTab === 'loans' && (
         <div className="data-table-container">
-          <div className="table-header">
+          <div className="table-header" style={{ position: 'relative' }}>
             <input
               type="text"
               placeholder="Tìm kiếm theo tên khoản vay hoặc số tài khoản..."
@@ -286,58 +468,141 @@ const AccountsFunds = () => {
               </button>
               <button className="btn btn-success">📤 Export Excel</button>
               <button className="btn btn-secondary">📥 Import Excel</button>
+              <button
+                className="btn btn-settings"
+                style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}
+                title="Cài đặt cột hiển thị"
+                onClick={() => setShowLoanColSetting(v => !v)}
+              >
+                <span role="img" aria-label="settings">⚙️</span>
+              </button>
             </div>
+
+            {/* Popup chọn cột hiển thị */}
+            {showLoanColSetting && (
+              <div style={{
+                position: 'fixed',
+                top: '120px', // điều chỉnh phù hợp với header
+                right: '40px',
+                background: '#fff',
+                border: '1px solid #eee',
+                borderRadius: 8,
+                boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+                zIndex: 9999,
+                minWidth: 240,
+                padding: 14
+              }}>
+                <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                  <input
+                    type="checkbox"
+                    checked={loanVisibleCols.length === loanColumns.length}
+                    onChange={e => setLoanVisibleCols(e.target.checked ? defaultLoanVisible : [])}
+                    style={{ marginRight: 6 }}
+                  />
+                  <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
+                  <button
+                    style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
+                    onClick={() => setLoanVisibleCols(defaultLoanVisible)}
+                  >Làm lại</button>
+                </div>
+                <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
+                {loanColumns.filter(col => !col.fixed).map(col => (
+                  <div key={col.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
+                    <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
+                    <input
+                      type="checkbox"
+                      checked={loanVisibleCols.includes(col.key)}
+                      onChange={e => {
+                        if (e.target.checked) setLoanVisibleCols(cols => [...cols, col.key]);
+                        else setLoanVisibleCols(cols => cols.filter(k => k !== col.key));
+                      }}
+                      style={{ marginRight: 6 }}
+                    />
+                    <span>{col.label}</span>
+                  </div>
+                ))}
+                <div style={{ fontSize: 13, color: '#888', margin: '6px 0 2px' }}>Cố định phải</div>
+                <div style={{ display: 'flex', alignItems: 'center', opacity: 0.7 }}>
+                  <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
+                  <input type="checkbox" checked disabled style={{ marginRight: 6 }} />
+                  <span>Thao tác</span>
+                </div>
+              </div>
+            )}
           </div>
 
-          <table className="data-table">
+          <table className="data-table" ref={loanTableRef}>
+            <colgroup>
+              {loanColWidths.map((w, i) => (
+                loanVisibleCols.includes(loanColumns[i].key) ? <col key={i} style={{ width: w }} /> : null
+              ))}
+            </colgroup>
             <thead>
               <tr>
-                <th>Số tài khoản</th>
-                <th>Tên khoản nợ NH</th>
-                <th>Ngày vay</th>
-                <th>Ngày đáo hạn</th>
-                <th>Kỳ trả lãi</th>
-                <th>CP lãi</th>
-                <th>Trả gốc hàng kỳ</th>
-                <th>Tiền trả gốc</th>
-                <th>Ghi chú (%)</th>
-                <th>Tình trạng</th>
-                <th>Thao tác</th>
+                {loanColumns.map((col, idx, arr) => (
+                  loanVisibleCols.includes(col.key) ? (
+                    <th key={col.key} style={{ position: 'relative' }}>
+                      {/* Mép trái */}
+                      {idx > 0 && loanVisibleCols.includes(arr[idx - 1].key) && (
+                        <span
+                          className="col-resizer left"
+                          onMouseDown={e => handleLoanMouseDown(idx, e, 'left')}
+                          style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                        />
+                      )}
+                      {col.label}
+                      {/* Mép phải */}
+                      {idx < arr.length - 1 && loanVisibleCols.includes(arr[idx + 1].key) && (
+                        <span
+                          className="col-resizer right"
+                          onMouseDown={e => handleLoanMouseDown(idx, e, 'right')}
+                          style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                        />
+                      )}
+                    </th>
+                  ) : null
+                ))}
               </tr>
             </thead>
             <tbody>
               {filteredBankLoans.map((loan) => (
                 <tr key={loan.id}>
-                  <td>{loan.accountNumber}</td>
-                  <td>{loan.loanName}</td>
-                  <td>{loan.loanDate}</td>
-                  <td>{loan.dueDate}</td>
-                  <td>{loan.interestPeriod}</td>
-                  <td>{formatCurrency(loan.interestCost)}</td>
-                  <td>{formatCurrency(loan.principalPayment)}</td>
-                  <td>{formatCurrency(loan.principalAmount)}</td>
-                  <td>{loan.note}</td>
-                  <td>
-                    <span className={`status-badge ${loan.status === 'active' ? 'status-active' : 'status-inactive'}`}>
-                      {loan.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="action-buttons">
-                      <button 
-                        className="btn btn-secondary btn-small"
-                        onClick={() => handleEdit(loan)}
-                      >
-                        Sửa
-                      </button>
-                      <button 
-                        className="btn btn-danger btn-small"
-                        onClick={() => handleDelete(loan.id)}
-                      >
-                        Xóa
-                      </button>
-                    </div>
-                  </td>
+                  {loanColumns.map((col, idx) => {
+                    if (!loanVisibleCols.includes(col.key)) return null;
+                    if (col.key === 'status') {
+                      return (
+                        <td key={col.key}>
+                          <span className={`status-badge ${loan.status === 'active' ? 'status-active' : 'status-inactive'}`}>
+                            {loan.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
+                          </span>
+                        </td>
+                      );
+                    }
+                    if (col.key === 'interestCost' || col.key === 'principalPayment' || col.key === 'principalAmount') {
+                      return <td key={col.key}>{formatCurrency(loan[col.key])}</td>;
+                    }
+                    if (col.key === 'actions') {
+                      return (
+                        <td key={col.key}>
+                          <div className="action-buttons">
+                            <button 
+                              className="btn btn-secondary btn-small"
+                              onClick={() => handleEditLoan(loan)}
+                            >
+                              Sửa
+                            </button>
+                            <button 
+                              className="btn btn-danger btn-small"
+                              onClick={() => handleDeleteLoan(loan.id)}
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        </td>
+                      );
+                    }
+                    return <td key={col.key}>{loan[col.key]}</td>;
+                  })}
                 </tr>
               ))}
             </tbody>
