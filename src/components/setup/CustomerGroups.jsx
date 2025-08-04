@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import './SetupPage.css';
 
 const CustomerGroups = () => {
@@ -100,6 +100,50 @@ const CustomerGroups = () => {
     alert('Chức năng import Excel đang được phát triển');
   };
 
+
+  // Cột và độ rộng mặc định
+  const groupColumns = [
+    { key: 'code', label: 'Mã nhóm' },
+    { key: 'name', label: 'Tên nhóm' },
+    { key: 'salesSchedule', label: 'Lịch bán hàng' },
+    { key: 'note', label: 'Ghi chú' },
+    { key: 'status', label: 'Trạng thái' },
+    { key: 'actions', label: 'Thao tác', fixed: true }
+  ];
+  const defaultGroupWidths = [100, 140, 140, 180, 110, 110];
+  const [groupColWidths, setGroupColWidths] = useState(defaultGroupWidths);
+  const defaultGroupVisible = groupColumns.map(col => col.key);
+  const [groupVisibleCols, setGroupVisibleCols] = useState(defaultGroupVisible);
+  const [showGroupColSetting, setShowGroupColSetting] = useState(false);
+  const groupTableRef = useRef(null);
+
+  // Kéo cột
+  const handleGroupMouseDown = (index, e, edge) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidths = [...groupColWidths];
+    const onMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      setGroupColWidths((widths) => {
+        const newWidths = [...widths];
+        if (edge === 'right' && index < widths.length - 1) {
+          newWidths[index] = Math.max(50, startWidths[index] + delta);
+          newWidths[index + 1] = Math.max(50, startWidths[index + 1] - delta);
+        } else if (edge === 'left' && index > 0) {
+          newWidths[index] = Math.max(50, startWidths[index] - delta);
+          newWidths[index - 1] = Math.max(50, startWidths[index - 1] + delta);
+        }
+        return newWidths;
+      });
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
   return (
     <div className="setup-page">
       <div className="page-header">
@@ -108,7 +152,7 @@ const CustomerGroups = () => {
       </div>
 
       <div className="data-table-container">
-        <div className="table-header">
+        <div className="table-header" style={{ position: 'relative' }}>
           <input
             type="text"
             placeholder="Tìm kiếm theo tên hoặc mã nhóm..."
@@ -133,48 +177,138 @@ const CustomerGroups = () => {
             <button className="btn btn-secondary" onClick={handleImport}>
               📥 Import Excel
             </button>
+            <button
+              className="btn btn-settings"
+              style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}
+              title="Cài đặt cột hiển thị"
+              onClick={() => setShowGroupColSetting(v => !v)}
+            >
+              <span role="img" aria-label="settings">⚙️</span>
+            </button>
           </div>
+
+          {/* Popup chọn cột hiển thị */}
+          {showGroupColSetting && (
+            <div style={{
+              position: 'fixed',
+              top: '80px',
+              right: '40px',
+              background: '#fff',
+              border: '1px solid #eee',
+              borderRadius: 8,
+              boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+              zIndex: 9999,
+              minWidth: 220,
+              padding: 14
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={groupVisibleCols.length === groupColumns.length}
+                  onChange={e => setGroupVisibleCols(e.target.checked ? defaultGroupVisible : [])}
+                  style={{ marginRight: 6 }}
+                />
+                <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
+                <button
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
+                  onClick={() => setGroupVisibleCols(defaultGroupVisible)}
+                >Làm lại</button>
+              </div>
+              <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
+              {groupColumns.filter(col => !col.fixed).map(col => (
+                <div key={col.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
+                  <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
+                  <input
+                    type="checkbox"
+                    checked={groupVisibleCols.includes(col.key)}
+                    onChange={e => {
+                      if (e.target.checked) setGroupVisibleCols(cols => [...cols, col.key]);
+                      else setGroupVisibleCols(cols => cols.filter(k => k !== col.key));
+                    }}
+                    style={{ marginRight: 6 }}
+                  />
+                  <span>{col.label}</span>
+                </div>
+              ))}
+              <div style={{ fontSize: 13, color: '#888', margin: '6px 0 2px' }}>Cố định phải</div>
+              <div style={{ display: 'flex', alignItems: 'center', opacity: 0.7 }}>
+                <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
+                <input type="checkbox" checked disabled style={{ marginRight: 6 }} />
+                <span>Thao tác</span>
+              </div>
+            </div>
+          )}
         </div>
 
-        <table className="data-table">
+        <table className="data-table" ref={groupTableRef}>
+          <colgroup>
+            {groupColWidths.map((w, i) => (
+              groupVisibleCols.includes(groupColumns[i].key) ? <col key={i} style={{ width: w }} /> : null
+            ))}
+          </colgroup>
           <thead>
             <tr>
-              <th>Mã nhóm</th>
-              <th>Tên nhóm</th>
-              <th>Lịch bán hàng</th>
-              <th>Ghi chú</th>
-              <th>Trạng thái</th>
-              <th>Thao tác</th>
+              {groupColumns.map((col, idx, arr) => (
+                groupVisibleCols.includes(col.key) ? (
+                  <th key={col.key} style={{ position: 'relative' }}>
+                    {/* Mép trái */}
+                    {idx > 0 && groupVisibleCols.includes(arr[idx - 1].key) && (
+                      <span
+                        className="col-resizer left"
+                        onMouseDown={e => handleGroupMouseDown(idx, e, 'left')}
+                        style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                      />
+                    )}
+                    {col.label}
+                    {/* Mép phải */}
+                    {idx < arr.length - 1 && groupVisibleCols.includes(arr[idx + 1].key) && (
+                      <span
+                        className="col-resizer right"
+                        onMouseDown={e => handleGroupMouseDown(idx, e, 'right')}
+                        style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                      />
+                    )}
+                  </th>
+                ) : null
+              ))}
             </tr>
           </thead>
           <tbody>
             {filteredGroups.map((group) => (
               <tr key={group.id}>
-                <td>{group.code}</td>
-                <td>{group.name}</td>
-                <td>{group.salesSchedule}</td>
-                <td>{group.note}</td>
-                <td>
-                  <span className={`status-badge ${group.status === 'active' ? 'status-active' : 'status-inactive'}`}>
-                    {group.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
-                  </span>
-                </td>
-                <td>
-                  <div className="action-buttons">
-                    <button 
-                      className="btn btn-secondary btn-small"
-                      onClick={() => handleEdit(group)}
-                    >
-                      Sửa
-                    </button>
-                    <button 
-                      className="btn btn-danger btn-small"
-                      onClick={() => handleDelete(group.id)}
-                    >
-                      Xóa
-                    </button>
-                  </div>
-                </td>
+                {groupColumns.map((col, idx) => {
+                  if (!groupVisibleCols.includes(col.key)) return null;
+                  if (col.key === 'status') {
+                    return (
+                      <td key={col.key}>
+                        <span className={`status-badge ${group.status === 'active' ? 'status-active' : 'status-inactive'}`}>
+                          {group.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
+                        </span>
+                      </td>
+                    );
+                  }
+                  if (col.key === 'actions') {
+                    return (
+                      <td key={col.key}>
+                        <div className="action-buttons">
+                          <button 
+                            className="btn btn-secondary btn-small"
+                            onClick={() => handleEdit(group)}
+                          >
+                            Sửa
+                          </button>
+                          <button 
+                            className="btn btn-danger btn-small"
+                            onClick={() => handleDelete(group.id)}
+                          >
+                            Xóa
+                          </button>
+                        </div>
+                      </td>
+                    );
+                  }
+                  return <td key={col.key}>{group[col.key]}</td>;
+                })}
               </tr>
             ))}
           </tbody>
