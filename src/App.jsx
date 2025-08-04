@@ -15,6 +15,7 @@ import Warehouses from './components/setup/Warehouses';
 import QuotationTable from './components/business/QuotationTable';
 import ImportGoods from './components/business/ImportGoods';
 import WarehouseTransfer from './components/business/WarehouseTransfer';
+import ExportGoods from './components/business/ExportGoods';
 import CreateOrder from './components/business/sales/CreateOrder';
 import OrderManagement from './components/business/sales/OrderManagement';
 import PrintOrder from './components/business/sales/PrintOrder';
@@ -46,6 +47,8 @@ function App() {
             <Route path="/business/quotation-table" element={<QuotationTable />} />
             <Route path="/business/import-goods" element={<ImportGoods />} />
             <Route path="/business/warehouse-transfer" element={<WarehouseTransfer />} />
+            <Route path="/business/export-goods" element={<ExportGoods />} />
+            <Route path="/business/exports" element={<ExportGoods />} />
             <Route path="/business/sales/create-order" element={<CreateOrder />} />
             <Route path="/business/sales/order-management" element={<OrderManagement />} />
             <Route path="/business/sales/print-order" element={<PrintOrder />} />
