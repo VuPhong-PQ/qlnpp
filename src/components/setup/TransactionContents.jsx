@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import './SetupPage.css';
 
 const TransactionContents = () => {
@@ -127,6 +127,156 @@ const TransactionContents = () => {
     }
   };
 
+
+  // Cột và độ rộng mặc định
+  const initialContentColumns = [
+    { key: 'type', label: 'Loại nội dung' },
+    { key: 'code', label: 'Mã nội dung' },
+    { key: 'name', label: 'Tên nội dung' },
+    { key: 'note', label: 'Ghi chú' },
+    { key: 'status', label: 'Trạng thái' },
+    { key: 'actions', label: 'Thao tác', fixed: true }
+  ];
+  const defaultContentWidths = [120, 120, 180, 180, 110, 110];
+  // LocalStorage keys
+  const LS_KEY_COLS = 'transactionContentColumns';
+  const LS_KEY_WIDTHS = 'transactionContentColWidths';
+  const LS_KEY_VISIBLE = 'transactionContentVisibleCols';
+
+  // Khôi phục từ localStorage
+  const getInitialColumns = () => {
+    const saved = localStorage.getItem(LS_KEY_COLS);
+    if (saved) {
+      try {
+        const arr = JSON.parse(saved);
+        // Đảm bảo luôn có cột fixed cuối cùng
+        if (Array.isArray(arr) && arr.length === initialContentColumns.length) return arr;
+      } catch {}
+    }
+    return initialContentColumns;
+  };
+  const getInitialWidths = () => {
+    const saved = localStorage.getItem(LS_KEY_WIDTHS);
+    if (saved) {
+      try {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr) && arr.length === defaultContentWidths.length) return arr;
+      } catch {}
+    }
+    return defaultContentWidths;
+  };
+  const getInitialVisible = (columns) => {
+    const saved = localStorage.getItem(LS_KEY_VISIBLE);
+    if (saved) {
+      try {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr)) return arr;
+      } catch {}
+    }
+    return columns.map(col => col.key);
+  };
+
+  const [contentColumns, setContentColumns] = useState(getInitialColumns());
+  const [contentColWidths, setContentColWidths] = useState(getInitialWidths());
+  const [contentVisibleCols, setContentVisibleCols] = useState(getInitialVisible(getInitialColumns()));
+  const defaultContentVisible = initialContentColumns.map(col => col.key);
+  const [showContentColSetting, setShowContentColSetting] = useState(false);
+  const contentTableRef = useRef(null);
+  const contentColSettingRef = useRef(null);
+
+  // Drag state cho popup cài đặt
+  const [dragColIdx, setDragColIdx] = useState(null);
+  const [dragOverColIdx, setDragOverColIdx] = useState(null);
+
+  // Kéo-thả cột trong popup cài đặt
+  const handleSettingDragStart = (idx) => setDragColIdx(idx);
+  const handleSettingDragOver = (idx, e) => {
+    e.preventDefault();
+    setDragOverColIdx(idx);
+  };
+  const handleSettingDrop = () => {
+    if (
+      dragColIdx !== null &&
+      dragOverColIdx !== null &&
+      dragColIdx !== dragOverColIdx
+    ) {
+      const newCols = [...contentColumns];
+      const newWidths = [...contentColWidths];
+      const [removedCol] = newCols.splice(dragColIdx, 1);
+      newCols.splice(dragOverColIdx, 0, removedCol);
+      const [removedWidth] = newWidths.splice(dragColIdx, 1);
+      newWidths.splice(dragOverColIdx, 0, removedWidth);
+      setContentColumns(newCols);
+      setContentColWidths(newWidths);
+      // Cập nhật lại visibleCols theo thứ tự mới
+      const visibleKeys = newCols.map(col => col.key).filter(key => contentVisibleCols.includes(key));
+      setContentVisibleCols(visibleKeys);
+      // Lưu vào localStorage
+      localStorage.setItem(LS_KEY_COLS, JSON.stringify(newCols));
+      localStorage.setItem(LS_KEY_WIDTHS, JSON.stringify(newWidths));
+      localStorage.setItem(LS_KEY_VISIBLE, JSON.stringify(visibleKeys));
+    }
+    setDragColIdx(null);
+    setDragOverColIdx(null);
+  };
+
+  // Lưu thứ tự cột, độ rộng, cột hiển thị khi đóng popup
+  React.useEffect(() => {
+    if (!showContentColSetting) return;
+    const handleClickOutside = (e) => {
+      if (contentColSettingRef.current && !contentColSettingRef.current.contains(e.target)) {
+        setShowContentColSetting(false);
+        // Lưu vào localStorage
+        localStorage.setItem(LS_KEY_COLS, JSON.stringify(contentColumns));
+        localStorage.setItem(LS_KEY_WIDTHS, JSON.stringify(contentColWidths));
+        localStorage.setItem(LS_KEY_VISIBLE, JSON.stringify(contentVisibleCols));
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showContentColSetting, contentColumns, contentColWidths, contentVisibleCols]);
+
+  // Đóng popup khi click ra ngoài
+  React.useEffect(() => {
+    if (!showContentColSetting) return;
+    const handleClickOutside = (e) => {
+      if (contentColSettingRef.current && !contentColSettingRef.current.contains(e.target)) {
+        setShowContentColSetting(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showContentColSetting]);
+
+  // Kéo cột
+  const handleContentMouseDown = (index, e, edge) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidths = [...contentColWidths];
+    const onMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      setContentColWidths((widths) => {
+        const newWidths = [...widths];
+        if (edge === 'right' && index < widths.length - 1) {
+          newWidths[index] = Math.max(50, startWidths[index] + delta);
+          newWidths[index + 1] = Math.max(50, startWidths[index + 1] - delta);
+        } else if (edge === 'left' && index > 0) {
+          newWidths[index] = Math.max(50, startWidths[index] - delta);
+          newWidths[index - 1] = Math.max(50, startWidths[index - 1] + delta);
+        }
+        // Lưu width vào localStorage
+        localStorage.setItem(LS_KEY_WIDTHS, JSON.stringify(newWidths));
+        return newWidths;
+      });
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
   return (
     <div className="setup-page">
       <div className="page-header">
@@ -135,7 +285,7 @@ const TransactionContents = () => {
       </div>
 
       <div className="data-table-container">
-        <div className="table-header">
+        <div className="table-header" style={{ position: 'relative' }}>
           <input
             type="text"
             placeholder="Tìm kiếm theo tên, mã nội dung hoặc loại..."
@@ -160,62 +310,174 @@ const TransactionContents = () => {
             <button className="btn btn-secondary" onClick={handleImport}>
               📥 Import Excel
             </button>
+            <button
+              className="btn btn-settings"
+              style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}
+              title="Cài đặt cột hiển thị"
+              onClick={() => setShowContentColSetting(v => !v)}
+            >
+              <span role="img" aria-label="settings">⚙️</span>
+            </button>
           </div>
+
+          {/* Popup chọn cột hiển thị */}
+          {showContentColSetting && (
+            <div
+              ref={contentColSettingRef}
+              style={{
+                position: 'fixed',
+                top: '80px',
+                right: '40px',
+                background: '#fff',
+                border: '1px solid #eee',
+                borderRadius: 8,
+                boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+                zIndex: 9999,
+                minWidth: 240,
+                padding: 14
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={contentVisibleCols.length === contentColumns.length}
+                  onChange={e => {
+                    const newVisible = e.target.checked ? defaultContentVisible : [];
+                    setContentVisibleCols(newVisible);
+                    localStorage.setItem(LS_KEY_VISIBLE, JSON.stringify(newVisible));
+                  }}
+                  style={{ marginRight: 6 }}
+                />
+                <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
+                <button
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
+                  onClick={() => setContentVisibleCols(defaultContentVisible)}
+                >Làm lại</button>
+              </div>
+              <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
+              {contentColumns.filter(col => !col.fixed).map((col, idx) => (
+                <div
+                  key={col.key}
+                  style={{ display: 'flex', alignItems: 'center', marginBottom: 2, opacity: dragColIdx === idx ? 0.5 : 1, background: dragOverColIdx === idx && dragColIdx !== null ? '#e6f7ff' : undefined }}
+                  draggable
+                  onDragStart={() => handleSettingDragStart(idx)}
+                  onDragOver={e => handleSettingDragOver(idx, e)}
+                  onDrop={handleSettingDrop}
+                  onDragEnd={() => { setDragColIdx(null); setDragOverColIdx(null); }}
+                >
+                  <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
+                  <input
+                    type="checkbox"
+                    checked={contentVisibleCols.includes(col.key)}
+                    onChange={e => {
+                      if (e.target.checked) {
+                        const newVisible = [...contentVisibleCols, col.key];
+                        setContentVisibleCols(newVisible);
+                        localStorage.setItem(LS_KEY_VISIBLE, JSON.stringify(newVisible));
+                      } else {
+                        const newVisible = contentVisibleCols.filter(k => k !== col.key);
+                        setContentVisibleCols(newVisible);
+                        localStorage.setItem(LS_KEY_VISIBLE, JSON.stringify(newVisible));
+                      }
+                    }}
+                    style={{ marginRight: 6 }}
+                  />
+                  <span>{col.label}</span>
+                </div>
+              ))}
+              <div style={{ fontSize: 13, color: '#888', margin: '6px 0 2px' }}>Cố định phải</div>
+              <div style={{ display: 'flex', alignItems: 'center', opacity: 0.7 }}>
+                <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
+                <input type="checkbox" checked disabled style={{ marginRight: 6 }} />
+                <span>Thao tác</span>
+              </div>
+            </div>
+          )}
         </div>
 
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Loại nội dung</th>
-              <th>Mã nội dung</th>
-              <th>Tên nội dung</th>
-              <th>Ghi chú</th>
-              <th>Trạng thái</th>
-              <th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredContents.map((content) => (
-              <tr key={content.id}>
-                <td>
-                  <span 
-                    className="status-badge"
-                    style={{ 
-                      backgroundColor: getTypeColor(content.type),
-                      color: 'white'
-                    }}
-                  >
-                    {content.type}
-                  </span>
-                </td>
-                <td>{content.code}</td>
-                <td>{content.name}</td>
-                <td>{content.note}</td>
-                <td>
-                  <span className={`status-badge ${content.status === 'active' ? 'status-active' : 'status-inactive'}`}>
-                    {content.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
-                  </span>
-                </td>
-                <td>
-                  <div className="action-buttons">
-                    <button 
-                      className="btn btn-secondary btn-small"
-                      onClick={() => handleEdit(content)}
-                    >
-                      Sửa
-                    </button>
-                    <button 
-                      className="btn btn-danger btn-small"
-                      onClick={() => handleDelete(content.id)}
-                    >
-                      Xóa
-                    </button>
-                  </div>
-                </td>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="data-table" ref={contentTableRef}>
+            <colgroup>
+              {contentColWidths.map((w, i) => (
+                contentVisibleCols.includes(contentColumns[i].key) ? <col key={i} style={{ width: w }} /> : null
+              ))}
+            </colgroup>
+            <thead>
+              <tr>
+                {contentColumns.map((col, idx, arr) => (
+                  contentVisibleCols.includes(col.key) ? (
+                    <th key={col.key} style={{ position: 'relative' }}>
+                      {/* Mép trái */}
+                      {idx > 0 && contentVisibleCols.includes(arr[idx - 1].key) && (
+                        <span
+                          className="col-resizer left"
+                          onMouseDown={e => handleContentMouseDown(idx, e, 'left')}
+                          style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                        />
+                      )}
+                      {col.label}
+                      {/* Mép phải */}
+                      {idx < arr.length - 1 && contentVisibleCols.includes(arr[idx + 1].key) && (
+                        <span
+                          className="col-resizer right"
+                          onMouseDown={e => handleContentMouseDown(idx, e, 'right')}
+                          style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                        />
+                      )}
+                    </th>
+                  ) : null
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredContents.map((content) => (
+                <tr key={content.id}>
+                  {contentColumns.map((col, idx) => {
+                    if (!contentVisibleCols.includes(col.key)) return null;
+                    if (col.key === 'type') {
+                      return (
+                        <td key={col.key}>
+                          <span style={{ color: getTypeColor(content.type), fontWeight: 500 }}>{content.type}</span>
+                        </td>
+                      );
+                    }
+                    if (col.key === 'status') {
+                      return (
+                        <td key={col.key}>
+                          <span className={`status-badge ${content.status === 'active' ? 'status-active' : 'status-inactive'}`}>
+                            {content.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
+                          </span>
+                        </td>
+                      );
+                    }
+                    if (col.key === 'actions') {
+                      return (
+                        <td key={col.key}>
+                          <div className="action-buttons">
+                            <button 
+                              className="btn btn-secondary btn-small"
+                              onClick={() => handleEdit(content)}
+                            >
+                              Sửa
+                            </button>
+                            <button 
+                              className="btn btn-danger btn-small"
+                              onClick={() => handleDelete(content.id)}
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        </td>
+                      );
+                    }
+                    return <td key={col.key}>{content[col.key]}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
 
         {filteredContents.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>

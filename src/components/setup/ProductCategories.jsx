@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import './SetupPage.css';
 
 const ProductCategories = () => {
@@ -98,6 +98,63 @@ const ProductCategories = () => {
     alert('Chức năng import Excel đang được phát triển');
   };
 
+
+  // Cột và độ rộng mặc định
+  const categoryColumns = [
+    { key: 'code', label: 'Mã loại' },
+    { key: 'name', label: 'Tên loại' },
+    { key: 'noGroupOrder', label: 'Không gộp đơn hàng' },
+    { key: 'note', label: 'Ghi chú' },
+    { key: 'status', label: 'Trạng thái' },
+    { key: 'actions', label: 'Thao tác', fixed: true }
+  ];
+  const defaultCategoryWidths = [100, 180, 140, 180, 110, 110];
+  const [categoryColWidths, setCategoryColWidths] = useState(defaultCategoryWidths);
+  const defaultCategoryVisible = categoryColumns.map(col => col.key);
+  const [categoryVisibleCols, setCategoryVisibleCols] = useState(defaultCategoryVisible);
+  const [showCategoryColSetting, setShowCategoryColSetting] = useState(false);
+  const categoryTableRef = useRef(null);
+  const categoryColSettingRef = useRef(null);
+
+  // Đóng popup khi click ra ngoài
+  React.useEffect(() => {
+    if (!showCategoryColSetting) return;
+    const handleClickOutside = (e) => {
+      if (categoryColSettingRef.current && !categoryColSettingRef.current.contains(e.target)) {
+        setShowCategoryColSetting(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCategoryColSetting]);
+
+  // Kéo cột
+  const handleCategoryMouseDown = (index, e, edge) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidths = [...categoryColWidths];
+    const onMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      setCategoryColWidths((widths) => {
+        const newWidths = [...widths];
+        if (edge === 'right' && index < widths.length - 1) {
+          newWidths[index] = Math.max(50, startWidths[index] + delta);
+          newWidths[index + 1] = Math.max(50, startWidths[index + 1] - delta);
+        } else if (edge === 'left' && index > 0) {
+          newWidths[index] = Math.max(50, startWidths[index] - delta);
+          newWidths[index - 1] = Math.max(50, startWidths[index - 1] + delta);
+        }
+        return newWidths;
+      });
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
   return (
     <div className="setup-page">
       <div className="page-header">
@@ -106,7 +163,7 @@ const ProductCategories = () => {
       </div>
 
       <div className="data-table-container">
-        <div className="table-header">
+        <div className="table-header" style={{ position: 'relative' }}>
           <input
             type="text"
             placeholder="Tìm kiếm theo tên hoặc mã loại hàng..."
@@ -131,56 +188,156 @@ const ProductCategories = () => {
             <button className="btn btn-secondary" onClick={handleImport}>
               📥 Import Excel
             </button>
+            <button
+              className="btn btn-settings"
+              style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}
+              title="Cài đặt cột hiển thị"
+              onClick={() => setShowCategoryColSetting(v => !v)}
+            >
+              <span role="img" aria-label="settings">⚙️</span>
+            </button>
           </div>
+
+          {/* Popup chọn cột hiển thị */}
+          {showCategoryColSetting && (
+            <div
+              ref={categoryColSettingRef}
+              style={{
+                position: 'fixed',
+                top: '80px',
+                right: '40px',
+                background: '#fff',
+                border: '1px solid #eee',
+                borderRadius: 8,
+                boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+                zIndex: 9999,
+                minWidth: 240,
+                padding: 14
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={categoryVisibleCols.length === categoryColumns.length}
+                  onChange={e => setCategoryVisibleCols(e.target.checked ? defaultCategoryVisible : [])}
+                  style={{ marginRight: 6 }}
+                />
+                <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
+                <button
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
+                  onClick={() => setCategoryVisibleCols(defaultCategoryVisible)}
+                >Làm lại</button>
+              </div>
+              <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
+              {categoryColumns.filter(col => !col.fixed).map(col => (
+                <div key={col.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
+                  <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
+                  <input
+                    type="checkbox"
+                    checked={categoryVisibleCols.includes(col.key)}
+                    onChange={e => {
+                      if (e.target.checked) setCategoryVisibleCols(cols => [...cols, col.key]);
+                      else setCategoryVisibleCols(cols => cols.filter(k => k !== col.key));
+                    }}
+                    style={{ marginRight: 6 }}
+                  />
+                  <span>{col.label}</span>
+                </div>
+              ))}
+              <div style={{ fontSize: 13, color: '#888', margin: '6px 0 2px' }}>Cố định phải</div>
+              <div style={{ display: 'flex', alignItems: 'center', opacity: 0.7 }}>
+                <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
+                <input type="checkbox" checked disabled style={{ marginRight: 6 }} />
+                <span>Thao tác</span>
+              </div>
+            </div>
+          )}
         </div>
 
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Mã loại</th>
-              <th>Tên loại</th>
-              <th>Không gộp đơn hàng</th>
-              <th>Ghi chú</th>
-              <th>Trạng thái</th>
-              <th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredCategories.map((category) => (
-              <tr key={category.id}>
-                <td>{category.code}</td>
-                <td>{category.name}</td>
-                <td>
-                  <span className={`status-badge ${category.noGroupOrder ? 'status-inactive' : 'status-active'}`}>
-                    {category.noGroupOrder ? 'Có' : 'Không'}
-                  </span>
-                </td>
-                <td>{category.note}</td>
-                <td>
-                  <span className={`status-badge ${category.status === 'active' ? 'status-active' : 'status-inactive'}`}>
-                    {category.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
-                  </span>
-                </td>
-                <td>
-                  <div className="action-buttons">
-                    <button 
-                      className="btn btn-secondary btn-small"
-                      onClick={() => handleEdit(category)}
-                    >
-                      Sửa
-                    </button>
-                    <button 
-                      className="btn btn-danger btn-small"
-                      onClick={() => handleDelete(category.id)}
-                    >
-                      Xóa
-                    </button>
-                  </div>
-                </td>
+        <div style={{ overflowX: 'auto' }}>
+          <table className="data-table" ref={categoryTableRef}>
+            <colgroup>
+              {categoryColWidths.map((w, i) => (
+                categoryVisibleCols.includes(categoryColumns[i].key) ? <col key={i} style={{ width: w }} /> : null
+              ))}
+            </colgroup>
+            <thead>
+              <tr>
+                {categoryColumns.map((col, idx, arr) => (
+                  categoryVisibleCols.includes(col.key) ? (
+                    <th key={col.key} style={{ position: 'relative' }}>
+                      {/* Mép trái */}
+                      {idx > 0 && categoryVisibleCols.includes(arr[idx - 1].key) && (
+                        <span
+                          className="col-resizer left"
+                          onMouseDown={e => handleCategoryMouseDown(idx, e, 'left')}
+                          style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                        />
+                      )}
+                      {col.label}
+                      {/* Mép phải */}
+                      {idx < arr.length - 1 && categoryVisibleCols.includes(arr[idx + 1].key) && (
+                        <span
+                          className="col-resizer right"
+                          onMouseDown={e => handleCategoryMouseDown(idx, e, 'right')}
+                          style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                        />
+                      )}
+                    </th>
+                  ) : null
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredCategories.map((category) => (
+                <tr key={category.id}>
+                  {categoryColumns.map((col, idx) => {
+                    if (!categoryVisibleCols.includes(col.key)) return null;
+                    if (col.key === 'noGroupOrder') {
+                      return (
+                        <td key={col.key}>
+                          <span className={`status-badge ${category.noGroupOrder ? 'status-inactive' : 'status-active'}`}>
+                            {category.noGroupOrder ? 'Có' : 'Không'}
+                          </span>
+                        </td>
+                      );
+                    }
+                    if (col.key === 'status') {
+                      return (
+                        <td key={col.key}>
+                          <span className={`status-badge ${category.status === 'active' ? 'status-active' : 'status-inactive'}`}>
+                            {category.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
+                          </span>
+                        </td>
+                      );
+                    }
+                    if (col.key === 'actions') {
+                      return (
+                        <td key={col.key}>
+                          <div className="action-buttons">
+                            <button 
+                              className="btn btn-secondary btn-small"
+                              onClick={() => handleEdit(category)}
+                            >
+                              Sửa
+                            </button>
+                            <button 
+                              className="btn btn-danger btn-small"
+                              onClick={() => handleDelete(category.id)}
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        </td>
+                      );
+                    }
+                    return <td key={col.key}>{category[col.key]}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         {filteredCategories.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>

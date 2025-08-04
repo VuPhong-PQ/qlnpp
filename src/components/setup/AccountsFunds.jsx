@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
 
 const AccountsFunds = () => {
@@ -7,13 +7,10 @@ const AccountsFunds = () => {
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Độ rộng mặc định cho bảng quỹ tiền
-  const defaultFundWidths = [90, 120, 120, 120, 120, 120, 110, 110, 100, 90];
-  const [fundColWidths, setFundColWidths] = useState(defaultFundWidths);
-  const fundTableRef = useRef(null);
 
-  // Cột hiển thị cho bảng quỹ tiền
-  const fundColumns = [
+  // --- Kéo-thả, hiển thị, lưu cấu hình cột bảng quỹ tiền ---
+  const fundTableRef = useRef(null);
+  const defaultFundColumns = [
     { key: 'code', label: 'Mã quỹ' },
     { key: 'name', label: 'Tên quỹ' },
     { key: 'accountHolder', label: 'Chủ tài khoản' },
@@ -25,9 +22,59 @@ const AccountsFunds = () => {
     { key: 'status', label: 'Ngưng hoạt động' },
     { key: 'actions', label: 'Thao tác', fixed: true }
   ];
-  const defaultFundVisible = fundColumns.map(col => col.key);
-  const [fundVisibleCols, setFundVisibleCols] = useState(defaultFundVisible);
+  const defaultFundWidths = [90, 120, 120, 120, 120, 120, 110, 110, 100, 90];
+  const [fundColumns, setFundColumns] = useState(() => {
+    const saved = localStorage.getItem('fundColumns');
+    if (saved) {
+      try {
+        const arr = JSON.parse(saved);
+        // Map lại label/fixed nếu có update code
+        return arr.map(col => {
+          const def = defaultFundColumns.find(d => d.key === col.key);
+          return def ? { ...def, ...col } : col;
+        });
+      } catch {
+        return defaultFundColumns;
+      }
+    }
+    return defaultFundColumns;
+  });
+  const [fundColWidths, setFundColWidths] = useState(() => {
+    const saved = localStorage.getItem('fundColWidths');
+    if (saved) {
+      try {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr) && arr.length === defaultFundWidths.length) return arr;
+      } catch {}
+    }
+    return defaultFundWidths;
+  });
+  const defaultFundVisible = defaultFundColumns.map(col => col.key);
+  const [fundVisibleCols, setFundVisibleCols] = useState(() => {
+    const saved = localStorage.getItem('fundVisibleCols');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {}
+    }
+    return defaultFundVisible;
+  });
   const [showFundColSetting, setShowFundColSetting] = useState(false);
+  const fundColSettingRef = useRef(null);
+  // Drag state
+  const [dragColIdx, setDragColIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
+
+  // Lưu cấu hình cột vào localStorage
+  useEffect(() => {
+    localStorage.setItem('fundColumns', JSON.stringify(fundColumns));
+  }, [fundColumns]);
+  useEffect(() => {
+    localStorage.setItem('fundColWidths', JSON.stringify(fundColWidths));
+  }, [fundColWidths]);
+  useEffect(() => {
+    localStorage.setItem('fundVisibleCols', JSON.stringify(fundVisibleCols));
+  }, [fundVisibleCols]);
 
   // Độ rộng mặc định cho bảng khoản vay
   const defaultLoanWidths = [120, 140, 110, 110, 110, 100, 120, 120, 90, 90, 90];
@@ -51,6 +98,31 @@ const AccountsFunds = () => {
   const defaultLoanVisible = loanColumns.map(col => col.key);
   const [loanVisibleCols, setLoanVisibleCols] = useState(defaultLoanVisible);
   const [showLoanColSetting, setShowLoanColSetting] = useState(false);
+  const loanColSettingRef = useRef(null);
+
+  // Đóng popup + tự động lưu khi click ra ngoài cho popup cài đặt cột quỹ tiền
+  useEffect(() => {
+    if (!showFundColSetting) return;
+    const handleClickOutside = (e) => {
+      if (fundColSettingRef.current && !fundColSettingRef.current.contains(e.target)) {
+        setShowFundColSetting(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFundColSetting]);
+
+  // Đóng popup khi click ra ngoài cho popup cài đặt cột khoản vay
+  React.useEffect(() => {
+    if (!showLoanColSetting) return;
+    const handleClickOutside = (e) => {
+      if (loanColSettingRef.current && !loanColSettingRef.current.contains(e.target)) {
+        setShowLoanColSetting(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showLoanColSetting]);
 
   // Hàm xử lý kéo cột cho bảng quỹ tiền (kéo mép trái/phải)
   const handleFundMouseDown = (index, e, edge) => {
@@ -248,11 +320,11 @@ const AccountsFunds = () => {
     loan.accountNumber.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
+  // Định dạng số tiền: chỉ có dấu phẩy, không có chữ "đ", luôn dùng dấu phẩy ngăn cách
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
-    }).format(amount);
+    if (typeof amount !== 'number') return amount;
+    // Đảm bảo luôn là dấu phẩy, thay dấu chấm nếu có
+    return amount.toLocaleString('vi-VN').replace(/\./g, ',');
   };
 
   return (
@@ -314,18 +386,21 @@ const AccountsFunds = () => {
 
         {/* Popup chọn cột hiển thị */}
         {showFundColSetting && (
-          <div style={{
-            position: 'fixed',
-            top: '80px', // hoặc điều chỉnh phù hợp với header
-            right: '40px', // căn sát mép phải màn hình, có thể chỉnh lại nếu cần
-            background: '#fff',
-            border: '1px solid #eee',
-            borderRadius: 8,
-            boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
-            zIndex: 9999,
-            minWidth: 240,
-            padding: 14
-          }}>
+          <div
+            ref={fundColSettingRef}
+            style={{
+              position: 'fixed',
+              top: '80px',
+              right: '40px',
+              background: '#fff',
+              border: '1px solid #eee',
+              borderRadius: 8,
+              boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+              zIndex: 9999,
+              minWidth: 240,
+              padding: 14
+            }}
+          >
             <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
               <input
                 type="checkbox"
@@ -336,12 +411,37 @@ const AccountsFunds = () => {
               <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
               <button
                 style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
-                onClick={() => setFundVisibleCols(defaultFundVisible)}
+                onClick={() => {
+                  setFundVisibleCols(defaultFundVisible);
+                  setFundColumns(defaultFundColumns);
+                  setFundColWidths(defaultFundWidths);
+                }}
               >Làm lại</button>
             </div>
             <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
-            {fundColumns.filter(col => !col.fixed).map(col => (
-              <div key={col.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
+            {fundColumns.filter(col => !col.fixed).map((col, idx) => (
+              <div
+                key={col.key}
+                style={{ display: 'flex', alignItems: 'center', marginBottom: 2, background: dragOverIdx === idx ? '#f0f7ff' : undefined }}
+                draggable
+                onDragStart={() => setDragColIdx(idx)}
+                onDragOver={e => { e.preventDefault(); setDragOverIdx(idx); }}
+                onDrop={() => {
+                  if (dragColIdx === null || dragColIdx === idx) return;
+                  const newCols = [...fundColumns];
+                  const [moved] = newCols.splice(dragColIdx, 1);
+                  newCols.splice(idx, 0, moved);
+                  setFundColumns(newCols);
+                  // Cập nhật width theo thứ tự mới
+                  const newWidths = [...fundColWidths];
+                  const [w] = newWidths.splice(dragColIdx, 1);
+                  newWidths.splice(idx, 0, w);
+                  setFundColWidths(newWidths);
+                  setDragColIdx(null);
+                  setDragOverIdx(null);
+                }}
+                onDragEnd={() => { setDragColIdx(null); setDragOverIdx(null); }}
+              >
                 <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
                 <input
                   type="checkbox"
@@ -367,8 +467,8 @@ const AccountsFunds = () => {
 
           <table className="data-table" ref={fundTableRef}>
             <colgroup>
-              {fundColWidths.map((w, i) => (
-                fundVisibleCols.includes(fundColumns[i].key) ? <col key={i} style={{ width: w }} /> : null
+              {fundColumns.map((col, i) => (
+                fundVisibleCols.includes(col.key) ? <col key={col.key} style={{ width: fundColWidths[i] }} /> : null
               ))}
             </colgroup>
             <thead>
@@ -480,18 +580,21 @@ const AccountsFunds = () => {
 
             {/* Popup chọn cột hiển thị */}
             {showLoanColSetting && (
-              <div style={{
-                position: 'fixed',
-                top: '120px', // điều chỉnh phù hợp với header
-                right: '40px',
-                background: '#fff',
-                border: '1px solid #eee',
-                borderRadius: 8,
-                boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
-                zIndex: 9999,
-                minWidth: 240,
-                padding: 14
-              }}>
+              <div
+                ref={loanColSettingRef}
+                style={{
+                  position: 'fixed',
+                  top: '120px', // điều chỉnh phù hợp với header
+                  right: '40px',
+                  background: '#fff',
+                  border: '1px solid #eee',
+                  borderRadius: 8,
+                  boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+                  zIndex: 9999,
+                  minWidth: 240,
+                  padding: 14
+                }}
+              >
                 <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
                   <input
                     type="checkbox"

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import './SetupPage.css';
 
 const Products = () => {
@@ -185,6 +185,69 @@ const Products = () => {
     }).format(amount);
   };
 
+  // Cột và độ rộng mặc định
+  const productColumns = [
+    { key: 'category', label: 'Loại hàng' },
+    { key: 'barcode', label: 'Mã vạch' },
+    { key: 'code', label: 'Mã HH' },
+    { key: 'name', label: 'Tên hàng hóa' },
+    { key: 'vatName', label: 'Tên hàng VAT' },
+    { key: 'shelfLife', label: 'HSD (tháng)' },
+    { key: 'baseUnit', label: 'ĐVT gốc' },
+    { key: 'retailPrice', label: 'Giá bán lẻ' },
+    { key: 'wholesalePrice', label: 'Giá bán sỉ' },
+    { key: 'minStock', label: 'Tồn tối thiểu' },
+    { key: 'discount', label: 'Chiết khấu (%)' },
+    { key: 'status', label: 'Trạng thái' },
+    { key: 'actions', label: 'Thao tác', fixed: true }
+  ];
+  const defaultProductWidths = [120, 120, 100, 180, 180, 100, 100, 120, 120, 110, 110, 110, 110];
+  const [productColWidths, setProductColWidths] = useState(defaultProductWidths);
+  const defaultProductVisible = productColumns.map(col => col.key);
+  const [productVisibleCols, setProductVisibleCols] = useState(defaultProductVisible);
+  const [showProductColSetting, setShowProductColSetting] = useState(false);
+  const productTableRef = useRef(null);
+  const productColSettingRef = useRef(null);
+
+  // Đóng popup khi click ra ngoài
+  React.useEffect(() => {
+    if (!showProductColSetting) return;
+    const handleClickOutside = (e) => {
+      if (productColSettingRef.current && !productColSettingRef.current.contains(e.target)) {
+        setShowProductColSetting(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showProductColSetting]);
+
+  // Kéo cột
+  const handleProductMouseDown = (index, e, edge) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidths = [...productColWidths];
+    const onMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      setProductColWidths((widths) => {
+        const newWidths = [...widths];
+        if (edge === 'right' && index < widths.length - 1) {
+          newWidths[index] = Math.max(50, startWidths[index] + delta);
+          newWidths[index + 1] = Math.max(50, startWidths[index + 1] - delta);
+        } else if (edge === 'left' && index > 0) {
+          newWidths[index] = Math.max(50, startWidths[index] - delta);
+          newWidths[index - 1] = Math.max(50, startWidths[index - 1] + delta);
+        }
+        return newWidths;
+      });
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
   return (
     <div className="setup-page">
       <div className="page-header">
@@ -193,7 +256,7 @@ const Products = () => {
       </div>
 
       <div className="data-table-container">
-        <div className="table-header">
+        <div className="table-header" style={{ position: 'relative' }}>
           <input
             type="text"
             placeholder="Tìm kiếm theo tên, mã sản phẩm hoặc mã vạch..."
@@ -214,63 +277,145 @@ const Products = () => {
             </button>
             <button className="btn btn-success">📤 Export Excel</button>
             <button className="btn btn-secondary">📥 Import Excel</button>
+            <button
+              className="btn btn-settings"
+              style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}
+              title="Cài đặt cột hiển thị"
+              onClick={() => setShowProductColSetting(v => !v)}
+            >
+              <span role="img" aria-label="settings">⚙️</span>
+            </button>
           </div>
+
+          {/* Popup chọn cột hiển thị */}
+          {showProductColSetting && (
+            <div
+              ref={productColSettingRef}
+              style={{
+                position: 'fixed',
+                top: '80px',
+                right: '40px',
+                background: '#fff',
+                border: '1px solid #eee',
+                borderRadius: 8,
+                boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+                zIndex: 9999,
+                minWidth: 240,
+                padding: 14
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={productVisibleCols.length === productColumns.length}
+                  onChange={e => setProductVisibleCols(e.target.checked ? defaultProductVisible : [])}
+                  style={{ marginRight: 6 }}
+                />
+                <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
+                <button
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
+                  onClick={() => setProductVisibleCols(defaultProductVisible)}
+                >Làm lại</button>
+              </div>
+              <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
+              {productColumns.filter(col => !col.fixed).map(col => (
+                <div key={col.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
+                  <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
+                  <input
+                    type="checkbox"
+                    checked={productVisibleCols.includes(col.key)}
+                    onChange={e => {
+                      if (e.target.checked) setProductVisibleCols(cols => [...cols, col.key]);
+                      else setProductVisibleCols(cols => cols.filter(k => k !== col.key));
+                    }}
+                    style={{ marginRight: 6 }}
+                  />
+                  <span>{col.label}</span>
+                </div>
+              ))}
+              <div style={{ fontSize: 13, color: '#888', margin: '6px 0 2px' }}>Cố định phải</div>
+              <div style={{ display: 'flex', alignItems: 'center', opacity: 0.7 }}>
+                <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
+                <input type="checkbox" checked disabled style={{ marginRight: 6 }} />
+                <span>Thao tác</span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={{ overflowX: 'auto' }}>
-          <table className="data-table">
+          <table className="data-table" ref={productTableRef}>
+            <colgroup>
+              {productColWidths.map((w, i) => (
+                productVisibleCols.includes(productColumns[i].key) ? <col key={i} style={{ width: w }} /> : null
+              ))}
+            </colgroup>
             <thead>
               <tr>
-                <th>Loại hàng</th>
-                <th>Mã vạch</th>
-                <th>Mã HH</th>
-                <th>Tên hàng hóa</th>
-                <th>Tên hàng VAT</th>
-                <th>HSD (tháng)</th>
-                <th>ĐVT gốc</th>
-                <th>Giá bán lẻ</th>
-                <th>Giá bán sỉ</th>
-                <th>Tồn tối thiểu</th>
-                <th>Chiết khấu (%)</th>
-                <th>Trạng thái</th>
-                <th>Thao tác</th>
+                {productColumns.map((col, idx, arr) => (
+                  productVisibleCols.includes(col.key) ? (
+                    <th key={col.key} style={{ position: 'relative' }}>
+                      {/* Mép trái */}
+                      {idx > 0 && productVisibleCols.includes(arr[idx - 1].key) && (
+                        <span
+                          className="col-resizer left"
+                          onMouseDown={e => handleProductMouseDown(idx, e, 'left')}
+                          style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                        />
+                      )}
+                      {col.label}
+                      {/* Mép phải */}
+                      {idx < arr.length - 1 && productVisibleCols.includes(arr[idx + 1].key) && (
+                        <span
+                          className="col-resizer right"
+                          onMouseDown={e => handleProductMouseDown(idx, e, 'right')}
+                          style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                        />
+                      )}
+                    </th>
+                  ) : null
+                ))}
               </tr>
             </thead>
             <tbody>
               {filteredProducts.map((product) => (
                 <tr key={product.id}>
-                  <td>{product.category}</td>
-                  <td>{product.barcode}</td>
-                  <td>{product.code}</td>
-                  <td>{product.name}</td>
-                  <td>{product.vatName}</td>
-                  <td>{product.shelfLife}</td>
-                  <td>{product.baseUnit}</td>
-                  <td>{formatCurrency(product.retailPrice)}</td>
-                  <td>{formatCurrency(product.wholesalePrice)}</td>
-                  <td>{product.minStock}</td>
-                  <td>{product.discount}%</td>
-                  <td>
-                    <span className={`status-badge ${product.status === 'active' ? 'status-active' : 'status-inactive'}`}>
-                      {product.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="action-buttons">
-                      <button 
-                        className="btn btn-secondary btn-small"
-                        onClick={() => handleEdit(product)}
-                      >
-                        Sửa
-                      </button>
-                      <button 
-                        className="btn btn-danger btn-small"
-                        onClick={() => handleDelete(product.id)}
-                      >
-                        Xóa
-                      </button>
-                    </div>
-                  </td>
+                  {productColumns.map((col, idx) => {
+                    if (!productVisibleCols.includes(col.key)) return null;
+                    if (col.key === 'retailPrice' || col.key === 'wholesalePrice') {
+                      return <td key={col.key}>{formatCurrency(product[col.key])}</td>;
+                    }
+                    if (col.key === 'status') {
+                      return (
+                        <td key={col.key}>
+                          <span className={`status-badge ${product.status === 'active' ? 'status-active' : 'status-inactive'}`}>
+                            {product.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
+                          </span>
+                        </td>
+                      );
+                    }
+                    if (col.key === 'actions') {
+                      return (
+                        <td key={col.key}>
+                          <div className="action-buttons">
+                            <button 
+                              className="btn btn-secondary btn-small"
+                              onClick={() => handleEdit(product)}
+                            >
+                              Sửa
+                            </button>
+                            <button 
+                              className="btn btn-danger btn-small"
+                              onClick={() => handleDelete(product.id)}
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        </td>
+                      );
+                    }
+                    return <td key={col.key}>{product[col.key]}</td>;
+                  })}
                 </tr>
               ))}
             </tbody>
@@ -279,7 +424,7 @@ const Products = () => {
 
         {filteredProducts.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
-            Không tìm thấy sản phẩm nào
+            Không tìm thấy hàng hóa nào
           </div>
         )}
       </div>

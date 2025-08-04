@@ -116,6 +116,19 @@ const CustomerGroups = () => {
   const [groupVisibleCols, setGroupVisibleCols] = useState(defaultGroupVisible);
   const [showGroupColSetting, setShowGroupColSetting] = useState(false);
   const groupTableRef = useRef(null);
+  const groupColSettingRef = useRef(null);
+
+  // Đóng popup khi click ra ngoài
+  React.useEffect(() => {
+    if (!showGroupColSetting) return;
+    const handleClickOutside = (e) => {
+      if (groupColSettingRef.current && !groupColSettingRef.current.contains(e.target)) {
+        setShowGroupColSetting(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showGroupColSetting]);
 
   // Kéo cột
   const handleGroupMouseDown = (index, e, edge) => {
@@ -189,18 +202,21 @@ const CustomerGroups = () => {
 
           {/* Popup chọn cột hiển thị */}
           {showGroupColSetting && (
-            <div style={{
-              position: 'fixed',
-              top: '80px',
-              right: '40px',
-              background: '#fff',
-              border: '1px solid #eee',
-              borderRadius: 8,
-              boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
-              zIndex: 9999,
-              minWidth: 220,
-              padding: 14
-            }}>
+            <div
+              ref={groupColSettingRef}
+              style={{
+                position: 'fixed',
+                top: '80px',
+                right: '40px',
+                background: '#fff',
+                border: '1px solid #eee',
+                borderRadius: 8,
+                boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+                zIndex: 9999,
+                minWidth: 220,
+                padding: 14
+              }}
+            >
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
                 <input
                   type="checkbox"

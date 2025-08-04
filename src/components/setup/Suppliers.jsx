@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import './SetupPage.css';
 
 const Suppliers = () => {
@@ -128,6 +128,103 @@ const Suppliers = () => {
     alert('Chức năng import Excel đang được phát triển');
   };
 
+
+
+  // Cột và độ rộng mặc định
+  const initialSupplierColumns = [
+    { key: 'code', label: 'Mã NCC' },
+    { key: 'name', label: 'Tên nhà cung cấp' },
+    { key: 'phone', label: 'Số điện thoại' },
+    { key: 'address', label: 'Địa chỉ' },
+    { key: 'taxCode', label: 'Mã số thuế' },
+    { key: 'productType', label: 'Loại hàng' },
+    { key: 'note', label: 'Ghi chú' },
+    { key: 'status', label: 'Tình trạng' },
+    { key: 'actions', label: 'Thao tác', fixed: true }
+  ];
+  const defaultSupplierWidths = [100, 180, 120, 200, 120, 140, 140, 110, 110];
+  const [supplierColumns, setSupplierColumns] = useState(initialSupplierColumns);
+  const [supplierColWidths, setSupplierColWidths] = useState(defaultSupplierWidths);
+  const defaultSupplierVisible = supplierColumns.map(col => col.key);
+  const [supplierVisibleCols, setSupplierVisibleCols] = useState(defaultSupplierVisible);
+  const [showSupplierColSetting, setShowSupplierColSetting] = useState(false);
+  const supplierTableRef = useRef(null);
+  const supplierColSettingRef = useRef(null);
+
+  // Drag & drop state
+  const [dragColIndex, setDragColIndex] = useState(null);
+  const [dragOverColIndex, setDragOverColIndex] = useState(null);
+
+  // Kéo-thả cột
+  const handleColDragStart = (idx) => {
+    setDragColIndex(idx);
+  };
+  const handleColDragOver = (idx, e) => {
+    e.preventDefault();
+    setDragOverColIndex(idx);
+  };
+  const handleColDrop = () => {
+    if (
+      dragColIndex !== null &&
+      dragOverColIndex !== null &&
+      dragColIndex !== dragOverColIndex
+    ) {
+      // Hoán đổi vị trí cột trong supplierColumns, supplierColWidths
+      const newColumns = [...supplierColumns];
+      const newWidths = [...supplierColWidths];
+      const [removedCol] = newColumns.splice(dragColIndex, 1);
+      newColumns.splice(dragOverColIndex, 0, removedCol);
+      const [removedWidth] = newWidths.splice(dragColIndex, 1);
+      newWidths.splice(dragOverColIndex, 0, removedWidth);
+      setSupplierColumns(newColumns);
+      setSupplierColWidths(newWidths);
+      // Cập nhật lại visibleCols theo thứ tự mới
+      const visibleKeys = newColumns.map(col => col.key).filter(key => supplierVisibleCols.includes(key));
+      setSupplierVisibleCols(visibleKeys);
+    }
+    setDragColIndex(null);
+    setDragOverColIndex(null);
+  };
+
+  // Đóng popup khi click ra ngoài
+  React.useEffect(() => {
+    if (!showSupplierColSetting) return;
+    const handleClickOutside = (e) => {
+      if (supplierColSettingRef.current && !supplierColSettingRef.current.contains(e.target)) {
+        setShowSupplierColSetting(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showSupplierColSetting]);
+
+  // Kéo cột
+  const handleSupplierMouseDown = (index, e, edge) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidths = [...supplierColWidths];
+    const onMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      setSupplierColWidths((widths) => {
+        const newWidths = [...widths];
+        if (edge === 'right' && index < widths.length - 1) {
+          newWidths[index] = Math.max(50, startWidths[index] + delta);
+          newWidths[index + 1] = Math.max(50, startWidths[index + 1] - delta);
+        } else if (edge === 'left' && index > 0) {
+          newWidths[index] = Math.max(50, startWidths[index] - delta);
+          newWidths[index - 1] = Math.max(50, startWidths[index - 1] + delta);
+        }
+        return newWidths;
+      });
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
   return (
     <div className="setup-page">
       <div className="page-header">
@@ -136,7 +233,7 @@ const Suppliers = () => {
       </div>
 
       <div className="data-table-container">
-        <div className="table-header">
+        <div className="table-header" style={{ position: 'relative' }}>
           <input
             type="text"
             placeholder="Tìm kiếm theo tên, mã, số điện thoại hoặc loại hàng..."
@@ -161,58 +258,163 @@ const Suppliers = () => {
             <button className="btn btn-secondary" onClick={handleImport}>
               📥 Import Excel
             </button>
+            <button
+              className="btn btn-settings"
+              style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}
+              title="Cài đặt cột hiển thị"
+              onClick={() => setShowSupplierColSetting(v => !v)}
+            >
+              <span role="img" aria-label="settings">⚙️</span>
+            </button>
           </div>
+
+          {/* Popup chọn cột hiển thị */}
+          {showSupplierColSetting && (
+            <div
+              ref={supplierColSettingRef}
+              style={{
+                position: 'fixed',
+                top: '80px',
+                right: '40px',
+                background: '#fff',
+                border: '1px solid #eee',
+                borderRadius: 8,
+                boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+                zIndex: 9999,
+                minWidth: 240,
+                padding: 14
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={supplierVisibleCols.length === supplierColumns.length}
+                  onChange={e => setSupplierVisibleCols(e.target.checked ? defaultSupplierVisible : [])}
+                  style={{ marginRight: 6 }}
+                />
+                <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
+                <button
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
+                  onClick={() => setSupplierVisibleCols(defaultSupplierVisible)}
+                >Làm lại</button>
+              </div>
+              <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
+              {supplierColumns.filter(col => !col.fixed).map(col => (
+                <div key={col.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
+                  <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
+                  <input
+                    type="checkbox"
+                    checked={supplierVisibleCols.includes(col.key)}
+                    onChange={e => {
+                      if (e.target.checked) setSupplierVisibleCols(cols => [...cols, col.key]);
+                      else setSupplierVisibleCols(cols => cols.filter(k => k !== col.key));
+                    }}
+                    style={{ marginRight: 6 }}
+                  />
+                  <span>{col.label}</span>
+                </div>
+              ))}
+              <div style={{ fontSize: 13, color: '#888', margin: '6px 0 2px' }}>Cố định phải</div>
+              <div style={{ display: 'flex', alignItems: 'center', opacity: 0.7 }}>
+                <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
+                <input type="checkbox" checked disabled style={{ marginRight: 6 }} />
+                <span>Thao tác</span>
+              </div>
+            </div>
+          )}
         </div>
 
-        <table className="data-table">
-          <thead>
-            <tr>
-              <th>Mã NCC</th>
-              <th>Tên nhà cung cấp</th>
-              <th>Số điện thoại</th>
-              <th>Địa chỉ</th>
-              <th>Mã số thuế</th>
-              <th>Loại hàng</th>
-              <th>Ghi chú</th>
-              <th>Tình trạng</th>
-              <th>Thao tác</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredSuppliers.map((supplier) => (
-              <tr key={supplier.id}>
-                <td>{supplier.code}</td>
-                <td>{supplier.name}</td>
-                <td>{supplier.phone}</td>
-                <td>{supplier.address}</td>
-                <td>{supplier.taxCode}</td>
-                <td>{supplier.productType}</td>
-                <td>{supplier.note}</td>
-                <td>
-                  <span className={`status-badge ${supplier.status === 'active' ? 'status-active' : 'status-inactive'}`}>
-                    {supplier.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
-                  </span>
-                </td>
-                <td>
-                  <div className="action-buttons">
-                    <button 
-                      className="btn btn-secondary btn-small"
-                      onClick={() => handleEdit(supplier)}
+        <div style={{ overflowX: 'auto' }}>
+          <table className="data-table" ref={supplierTableRef}>
+            <colgroup>
+              {supplierColWidths.map((w, i) => (
+                supplierVisibleCols.includes(supplierColumns[i].key) ? <col key={i} style={{ width: w }} /> : null
+              ))}
+            </colgroup>
+            <thead>
+              <tr>
+                {supplierColumns.map((col, idx, arr) =>
+                  supplierVisibleCols.includes(col.key) ? (
+                    <th
+                      key={col.key}
+                      style={{
+                        position: 'relative',
+                        opacity: dragColIndex === idx ? 0.5 : 1,
+                        background: dragOverColIndex === idx && dragColIndex !== null ? '#e6f7ff' : undefined,
+                        cursor: 'move'
+                      }}
+                      draggable
+                      onDragStart={() => handleColDragStart(idx)}
+                      onDragOver={e => handleColDragOver(idx, e)}
+                      onDrop={handleColDrop}
+                      onDragEnd={() => {
+                        setDragColIndex(null);
+                        setDragOverColIndex(null);
+                      }}
                     >
-                      Sửa
-                    </button>
-                    <button 
-                      className="btn btn-danger btn-small"
-                      onClick={() => handleDelete(supplier.id)}
-                    >
-                      Xóa
-                    </button>
-                  </div>
-                </td>
+                      {/* Mép trái */}
+                      {idx > 0 && supplierVisibleCols.includes(arr[idx - 1].key) && (
+                        <span
+                          className="col-resizer left"
+                          onMouseDown={e => handleSupplierMouseDown(idx, e, 'left')}
+                          style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                        />
+                      )}
+                      {col.label}
+                      {/* Mép phải */}
+                      {idx < arr.length - 1 && supplierVisibleCols.includes(arr[idx + 1].key) && (
+                        <span
+                          className="col-resizer right"
+                          onMouseDown={e => handleSupplierMouseDown(idx, e, 'right')}
+                          style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                        />
+                      )}
+                    </th>
+                  ) : null
+                )}
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {filteredSuppliers.map((supplier) => (
+                <tr key={supplier.id}>
+                  {supplierColumns.map((col, idx) => {
+                    if (!supplierVisibleCols.includes(col.key)) return null;
+                    if (col.key === 'status') {
+                      return (
+                        <td key={col.key}>
+                          <span className={`status-badge ${supplier.status === 'active' ? 'status-active' : 'status-inactive'}`}>
+                            {supplier.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
+                          </span>
+                        </td>
+                      );
+                    }
+                    if (col.key === 'actions') {
+                      return (
+                        <td key={col.key}>
+                          <div className="action-buttons">
+                            <button 
+                              className="btn btn-secondary btn-small"
+                              onClick={() => handleEdit(supplier)}
+                            >
+                              Sửa
+                            </button>
+                            <button 
+                              className="btn btn-danger btn-small"
+                              onClick={() => handleDelete(supplier.id)}
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        </td>
+                      );
+                    }
+                    return <td key={col.key}>{supplier[col.key]}</td>;
+                  })}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
 
         {filteredSuppliers.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>

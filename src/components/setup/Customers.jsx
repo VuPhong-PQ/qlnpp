@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import './SetupPage.css';
 
 const Customers = () => {
@@ -143,6 +143,70 @@ const Customers = () => {
     }).format(amount);
   };
 
+
+  // Cột và độ rộng mặc định
+  const customerColumns = [
+    { key: 'customerGroup', label: 'Nhóm KH' },
+    { key: 'code', label: 'Mã KH' },
+    { key: 'vatName', label: 'Tên xuất VAT' },
+    { key: 'vatAddress', label: 'Địa chỉ xuất VAT' },
+    { key: 'phone', label: 'Số điện thoại' },
+    { key: 'email', label: 'Email' },
+    { key: 'taxCode', label: 'Mã số thuế' },
+    { key: 'customerType', label: 'Loại KH' },
+    { key: 'debtLimit', label: 'Hạn mức công nợ' },
+    { key: 'debtTerm', label: 'Hạn nợ' },
+    { key: 'initialDebt', label: 'Công nợ ban đầu' },
+    { key: 'status', label: 'Trạng thái' },
+    { key: 'actions', label: 'Thao tác', fixed: true }
+  ];
+  const defaultCustomerWidths = [100, 100, 160, 180, 110, 120, 110, 110, 130, 100, 130, 110, 110];
+  const [customerColWidths, setCustomerColWidths] = useState(defaultCustomerWidths);
+  const defaultCustomerVisible = customerColumns.map(col => col.key);
+  const [customerVisibleCols, setCustomerVisibleCols] = useState(defaultCustomerVisible);
+  const [showCustomerColSetting, setShowCustomerColSetting] = useState(false);
+  const customerTableRef = useRef(null);
+  const customerColSettingRef = useRef(null);
+
+  // Đóng popup khi click ra ngoài
+  React.useEffect(() => {
+    if (!showCustomerColSetting) return;
+    const handleClickOutside = (e) => {
+      if (customerColSettingRef.current && !customerColSettingRef.current.contains(e.target)) {
+        setShowCustomerColSetting(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showCustomerColSetting]);
+
+  // Kéo cột
+  const handleCustomerMouseDown = (index, e, edge) => {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidths = [...customerColWidths];
+    const onMouseMove = (moveEvent) => {
+      const delta = moveEvent.clientX - startX;
+      setCustomerColWidths((widths) => {
+        const newWidths = [...widths];
+        if (edge === 'right' && index < widths.length - 1) {
+          newWidths[index] = Math.max(50, startWidths[index] + delta);
+          newWidths[index + 1] = Math.max(50, startWidths[index + 1] - delta);
+        } else if (edge === 'left' && index > 0) {
+          newWidths[index] = Math.max(50, startWidths[index] - delta);
+          newWidths[index - 1] = Math.max(50, startWidths[index - 1] + delta);
+        }
+        return newWidths;
+      });
+    };
+    const onMouseUp = () => {
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
   return (
     <div className="setup-page">
       <div className="page-header">
@@ -151,7 +215,7 @@ const Customers = () => {
       </div>
 
       <div className="data-table-container">
-        <div className="table-header">
+        <div className="table-header" style={{ position: 'relative' }}>
           <input
             type="text"
             placeholder="Tìm kiếm theo tên, mã khách hàng hoặc số điện thoại..."
@@ -172,63 +236,145 @@ const Customers = () => {
             </button>
             <button className="btn btn-success">📤 Export Excel</button>
             <button className="btn btn-secondary">📥 Import Excel</button>
+            <button
+              className="btn btn-settings"
+              style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}
+              title="Cài đặt cột hiển thị"
+              onClick={() => setShowCustomerColSetting(v => !v)}
+            >
+              <span role="img" aria-label="settings">⚙️</span>
+            </button>
           </div>
+
+          {/* Popup chọn cột hiển thị */}
+          {showCustomerColSetting && (
+            <div
+              ref={customerColSettingRef}
+              style={{
+                position: 'fixed',
+                top: '80px',
+                right: '40px',
+                background: '#fff',
+                border: '1px solid #eee',
+                borderRadius: 8,
+                boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
+                zIndex: 9999,
+                minWidth: 240,
+                padding: 14
+              }}
+            >
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
+                <input
+                  type="checkbox"
+                  checked={customerVisibleCols.length === customerColumns.length}
+                  onChange={e => setCustomerVisibleCols(e.target.checked ? defaultCustomerVisible : [])}
+                  style={{ marginRight: 6 }}
+                />
+                <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
+                <button
+                  style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
+                  onClick={() => setCustomerVisibleCols(defaultCustomerVisible)}
+                >Làm lại</button>
+              </div>
+              <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
+              {customerColumns.filter(col => !col.fixed).map(col => (
+                <div key={col.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
+                  <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
+                  <input
+                    type="checkbox"
+                    checked={customerVisibleCols.includes(col.key)}
+                    onChange={e => {
+                      if (e.target.checked) setCustomerVisibleCols(cols => [...cols, col.key]);
+                      else setCustomerVisibleCols(cols => cols.filter(k => k !== col.key));
+                    }}
+                    style={{ marginRight: 6 }}
+                  />
+                  <span>{col.label}</span>
+                </div>
+              ))}
+              <div style={{ fontSize: 13, color: '#888', margin: '6px 0 2px' }}>Cố định phải</div>
+              <div style={{ display: 'flex', alignItems: 'center', opacity: 0.7 }}>
+                <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
+                <input type="checkbox" checked disabled style={{ marginRight: 6 }} />
+                <span>Thao tác</span>
+              </div>
+            </div>
+          )}
         </div>
 
         <div style={{ overflowX: 'auto' }}>
-          <table className="data-table">
+          <table className="data-table" ref={customerTableRef}>
+            <colgroup>
+              {customerColWidths.map((w, i) => (
+                customerVisibleCols.includes(customerColumns[i].key) ? <col key={i} style={{ width: w }} /> : null
+              ))}
+            </colgroup>
             <thead>
               <tr>
-                <th>Nhóm KH</th>
-                <th>Mã KH</th>
-                <th>Tên xuất VAT</th>
-                <th>Địa chỉ xuất VAT</th>
-                <th>Số điện thoại</th>
-                <th>Email</th>
-                <th>Mã số thuế</th>
-                <th>Loại KH</th>
-                <th>Hạn mức công nợ</th>
-                <th>Hạn nợ</th>
-                <th>Công nợ ban đầu</th>
-                <th>Trạng thái</th>
-                <th>Thao tác</th>
+                {customerColumns.map((col, idx, arr) => (
+                  customerVisibleCols.includes(col.key) ? (
+                    <th key={col.key} style={{ position: 'relative' }}>
+                      {/* Mép trái */}
+                      {idx > 0 && customerVisibleCols.includes(arr[idx - 1].key) && (
+                        <span
+                          className="col-resizer left"
+                          onMouseDown={e => handleCustomerMouseDown(idx, e, 'left')}
+                          style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                        />
+                      )}
+                      {col.label}
+                      {/* Mép phải */}
+                      {idx < arr.length - 1 && customerVisibleCols.includes(arr[idx + 1].key) && (
+                        <span
+                          className="col-resizer right"
+                          onMouseDown={e => handleCustomerMouseDown(idx, e, 'right')}
+                          style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                        />
+                      )}
+                    </th>
+                  ) : null
+                ))}
               </tr>
             </thead>
             <tbody>
               {filteredCustomers.map((customer) => (
                 <tr key={customer.id}>
-                  <td>{customer.customerGroup}</td>
-                  <td>{customer.code}</td>
-                  <td>{customer.vatName}</td>
-                  <td>{customer.vatAddress}</td>
-                  <td>{customer.phone}</td>
-                  <td>{customer.email}</td>
-                  <td>{customer.taxCode}</td>
-                  <td>{customer.customerType}</td>
-                  <td>{formatCurrency(customer.debtLimit)}</td>
-                  <td>{customer.debtTerm}</td>
-                  <td>{formatCurrency(customer.initialDebt)}</td>
-                  <td>
-                    <span className={`status-badge ${customer.status === 'active' ? 'status-active' : 'status-inactive'}`}>
-                      {customer.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
-                    </span>
-                  </td>
-                  <td>
-                    <div className="action-buttons">
-                      <button 
-                        className="btn btn-secondary btn-small"
-                        onClick={() => handleEdit(customer)}
-                      >
-                        Sửa
-                      </button>
-                      <button 
-                        className="btn btn-danger btn-small"
-                        onClick={() => handleDelete(customer.id)}
-                      >
-                        Xóa
-                      </button>
-                    </div>
-                  </td>
+                  {customerColumns.map((col, idx) => {
+                    if (!customerVisibleCols.includes(col.key)) return null;
+                    if (col.key === 'status') {
+                      return (
+                        <td key={col.key}>
+                          <span className={`status-badge ${customer.status === 'active' ? 'status-active' : 'status-inactive'}`}>
+                            {customer.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
+                          </span>
+                        </td>
+                      );
+                    }
+                    if (col.key === 'debtLimit' || col.key === 'initialDebt') {
+                      return <td key={col.key}>{formatCurrency(customer[col.key])}</td>;
+                    }
+                    if (col.key === 'actions') {
+                      return (
+                        <td key={col.key}>
+                          <div className="action-buttons">
+                            <button 
+                              className="btn btn-secondary btn-small"
+                              onClick={() => handleEdit(customer)}
+                            >
+                              Sửa
+                            </button>
+                            <button 
+                              className="btn btn-danger btn-small"
+                              onClick={() => handleDelete(customer.id)}
+                            >
+                              Xóa
+                            </button>
+                          </div>
+                        </td>
+                      );
+                    }
+                    return <td key={col.key}>{customer[col.key]}</td>;
+                  })}
                 </tr>
               ))}
             </tbody>
