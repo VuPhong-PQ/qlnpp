@@ -186,6 +186,8 @@ const Products = () => {
   };
 
   // Cột và độ rộng mặc định
+  // --- CẤU HÌNH CỘT, DRAG, LƯU LOCALSTORAGE ---
+  const PRODUCT_COLS_KEY = 'products_table_cols_v1';
   const productColumns = [
     { key: 'category', label: 'Loại hàng' },
     { key: 'barcode', label: 'Mã vạch' },
@@ -201,13 +203,76 @@ const Products = () => {
     { key: 'status', label: 'Trạng thái' },
     { key: 'actions', label: 'Thao tác', fixed: true }
   ];
-  const defaultProductWidths = [120, 120, 100, 180, 180, 100, 100, 120, 120, 110, 110, 110, 110];
-  const [productColWidths, setProductColWidths] = useState(defaultProductWidths);
+  const defaultProductOrder = productColumns.map(col => col.key);
   const defaultProductVisible = productColumns.map(col => col.key);
-  const [productVisibleCols, setProductVisibleCols] = useState(defaultProductVisible);
+  const defaultProductWidths = [120, 120, 100, 180, 180, 100, 100, 120, 120, 110, 110, 110, 110];
+  // Lấy cấu hình cột từ localStorage nếu có
+  const getInitialProductCols = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(PRODUCT_COLS_KEY));
+      if (saved && Array.isArray(saved.visibleCols) && Array.isArray(saved.order)) {
+        return [saved.visibleCols, saved.order];
+      }
+    } catch {}
+    return [defaultProductVisible, defaultProductOrder];
+  };
+  const [[initProductVisible, initProductOrder]] = [getInitialProductCols()];
+  const [productVisibleCols, setProductVisibleCols] = useState(initProductVisible);
+  const [productColOrder, setProductColOrder] = useState(initProductOrder);
+  const [productColWidths, setProductColWidths] = useState(defaultProductWidths);
   const [showProductColSetting, setShowProductColSetting] = useState(false);
   const productTableRef = useRef(null);
   const productColSettingRef = useRef(null);
+  // Drag state cho popup
+  const [popupDragIndex, setPopupDragIndex] = useState(null);
+  const [popupDragOverIndex, setPopupDragOverIndex] = useState(null);
+  // Lưu cấu hình cột vào localStorage
+  const saveProductColConfig = (visibleCols, order) => {
+    localStorage.setItem(PRODUCT_COLS_KEY, JSON.stringify({ visibleCols, order }));
+  };
+  // Tự động lưu khi thay đổi
+  React.useEffect(() => {
+    saveProductColConfig(productVisibleCols, productColOrder);
+  }, [productVisibleCols, productColOrder]);
+  // Đóng popup khi click ra ngoài và tự động lưu
+  React.useEffect(() => {
+    if (!showProductColSetting) return;
+    const handleClick = (e) => {
+      if (productColSettingRef.current && !productColSettingRef.current.contains(e.target)) {
+        setShowProductColSetting(false);
+        saveProductColConfig(productVisibleCols, productColOrder);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showProductColSetting, productVisibleCols, productColOrder]);
+  // Drag & drop trong popup
+  const handlePopupDragStart = (idx) => setPopupDragIndex(idx);
+  const handlePopupDragOver = (idx, e) => { e.preventDefault(); setPopupDragOverIndex(idx); };
+  const handlePopupDrop = () => {
+    if (popupDragIndex === null || popupDragOverIndex === null || popupDragIndex === popupDragOverIndex) {
+      setPopupDragIndex(null); setPopupDragOverIndex(null); return;
+    }
+    const cols = productColOrder.filter(k => !productColumns.find(col => col.key === k)?.fixed);
+    const dragged = cols[popupDragIndex];
+    cols.splice(popupDragIndex, 1);
+    cols.splice(popupDragOverIndex, 0, dragged);
+    // Thêm lại các cột fixed cuối cùng
+    const newOrder = [...cols, ...productColumns.filter(col => col.fixed).map(col => col.key)];
+    setProductColOrder(newOrder);
+    setPopupDragIndex(null); setPopupDragOverIndex(null);
+  };
+  // Khi click checkbox cột hiển thị
+  const handleColVisibleChange = (key, checked) => {
+    if (checked) setProductVisibleCols(cols => [...cols, key]);
+    else setProductVisibleCols(cols => cols.filter(k => k !== key));
+  };
+  // Khi click "Làm lại"
+  const handleResetCols = () => {
+    setProductVisibleCols(defaultProductVisible);
+    setProductColOrder(defaultProductOrder);
+    saveProductColConfig(defaultProductVisible, defaultProductOrder);
+  };
 
   // Đóng popup khi click ra ngoài
   React.useEffect(() => {
@@ -307,32 +372,68 @@ const Products = () => {
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
                 <input
                   type="checkbox"
-                  checked={productVisibleCols.length === productColumns.length}
-                  onChange={e => setProductVisibleCols(e.target.checked ? defaultProductVisible : [])}
+                  checked={
+                    productColumns.filter(col => !col.fixed).every(col => productVisibleCols.includes(col.key)) &&
+                    productColumns.filter(col => !col.fixed).length === productVisibleCols.filter(key => !productColumns.find(col => col.key === key)?.fixed).length
+                  }
+                  onChange={e => {
+                    const nonFixedCols = productColumns.filter(col => !col.fixed).map(col => col.key);
+                    if (e.target.checked) {
+                      // Thêm các cột chưa cố định vào visible, giữ nguyên các cột cố định nếu đã có
+                      const newVisible = Array.from(new Set([...productVisibleCols, ...nonFixedCols, ...productColumns.filter(col => col.fixed).map(col => col.key)]));
+                      setProductVisibleCols(newVisible);
+                      setProductColOrder([...nonFixedCols, ...productColumns.filter(col => col.fixed).map(col => col.key)]);
+                      saveProductColConfig(newVisible, [...nonFixedCols, ...productColumns.filter(col => col.fixed).map(col => col.key)]);
+                    } else {
+                      // Bỏ các cột chưa cố định khỏi visible, giữ lại cột cố định
+                      const fixedCols = productColumns.filter(col => col.fixed).map(col => col.key);
+                      setProductVisibleCols(fixedCols);
+                      setProductColOrder([...nonFixedCols, ...fixedCols]);
+                      saveProductColConfig(fixedCols, [...nonFixedCols, ...fixedCols]);
+                    }
+                  }}
                   style={{ marginRight: 6 }}
                 />
                 <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
                 <button
                   style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
-                  onClick={() => setProductVisibleCols(defaultProductVisible)}
+                  onClick={handleResetCols}
                 >Làm lại</button>
               </div>
               <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
-              {productColumns.filter(col => !col.fixed).map(col => (
-                <div key={col.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
-                  <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
-                  <input
-                    type="checkbox"
-                    checked={productVisibleCols.includes(col.key)}
-                    onChange={e => {
-                      if (e.target.checked) setProductVisibleCols(cols => [...cols, col.key]);
-                      else setProductVisibleCols(cols => cols.filter(k => k !== col.key));
+              {productColOrder.filter(key => !productColumns.find(col => col.key === key)?.fixed).map((key, idx) => {
+                const col = productColumns.find(c => c.key === key);
+                return (
+                  <div
+                    key={col.key}
+                    style={{ display: 'flex', alignItems: 'center', marginBottom: 2, background: popupDragOverIndex === idx && popupDragIndex !== null ? '#e6f7ff' : undefined, opacity: popupDragIndex === idx ? 0.5 : 1, cursor: 'move', borderRadius: 4 }}
+                    draggable
+                    onDragStart={() => setPopupDragIndex(idx)}
+                    onDragOver={e => { e.preventDefault(); setPopupDragOverIndex(idx); }}
+                    onDrop={() => {
+                      if (popupDragIndex === null || popupDragIndex === idx) { setPopupDragIndex(null); setPopupDragOverIndex(null); return; }
+                      const cols = productColOrder.filter(k => !productColumns.find(col => col.key === k)?.fixed);
+                      const dragged = cols[popupDragIndex];
+                      cols.splice(popupDragIndex, 1);
+                      cols.splice(idx, 0, dragged);
+                      // Thêm lại các cột fixed cuối cùng
+                      const newOrder = [...cols, ...productColumns.filter(col => col.fixed).map(col => col.key)];
+                      setProductColOrder(newOrder);
+                      setPopupDragIndex(null); setPopupDragOverIndex(null);
                     }}
-                    style={{ marginRight: 6 }}
-                  />
-                  <span>{col.label}</span>
-                </div>
-              ))}
+                    onDragEnd={() => { setPopupDragIndex(null); setPopupDragOverIndex(null); }}
+                  >
+                    <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
+                    <input
+                      type="checkbox"
+                      checked={productVisibleCols.includes(col.key)}
+                      onChange={e => handleColVisibleChange(col.key, e.target.checked)}
+                      style={{ marginRight: 6 }}
+                    />
+                    <span>{col.label}</span>
+                  </div>
+                );
+              })}
               <div style={{ fontSize: 13, color: '#888', margin: '6px 0 2px' }}>Cố định phải</div>
               <div style={{ display: 'flex', alignItems: 'center', opacity: 0.7 }}>
                 <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
@@ -346,17 +447,19 @@ const Products = () => {
         <div style={{ overflowX: 'auto' }}>
           <table className="data-table" ref={productTableRef}>
             <colgroup>
-              {productColWidths.map((w, i) => (
-                productVisibleCols.includes(productColumns[i].key) ? <col key={i} style={{ width: w }} /> : null
+              {productColOrder.map((key, i) => (
+                productVisibleCols.includes(key) ? <col key={key} style={{ width: productColWidths[i] }} /> : null
               ))}
             </colgroup>
             <thead>
               <tr>
-                {productColumns.map((col, idx, arr) => (
-                  productVisibleCols.includes(col.key) ? (
+                {productColOrder.map((key, idx, arr) => {
+                  const col = productColumns.find(c => c.key === key);
+                  if (!col || !productVisibleCols.includes(key)) return null;
+                  return (
                     <th key={col.key} style={{ position: 'relative' }}>
                       {/* Mép trái */}
-                      {idx > 0 && productVisibleCols.includes(arr[idx - 1].key) && (
+                      {idx > 0 && productVisibleCols.includes(arr[idx - 1]) && (
                         <span
                           className="col-resizer left"
                           onMouseDown={e => handleProductMouseDown(idx, e, 'left')}
@@ -365,7 +468,7 @@ const Products = () => {
                       )}
                       {col.label}
                       {/* Mép phải */}
-                      {idx < arr.length - 1 && productVisibleCols.includes(arr[idx + 1].key) && (
+                      {idx < arr.length - 1 && productVisibleCols.includes(arr[idx + 1]) && (
                         <span
                           className="col-resizer right"
                           onMouseDown={e => handleProductMouseDown(idx, e, 'right')}
@@ -373,15 +476,17 @@ const Products = () => {
                         />
                       )}
                     </th>
-                  ) : null
-                ))}
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {filteredProducts.map((product) => (
                 <tr key={product.id}>
-                  {productColumns.map((col, idx) => {
-                    if (!productVisibleCols.includes(col.key)) return null;
+                  {productColOrder.map((key, idx) => {
+                    if (!productVisibleCols.includes(key)) return null;
+                    const col = productColumns.find(c => c.key === key);
+                    if (!col) return null;
                     if (col.key === 'retailPrice' || col.key === 'wholesalePrice') {
                       return <td key={col.key}>{formatCurrency(product[col.key])}</td>;
                     }
