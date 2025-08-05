@@ -1,0 +1,136 @@
+/* Table styles for Suppliers */
+.data-table {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  font-size: 15px;
+}
+.data-table th, .data-table td {
+  border: 1px solid #e0e0e0;
+  padding: 8px 12px;
+  text-align: left;
+}
+.data-table th {
+  background: #f5f5f5;
+  font-weight: 600;
+}
+.data-table tr:nth-child(even) {
+  background: #fafbfc;
+}
+.data-table tr:hover {
+  background: #e6f7ff;
+}
+.status-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 13px;
+  font-weight: 500;
+}
+.status-active {
+  background: #e6ffed;
+  color: #389e0d;
+  border: 1px solid #b7eb8f;
+}
+.status-inactive {
+  background: #fff1f0;
+  color: #cf1322;
+  border: 1px solid #ffa39e;
+}
+.action-buttons {
+  display: flex;
+  gap: 8px;
+}
+.btn-small {
+  padding: 2px 10px;
+  font-size: 13px;
+}
+.suppliers-modal .modal-content {
+  max-width: 600px;
+}
+
+.suppliers-modal .form-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 18px;
+}
+
+.suppliers-modal .form-group label {
+  font-weight: 500;
+}
+
+.suppliers-modal .form-group input,
+.suppliers-modal .form-group select,
+.suppliers-modal .form-group textarea {
+  width: 100%;
+  padding: 10px 14px;
+  border-radius: 6px;
+  border: 1.5px solid #e9ecef;
+  font-size: 14px;
+  margin-bottom: 6px;
+}
+
+.suppliers-modal .form-group textarea {
+  resize: vertical;
+}
+
+.suppliers-modal .form-actions {
+  display: flex;
+  gap: 12px;
+  justify-content: flex-end;
+  margin-top: 18px;
+}
+
+.suppliers-modal .btn {
+  min-width: 100px;
+}
+
+.suppliers-modal .btn-primary {
+  background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+  color: white;
+}
+
+.suppliers-modal .btn-secondary {
+  background: #f8f9fa;
+  color: #6c757d;
+  border: 2px solid #e9ecef;
+}
+
+.suppliers-modal .btn-danger {
+  background: #dc3545;
+  color: white;
+}
+
+.suppliers-modal .btn-success {
+  background: #28a745;
+  color: white;
+}
+
+.suppliers-modal .btn-small {
+  padding: 6px 12px;
+  font-size: 12px;
+  min-width: auto;
+}
+
+.suppliers-modal .action-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.suppliers-modal .status-badge {
+  padding: 4px 12px;
+  border-radius: 20px;
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+}
+
+.suppliers-modal .status-active {
+  background: #d4edda;
+  color: #155724;
+}
+
+.suppliers-modal .status-inactive {
+  background: #f8d7da;
+  color: #721c24;
+}

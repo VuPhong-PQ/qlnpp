@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
 
 const Customers = () => {
@@ -144,8 +144,10 @@ const Customers = () => {
   };
 
 
-  // Cột và độ rộng mặc định
-  const customerColumns = [
+
+  // --- Kéo-thả, hiển thị, lưu cấu hình cột bảng khách hàng ---
+  const customerTableRef = useRef(null);
+  const defaultCustomerColumns = [
     { key: 'customerGroup', label: 'Nhóm KH' },
     { key: 'code', label: 'Mã KH' },
     { key: 'vatName', label: 'Tên xuất VAT' },
@@ -161,15 +163,60 @@ const Customers = () => {
     { key: 'actions', label: 'Thao tác', fixed: true }
   ];
   const defaultCustomerWidths = [100, 100, 160, 180, 110, 120, 110, 110, 130, 100, 130, 110, 110];
-  const [customerColWidths, setCustomerColWidths] = useState(defaultCustomerWidths);
-  const defaultCustomerVisible = customerColumns.map(col => col.key);
-  const [customerVisibleCols, setCustomerVisibleCols] = useState(defaultCustomerVisible);
+  const [customerColumns, setCustomerColumns] = useState(() => {
+    const saved = localStorage.getItem('customerColumns');
+    if (saved) {
+      try {
+        const arr = JSON.parse(saved);
+        return arr.map(col => {
+          const def = defaultCustomerColumns.find(d => d.key === col.key);
+          return def ? { ...def, ...col } : col;
+        });
+      } catch {
+        return defaultCustomerColumns;
+      }
+    }
+    return defaultCustomerColumns;
+  });
+  const [customerColWidths, setCustomerColWidths] = useState(() => {
+    const saved = localStorage.getItem('customerColWidths');
+    if (saved) {
+      try {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr) && arr.length === defaultCustomerWidths.length) return arr;
+      } catch {}
+    }
+    return defaultCustomerWidths;
+  });
+  const defaultCustomerVisible = defaultCustomerColumns.map(col => col.key);
+  const [customerVisibleCols, setCustomerVisibleCols] = useState(() => {
+    const saved = localStorage.getItem('customerVisibleCols');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {}
+    }
+    return defaultCustomerVisible;
+  });
   const [showCustomerColSetting, setShowCustomerColSetting] = useState(false);
-  const customerTableRef = useRef(null);
   const customerColSettingRef = useRef(null);
+  // Drag state
+  const [dragColIdx, setDragColIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
 
-  // Đóng popup khi click ra ngoài
-  React.useEffect(() => {
+  // Lưu cấu hình cột vào localStorage
+  useEffect(() => {
+    localStorage.setItem('customerColumns', JSON.stringify(customerColumns));
+  }, [customerColumns]);
+  useEffect(() => {
+    localStorage.setItem('customerColWidths', JSON.stringify(customerColWidths));
+  }, [customerColWidths]);
+  useEffect(() => {
+    localStorage.setItem('customerVisibleCols', JSON.stringify(customerVisibleCols));
+  }, [customerVisibleCols]);
+
+  // Đóng popup + tự động lưu khi click ra ngoài cho popup cài đặt cột khách hàng
+  useEffect(() => {
     if (!showCustomerColSetting) return;
     const handleClickOutside = (e) => {
       if (customerColSettingRef.current && !customerColSettingRef.current.contains(e.target)) {
@@ -273,12 +320,37 @@ const Customers = () => {
                 <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
                 <button
                   style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
-                  onClick={() => setCustomerVisibleCols(defaultCustomerVisible)}
+                  onClick={() => {
+                    setCustomerVisibleCols(defaultCustomerVisible);
+                    setCustomerColumns(defaultCustomerColumns);
+                    setCustomerColWidths(defaultCustomerWidths);
+                  }}
                 >Làm lại</button>
               </div>
               <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
-              {customerColumns.filter(col => !col.fixed).map(col => (
-                <div key={col.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
+              {customerColumns.filter(col => !col.fixed).map((col, idx) => (
+                <div
+                  key={col.key}
+                  style={{ display: 'flex', alignItems: 'center', marginBottom: 2, background: dragOverIdx === idx ? '#f0f7ff' : undefined }}
+                  draggable
+                  onDragStart={() => setDragColIdx(idx)}
+                  onDragOver={e => { e.preventDefault(); setDragOverIdx(idx); }}
+                  onDrop={() => {
+                    if (dragColIdx === null || dragColIdx === idx) return;
+                    const newCols = [...customerColumns];
+                    const [moved] = newCols.splice(dragColIdx, 1);
+                    newCols.splice(idx, 0, moved);
+                    setCustomerColumns(newCols);
+                    // Cập nhật width theo thứ tự mới
+                    const newWidths = [...customerColWidths];
+                    const [w] = newWidths.splice(dragColIdx, 1);
+                    newWidths.splice(idx, 0, w);
+                    setCustomerColWidths(newWidths);
+                    setDragColIdx(null);
+                    setDragOverIdx(null);
+                  }}
+                  onDragEnd={() => { setDragColIdx(null); setDragOverIdx(null); }}
+                >
                   <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
                   <input
                     type="checkbox"
@@ -305,8 +377,8 @@ const Customers = () => {
         <div style={{ overflowX: 'auto' }}>
           <table className="data-table" ref={customerTableRef}>
             <colgroup>
-              {customerColWidths.map((w, i) => (
-                customerVisibleCols.includes(customerColumns[i].key) ? <col key={i} style={{ width: w }} /> : null
+              {customerColumns.map((col, i) => (
+                customerVisibleCols.includes(col.key) ? <col key={col.key} style={{ width: customerColWidths[i] }} /> : null
               ))}
             </colgroup>
             <thead>

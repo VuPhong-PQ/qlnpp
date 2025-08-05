@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
 
 const CustomerGroups = () => {
@@ -101,8 +101,10 @@ const CustomerGroups = () => {
   };
 
 
-  // Cột và độ rộng mặc định
-  const groupColumns = [
+
+  // --- Kéo-thả, hiển thị, lưu cấu hình cột bảng nhóm khách hàng ---
+  const groupTableRef = useRef(null);
+  const defaultGroupColumns = [
     { key: 'code', label: 'Mã nhóm' },
     { key: 'name', label: 'Tên nhóm' },
     { key: 'salesSchedule', label: 'Lịch bán hàng' },
@@ -111,15 +113,60 @@ const CustomerGroups = () => {
     { key: 'actions', label: 'Thao tác', fixed: true }
   ];
   const defaultGroupWidths = [100, 140, 140, 180, 110, 110];
-  const [groupColWidths, setGroupColWidths] = useState(defaultGroupWidths);
-  const defaultGroupVisible = groupColumns.map(col => col.key);
-  const [groupVisibleCols, setGroupVisibleCols] = useState(defaultGroupVisible);
+  const [groupColumns, setGroupColumns] = useState(() => {
+    const saved = localStorage.getItem('groupColumns');
+    if (saved) {
+      try {
+        const arr = JSON.parse(saved);
+        return arr.map(col => {
+          const def = defaultGroupColumns.find(d => d.key === col.key);
+          return def ? { ...def, ...col } : col;
+        });
+      } catch {
+        return defaultGroupColumns;
+      }
+    }
+    return defaultGroupColumns;
+  });
+  const [groupColWidths, setGroupColWidths] = useState(() => {
+    const saved = localStorage.getItem('groupColWidths');
+    if (saved) {
+      try {
+        const arr = JSON.parse(saved);
+        if (Array.isArray(arr) && arr.length === defaultGroupWidths.length) return arr;
+      } catch {}
+    }
+    return defaultGroupWidths;
+  });
+  const defaultGroupVisible = defaultGroupColumns.map(col => col.key);
+  const [groupVisibleCols, setGroupVisibleCols] = useState(() => {
+    const saved = localStorage.getItem('groupVisibleCols');
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch {}
+    }
+    return defaultGroupVisible;
+  });
   const [showGroupColSetting, setShowGroupColSetting] = useState(false);
-  const groupTableRef = useRef(null);
   const groupColSettingRef = useRef(null);
+  // Drag state
+  const [dragColIdx, setDragColIdx] = useState(null);
+  const [dragOverIdx, setDragOverIdx] = useState(null);
 
-  // Đóng popup khi click ra ngoài
-  React.useEffect(() => {
+  // Lưu cấu hình cột vào localStorage
+  useEffect(() => {
+    localStorage.setItem('groupColumns', JSON.stringify(groupColumns));
+  }, [groupColumns]);
+  useEffect(() => {
+    localStorage.setItem('groupColWidths', JSON.stringify(groupColWidths));
+  }, [groupColWidths]);
+  useEffect(() => {
+    localStorage.setItem('groupVisibleCols', JSON.stringify(groupVisibleCols));
+  }, [groupVisibleCols]);
+
+  // Đóng popup + tự động lưu khi click ra ngoài cho popup cài đặt cột nhóm khách hàng
+  useEffect(() => {
     if (!showGroupColSetting) return;
     const handleClickOutside = (e) => {
       if (groupColSettingRef.current && !groupColSettingRef.current.contains(e.target)) {
@@ -227,12 +274,37 @@ const CustomerGroups = () => {
                 <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
                 <button
                   style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
-                  onClick={() => setGroupVisibleCols(defaultGroupVisible)}
+                  onClick={() => {
+                    setGroupVisibleCols(defaultGroupVisible);
+                    setGroupColumns(defaultGroupColumns);
+                    setGroupColWidths(defaultGroupWidths);
+                  }}
                 >Làm lại</button>
               </div>
               <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
-              {groupColumns.filter(col => !col.fixed).map(col => (
-                <div key={col.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
+              {groupColumns.filter(col => !col.fixed).map((col, idx) => (
+                <div
+                  key={col.key}
+                  style={{ display: 'flex', alignItems: 'center', marginBottom: 2, background: dragOverIdx === idx ? '#f0f7ff' : undefined }}
+                  draggable
+                  onDragStart={() => setDragColIdx(idx)}
+                  onDragOver={e => { e.preventDefault(); setDragOverIdx(idx); }}
+                  onDrop={() => {
+                    if (dragColIdx === null || dragColIdx === idx) return;
+                    const newCols = [...groupColumns];
+                    const [moved] = newCols.splice(dragColIdx, 1);
+                    newCols.splice(idx, 0, moved);
+                    setGroupColumns(newCols);
+                    // Cập nhật width theo thứ tự mới
+                    const newWidths = [...groupColWidths];
+                    const [w] = newWidths.splice(dragColIdx, 1);
+                    newWidths.splice(idx, 0, w);
+                    setGroupColWidths(newWidths);
+                    setDragColIdx(null);
+                    setDragOverIdx(null);
+                  }}
+                  onDragEnd={() => { setDragColIdx(null); setDragOverIdx(null); }}
+                >
                   <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
                   <input
                     type="checkbox"
@@ -258,8 +330,8 @@ const CustomerGroups = () => {
 
         <table className="data-table" ref={groupTableRef}>
           <colgroup>
-            {groupColWidths.map((w, i) => (
-              groupVisibleCols.includes(groupColumns[i].key) ? <col key={i} style={{ width: w }} /> : null
+            {groupColumns.map((col, i) => (
+              groupVisibleCols.includes(col.key) ? <col key={col.key} style={{ width: groupColWidths[i] }} /> : null
             ))}
           </colgroup>
           <thead>
