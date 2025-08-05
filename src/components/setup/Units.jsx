@@ -101,7 +101,8 @@ const Units = () => {
   };
 
 
-  // Cột và độ rộng mặc định
+  // --- CẤU HÌNH CỘT, DRAG, LƯU LOCALSTORAGE ---
+  const UNIT_COLS_KEY = 'units_table_cols_v1';
   const unitColumns = [
     { key: 'code', label: 'Mã đơn vị' },
     { key: 'name', label: 'Tên đơn vị' },
@@ -109,25 +110,59 @@ const Units = () => {
     { key: 'status', label: 'Trạng thái' },
     { key: 'actions', label: 'Thao tác', fixed: true }
   ];
-  const defaultUnitWidths = [100, 140, 180, 110, 110];
-  const [unitColWidths, setUnitColWidths] = useState(defaultUnitWidths);
+  const defaultUnitOrder = unitColumns.map(col => col.key);
   const defaultUnitVisible = unitColumns.map(col => col.key);
-  const [unitVisibleCols, setUnitVisibleCols] = useState(defaultUnitVisible);
+  const defaultUnitWidths = [100, 140, 180, 110, 110];
+  // Lấy cấu hình cột từ localStorage nếu có
+  const getInitialUnitCols = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(UNIT_COLS_KEY));
+      if (saved && Array.isArray(saved.visibleCols) && Array.isArray(saved.order)) {
+        return [saved.visibleCols, saved.order];
+      }
+    } catch {}
+    return [defaultUnitVisible, defaultUnitOrder];
+  };
+  const [[initUnitVisible, initUnitOrder]] = [getInitialUnitCols()];
+  const [unitVisibleCols, setUnitVisibleCols] = useState(initUnitVisible);
+  const [unitColOrder, setUnitColOrder] = useState(initUnitOrder);
+  const [unitColWidths, setUnitColWidths] = useState(defaultUnitWidths);
   const [showUnitColSetting, setShowUnitColSetting] = useState(false);
   const unitTableRef = useRef(null);
   const unitColSettingRef = useRef(null);
-
-  // Đóng popup khi click ra ngoài
+  // Drag state cho popup
+  const [popupDragIndex, setPopupDragIndex] = useState(null);
+  const [popupDragOverIndex, setPopupDragOverIndex] = useState(null);
+  // Lưu cấu hình cột vào localStorage
+  const saveUnitColConfig = (visibleCols, order) => {
+    localStorage.setItem(UNIT_COLS_KEY, JSON.stringify({ visibleCols, order }));
+  };
+  // Tự động lưu khi thay đổi
+  React.useEffect(() => {
+    saveUnitColConfig(unitVisibleCols, unitColOrder);
+  }, [unitVisibleCols, unitColOrder]);
+  // Đóng popup khi click ra ngoài và tự động lưu
   React.useEffect(() => {
     if (!showUnitColSetting) return;
-    const handleClickOutside = (e) => {
+    const handleClick = (e) => {
       if (unitColSettingRef.current && !unitColSettingRef.current.contains(e.target)) {
         setShowUnitColSetting(false);
+        saveUnitColConfig(unitVisibleCols, unitColOrder);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showUnitColSetting]);
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showUnitColSetting, unitVisibleCols, unitColOrder]);
+  // Drag & drop trong popup
+  const handleColVisibleChange = (key, checked) => {
+    if (checked) setUnitVisibleCols(cols => [...cols, key]);
+    else setUnitVisibleCols(cols => cols.filter(k => k !== key));
+  };
+  const handleResetCols = () => {
+    setUnitVisibleCols(defaultUnitVisible);
+    setUnitColOrder(defaultUnitOrder);
+    saveUnitColConfig(defaultUnitVisible, defaultUnitOrder);
+  };
 
   // Kéo cột
   const handleUnitMouseDown = (index, e, edge) => {
@@ -219,32 +254,68 @@ const Units = () => {
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
                 <input
                   type="checkbox"
-                  checked={unitVisibleCols.length === unitColumns.length}
-                  onChange={e => setUnitVisibleCols(e.target.checked ? defaultUnitVisible : [])}
+                  checked={
+                    unitColumns.filter(col => !col.fixed).every(col => unitVisibleCols.includes(col.key)) &&
+                    unitColumns.filter(col => !col.fixed).length === unitVisibleCols.filter(key => !unitColumns.find(col => col.key === key)?.fixed).length
+                  }
+                  onChange={e => {
+                    const nonFixedCols = unitColumns.filter(col => !col.fixed).map(col => col.key);
+                    if (e.target.checked) {
+                      // Thêm các cột chưa cố định vào visible, giữ nguyên các cột cố định nếu đã có
+                      const newVisible = Array.from(new Set([...unitVisibleCols, ...nonFixedCols, ...unitColumns.filter(col => col.fixed).map(col => col.key)]));
+                      setUnitVisibleCols(newVisible);
+                      setUnitColOrder([...nonFixedCols, ...unitColumns.filter(col => col.fixed).map(col => col.key)]);
+                      saveUnitColConfig(newVisible, [...nonFixedCols, ...unitColumns.filter(col => col.fixed).map(col => col.key)]);
+                    } else {
+                      // Bỏ các cột chưa cố định khỏi visible, giữ lại cột cố định
+                      const fixedCols = unitColumns.filter(col => col.fixed).map(col => col.key);
+                      setUnitVisibleCols(fixedCols);
+                      setUnitColOrder([...nonFixedCols, ...fixedCols]);
+                      saveUnitColConfig(fixedCols, [...nonFixedCols, ...fixedCols]);
+                    }
+                  }}
                   style={{ marginRight: 6 }}
                 />
                 <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
                 <button
                   style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
-                  onClick={() => setUnitVisibleCols(defaultUnitVisible)}
+                  onClick={handleResetCols}
                 >Làm lại</button>
               </div>
               <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
-              {unitColumns.filter(col => !col.fixed).map(col => (
-                <div key={col.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
-                  <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
-                  <input
-                    type="checkbox"
-                    checked={unitVisibleCols.includes(col.key)}
-                    onChange={e => {
-                      if (e.target.checked) setUnitVisibleCols(cols => [...cols, col.key]);
-                      else setUnitVisibleCols(cols => cols.filter(k => k !== col.key));
+              {unitColOrder.filter(key => !unitColumns.find(col => col.key === key)?.fixed).map((key, idx) => {
+                const col = unitColumns.find(c => c.key === key);
+                return (
+                  <div
+                    key={col.key}
+                    style={{ display: 'flex', alignItems: 'center', marginBottom: 2, background: popupDragOverIndex === idx && popupDragIndex !== null ? '#e6f7ff' : undefined, opacity: popupDragIndex === idx ? 0.5 : 1, cursor: 'move', borderRadius: 4 }}
+                    draggable
+                    onDragStart={() => setPopupDragIndex(idx)}
+                    onDragOver={e => { e.preventDefault(); setPopupDragOverIndex(idx); }}
+                    onDrop={() => {
+                      if (popupDragIndex === null || popupDragIndex === idx) { setPopupDragIndex(null); setPopupDragOverIndex(null); return; }
+                      const cols = unitColOrder.filter(k => !unitColumns.find(col => col.key === k)?.fixed);
+                      const dragged = cols[popupDragIndex];
+                      cols.splice(popupDragIndex, 1);
+                      cols.splice(idx, 0, dragged);
+                      // Thêm lại các cột fixed cuối cùng
+                      const newOrder = [...cols, ...unitColumns.filter(col => col.fixed).map(col => col.key)];
+                      setUnitColOrder(newOrder);
+                      setPopupDragIndex(null); setPopupDragOverIndex(null);
                     }}
-                    style={{ marginRight: 6 }}
-                  />
-                  <span>{col.label}</span>
-                </div>
-              ))}
+                    onDragEnd={() => { setPopupDragIndex(null); setPopupDragOverIndex(null); }}
+                  >
+                    <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
+                    <input
+                      type="checkbox"
+                      checked={unitVisibleCols.includes(col.key)}
+                      onChange={e => handleColVisibleChange(col.key, e.target.checked)}
+                      style={{ marginRight: 6 }}
+                    />
+                    <span>{col.label}</span>
+                  </div>
+                );
+              })}
               <div style={{ fontSize: 13, color: '#888', margin: '6px 0 2px' }}>Cố định phải</div>
               <div style={{ display: 'flex', alignItems: 'center', opacity: 0.7 }}>
                 <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
@@ -258,17 +329,19 @@ const Units = () => {
         <div style={{ overflowX: 'auto' }}>
           <table className="data-table" ref={unitTableRef}>
             <colgroup>
-              {unitColWidths.map((w, i) => (
-                unitVisibleCols.includes(unitColumns[i].key) ? <col key={i} style={{ width: w }} /> : null
+              {unitColOrder.map((key, i) => (
+                unitVisibleCols.includes(key) ? <col key={key} style={{ width: unitColWidths[i] }} /> : null
               ))}
             </colgroup>
             <thead>
               <tr>
-                {unitColumns.map((col, idx, arr) => (
-                  unitVisibleCols.includes(col.key) ? (
+                {unitColOrder.map((key, idx, arr) => {
+                  const col = unitColumns.find(c => c.key === key);
+                  if (!col || !unitVisibleCols.includes(key)) return null;
+                  return (
                     <th key={col.key} style={{ position: 'relative' }}>
                       {/* Mép trái */}
-                      {idx > 0 && unitVisibleCols.includes(arr[idx - 1].key) && (
+                      {idx > 0 && unitVisibleCols.includes(arr[idx - 1]) && (
                         <span
                           className="col-resizer left"
                           onMouseDown={e => handleUnitMouseDown(idx, e, 'left')}
@@ -277,7 +350,7 @@ const Units = () => {
                       )}
                       {col.label}
                       {/* Mép phải */}
-                      {idx < arr.length - 1 && unitVisibleCols.includes(arr[idx + 1].key) && (
+                      {idx < arr.length - 1 && unitVisibleCols.includes(arr[idx + 1]) && (
                         <span
                           className="col-resizer right"
                           onMouseDown={e => handleUnitMouseDown(idx, e, 'right')}
@@ -285,15 +358,17 @@ const Units = () => {
                         />
                       )}
                     </th>
-                  ) : null
-                ))}
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {filteredUnits.map((unit) => (
                 <tr key={unit.id}>
-                  {unitColumns.map((col, idx) => {
-                    if (!unitVisibleCols.includes(col.key)) return null;
+                  {unitColOrder.map((key, idx) => {
+                    if (!unitVisibleCols.includes(key)) return null;
+                    const col = unitColumns.find(c => c.key === key);
+                    if (!col) return null;
                     if (col.key === 'status') {
                       return (
                         <td key={col.key}>
