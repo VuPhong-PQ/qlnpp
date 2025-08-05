@@ -351,7 +351,14 @@ const TransactionContents = () => {
                 <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
                 <button
                   style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
-                  onClick={() => setContentVisibleCols(defaultContentVisible)}
+                  onClick={() => {
+                    setContentColumns(initialContentColumns);
+                    setContentColWidths(defaultContentWidths);
+                    setContentVisibleCols(defaultContentVisible);
+                    localStorage.setItem(LS_KEY_COLS, JSON.stringify(initialContentColumns));
+                    localStorage.setItem(LS_KEY_WIDTHS, JSON.stringify(defaultContentWidths));
+                    localStorage.setItem(LS_KEY_VISIBLE, JSON.stringify(defaultContentVisible));
+                  }}
                 >Làm lại</button>
               </div>
               <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>

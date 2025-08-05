@@ -121,7 +121,8 @@ const Warehouses = () => {
   };
 
 
-  // Cột và độ rộng mặc định
+  // --- CẤU HÌNH CỘT, DRAG, LƯU LOCALSTORAGE ---
+  const WAREHOUSE_COLS_KEY = 'warehouses_table_cols_v1';
   const warehouseColumns = [
     { key: 'code', label: 'Mã kho' },
     { key: 'name', label: 'Tên kho' },
@@ -132,25 +133,59 @@ const Warehouses = () => {
     { key: 'status', label: 'Tình trạng' },
     { key: 'actions', label: 'Thao tác', fixed: true }
   ];
-  const defaultWarehouseWidths = [100, 160, 120, 140, 200, 150, 110, 110];
-  const [warehouseColWidths, setWarehouseColWidths] = useState(defaultWarehouseWidths);
+  const defaultWarehouseOrder = warehouseColumns.map(col => col.key);
   const defaultWarehouseVisible = warehouseColumns.map(col => col.key);
-  const [warehouseVisibleCols, setWarehouseVisibleCols] = useState(defaultWarehouseVisible);
+  const defaultWarehouseWidths = [100, 160, 120, 140, 200, 150, 110, 110];
+  // Lấy cấu hình cột từ localStorage nếu có
+  const getInitialWarehouseCols = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(WAREHOUSE_COLS_KEY));
+      if (saved && Array.isArray(saved.visibleCols) && Array.isArray(saved.order)) {
+        return [saved.visibleCols, saved.order];
+      }
+    } catch {}
+    return [defaultWarehouseVisible, defaultWarehouseOrder];
+  };
+  const [[initWarehouseVisible, initWarehouseOrder]] = [getInitialWarehouseCols()];
+  const [warehouseVisibleCols, setWarehouseVisibleCols] = useState(initWarehouseVisible);
+  const [warehouseColOrder, setWarehouseColOrder] = useState(initWarehouseOrder);
+  const [warehouseColWidths, setWarehouseColWidths] = useState(defaultWarehouseWidths);
   const [showWarehouseColSetting, setShowWarehouseColSetting] = useState(false);
   const warehouseTableRef = useRef(null);
   const warehouseColSettingRef = useRef(null);
-
-  // Đóng popup khi click ra ngoài
+  // Drag state cho popup
+  const [popupDragIndex, setPopupDragIndex] = useState(null);
+  const [popupDragOverIndex, setPopupDragOverIndex] = useState(null);
+  // Lưu cấu hình cột vào localStorage
+  const saveWarehouseColConfig = (visibleCols, order) => {
+    localStorage.setItem(WAREHOUSE_COLS_KEY, JSON.stringify({ visibleCols, order }));
+  };
+  // Tự động lưu khi thay đổi
+  React.useEffect(() => {
+    saveWarehouseColConfig(warehouseVisibleCols, warehouseColOrder);
+  }, [warehouseVisibleCols, warehouseColOrder]);
+  // Đóng popup khi click ra ngoài và tự động lưu
   React.useEffect(() => {
     if (!showWarehouseColSetting) return;
-    const handleClickOutside = (e) => {
+    const handleClick = (e) => {
       if (warehouseColSettingRef.current && !warehouseColSettingRef.current.contains(e.target)) {
         setShowWarehouseColSetting(false);
+        saveWarehouseColConfig(warehouseVisibleCols, warehouseColOrder);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showWarehouseColSetting]);
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showWarehouseColSetting, warehouseVisibleCols, warehouseColOrder]);
+  // Drag & drop trong popup
+  const handleColVisibleChange = (key, checked) => {
+    if (checked) setWarehouseVisibleCols(cols => [...cols, key]);
+    else setWarehouseVisibleCols(cols => cols.filter(k => k !== key));
+  };
+  const handleResetCols = () => {
+    setWarehouseVisibleCols(defaultWarehouseVisible);
+    setWarehouseColOrder(defaultWarehouseOrder);
+    saveWarehouseColConfig(defaultWarehouseVisible, defaultWarehouseOrder);
+  };
 
   // Kéo cột
   const handleWarehouseMouseDown = (index, e, edge) => {
@@ -242,32 +277,68 @@ const Warehouses = () => {
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
                 <input
                   type="checkbox"
-                  checked={warehouseVisibleCols.length === warehouseColumns.length}
-                  onChange={e => setWarehouseVisibleCols(e.target.checked ? defaultWarehouseVisible : [])}
+                  checked={
+                    warehouseColumns.filter(col => !col.fixed).every(col => warehouseVisibleCols.includes(col.key)) &&
+                    warehouseColumns.filter(col => !col.fixed).length === warehouseVisibleCols.filter(key => !warehouseColumns.find(col => col.key === key)?.fixed).length
+                  }
+                  onChange={e => {
+                    const nonFixedCols = warehouseColumns.filter(col => !col.fixed).map(col => col.key);
+                    if (e.target.checked) {
+                      // Thêm các cột chưa cố định vào visible, giữ nguyên các cột cố định nếu đã có
+                      const newVisible = Array.from(new Set([...warehouseVisibleCols, ...nonFixedCols, ...warehouseColumns.filter(col => col.fixed).map(col => col.key)]));
+                      setWarehouseVisibleCols(newVisible);
+                      setWarehouseColOrder([...nonFixedCols, ...warehouseColumns.filter(col => col.fixed).map(col => col.key)]);
+                      saveWarehouseColConfig(newVisible, [...nonFixedCols, ...warehouseColumns.filter(col => col.fixed).map(col => col.key)]);
+                    } else {
+                      // Bỏ các cột chưa cố định khỏi visible, giữ lại cột cố định
+                      const fixedCols = warehouseColumns.filter(col => col.fixed).map(col => col.key);
+                      setWarehouseVisibleCols(fixedCols);
+                      setWarehouseColOrder([...nonFixedCols, ...fixedCols]);
+                      saveWarehouseColConfig(fixedCols, [...nonFixedCols, ...fixedCols]);
+                    }
+                  }}
                   style={{ marginRight: 6 }}
                 />
                 <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
                 <button
                   style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
-                  onClick={() => setWarehouseVisibleCols(defaultWarehouseVisible)}
+                  onClick={handleResetCols}
                 >Làm lại</button>
               </div>
               <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
-              {warehouseColumns.filter(col => !col.fixed).map(col => (
-                <div key={col.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
-                  <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
-                  <input
-                    type="checkbox"
-                    checked={warehouseVisibleCols.includes(col.key)}
-                    onChange={e => {
-                      if (e.target.checked) setWarehouseVisibleCols(cols => [...cols, col.key]);
-                      else setWarehouseVisibleCols(cols => cols.filter(k => k !== col.key));
+              {warehouseColOrder.filter(key => !warehouseColumns.find(col => col.key === key)?.fixed).map((key, idx) => {
+                const col = warehouseColumns.find(c => c.key === key);
+                return (
+                  <div
+                    key={col.key}
+                    style={{ display: 'flex', alignItems: 'center', marginBottom: 2, background: popupDragOverIndex === idx && popupDragIndex !== null ? '#e6f7ff' : undefined, opacity: popupDragIndex === idx ? 0.5 : 1, cursor: 'move', borderRadius: 4 }}
+                    draggable
+                    onDragStart={() => setPopupDragIndex(idx)}
+                    onDragOver={e => { e.preventDefault(); setPopupDragOverIndex(idx); }}
+                    onDrop={() => {
+                      if (popupDragIndex === null || popupDragIndex === idx) { setPopupDragIndex(null); setPopupDragOverIndex(null); return; }
+                      const cols = warehouseColOrder.filter(k => !warehouseColumns.find(col => col.key === k)?.fixed);
+                      const dragged = cols[popupDragIndex];
+                      cols.splice(popupDragIndex, 1);
+                      cols.splice(idx, 0, dragged);
+                      // Thêm lại các cột fixed cuối cùng
+                      const newOrder = [...cols, ...warehouseColumns.filter(col => col.fixed).map(col => col.key)];
+                      setWarehouseColOrder(newOrder);
+                      setPopupDragIndex(null); setPopupDragOverIndex(null);
                     }}
-                    style={{ marginRight: 6 }}
-                  />
-                  <span>{col.label}</span>
-                </div>
-              ))}
+                    onDragEnd={() => { setPopupDragIndex(null); setPopupDragOverIndex(null); }}
+                  >
+                    <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
+                    <input
+                      type="checkbox"
+                      checked={warehouseVisibleCols.includes(col.key)}
+                      onChange={e => handleColVisibleChange(col.key, e.target.checked)}
+                      style={{ marginRight: 6 }}
+                    />
+                    <span>{col.label}</span>
+                  </div>
+                );
+              })}
               <div style={{ fontSize: 13, color: '#888', margin: '6px 0 2px' }}>Cố định phải</div>
               <div style={{ display: 'flex', alignItems: 'center', opacity: 0.7 }}>
                 <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
@@ -281,17 +352,19 @@ const Warehouses = () => {
         <div style={{ overflowX: 'auto' }}>
           <table className="data-table" ref={warehouseTableRef}>
             <colgroup>
-              {warehouseColWidths.map((w, i) => (
-                warehouseVisibleCols.includes(warehouseColumns[i].key) ? <col key={i} style={{ width: w }} /> : null
+              {warehouseColOrder.map((key, i) => (
+                warehouseVisibleCols.includes(key) ? <col key={key} style={{ width: warehouseColWidths[i] }} /> : null
               ))}
             </colgroup>
             <thead>
               <tr>
-                {warehouseColumns.map((col, idx, arr) => (
-                  warehouseVisibleCols.includes(col.key) ? (
+                {warehouseColOrder.map((key, idx, arr) => {
+                  const col = warehouseColumns.find(c => c.key === key);
+                  if (!col || !warehouseVisibleCols.includes(key)) return null;
+                  return (
                     <th key={col.key} style={{ position: 'relative' }}>
                       {/* Mép trái */}
-                      {idx > 0 && warehouseVisibleCols.includes(arr[idx - 1].key) && (
+                      {idx > 0 && warehouseVisibleCols.includes(arr[idx - 1]) && (
                         <span
                           className="col-resizer left"
                           onMouseDown={e => handleWarehouseMouseDown(idx, e, 'left')}
@@ -300,7 +373,7 @@ const Warehouses = () => {
                       )}
                       {col.label}
                       {/* Mép phải */}
-                      {idx < arr.length - 1 && warehouseVisibleCols.includes(arr[idx + 1].key) && (
+                      {idx < arr.length - 1 && warehouseVisibleCols.includes(arr[idx + 1]) && (
                         <span
                           className="col-resizer right"
                           onMouseDown={e => handleWarehouseMouseDown(idx, e, 'right')}
@@ -308,15 +381,17 @@ const Warehouses = () => {
                         />
                       )}
                     </th>
-                  ) : null
-                ))}
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {filteredWarehouses.map((warehouse) => (
                 <tr key={warehouse.id}>
-                  {warehouseColumns.map((col, idx) => {
-                    if (!warehouseVisibleCols.includes(col.key)) return null;
+                  {warehouseColOrder.map((key, idx) => {
+                    if (!warehouseVisibleCols.includes(key)) return null;
+                    const col = warehouseColumns.find(c => c.key === key);
+                    if (!col) return null;
                     if (col.key === 'code') {
                       return (
                         <td key={col.key}>
