@@ -99,7 +99,9 @@ const ProductCategories = () => {
   };
 
 
-  // Cột và độ rộng mặc định
+
+  // --- CẤU HÌNH CỘT, DRAG, LƯU LOCALSTORAGE ---
+  const CATEGORY_COLS_KEY = 'product_categories_table_cols_v1';
   const categoryColumns = [
     { key: 'code', label: 'Mã loại' },
     { key: 'name', label: 'Tên loại' },
@@ -108,25 +110,75 @@ const ProductCategories = () => {
     { key: 'status', label: 'Trạng thái' },
     { key: 'actions', label: 'Thao tác', fixed: true }
   ];
-  const defaultCategoryWidths = [100, 180, 140, 180, 110, 110];
-  const [categoryColWidths, setCategoryColWidths] = useState(defaultCategoryWidths);
-  const defaultCategoryVisible = categoryColumns.map(col => col.key);
-  const [categoryVisibleCols, setCategoryVisibleCols] = useState(defaultCategoryVisible);
+  const defaultCategoryOrder = categoryColumns.map(col => col.key);
+  // Mặc định chỉ các cột này hiển thị và đúng thứ tự khi "Làm lại"
+  const defaultCategoryVisible = ['code', 'name', 'noGroupOrder', 'note', 'status'];
+  // Lấy cấu hình cột từ localStorage nếu có
+  const getInitialCategoryCols = () => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(CATEGORY_COLS_KEY));
+      if (saved && Array.isArray(saved.visibleCols) && Array.isArray(saved.order)) {
+        return [saved.visibleCols, saved.order];
+      }
+    } catch {}
+    return [defaultCategoryVisible, defaultCategoryOrder];
+  };
+  const [[initCategoryVisible, initCategoryOrder]] = [getInitialCategoryCols()];
+  const [categoryVisibleCols, setCategoryVisibleCols] = useState(initCategoryVisible);
+  const [categoryColOrder, setCategoryColOrder] = useState(initCategoryOrder);
   const [showCategoryColSetting, setShowCategoryColSetting] = useState(false);
+  const [categoryColWidths, setCategoryColWidths] = useState([100, 180, 140, 180, 110, 110]);
   const categoryTableRef = useRef(null);
   const categoryColSettingRef = useRef(null);
-
-  // Đóng popup khi click ra ngoài
+  // Drag state cho popup
+  const [popupDragIndex, setPopupDragIndex] = useState(null);
+  const [popupDragOverIndex, setPopupDragOverIndex] = useState(null);
+  // Lưu cấu hình cột vào localStorage
+  const saveCategoryColConfig = (visibleCols, order) => {
+    localStorage.setItem(CATEGORY_COLS_KEY, JSON.stringify({ visibleCols, order }));
+  };
+  // Tự động lưu khi thay đổi
+  React.useEffect(() => {
+    saveCategoryColConfig(categoryVisibleCols, categoryColOrder);
+  }, [categoryVisibleCols, categoryColOrder]);
+  // Đóng popup khi click ra ngoài và tự động lưu
   React.useEffect(() => {
     if (!showCategoryColSetting) return;
-    const handleClickOutside = (e) => {
+    const handleClick = (e) => {
       if (categoryColSettingRef.current && !categoryColSettingRef.current.contains(e.target)) {
         setShowCategoryColSetting(false);
+        saveCategoryColConfig(categoryVisibleCols, categoryColOrder);
       }
     };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showCategoryColSetting]);
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showCategoryColSetting, categoryVisibleCols, categoryColOrder]);
+  // Drag & drop trong popup
+  const handlePopupDragStart = (idx) => setPopupDragIndex(idx);
+  const handlePopupDragOver = (idx, e) => { e.preventDefault(); setPopupDragOverIndex(idx); };
+  const handlePopupDrop = () => {
+    if (popupDragIndex === null || popupDragOverIndex === null || popupDragIndex === popupDragOverIndex) {
+      setPopupDragIndex(null); setPopupDragOverIndex(null); return;
+    }
+    const cols = categoryColOrder.filter(k => !categoryColumns.find(col => col.key === k)?.fixed);
+    const dragged = cols[popupDragIndex];
+    cols.splice(popupDragIndex, 1);
+    cols.splice(popupDragOverIndex, 0, dragged);
+    // Thêm lại các cột fixed cuối cùng
+    const newOrder = [...cols, ...categoryColumns.filter(col => col.fixed).map(col => col.key)];
+    setCategoryColOrder(newOrder);
+    setPopupDragIndex(null); setPopupDragOverIndex(null);
+  };
+  // Khi click checkbox cột hiển thị
+  const handleColVisibleChange = (key, checked) => {
+    if (checked) setCategoryVisibleCols(cols => [...cols, key]);
+    else setCategoryVisibleCols(cols => cols.filter(k => k !== key));
+  };
+  // Khi click "Làm lại"
+  const handleResetCols = () => {
+    setCategoryVisibleCols(defaultCategoryVisible);
+    setCategoryColOrder(defaultCategoryVisible);
+  };
 
   // Kéo cột
   const handleCategoryMouseDown = (index, e, edge) => {
@@ -218,32 +270,62 @@ const ProductCategories = () => {
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
                 <input
                   type="checkbox"
-                  checked={categoryVisibleCols.length === categoryColumns.length}
-                  onChange={e => setCategoryVisibleCols(e.target.checked ? defaultCategoryVisible : [])}
+                  checked={
+                    categoryColumns.filter(col => !col.fixed).every(col => categoryVisibleCols.includes(col.key)) &&
+                    categoryColumns.filter(col => !col.fixed).length === categoryVisibleCols.filter(key => !categoryColumns.find(col => col.key === key)?.fixed).length
+                  }
+                  onChange={e => {
+                    const nonFixedCols = categoryColumns.filter(col => !col.fixed).map(col => col.key);
+                    if (e.target.checked) {
+                      // Thêm các cột chưa cố định vào visible, giữ nguyên các cột cố định nếu đã có
+                      const newVisible = Array.from(new Set([...categoryVisibleCols, ...nonFixedCols, ...categoryColumns.filter(col => col.fixed).map(col => col.key)]));
+                      setCategoryVisibleCols(newVisible);
+                      setCategoryColOrder([...nonFixedCols, ...categoryColumns.filter(col => col.fixed).map(col => col.key)]);
+                      saveCategoryColConfig(newVisible, [...nonFixedCols, ...categoryColumns.filter(col => col.fixed).map(col => col.key)]);
+                    } else {
+                      // Bỏ các cột chưa cố định khỏi visible, giữ lại cột cố định
+                      const fixedCols = categoryColumns.filter(col => col.fixed).map(col => col.key);
+                      setCategoryVisibleCols(fixedCols);
+                      setCategoryColOrder([...nonFixedCols, ...fixedCols]);
+                      saveCategoryColConfig(fixedCols, [...nonFixedCols, ...fixedCols]);
+                    }
+                  }}
                   style={{ marginRight: 6 }}
                 />
                 <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
                 <button
                   style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
-                  onClick={() => setCategoryVisibleCols(defaultCategoryVisible)}
+                  onClick={() => {
+                    setCategoryVisibleCols(defaultCategoryVisible);
+                    setCategoryColOrder(defaultCategoryVisible);
+                    saveCategoryColConfig(defaultCategoryVisible, defaultCategoryVisible);
+                  }}
                 >Làm lại</button>
               </div>
               <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
-              {categoryColumns.filter(col => !col.fixed).map(col => (
-                <div key={col.key} style={{ display: 'flex', alignItems: 'center', marginBottom: 2 }}>
-                  <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
-                  <input
-                    type="checkbox"
-                    checked={categoryVisibleCols.includes(col.key)}
-                    onChange={e => {
-                      if (e.target.checked) setCategoryVisibleCols(cols => [...cols, col.key]);
-                      else setCategoryVisibleCols(cols => cols.filter(k => k !== col.key));
-                    }}
-                    style={{ marginRight: 6 }}
-                  />
-                  <span>{col.label}</span>
-                </div>
-              ))}
+              {categoryColOrder.filter(key => !categoryColumns.find(col => col.key === key)?.fixed).map((key, idx) => {
+                const col = categoryColumns.find(c => c.key === key);
+                return (
+                  <div
+                    key={col.key}
+                    style={{ display: 'flex', alignItems: 'center', marginBottom: 2, background: popupDragOverIndex === idx && popupDragIndex !== null ? '#e6f7ff' : undefined, opacity: popupDragIndex === idx ? 0.5 : 1, cursor: 'move', borderRadius: 4 }}
+                    draggable
+                    onDragStart={() => handlePopupDragStart(idx)}
+                    onDragOver={e => handlePopupDragOver(idx, e)}
+                    onDrop={handlePopupDrop}
+                    onDragEnd={() => { setPopupDragIndex(null); setPopupDragOverIndex(null); }}
+                  >
+                    <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
+                    <input
+                      type="checkbox"
+                      checked={categoryVisibleCols.includes(col.key)}
+                      onChange={e => handleColVisibleChange(col.key, e.target.checked)}
+                      style={{ marginRight: 6 }}
+                    />
+                    <span>{col.label}</span>
+                  </div>
+                );
+              })}
               <div style={{ fontSize: 13, color: '#888', margin: '6px 0 2px' }}>Cố định phải</div>
               <div style={{ display: 'flex', alignItems: 'center', opacity: 0.7 }}>
                 <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
@@ -257,17 +339,19 @@ const ProductCategories = () => {
         <div style={{ overflowX: 'auto' }}>
           <table className="data-table" ref={categoryTableRef}>
             <colgroup>
-              {categoryColWidths.map((w, i) => (
-                categoryVisibleCols.includes(categoryColumns[i].key) ? <col key={i} style={{ width: w }} /> : null
+              {categoryColOrder.map((key, i) => (
+                categoryVisibleCols.includes(key) ? <col key={key} style={{ width: categoryColWidths[i] }} /> : null
               ))}
             </colgroup>
             <thead>
               <tr>
-                {categoryColumns.map((col, idx, arr) => (
-                  categoryVisibleCols.includes(col.key) ? (
+                {categoryColOrder.map((key, idx, arr) => {
+                  const col = categoryColumns.find(c => c.key === key);
+                  if (!col || !categoryVisibleCols.includes(key)) return null;
+                  return (
                     <th key={col.key} style={{ position: 'relative' }}>
                       {/* Mép trái */}
-                      {idx > 0 && categoryVisibleCols.includes(arr[idx - 1].key) && (
+                      {idx > 0 && categoryVisibleCols.includes(arr[idx - 1]) && (
                         <span
                           className="col-resizer left"
                           onMouseDown={e => handleCategoryMouseDown(idx, e, 'left')}
@@ -276,7 +360,7 @@ const ProductCategories = () => {
                       )}
                       {col.label}
                       {/* Mép phải */}
-                      {idx < arr.length - 1 && categoryVisibleCols.includes(arr[idx + 1].key) && (
+                      {idx < arr.length - 1 && categoryVisibleCols.includes(arr[idx + 1]) && (
                         <span
                           className="col-resizer right"
                           onMouseDown={e => handleCategoryMouseDown(idx, e, 'right')}
@@ -284,15 +368,17 @@ const ProductCategories = () => {
                         />
                       )}
                     </th>
-                  ) : null
-                ))}
+                  );
+                })}
               </tr>
             </thead>
             <tbody>
               {filteredCategories.map((category) => (
                 <tr key={category.id}>
-                  {categoryColumns.map((col, idx) => {
-                    if (!categoryVisibleCols.includes(col.key)) return null;
+                  {categoryColOrder.map((key, idx) => {
+                    if (!categoryVisibleCols.includes(key)) return null;
+                    const col = categoryColumns.find(c => c.key === key);
+                    if (!col) return null;
                     if (col.key === 'noGroupOrder') {
                       return (
                         <td key={col.key}>

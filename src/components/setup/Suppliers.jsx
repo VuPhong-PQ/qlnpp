@@ -165,19 +165,9 @@ function Suppliers() {
 
   // Khi click "Làm lại"
   const handleResetCols = () => {
-    const defaultOrder = [
-      'code',
-      'name',
-      'phone',
-      'address',
-      'taxCode',
-      'productType',
-      'note',
-      'status',
-      'actions',
-    ];
-    setSupplierVisibleCols(defaultOrder);
-    setSupplierColOrder(defaultOrder);
+    setSupplierVisibleCols(defaultSupplierVisible);
+    setSupplierColOrder(defaultSupplierVisible);
+    saveColConfig(defaultSupplierVisible, defaultSupplierVisible);
   };
 
   // Dummy handlers để tránh lỗi
@@ -256,7 +246,7 @@ function Suppliers() {
               <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
                 <input
                   type="checkbox"
-                  checked={supplierVisibleCols.length === supplierColumns.length}
+                  checked={supplierVisibleCols.length === supplierColumns.length && supplierColumns.every(col => supplierVisibleCols.includes(col.key))}
                   onChange={e => setSupplierVisibleCols(e.target.checked ? defaultSupplierVisible : [])}
                   style={{ marginRight: 6 }}
                 />
