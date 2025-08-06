@@ -38,7 +38,6 @@ const Header = () => {
       icon: '💼',
       items: [
         { name: 'Bảng báo giá', path: '/business/quotation-table' },
-        { name: 'Đặt hàng NCC', path: '/business/purchase-orders' },
         { name: 'Nhập hàng', path: '/business/import-goods' },
         { name: 'Chuyển kho', path: '/business/warehouse-transfer' },
         { 
