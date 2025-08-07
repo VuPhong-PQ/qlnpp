@@ -18,7 +18,7 @@
     padding: 16px 12px 8px 12px !important;
   }
   .quotation-list-table, .quotation-detail-table {
-    min-width: 400px !important;
+    min-width: 280px !important;
     font-size: 14px !important;
   }
 }
@@ -33,7 +33,7 @@
     padding: 10px 6px 6px 6px !important;
   }
   .quotation-list-table, .quotation-detail-table {
-    min-width: 320px !important;
+    min-width: 200px !important;
     font-size: 12px !important;
   }
   .settings-modal-overlay, .modal-overlay {
@@ -41,18 +41,17 @@
   }
 }
 
-/* Make table scrollable horizontally on small screens */
-.quotation-list-table, .quotation-detail-table {
-  display: block;
+/* Table scroll for small screens: use container, not table */
+.table-scroll-x {
   overflow-x: auto;
   width: 100%;
   max-width: 100vw;
 }
-.quotation-list-table thead, .quotation-detail-table thead,
-.quotation-list-table tbody, .quotation-detail-table tbody {
-  display: table;
+
+/* Make table scrollable horizontally on small screens */
+.quotation-list-table, .quotation-detail-table {
   width: 100%;
-  table-layout: fixed;
+  max-width: 100vw;
 }
 .quotation-list-table th,
 .quotation-list-table td {
@@ -160,7 +159,7 @@
   border-collapse: separate;
   border-spacing: 0;
   background: #fff;
-  min-width: 600px;
+  min-width: 320px;
   box-shadow: 0 1px 4px #f0f1f2;
 }
 .quotation-list-table th, .quotation-detail-table th {
