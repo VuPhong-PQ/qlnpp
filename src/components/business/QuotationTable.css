@@ -1,3 +1,94 @@
+/* Responsive styles for QuotationTable page */
+@media (max-width: 1024px) {
+  .quotation-table-page {
+    flex-direction: column;
+    padding: 8px !important;
+    gap: 12px !important;
+  }
+  .left-panel, .right-panel {
+    width: 100% !important;
+    min-width: 0 !important;
+    box-sizing: border-box;
+    border-radius: 10px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+  }
+  .panel-header {
+    font-size: 18px !important;
+    padding: 16px 12px 8px 12px !important;
+  }
+  .quotation-list-table, .quotation-detail-table {
+    min-width: 400px !important;
+    font-size: 14px !important;
+  }
+}
+
+@media (max-width: 700px) {
+  .quotation-table-page {
+    padding: 2px !important;
+    gap: 6px !important;
+  }
+  .panel-header {
+    font-size: 15px !important;
+    padding: 10px 6px 6px 6px !important;
+  }
+  .quotation-list-table, .quotation-detail-table {
+    min-width: 320px !important;
+    font-size: 12px !important;
+  }
+  .settings-modal-overlay, .modal-overlay {
+    padding: 0 !important;
+  }
+}
+
+/* Make table scrollable horizontally on small screens */
+.quotation-list-table, .quotation-detail-table {
+  display: block;
+  overflow-x: auto;
+  width: 100%;
+  max-width: 100vw;
+}
+.quotation-list-table thead, .quotation-detail-table thead,
+.quotation-list-table tbody, .quotation-detail-table tbody {
+  display: table;
+  width: 100%;
+  table-layout: fixed;
+}
+.quotation-list-table th,
+.quotation-list-table td {
+  border-left: 1px solid #e0e0e0;
+  border-right: 1px solid #e0e0e0;
+}
+.quotation-list-table th:first-child,
+.quotation-list-table td:first-child {
+  border-left: none;
+}
+.quotation-list-table th:last-child,
+.quotation-list-table td:last-child {
+  border-right: none;
+}
+.quotation-list-table {
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+  background: #fafbfc;
+  border-radius: 8px;
+  overflow: hidden;
+  border: 1px solid #e0e0e0;
+}
+.quotation-list-table th,
+.quotation-list-table td {
+  border-bottom: 1px solid #e0e0e0;
+}
+.quotation-list-table tr:last-child td {
+  border-bottom: none;
+}
+.quotation-list-table th {
+  background: #f5f7fa;
+}
+.quotation-list-table td {
+  background: #fff;
+}
 .quotation-list-table th,
 .quotation-detail-table th {
   border-right: 1px solid #e0e0e0;
