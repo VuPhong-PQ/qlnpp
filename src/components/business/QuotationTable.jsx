@@ -63,6 +63,65 @@ const initialQuotations = [
     employee: 'Lê Văn C',
   },
 ];
+
+// Dummy data for quotation details (panel phải), liên kết với code báo giá
+const quotationDetails = [
+  // Chi tiết cho BG001
+  {
+    quotationCode: 'BG001',
+    itemType: 'Hàng hóa',
+    barcode: '8938505970011',
+    itemCode: 'SP001',
+    itemName: 'Sản phẩm A',
+    description: 'Mô tả sản phẩm A',
+    unit: 'Cái',
+    price: 120000,
+    unit1: 'Thùng',
+    price1: 115000,
+    note: 'Giao nhanh',
+  },
+  {
+    quotationCode: 'BG001',
+    itemType: 'Hàng hóa',
+    barcode: '8938505970012',
+    itemCode: 'SP002',
+    itemName: 'Sản phẩm B',
+    description: 'Mô tả sản phẩm B',
+    unit: 'Cái',
+    price: 95000,
+    unit1: 'Thùng',
+    price1: 90000,
+    note: '',
+  },
+  // Chi tiết cho BG002
+  {
+    quotationCode: 'BG002',
+    itemType: 'Dịch vụ',
+    barcode: '',
+    itemCode: 'DV001',
+    itemName: 'Dịch vụ X',
+    description: 'Dịch vụ bảo trì',
+    unit: 'Lần',
+    price: 500000,
+    unit1: '',
+    price1: '',
+    note: 'Bảo hành 6 tháng',
+  },
+  // Chi tiết cho BG003
+  {
+    quotationCode: 'BG003',
+    itemType: 'Hàng hóa',
+    barcode: '8938505970033',
+    itemCode: 'SP003',
+    itemName: 'Sản phẩm C',
+    description: 'Mô tả sản phẩm C',
+    unit: 'Cái',
+    price: 150000,
+    unit1: 'Thùng',
+    price1: 140000,
+    note: '',
+  },
+];
 import './QuotationTable.css';
 
 // Column settings modal component
@@ -348,6 +407,11 @@ const getInitialRightCols = () => {
     saveQuotationColConfig(['date', 'code', 'actions'], ['date', 'code', 'actions']);
   };
   const resetRightCols = () => setRightVisibleCols(defaultRightColumns.map(c => c.key));
+  // Lọc chi tiết theo báo giá đang chọn
+  const detailRows = selectedQuotation
+    ? quotationDetails.filter(d => d.quotationCode === selectedQuotation.code)
+    : [];
+
   return (
     <div className="quotation-table-page" style={{background: '#f7f8fa', minHeight: '100vh', padding: 16, display: 'flex', gap: 16}}>
       {/* Left 30% panel */}
@@ -572,12 +636,52 @@ const getInitialRightCols = () => {
                     </tr>
                   </thead>
                   <tbody>
-                    <tr>
-                      <td colSpan={rightVisibleCols.length} style={{textAlign: 'center', padding: 32, color: '#bbb'}}>
-                        <div style={{fontSize: 48, marginBottom: 8}}><span className="anticon">📦</span></div>
-                        <div>Trống</div>
-                      </td>
-                    </tr>
+                    {detailRows.length === 0 ? (
+                      <tr>
+                        <td colSpan={rightVisibleCols.length} style={{textAlign: 'center', padding: 32, color: '#bbb'}}>
+                          <div style={{fontSize: 48, marginBottom: 8}}><span className="anticon">📦</span></div>
+                          <div>Trống</div>
+                        </td>
+                      </tr>
+                    ) : (
+                      detailRows.map((row, rowIdx) => (
+                        <tr key={rowIdx}>
+                          {rightColOrder.map((key, colIdx) => {
+                            if (!rightVisibleCols.includes(key)) return null;
+                            if (key === 'actions') {
+                              return (
+                                <td key={key} style={{ width: rightColWidths[colIdx], padding: 8 }}>
+                                  <Space>
+                                    <Button type="primary" icon={<EditOutlined />} size="small" onClick={e => { e.stopPropagation(); }}>
+                                      Sửa
+                                    </Button>
+                                    <Popconfirm
+                                      title="Bạn có chắc muốn xóa?"
+                                      onConfirm={e => { e.stopPropagation(); }}
+                                      okText="Có"
+                                      cancelText="Không"
+                                      onCancel={e => e && e.stopPropagation()}
+                                    >
+                                      <Button danger icon={<DeleteOutlined />} size="small" onClick={e => e.stopPropagation()}>
+                                        Xóa
+                                      </Button>
+                                    </Popconfirm>
+                                  </Space>
+                                </td>
+                              );
+                            }
+                            let value = row[key];
+                            // Format giá
+                            if ((key === 'price' || key === 'price1') && value) {
+                              value = Number(value).toLocaleString('vi-VN');
+                            }
+                            return (
+                              <td key={key} style={{ width: rightColWidths[colIdx], padding: 8 }}>{value || ''}</td>
+                            );
+                          })}
+                        </tr>
+                      ))
+                    )}
                   </tbody>
                 </table>
               </div>
