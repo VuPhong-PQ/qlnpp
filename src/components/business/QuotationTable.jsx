@@ -5,15 +5,19 @@ const defaultLeftColumns = [
   { key: 'actions', title: 'Thao tác' },
 ];
 
-// Cấu hình cột mặc định cho bảng bên phải (chi tiết báo giá)
+// Cấu hình cột mới cho bảng bên phải (chi tiết báo giá) theo yêu cầu
 const defaultRightColumns = [
-  { key: 'product', title: 'Hàng hóa' },
-  { key: 'unit', title: 'Đơn vị' },
-  { key: 'quantity', title: 'Số lượng' },
+  { key: 'itemType', title: 'Loại hàng' },
+  { key: 'barcode', title: 'Mã vạch' },
+  { key: 'itemCode', title: 'Mã hàng' },
+  { key: 'itemName', title: 'Tên hàng' },
+  { key: 'description', title: 'Mô tả' },
+  { key: 'unit', title: 'Đvt' },
   { key: 'price', title: 'Đơn giá' },
-  { key: 'total', title: 'Thành tiền' },
-  { key: 'quotationType', title: 'Loại báo giá' },
-  { key: 'actions', title: '' },
+  { key: 'unit1', title: 'Đvt 1' },
+  { key: 'price1', title: 'Đơn giá 1' },
+  { key: 'note', title: 'Ghi chú' },
+  { key: 'actions', title: 'Thao tác' },
 ];
 
 import React, { useState, useRef } from 'react';
@@ -241,10 +245,54 @@ function QuotationTable() {
   const [showLeftSearch, setShowLeftSearch] = useState(false);
   const [leftSearch, setLeftSearch] = useState({ code: '', dateFrom: '', dateTo: '' });
 
-  // State for right panel (quotation details)
-  const [rightVisibleCols, setRightVisibleCols] = useState(defaultRightColumns.map(c => c.key));
+// --- CẤU HÌNH CỘT, DRAG, LƯU LOCALSTORAGE PANEL PHẢI ---
+const QUOTATION_RIGHT_COLS_KEY = 'quotation_detail_table_cols_v1';
+const getInitialRightCols = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(QUOTATION_RIGHT_COLS_KEY));
+    if (saved && Array.isArray(saved.visibleCols) && Array.isArray(saved.order)) {
+      return [saved.visibleCols, saved.order];
+    }
+  } catch {}
+  const defaultOrder = defaultRightColumns.map(c => c.key);
+  return [defaultOrder, defaultOrder];
+};
+
+  const [[initRightVisible, initRightOrder]] = [getInitialRightCols()];
+  const [rightVisibleCols, setRightVisibleCols] = useState(initRightVisible);
+  const [rightColOrder, setRightColOrder] = useState(initRightOrder);
   const [rightColWidths, setRightColWidths] = useState(defaultRightColumns.map(() => 120));
   const [showRightSettings, setShowRightSettings] = useState(false);
+
+  // Lưu cấu hình cột vào localStorage
+  const saveRightColConfig = (visibleCols, order) => {
+    localStorage.setItem(QUOTATION_RIGHT_COLS_KEY, JSON.stringify({ visibleCols, order }));
+  };
+  // Tự động lưu khi thay đổi
+  React.useEffect(() => {
+    saveRightColConfig(rightVisibleCols, rightColOrder);
+  }, [rightVisibleCols, rightColOrder]);
+  // Đóng popup khi click ra ngoài và tự động lưu
+  const rightSettingsRef = useRef(null);
+  React.useEffect(() => {
+    if (!showRightSettings) return;
+    const handleClick = (e) => {
+      if (rightSettingsRef.current && !rightSettingsRef.current.contains(e.target)) {
+        setShowRightSettings(false);
+        saveRightColConfig(rightVisibleCols, rightColOrder);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showRightSettings, rightVisibleCols, rightColOrder]);
+  // Reset columns
+  // Đổi tên hàm reset cho panel phải để tránh trùng lặp
+  const resetRightDetailCols = () => {
+    const def = defaultRightColumns.map(c => c.key);
+    setRightVisibleCols(def);
+    setRightColOrder(def);
+    saveRightColConfig(def, def);
+  };
 
   // Lọc danh sách báo giá theo tìm kiếm
   const filteredQuotations = quotations.filter(q =>
@@ -464,19 +512,48 @@ function QuotationTable() {
                 </div>
               </div>
               <div style={{margin: '8px 0 8px 0', fontWeight: 600, fontSize: 16}}>Tổng 0</div>
-              <div style={{display: 'flex', alignItems: 'center', gap: 8, marginBottom: 8}}>
-                <button style={{background: '#a259ec', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb'}}>C</button>
-                <button style={{background: '#ff6f91', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb'}}>I</button>
-                <button style={{background: '#888', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb'}} onClick={() => setShowRightSettings(true)}><span className="anticon">⚙</span></button>
+              {/* Nút thao tác khác nếu cần, có thể bỏ hoặc chuyển sang phải */}
+              {/* Nút bánh răng đặt bên ngoài bảng, phía trên cột "Thao tác" */}
+              <div style={{display: 'flex', justifyContent: 'flex-end', alignItems: 'center', margin: '0 0 4px 0', position: 'relative'}}>
+                <button
+                  style={{background: '#888', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb'}}
+                  onClick={e => { e.stopPropagation(); setShowRightSettings(true); }}
+                  id="right-settings-gear-btn"
+                >
+                  <span className="anticon">⚙</span>
+                </button>
+                {showRightSettings && (
+                  <div
+                    className="settings-modal-overlay"
+                    style={{alignItems: 'flex-start', justifyContent: 'flex-end'}}
+                  >
+                    <div
+                      className="column-settings-modal column-settings-popup"
+                      ref={rightSettingsRef}
+                      style={{left: 'unset', right: 24, top: 80, minWidth: 270, maxWidth: 320, zIndex: 1100}}
+                    >
+                      <ColumnSettings
+                        columns={defaultRightColumns}
+                        visibleColumns={rightVisibleCols}
+                        colOrder={rightColOrder}
+                        setVisibleColumns={setRightVisibleCols}
+                        setColOrder={setRightColOrder}
+                        onClose={() => { setShowRightSettings(false); saveRightColConfig(rightVisibleCols, rightColOrder); }}
+                        onReset={resetRightDetailCols}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
-              <div style={{overflowX: 'auto', borderRadius: 8, border: '1px solid #f0f0f0', background: '#fafbfc'}}>
+              <div className="table-scroll-x" style={{borderRadius: 8, border: '1px solid #f0f0f0', background: '#fafbfc'}}>
                 <table className="quotation-detail-table" style={{minWidth: 800}}>
                   <thead>
                     <tr>
-                      {defaultRightColumns.map((col, idx) => {
-                        if (!rightVisibleCols.includes(col.key)) return null;
-                        const visibleKeys = defaultRightColumns.filter(c => rightVisibleCols.includes(c.key)).map(c => c.key);
-                        const isLast = visibleKeys[visibleKeys.length - 1] === col.key;
+                      {rightColOrder.map((key, idx) => {
+                        const col = defaultRightColumns.find(c => c.key === key);
+                        if (!col || !rightVisibleCols.includes(col.key)) return null;
+                        const visibleKeys = rightColOrder.filter(k => rightVisibleCols.includes(k));
+                        const isLast = visibleKeys[visibleKeys.length - 1] === key;
                         return (
                           <ResizableTh
                             key={col.key}
@@ -505,18 +582,7 @@ function QuotationTable() {
                 <button style={{background: '#7d3cff', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 16, padding: '8px 20px', boxShadow: '0 2px 8px #e5e7eb'}}><span className="anticon">🖨</span> In A4</button>
                 <button style={{background: '#00c48c', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 16, padding: '8px 20px', boxShadow: '0 2px 8px #e5e7eb'}}><span className="anticon">📤</span> Xuất Excel</button>
               </div>
-              {showRightSettings && (
-                <div className="settings-modal-overlay">
-                  <ColumnSettings
-                    columns={defaultRightColumns}
-                    visibleColumns={rightVisibleCols}
-                    setVisibleColumns={setRightVisibleCols}
-                    onClose={() => setShowRightSettings(false)}
-                    onReset={resetRightCols}
-                    onDragEnd={cols => setRightVisibleCols(cols)}
-                  />
-                </div>
-              )}
+              {/* Đã chuyển popup settings vào trong table-scroll-x để popup xuất hiện bên phải nút bánh răng */}
             </>
           ) : (
             <div className="no-selection">Chọn một báo giá để xem chi tiết</div>
