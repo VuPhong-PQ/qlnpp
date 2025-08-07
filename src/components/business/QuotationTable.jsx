@@ -2,8 +2,7 @@
 const defaultLeftColumns = [
   { key: 'code', title: 'Số báo giá' },
   { key: 'date', title: 'Ngày lập' },
-  { key: 'quotationType', title: 'Loại báo giá' },
-  { key: 'actions', title: '' },
+  { key: 'actions', title: 'Thao tác' },
 ];
 
 // Cấu hình cột mặc định cho bảng bên phải (chi tiết báo giá)
@@ -13,10 +12,26 @@ const defaultRightColumns = [
   { key: 'quantity', title: 'Số lượng' },
   { key: 'price', title: 'Đơn giá' },
   { key: 'total', title: 'Thành tiền' },
+  { key: 'quotationType', title: 'Loại báo giá' },
   { key: 'actions', title: '' },
 ];
 
 import React, { useState, useRef } from 'react';
+// --- CẤU HÌNH CỘT, DRAG, LƯU LOCALSTORAGE ---
+const QUOTATION_COLS_KEY = 'quotation_table_cols_v1';
+const getInitialQuotationCols = () => {
+  try {
+    const saved = JSON.parse(localStorage.getItem(QUOTATION_COLS_KEY));
+    if (saved && Array.isArray(saved.visibleCols) && Array.isArray(saved.order)) {
+      return [saved.visibleCols, saved.order];
+    }
+  } catch {}
+  // Mặc định: ngày lập, số báo giá, actions
+  const defaultOrder = ['date', 'code', 'actions'];
+  return [defaultOrder, defaultOrder];
+};
+import { Button, Space, Popconfirm } from 'antd';
+import { EditOutlined, DeleteOutlined } from '@ant-design/icons';
 // Dummy data for initial quotations
 const initialQuotations = [
   {
@@ -47,7 +62,7 @@ const initialQuotations = [
 import './QuotationTable.css';
 
 // Column settings modal component
-function ColumnSettings({ columns, visibleColumns, setVisibleColumns, onClose, onReset, onDragEnd }) {
+function ColumnSettings({ columns, visibleColumns, colOrder, setVisibleColumns, setColOrder, onClose, onReset }) {
   // Chia nhóm: chưa cố định (có thể kéo thả), cố định phải (không kéo thả)
   const fixedRight = columns.filter(col => col.key === 'actions');
   const normalCols = columns.filter(col => col.key !== 'actions');
@@ -58,31 +73,43 @@ function ColumnSettings({ columns, visibleColumns, setVisibleColumns, onClose, o
   // Đóng popup khi click ra ngoài
   React.useEffect(() => {
     const handleClick = (e) => {
-      if (ref.current && !ref.current.contains(e.target)) onClose();
+      if (ref.current && !ref.current.contains(e.target)) {
+        onClose();
+      }
     };
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [onClose]);
 
+  // Kéo thả đổi vị trí cột (chỉ đổi colOrder, không đổi visibleCols)
   const handleDragStart = (idx) => setDraggedIndex(idx);
-  const handleDragOver = (idx) => setDragOverIndex(idx);
+  const handleDragOver = (idx) => {
+    if (draggedIndex !== null && idx !== draggedIndex) setDragOverIndex(idx);
+  };
   const handleDrop = () => {
-    if (draggedIndex === null || dragOverIndex === null) return;
-    const newOrder = [...visibleColumns];
-    const normalKeys = normalCols.map(c => c.key);
-    // Chỉ reorder trong nhóm chưa cố định
-    const currentOrder = visibleColumns.filter(k => normalKeys.includes(k));
-    const [removed] = currentOrder.splice(draggedIndex, 1);
-    currentOrder.splice(dragOverIndex, 0, removed);
+    if (draggedIndex === null || dragOverIndex === null || draggedIndex === dragOverIndex) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    const nonFixedKeys = normalCols.map(c => c.key);
+    const currentOrder = colOrder.filter(k => nonFixedKeys.includes(k));
+    if (currentOrder.length < 2) {
+      setDraggedIndex(null);
+      setDragOverIndex(null);
+      return;
+    }
+    const newOrder = [...currentOrder];
+    const [removed] = newOrder.splice(draggedIndex, 1);
+    newOrder.splice(dragOverIndex, 0, removed);
     // Ghép lại với nhóm cố định phải
-    const newVisible = [...currentOrder, ...visibleColumns.filter(k => !normalKeys.includes(k))];
-    setVisibleColumns(newVisible);
+    const newColOrder = [...newOrder, ...colOrder.filter(k => !nonFixedKeys.includes(k))];
+    setColOrder(newColOrder);
     setDraggedIndex(null);
     setDragOverIndex(null);
-    if (onDragEnd) onDragEnd(newVisible);
   };
 
-  // Header checkbox: bật/tắt tất cả
+  // Header checkbox: bật/tắt tất cả (chỉ đổi visibleCols)
   const allChecked = normalCols.every(col => visibleColumns.includes(col.key)) && fixedRight.every(col => visibleColumns.includes(col.key));
   const handleAllCheck = () => {
     if (allChecked) {
@@ -90,6 +117,13 @@ function ColumnSettings({ columns, visibleColumns, setVisibleColumns, onClose, o
     } else {
       setVisibleColumns(columns.map(c => c.key));
     }
+  };
+
+  // Nút làm lại: reset về thứ tự ngày lập, số báo giá, actions
+  const handleReset = () => {
+    setVisibleColumns(['date', 'code', 'actions']);
+    setColOrder(['date', 'code', 'actions']);
+    if (onReset) onReset(['date', 'code', 'actions']);
   };
 
   return (
@@ -101,35 +135,38 @@ function ColumnSettings({ columns, visibleColumns, setVisibleColumns, onClose, o
             <input type="checkbox" checked={allChecked} onChange={handleAllCheck} />
             Cột hiển thị
           </label>
-          <button className="popup-reset-btn" onClick={onReset}>Làm lại</button>
+          <button className="popup-reset-btn" onClick={handleReset}>Làm lại</button>
         </div>
         <div className="popup-group-label">Chưa cố định</div>
         <div className="popup-list">
-          {normalCols.map((col, idx) => (
-            <div
-              key={col.key}
-              className={`setting-row${visibleColumns.includes(col.key) ? '' : ' hidden'}${draggedIndex === idx ? ' dragging' : ''}${dragOverIndex === idx ? ' dragover' : ''}`}
-              draggable
-              onDragStart={() => handleDragStart(idx)}
-              onDragOver={e => { e.preventDefault(); handleDragOver(idx); }}
-              onDrop={handleDrop}
-              style={{display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: 'grab'}}
-            >
-              <span className="drag-icon" style={{fontSize: 16, color: '#bbb', cursor: 'grab'}}>⋮⋮</span>
-              <input
-                type="checkbox"
-                checked={visibleColumns.includes(col.key)}
-                onChange={() => {
-                  setVisibleColumns(
-                    visibleColumns.includes(col.key)
-                      ? visibleColumns.filter(k => k !== col.key)
-                      : [...visibleColumns, col.key]
-                  );
-                }}
-              />
-              <span>{col.title}</span>
-            </div>
-          ))}
+          {colOrder.filter(key => !fixedRight.find(col => col.key === key)).map((key, idx) => {
+            const col = columns.find(c => c.key === key);
+            return (
+              <div
+                key={col.key}
+                className={`setting-row${visibleColumns.includes(col.key) ? '' : ' hidden'}${draggedIndex === idx ? ' dragging' : ''}${dragOverIndex === idx ? ' dragover' : ''}`}
+                draggable={colOrder.filter(k => !fixedRight.find(col => col.key === k)).length > 1}
+                onDragStart={() => handleDragStart(idx)}
+                onDragOver={e => { e.preventDefault(); handleDragOver(idx); }}
+                onDrop={handleDrop}
+                style={{display: 'flex', alignItems: 'center', gap: 8, padding: '6px 0', cursor: colOrder.filter(k => !fixedRight.find(col => col.key === k)).length > 1 ? 'grab' : 'default'}}
+              >
+                <span className="drag-icon" style={{fontSize: 16, color: '#bbb', cursor: colOrder.filter(k => !fixedRight.find(col => col.key === k)).length > 1 ? 'grab' : 'default'}}>⋮⋮</span>
+                <input
+                  type="checkbox"
+                  checked={visibleColumns.includes(col.key)}
+                  onChange={() => {
+                    setVisibleColumns(
+                      visibleColumns.includes(col.key)
+                        ? visibleColumns.filter(k => k !== col.key)
+                        : [...visibleColumns, col.key]
+                    );
+                  }}
+                />
+                <span>{col.title}</span>
+              </div>
+            );
+          })}
         </div>
         <div className="popup-group-label">Cố định phải</div>
         <div className="popup-list">
@@ -156,7 +193,7 @@ function ColumnSettings({ columns, visibleColumns, setVisibleColumns, onClose, o
   );
 }
 // Resizable table header cell
-function ResizableTh({ children, width, onResize, ...props }) {
+function ResizableTh({ children, width, onResize, isLast, ...props }) {
   const thRef = useRef();
   const startX = useRef();
   const startWidth = useRef();
@@ -175,7 +212,17 @@ function ResizableTh({ children, width, onResize, ...props }) {
     document.removeEventListener('mouseup', handleMouseUp);
   };
   return (
-    <th ref={thRef} style={{ width }} {...props}>
+    <th
+      ref={thRef}
+      style={{
+        width,
+        position: 'relative',
+        borderRight: isLast ? undefined : '1px solid #e0e0e0',
+        backgroundClip: 'padding-box',
+        boxSizing: 'border-box',
+      }}
+      {...props}
+    >
       <div className="th-content">{children}</div>
       <div className="resize-handle" onMouseDown={handleMouseDown} />
     </th>
@@ -185,7 +232,10 @@ function QuotationTable() {
   // State for left panel (quotation list)
   const [quotations, setQuotations] = useState(initialQuotations);
   const [selectedQuotation, setSelectedQuotation] = useState(initialQuotations[0]);
-  const [leftVisibleCols, setLeftVisibleCols] = useState(defaultLeftColumns.map(c => c.key));
+  // Lấy cấu hình cột từ localStorage nếu có
+  const [[initLeftVisible, initLeftOrder]] = [getInitialQuotationCols()];
+  const [leftVisibleCols, setLeftVisibleCols] = useState(initLeftVisible);
+  const [leftColOrder, setLeftColOrder] = useState(initLeftOrder);
   const [leftColWidths, setLeftColWidths] = useState([140, 180, 120, 120, 60]);
   const [showLeftSettings, setShowLeftSettings] = useState(false);
   const [showLeftSearch, setShowLeftSearch] = useState(false);
@@ -209,8 +259,34 @@ function QuotationTable() {
     setRightColWidths(widths => widths.map((v, i) => (i === idx ? w : v)));
   };
 
+  // Lưu cấu hình cột vào localStorage
+  const saveQuotationColConfig = (visibleCols, order) => {
+    localStorage.setItem(QUOTATION_COLS_KEY, JSON.stringify({ visibleCols, order }));
+  };
+  // Tự động lưu khi thay đổi
+  React.useEffect(() => {
+    saveQuotationColConfig(leftVisibleCols, leftColOrder);
+  }, [leftVisibleCols, leftColOrder]);
+  // Đóng popup khi click ra ngoài và tự động lưu
+  const leftSettingsRef = useRef(null);
+  React.useEffect(() => {
+    if (!showLeftSettings) return;
+    const handleClick = (e) => {
+      if (leftSettingsRef.current && !leftSettingsRef.current.contains(e.target)) {
+        setShowLeftSettings(false);
+        saveQuotationColConfig(leftVisibleCols, leftColOrder);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [showLeftSettings, leftVisibleCols, leftColOrder]);
+
   // Reset columns
-  const resetLeftCols = () => setLeftVisibleCols(defaultLeftColumns.map(c => c.key));
+  const resetLeftCols = () => {
+    setLeftVisibleCols(['date', 'code', 'actions']);
+    setLeftColOrder(['date', 'code', 'actions']);
+    saveQuotationColConfig(['date', 'code', 'actions'], ['date', 'code', 'actions']);
+  };
   const resetRightCols = () => setRightVisibleCols(defaultRightColumns.map(c => c.key));
   return (
     <div className="quotation-table-page" style={{background: '#f7f8fa', minHeight: '100vh', padding: 16, display: 'flex', gap: 16}}>
@@ -226,16 +302,22 @@ function QuotationTable() {
             <button style={{background: '#ff6f91', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb'}}>I</button>
             <button style={{background: '#888', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb'}} onClick={() => setShowLeftSettings(true)}><span className="anticon">⚙</span></button>
           </div>
-          <div style={{overflowX: 'auto', borderRadius: 8, border: '1px solid #f0f0f0', background: '#fafbfc'}}>
-            <table className="quotation-list-table" style={{minWidth: 320}}>
+          <div style={{overflowX: 'auto', borderRadius: 8, border: '1px solid #f0f0f0', background: '#fafbfc', width: '100%'}}>
+            <table className="quotation-list-table" style={{minWidth: 480, width: 'max-content'}}>
               <thead>
                 <tr>
-                  {defaultLeftColumns.map((col, idx) =>
-                    leftVisibleCols.includes(col.key) ? (
+                  {leftColOrder.map((key, idx) => {
+                    const col = defaultLeftColumns.find(c => c.key === key);
+                    if (!col || !leftVisibleCols.includes(col.key)) return null;
+                    // Find the last visible column index
+                    const visibleKeys = leftColOrder.filter(k => leftVisibleCols.includes(k));
+                    const isLast = visibleKeys[visibleKeys.length - 1] === key;
+                    return (
                       <ResizableTh
                         key={col.key}
                         width={leftColWidths[idx]}
                         onResize={w => handleLeftResize(idx, w)}
+                        isLast={isLast}
                       >
                         {col.title}
                         {col.key === 'code' && (
@@ -245,8 +327,8 @@ function QuotationTable() {
                           <span style={{marginLeft: 8, color: '#bbb', cursor: 'pointer'}} onClick={e => { e.stopPropagation(); setShowLeftSearch('date'); }}><span className="anticon">🔍</span></span>
                         )}
                       </ResizableTh>
-                    ) : null
-                  )}
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
@@ -256,15 +338,28 @@ function QuotationTable() {
                     className={selectedQuotation?.id === q.id ? 'selected' : ''}
                     onClick={() => setSelectedQuotation(q)}
                   >
-                    {defaultLeftColumns.map((col, colIdx) => {
-                      if (!leftVisibleCols.includes(col.key)) return null;
+                    {leftColOrder.map((key, colIdx) => {
+                      const col = defaultLeftColumns.find(c => c.key === key);
+                      if (!col || !leftVisibleCols.includes(col.key)) return null;
                       let value = null;
                       if (col.key === 'actions') {
                         value = (
-                          <div style={{display: 'flex', gap: 8}}>
-                            <button style={{background: '#4f8cff', border: 'none', borderRadius: '50%', width: 32, height: 32, color: '#fff', fontSize: 18}} title="Sửa"><span className="anticon">📝</span></button>
-                            <button style={{background: '#ff6f91', border: 'none', borderRadius: '50%', width: 32, height: 32, color: '#fff', fontSize: 18}} title="Xóa"><span className="anticon">🗑️</span></button>
-                          </div>
+                          <Space>
+                            <Button type="primary" icon={<EditOutlined />} size="small" onClick={e => { e.stopPropagation(); console.log('Sửa', q); }}>
+                              Sửa
+                            </Button>
+                            <Popconfirm
+                              title="Bạn có chắc muốn xóa?"
+                              onConfirm={e => { e.stopPropagation(); console.log('Đã xóa', q); }}
+                              okText="Có"
+                              cancelText="Không"
+                              onCancel={e => e && e.stopPropagation()}
+                            >
+                              <Button danger icon={<DeleteOutlined />} size="small" onClick={e => e.stopPropagation()}>
+                                Xóa
+                              </Button>
+                            </Popconfirm>
+                          </Space>
                         );
                       } else if (col.key === 'date') {
                         value = q.date ? (new Date(q.date).toLocaleString('vi-VN', { hour12: false })) : '';
@@ -297,10 +392,11 @@ function QuotationTable() {
             <ColumnSettings
               columns={defaultLeftColumns}
               visibleColumns={leftVisibleCols}
+              colOrder={leftColOrder}
               setVisibleColumns={setLeftVisibleCols}
-              onClose={() => setShowLeftSettings(false)}
+              setColOrder={setLeftColOrder}
+              onClose={() => { setShowLeftSettings(false); saveQuotationColConfig(leftVisibleCols, leftColOrder); }}
               onReset={resetLeftCols}
-              onDragEnd={cols => setLeftVisibleCols(cols)}
             />
           </div>
         )}
@@ -377,17 +473,21 @@ function QuotationTable() {
                 <table className="quotation-detail-table" style={{minWidth: 800}}>
                   <thead>
                     <tr>
-                      {defaultRightColumns.map((col, idx) =>
-                        rightVisibleCols.includes(col.key) ? (
+                      {defaultRightColumns.map((col, idx) => {
+                        if (!rightVisibleCols.includes(col.key)) return null;
+                        const visibleKeys = defaultRightColumns.filter(c => rightVisibleCols.includes(c.key)).map(c => c.key);
+                        const isLast = visibleKeys[visibleKeys.length - 1] === col.key;
+                        return (
                           <ResizableTh
                             key={col.key}
                             width={rightColWidths[idx]}
                             onResize={w => handleRightResize(idx, w)}
+                            isLast={isLast}
                           >
                             {col.title}
                           </ResizableTh>
-                        ) : null
-                      )}
+                        );
+                      })}
                     </tr>
                   </thead>
                   <tbody>

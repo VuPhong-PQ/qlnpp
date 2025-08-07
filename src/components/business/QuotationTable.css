@@ -1,3 +1,20 @@
+.quotation-list-table th,
+.quotation-detail-table th {
+  border-right: 1px solid #e0e0e0;
+}
+.quotation-list-table th:last-child,
+.quotation-detail-table th:last-child {
+  border-right: none;
+}
+.resize-handle {
+  background: #e0e0e0;
+  opacity: 0.6;
+  transition: background 0.2s;
+}
+.resize-handle:hover {
+  background: #a259ec;
+  opacity: 1;
+}
 .quotation-table-page {
   display: flex;
   height: 100vh;
