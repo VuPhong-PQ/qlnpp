@@ -66,7 +66,7 @@ const initialQuotations = [
 import './QuotationTable.css';
 
 // Column settings modal component
-function ColumnSettings({ columns, visibleColumns, colOrder, setVisibleColumns, setColOrder, onClose, onReset }) {
+function ColumnSettings({ columns, visibleColumns, colOrder, setVisibleColumns, setColOrder, onClose, onReset, setColWidths }) {
   // Chia nhóm: chưa cố định (có thể kéo thả), cố định phải (không kéo thả)
   const fixedRight = columns.filter(col => col.key === 'actions');
   const normalCols = columns.filter(col => col.key !== 'actions');
@@ -123,11 +123,21 @@ function ColumnSettings({ columns, visibleColumns, colOrder, setVisibleColumns, 
     }
   };
 
-  // Nút làm lại: reset về thứ tự ngày lập, số báo giá, actions
+  // Nút làm lại: reset về mặc định cho panel phải hoặc trái
   const handleReset = () => {
-    setVisibleColumns(['date', 'code', 'actions']);
-    setColOrder(['date', 'code', 'actions']);
-    if (onReset) onReset(['date', 'code', 'actions']);
+    if (setColWidths && columns.length > 0) {
+      // Panel phải: reset về mặc định tất cả
+      const def = columns.map(c => c.key);
+      setVisibleColumns(def);
+      setColOrder(def);
+      setColWidths(columns.map(() => 120));
+      if (onReset) onReset();
+    } else {
+      // Panel trái: reset về ['date', 'code', 'actions']
+      setVisibleColumns(['date', 'code', 'actions']);
+      setColOrder(['date', 'code', 'actions']);
+      if (onReset) onReset(['date', 'code', 'actions']);
+    }
   };
 
   return (
@@ -291,7 +301,9 @@ const getInitialRightCols = () => {
     const def = defaultRightColumns.map(c => c.key);
     setRightVisibleCols(def);
     setRightColOrder(def);
+    setRightColWidths(defaultRightColumns.map(() => 120));
     saveRightColConfig(def, def);
+    setShowRightSettings(false); // Đóng popup sau khi reset
   };
 
   // Lọc danh sách báo giá theo tìm kiếm
@@ -514,37 +526,29 @@ const getInitialRightCols = () => {
               <div style={{margin: '8px 0 8px 0', fontWeight: 600, fontSize: 16}}>Tổng 0</div>
               {/* Nút thao tác khác nếu cần, có thể bỏ hoặc chuyển sang phải */}
               {/* Nút bánh răng đặt bên ngoài bảng, phía trên cột "Thao tác" */}
-              <div style={{display: 'flex', justifyContent: 'flex-end', alignItems: 'center', margin: '0 0 4px 0', position: 'relative'}}>
+              <div style={{display: 'flex', justifyContent: 'flex-end', margin: '0 0 4px 0', position: 'relative'}}>
                 <button
                   style={{background: '#888', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb'}}
-                  onClick={e => { e.stopPropagation(); setShowRightSettings(true); }}
+                  onClick={() => setShowRightSettings(true)}
                   id="right-settings-gear-btn"
                 >
                   <span className="anticon">⚙</span>
                 </button>
-                {showRightSettings && (
-                  <div
-                    className="settings-modal-overlay"
-                    style={{alignItems: 'flex-start', justifyContent: 'flex-end'}}
-                  >
-                    <div
-                      className="column-settings-modal column-settings-popup"
-                      ref={rightSettingsRef}
-                      style={{left: 'unset', right: 24, top: 80, minWidth: 270, maxWidth: 320, zIndex: 1100}}
-                    >
-                      <ColumnSettings
-                        columns={defaultRightColumns}
-                        visibleColumns={rightVisibleCols}
-                        colOrder={rightColOrder}
-                        setVisibleColumns={setRightVisibleCols}
-                        setColOrder={setRightColOrder}
-                        onClose={() => { setShowRightSettings(false); saveRightColConfig(rightVisibleCols, rightColOrder); }}
-                        onReset={resetRightDetailCols}
-                      />
-                    </div>
-                  </div>
-                )}
               </div>
+              {showRightSettings && (
+                <div className="settings-modal-overlay">
+                  <ColumnSettings
+                    columns={defaultRightColumns}
+                    visibleColumns={rightVisibleCols}
+                    colOrder={rightColOrder}
+                    setVisibleColumns={setRightVisibleCols}
+                    setColOrder={setRightColOrder}
+                    setColWidths={setRightColWidths}
+                    onClose={() => { setShowRightSettings(false); saveRightColConfig(rightVisibleCols, rightColOrder); }}
+                    onReset={resetRightDetailCols}
+                  />
+                </div>
+              )}
               <div className="table-scroll-x" style={{borderRadius: 8, border: '1px solid #f0f0f0', background: '#fafbfc'}}>
                 <table className="quotation-detail-table" style={{minWidth: 800}}>
                   <thead>
