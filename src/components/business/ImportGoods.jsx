@@ -1,12 +1,17 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import './BusinessPage.css';
+import { Table, Button, Space, Popconfirm, Input, Modal } from 'antd';
+import { SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
+import dayjs from 'dayjs';
 
 const ImportGoods = () => {
   const [showModal, setShowModal] = useState(false);
+  const [showSearchModal, setShowSearchModal] = useState(false);
   const [selectedImport, setSelectedImport] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const [dateFrom, setDateFrom] = useState('01/08/2025');
-  const [dateTo, setDateTo] = useState('02/08/2025');
+  const [searchCode, setSearchCode] = useState('');
+  const [dateFrom, setDateFrom] = useState('2025-08-01');
+  const [dateTo, setDateTo] = useState('2025-08-08');
   const [importType, setImportType] = useState('');
   const [employee, setEmployee] = useState('');
 
@@ -120,8 +125,16 @@ const ImportGoods = () => {
                          importItem.employee.toLowerCase().includes(searchTerm.toLowerCase());
     const matchesType = !importType || importItem.importType === importType;
     const matchesEmployee = !employee || importItem.employee === employee;
-    
-    return matchesSearch && matchesType && matchesEmployee;
+    const matchesCode = !searchCode || importItem.importNumber.toLowerCase().includes(searchCode.toLowerCase());
+    // Lọc theo khoảng ngày nhập (so sánh yyyy-mm-dd)
+    let matchesDate = true;
+    if (dateFrom && dateTo) {
+      // importItem.createdDate dạng DD/MM/YYYY
+      const [d, m, y] = importItem.createdDate.split('/');
+      const importDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+      matchesDate = importDate >= dateFrom && importDate <= dateTo;
+    }
+    return matchesSearch && matchesType && matchesEmployee && matchesCode && matchesDate;
   });
 
   const handleExport = () => {
@@ -157,102 +170,146 @@ const ImportGoods = () => {
     return `PN${year}${month}${day}-${count.toString().padStart(6, '0')}`;
   };
 
+  // Table row selection
+  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
+  const rowSelection = {
+    selectedRowKeys,
+    onChange: (newSelectedRowKeys) => {
+      setSelectedRowKeys(newSelectedRowKeys);
+      // Optional: select import in detail panel if only 1 row selected
+      if (newSelectedRowKeys.length === 1) {
+        const found = filteredImports.find(i => i.id === newSelectedRowKeys[0]);
+        if (found) setSelectedImport(found);
+      }
+    },
+  };
+
+  // Modal tìm kiếm số phiếu
+  const searchInputRef = useRef();
+
+  const columns = [
+    {
+      title: '',
+      dataIndex: 'checkbox',
+      width: 40,
+      render: (_, record) => null,
+    },
+    {
+      title: <span>Số phiếu <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => setShowSearchModal(true)} /></span>,
+      dataIndex: 'importNumber',
+      key: 'importNumber',
+      render: (text, record) => (
+        <span style={{fontWeight: selectedImport?.id === record.id ? 600 : 400, cursor:'pointer'}} onClick={() => handleSelectImport(record)}>{text}</span>
+      ),
+      sorter: (a, b) => a.importNumber.localeCompare(b.importNumber),
+    },
+    {
+      title: 'Ngày nhập',
+      dataIndex: 'createdDate',
+      key: 'createdDate',
+      render: (text) => text,
+      sorter: (a, b) => a.createdDate.localeCompare(b.createdDate),
+    },
+    {
+      title: 'Tổng tiền',
+      dataIndex: 'total',
+      key: 'total',
+      render: (_, record) => {
+        // Tính tổng tiền từ items
+        const total = (record.items || []).reduce((sum, item) => sum + (item.total || 0), 0);
+        return total.toLocaleString('vi-VN');
+      },
+      sorter: (a, b) => {
+        const ta = (a.items||[]).reduce((sum, item) => sum + (item.total||0), 0);
+        const tb = (b.items||[]).reduce((sum, item) => sum + (item.total||0), 0);
+        return ta-tb;
+      }
+    },
+    {
+      title: 'Thao tác',
+      key: 'actions',
+      width: 100,
+      render: (_, record) => (
+        <Space>
+          <Button icon={<EditOutlined />} size="small" onClick={e => {e.stopPropagation();}} title="Sửa" />
+          <Popconfirm title="Bạn có chắc chắn muốn xóa phiếu nhập này?" onConfirm={e => handleDelete(record.id, e)} okText="Có" cancelText="Không">
+            <Button icon={<DeleteOutlined />} danger size="small" onClick={e => e.stopPropagation()} title="Xóa" />
+          </Popconfirm>
+        </Space>
+      )
+    }
+  ];
+
   return (
     <div className="import-goods-page">
-      {/* Left Panel - Search */}
-      <div className="search-panel">
+      {/* Left Panel - Table Search */}
+      <div className="search-panel" style={{padding:16}}>
         <div className="panel-header">
           <h2>TÌM KIẾM</h2>
         </div>
-        
-        <div className="search-content">
-          <div className="search-section">
-            <div className="date-range-section">
-              <div className="form-group">
-                <input 
-                  type="date" 
-                  value={dateFrom.split('/').reverse().join('-')}
-                  onChange={(e) => setDateFrom(e.target.value.split('-').reverse().join('/'))}
-                  className="date-input"
-                />
-              </div>
-              <div className="form-group">
-                <input 
-                  type="date" 
-                  value={dateTo.split('/').reverse().join('-')}
-                  onChange={(e) => setDateTo(e.target.value.split('-').reverse().join('/'))}
-                  className="date-input"
-                />
-              </div>
-            </div>
-
-            <div className="form-group">
-              <select 
-                value={importType}
-                onChange={(e) => setImportType(e.target.value)}
-                className="select-input"
-              >
-                <option value="">Loại nhập</option>
-                <option value="nhập thường">Nhập thường</option>
-                <option value="nhập khẩn cấp">Nhập khẩn cấp</option>
-                <option value="nhập trả hàng">Nhập trả hàng</option>
-              </select>
-            </div>
-
-            <div className="form-group">
-              <select 
-                value={employee}
-                onChange={(e) => setEmployee(e.target.value)}
-                className="select-input"
-              >
-                <option value="">Nhân viên lập</option>
-                <option value="admin 66">admin 66</option>
-                <option value="user 01">user 01</option>
-              </select>
-            </div>
-
-            <button className="btn btn-primary search-btn">
-              Tìm kiếm
-            </button>
+        <div style={{marginBottom:16, display:'flex', flexDirection:'column', gap:8}}>
+          <div style={{display:'flex', gap:8}}>
+            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{flex:1, padding:'8px 12px', fontSize:15, borderRadius:4, border:'1px solid #e5e7eb'}} />
+            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{flex:1, padding:'8px 12px', fontSize:15, borderRadius:4, border:'1px solid #e5e7eb'}} />
           </div>
-
-          <div className="search-stats">
-            <span>Tổng {filteredImports.length}</span>
-          </div>
-
-          <div className="search-results">
-            <div className="results-header">
-              <div className="col-header">Số phiếu</div>
-              <div className="col-header">Thao tác</div>
-            </div>
-            
-            {filteredImports.map((importItem) => (
-              <div 
-                key={importItem.id}
-                className={`result-item ${selectedImport?.id === importItem.id ? 'selected' : ''}`}
-                onClick={() => handleSelectImport(importItem)}
-              >
-                <div className="result-number">{importItem.importNumber}</div>
-                <div className="result-actions">
-                  <button className="btn-icon btn-edit" title="Sửa">✏️</button>
-                  <button className="btn-icon btn-delete" onClick={(e) => handleDelete(importItem.id, e)} title="Xóa">🗑️</button>
-                </div>
-              </div>
-            ))}
-          </div>
-
-          <div className="search-pagination">
-            <button>‹</button>
-            <span>Dòng 1-{filteredImports.length} trên tổng {filteredImports.length} dòng</span>
-            <button>›</button>
-            <div className="pagination-controls">
-              <span>1</span>
-              <select>
-                <option>10 / trang</option>
-              </select>
-            </div>
-          </div>
+          <select value={importType} onChange={e=>setImportType(e.target.value)} style={{width:'100%', borderRadius:4, border:'1px solid #e5e7eb', padding:'8px 12px', fontSize:15}}>
+            <option value="">loại nhập</option>
+            <option value="nhập thường">Nhập thường</option>
+            <option value="nhập khẩn cấp">Nhập khẩn cấp</option>
+            <option value="nhập trả hàng">Nhập trả hàng</option>
+          </select>
+          <select value={employee} onChange={e=>setEmployee(e.target.value)} style={{width:'100%', borderRadius:4, border:'1px solid #e5e7eb', padding:'8px 12px', fontSize:15}}>
+            <option value="">nhân viên lập</option>
+            <option value="admin 66">admin 66</option>
+            <option value="user 01">user 01</option>
+          </select>
+          <Button type="primary" style={{width:'100%', fontSize:15, height:36, marginTop:2}}>Tìm kiếm</Button>
         </div>
+        <div style={{marginBottom:8}}>
+          <span>Tổng {filteredImports.length}</span>
+        </div>
+        <Table
+          rowKey="id"
+          columns={columns}
+          dataSource={filteredImports}
+          rowSelection={{
+            type: 'checkbox',
+            ...rowSelection,
+            columnTitle: '',
+            columnWidth: 40,
+          }}
+          pagination={false}
+          size="small"
+          onRow={record => ({
+            onClick: () => handleSelectImport(record)
+          })}
+          rowClassName={record => selectedImport?.id === record.id ? 'selected' : ''}
+          style={{background:'#fff', borderRadius:8}}
+        />
+        {/* Modal tìm kiếm số phiếu */}
+        <Modal
+          open={showSearchModal}
+          onCancel={()=>setShowSearchModal(false)}
+          onOk={()=>setShowSearchModal(false)}
+          title="Tìm kiếm theo số phiếu"
+          footer={null}
+        >
+          <Input
+            ref={searchInputRef}
+            placeholder="Nhập mã phiếu..."
+            value={searchCode}
+            onChange={e=>setSearchCode(e.target.value)}
+            allowClear
+            style={{marginBottom:12}}
+            onPressEnter={()=>setShowSearchModal(false)}
+          />
+          <div style={{maxHeight:180, overflowY:'auto'}}>
+            {imports.filter(i=>i.importNumber.toLowerCase().includes(searchCode.toLowerCase())).map(i=>(
+              <div key={i.id} style={{padding:'4px 0', cursor:'pointer', color:'#1677ff'}} onClick={()=>{setSearchCode(i.importNumber); setShowSearchModal(false);}}>{i.importNumber}</div>
+            ))}
+            {imports.filter(i=>i.importNumber.toLowerCase().includes(searchCode.toLowerCase())).length===0 && <div style={{color:'#bbb'}}>Không có số phiếu</div>}
+          </div>
+        </Modal>
       </div>
 
       {/* Right Panel - Import Details */}
