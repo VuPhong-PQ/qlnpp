@@ -1,5 +1,6 @@
 import React, { useState, useRef } from 'react';
 import './BusinessPage.css';
+import './ImportGoods.css';
 import { Table, Button, Space, Popconfirm, Input, Modal } from 'antd';
 import { SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
@@ -243,49 +244,51 @@ const ImportGoods = () => {
   return (
     <div className="import-goods-page">
       {/* Left Panel - Table Search */}
-      <div className="search-panel" style={{padding:16}}>
+      <div className="search-panel">
         <div className="panel-header">
           <h2>TÌM KIẾM</h2>
         </div>
-        <div style={{marginBottom:16, display:'flex', flexDirection:'column', gap:8}}>
-          <div style={{display:'flex', gap:8}}>
-            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} style={{flex:1, padding:'8px 12px', fontSize:15, borderRadius:4, border:'1px solid #e5e7eb'}} />
-            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} style={{flex:1, padding:'8px 12px', fontSize:15, borderRadius:4, border:'1px solid #e5e7eb'}} />
+        <div className="search-panel-controls">
+          <div className="search-panel-date-row">
+            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} />
+            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} />
           </div>
-          <select value={importType} onChange={e=>setImportType(e.target.value)} style={{width:'100%', borderRadius:4, border:'1px solid #e5e7eb', padding:'8px 12px', fontSize:15}}>
+          <select value={importType} onChange={e=>setImportType(e.target.value)}>
             <option value="">loại nhập</option>
             <option value="nhập thường">Nhập thường</option>
             <option value="nhập khẩn cấp">Nhập khẩn cấp</option>
             <option value="nhập trả hàng">Nhập trả hàng</option>
           </select>
-          <select value={employee} onChange={e=>setEmployee(e.target.value)} style={{width:'100%', borderRadius:4, border:'1px solid #e5e7eb', padding:'8px 12px', fontSize:15}}>
+          <select value={employee} onChange={e=>setEmployee(e.target.value)}>
             <option value="">nhân viên lập</option>
             <option value="admin 66">admin 66</option>
             <option value="user 01">user 01</option>
           </select>
-          <Button type="primary" style={{width:'100%', fontSize:15, height:36, marginTop:2}}>Tìm kiếm</Button>
+          <Button type="primary">Tìm kiếm</Button>
         </div>
-        <div style={{marginBottom:8}}>
+        <div className="search-panel-total">
           <span>Tổng {filteredImports.length}</span>
         </div>
-        <Table
-          rowKey="id"
-          columns={columns}
-          dataSource={filteredImports}
-          rowSelection={{
-            type: 'checkbox',
-            ...rowSelection,
-            columnTitle: '',
-            columnWidth: 40,
-          }}
-          pagination={false}
-          size="small"
-          onRow={record => ({
-            onClick: () => handleSelectImport(record)
-          })}
-          rowClassName={record => selectedImport?.id === record.id ? 'selected' : ''}
-          style={{background:'#fff', borderRadius:8}}
-        />
+        <div className="table-scroll-x">
+          <Table
+            rowKey="id"
+            columns={columns}
+            dataSource={filteredImports}
+            rowSelection={{
+              type: 'checkbox',
+              ...rowSelection,
+              columnTitle: '',
+              columnWidth: 40,
+            }}
+            pagination={false}
+            size="small"
+            onRow={record => ({
+              onClick: () => handleSelectImport(record)
+            })}
+            rowClassName={record => selectedImport?.id === record.id ? 'selected' : ''}
+            style={{minWidth:600}}
+          />
+        </div>
         {/* Modal tìm kiếm số phiếu */}
         <Modal
           open={showSearchModal}

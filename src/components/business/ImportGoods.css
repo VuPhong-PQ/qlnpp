@@ -1,0 +1,160 @@
+.import-goods-page {
+  display: flex;
+  height: 100%;
+  background: #f7f7fa;
+}
+
+.search-panel {
+  width: 420px;
+  min-width: 320px;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 2px 8px #e5e7eb;
+  margin-right: 16px;
+  display: flex;
+  flex-direction: column;
+  padding: 16px;
+}
+
+.panel-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.table-scroll-x {
+  border-radius: 8px;
+  border: 1px solid #f0f0f0;
+  background: #fff;
+  overflow-x: auto;
+}
+
+/* Popup cài đặt cột */
+.settings-modal-overlay {
+  position: fixed;
+  z-index: 1000;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.08);
+  display: flex;
+  align-items: flex-start;
+  justify-content: flex-end;
+}
+.column-settings-modal {
+  background: #fff;
+  border-radius: 10px;
+  box-shadow: 0 4px 24px #0001;
+  padding: 18px 20px 16px 20px;
+  min-width: 320px;
+  margin: 60px 40px 0 0;
+  position: relative;
+  z-index: 1001;
+}
+.popup-arrow {
+  position: absolute;
+  top: -12px;
+  right: 32px;
+  width: 0; height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 12px solid #fff;
+}
+.popup-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+.popup-reset-btn {
+  background: #f0f0f0;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 12px;
+  font-size: 14px;
+  cursor: pointer;
+}
+.popup-group-label {
+  font-size: 13px;
+  color: #888;
+  margin: 8px 0 2px 0;
+}
+.popup-list {
+  margin-bottom: 4px;
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  cursor: grab;
+  background: none;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.setting-row.dragging {
+  opacity: 0.5;
+}
+.setting-row.dragover {
+  background: #e6f4ff;
+}
+.setting-row.hidden {
+  opacity: 0.5;
+}
+.drag-icon {
+  font-size: 16px;
+  color: #bbb;
+  cursor: grab;
+}
+
+/* Table row highlight */
+.ant-table-row.selected {
+  background: #e6f4ff !important;
+}
+
+/* Nút bánh răng cài đặt */
+button[title="Cài đặt cột"] {
+  background: #888;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  font-size: 15px;
+  margin-left: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Các style input, select, button panel trái */
+.search-panel input[type="date"],
+.search-panel select {
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+  padding: 8px 12px;
+  font-size: 15px;
+}
+.search-panel input[type="date"] {
+  flex: 1;
+}
+.search-panel button[type="primary"] {
+  width: 100%;
+  font-size: 15px;
+  height: 36px;
+  margin-top: 2px;
+}
+
+/* Modal tìm kiếm số phiếu */
+.ant-modal .ant-modal-content {
+  border-radius: 10px;
+}
+
+/* Ẩn thanh cuộn ngang khi không cần thiết */
+.table-scroll-x::-webkit-scrollbar {
+  height: 8px;
+}
+.table-scroll-x::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 4px;
+}
