@@ -244,7 +244,7 @@ const ImportGoods = () => {
   return (
     <div className="import-goods-page">
       {/* Left Panel - Table Search */}
-      <div className="search-panel">
+  <div className="search-panel">
         <div className="panel-header">
           <h2>TÌM KIẾM</h2>
         </div>
@@ -316,7 +316,7 @@ const ImportGoods = () => {
       </div>
 
       {/* Right Panel - Import Details */}
-      <div className="import-detail-panel">
+  <div className="import-detail-panel">
         {selectedImport ? (
           <>
             <div className="detail-header">
