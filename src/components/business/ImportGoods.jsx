@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import { Menu } from 'antd';
 import './BusinessPage.css';
 import './ImportGoods.css';
 import { Table, Button, Space, Popconfirm, Input, Modal } from 'antd';
@@ -6,6 +7,26 @@ import { SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons'
 import dayjs from 'dayjs';
 
 const ImportGoods = () => {
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, record: null });
+
+  // Xử lý chuột phải trên bảng
+  const handleTableContextMenu = (event) => {
+    event.preventDefault();
+    setContextMenu({
+      visible: true,
+      x: event.clientX,
+      y: event.clientY,
+      record: null
+    });
+  };
+  // Đóng menu khi click ngoài
+  React.useEffect(() => {
+    const handleClick = () => setContextMenu(c => ({ ...c, visible: false }));
+    if (contextMenu.visible) {
+      document.addEventListener('click', handleClick);
+      return () => document.removeEventListener('click', handleClick);
+    }
+  }, [contextMenu.visible]);
   const [showModal, setShowModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [selectedImport, setSelectedImport] = useState(null);
@@ -269,7 +290,7 @@ const ImportGoods = () => {
         <div className="search-panel-total">
           <span>Tổng {filteredImports.length}</span>
         </div>
-        <div className="table-scroll-x">
+        <div className="table-scroll-x" onContextMenu={handleTableContextMenu} style={{ position: 'relative' }}>
           <Table
             rowKey="id"
             columns={columns}
@@ -288,6 +309,16 @@ const ImportGoods = () => {
             rowClassName={record => selectedImport?.id === record.id ? 'selected' : ''}
             style={{minWidth:600}}
           />
+          {contextMenu.visible && (
+            <Menu
+              style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 9999, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
+              onClick={() => setContextMenu(c => ({ ...c, visible: false }))}
+            >
+              <Menu.Item key="view">✔️ Xem chi tiết</Menu.Item>
+              <Menu.Item key="delete">🗑️ Xóa</Menu.Item>
+              <Menu.Item key="print">🖨️ In danh sách đã chọn</Menu.Item>
+            </Menu>
+          )}
         </div>
         {/* Modal tìm kiếm số phiếu */}
         <Modal
