@@ -1,0 +1,6 @@
+@QlnppApi_HostAddress = http://localhost:5238
+
+GET {{QlnppApi_HostAddress}}/weatherforecast/
+Accept: application/json
+
+###

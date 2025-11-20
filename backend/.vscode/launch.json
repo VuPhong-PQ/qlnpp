@@ -1,0 +1,31 @@
+## Backend Development Server
+
+### Run commands:
+1. Create database:
+   ```
+   dotnet ef database update
+   ```
+
+2. Start backend server:
+   ```
+   dotnet run
+   ```
+
+3. Backend API will be available at:
+   - HTTPS: https://localhost:7001
+   - HTTP: http://localhost:5000
+
+### Create new migration:
+```
+dotnet ef migrations add MigrationName
+```
+
+### Update database:
+```
+dotnet ef database update
+```
+
+### Remove last migration:
+```
+dotnet ef migrations remove
+```
