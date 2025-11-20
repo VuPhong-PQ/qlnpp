@@ -164,3 +164,5 @@ export const useColumnFilter = () => {
     renderFilterPopup
   };
 };
+
+export default useColumnFilter;

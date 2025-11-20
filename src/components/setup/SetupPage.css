@@ -16,6 +16,7 @@
 /* Setup Page Common Styles */
 .setup-page {
   padding: 30px;
+  padding-top: 90px; /* 60px header + 30px spacing */
   background: #f8f9fa;
   min-height: auto;
 }

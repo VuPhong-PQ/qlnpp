@@ -105,11 +105,6 @@ const AccountsFunds = () => {
   const [showLoanColSetting, setShowLoanColSetting] = useState(false);
   const loanColSettingRef = useRef(null);
 
-  // State cho column filters
-  const [columnFilters, setColumnFilters] = useState({});
-  const [showFilterPopup, setShowFilterPopup] = useState(null);
-  const filterPopupRef = useRef(null);
-
   // Đóng popup + tự động lưu khi click ra ngoài cho popup cài đặt cột quỹ tiền
   useEffect(() => {
     if (!showFundColSetting) return;
@@ -133,18 +128,6 @@ const AccountsFunds = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showLoanColSetting]);
-
-  // Đóng filter popup khi click ra ngoài
-  React.useEffect(() => {
-    if (!showFilterPopup) return;
-    const handleClickOutside = (e) => {
-      if (filterPopupRef.current && !filterPopupRef.current.contains(e.target)) {
-        setShowFilterPopup(null);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showFilterPopup]);
 
   // Hàm xử lý kéo cột cho bảng quỹ tiền (kéo mép trái/phải)
   const handleFundMouseDown = (index, e, edge) => {
@@ -350,31 +333,7 @@ const AccountsFunds = () => {
 
   const filteredFunds = applyFilters(funds, searchTerm, ['name', 'code', 'accountHolder', 'accountNumber', 'bank', 'branch', 'note']);
 
-  const filteredBankLoans = bankLoans.filter(loan => {
-    // Search term filter
-    const matchesSearch = loan.loanName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      loan.accountNumber?.toLowerCase().includes(searchTerm.toLowerCase());
-    
-    if (!matchesSearch) return false;
-
-    // Column filters
-    for (const [key, value] of Object.entries(columnFilters)) {
-      if (!value) continue;
-      
-      const loanValue = loan[key];
-      
-      if (key === 'loanDate' || key === 'dueDate') {
-        // Date filters
-        if (value.from && new Date(loanValue) < new Date(value.from)) return false;
-        if (value.to && new Date(loanValue) > new Date(value.to)) return false;
-      } else if (typeof value === 'string') {
-        // Text filters
-        if (!loanValue?.toString().toLowerCase().includes(value.toLowerCase())) return false;
-      }
-    }
-    
-    return true;
-  });
+  const filteredBankLoans = applyFilters(bankLoans, searchTerm, ['loanName', 'accountNumber', 'loanDate', 'dueDate', 'interestPeriod', 'note']);
 
   // Định dạng số tiền: chỉ có dấu phẩy, không có chữ "đ", luôn dùng dấu phẩy ngăn cách
   const formatCurrency = (amount) => {
@@ -724,12 +683,10 @@ const AccountsFunds = () => {
                         <span>{col.label}</span>
                         {col.key !== 'actions' && (
                           <span 
-                            onClick={() => setShowFilterPopup(showFilterPopup === col.key ? null : col.key)}
+                            onClick={() => setShowFilterPopup(col.key)}
                             style={{ 
                               cursor: 'pointer', 
-                              fontSize: '14px', 
-                              opacity: columnFilters[col.key] ? 1 : 0.5,
-                              color: columnFilters[col.key] ? '#1890ff' : 'inherit'
+                              fontSize: '14px'
                             }}
                           >
                             🔍
@@ -738,106 +695,7 @@ const AccountsFunds = () => {
                       </div>
                       
                       {/* Filter Popup */}
-                      {showFilterPopup === col.key && (
-                        <div 
-                          ref={filterPopupRef}
-                          style={{
-                            position: 'absolute',
-                            top: '100%',
-                            left: 0,
-                            zIndex: 1000,
-                            background: 'white',
-                            border: '1px solid #d9d9d9',
-                            borderRadius: '4px',
-                            padding: '12px',
-                            minWidth: '250px',
-                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
-                            marginTop: '4px'
-                          }}
-                        >
-                          {(col.key === 'loanDate' || col.key === 'dueDate') ? (
-                            <>
-                              <div style={{ marginBottom: '8px', fontWeight: 500 }}>Lọc {col.label}</div>
-                              <div style={{ marginBottom: '8px' }}>
-                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Ngày bắt đầu</label>
-                                <input
-                                  type="date"
-                                  value={columnFilters[col.key]?.from || ''}
-                                  onChange={(e) => setColumnFilters({
-                                    ...columnFilters,
-                                    [col.key]: { ...columnFilters[col.key], from: e.target.value }
-                                  })}
-                                  style={{ width: '100%', padding: '4px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
-                                />
-                              </div>
-                              <div style={{ marginBottom: '12px' }}>
-                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Ngày kết thúc</label>
-                                <input
-                                  type="date"
-                                  value={columnFilters[col.key]?.to || ''}
-                                  onChange={(e) => setColumnFilters({
-                                    ...columnFilters,
-                                    [col.key]: { ...columnFilters[col.key], to: e.target.value }
-                                  })}
-                                  style={{ width: '100%', padding: '4px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
-                                />
-                              </div>
-                            </>
-                          ) : (
-                            <>
-                              <div style={{ marginBottom: '8px', fontWeight: 500 }}>Tìm kiếm {col.label}</div>
-                              <input
-                                type="text"
-                                placeholder={`Nhập ${col.label.toLowerCase()}...`}
-                                value={columnFilters[col.key] || ''}
-                                onChange={(e) => setColumnFilters({ ...columnFilters, [col.key]: e.target.value })}
-                                style={{ 
-                                  width: '100%', 
-                                  padding: '6px 8px', 
-                                  border: '1px solid #d9d9d9', 
-                                  borderRadius: '4px',
-                                  marginBottom: '12px'
-                                }}
-                              />
-                            </>
-                          )}
-                          <div style={{ display: 'flex', gap: '8px' }}>
-                            <button
-                              onClick={() => {
-                                const newFilters = { ...columnFilters };
-                                delete newFilters[col.key];
-                                setColumnFilters(newFilters);
-                              }}
-                              style={{
-                                flex: 1,
-                                padding: '6px 12px',
-                                background: '#fff',
-                                border: '1px solid #d9d9d9',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '13px'
-                              }}
-                            >
-                              Xem tất cả
-                            </button>
-                            <button
-                              onClick={() => setShowFilterPopup(null)}
-                              style={{
-                                flex: 1,
-                                padding: '6px 12px',
-                                background: '#1890ff',
-                                color: 'white',
-                                border: 'none',
-                                borderRadius: '4px',
-                                cursor: 'pointer',
-                                fontSize: '13px'
-                              }}
-                            >
-                              Tìm
-                            </button>
-                          </div>
-                        </div>
-                      )}
+                      {renderFilterPopup(col.key, col.label, col.key === 'loanDate' || col.key === 'dueDate')}
                       
                       {/* Mép phải */}
                       {idx < arr.length - 1 && loanVisibleCols.includes(arr[idx + 1].key) && (
