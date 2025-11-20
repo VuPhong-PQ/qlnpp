@@ -2,6 +2,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
 import useColumnFilter from '../../hooks/useColumnFilter.jsx';
+import { API_ENDPOINTS, api } from '../../config/api';
 
 function Suppliers() {
 
@@ -11,6 +12,8 @@ function Suppliers() {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [showSupplierColSetting, setShowSupplierColSetting] = useState(false);
+  const [loading, setLoading] = useState(false);
+  
   // Key lưu localStorage
   const SUPPLIER_COLS_KEY = 'supplier_table_cols_v1';
   // Lấy cấu hình cột từ localStorage nếu có
@@ -50,42 +53,8 @@ function Suppliers() {
   const [supplierVisibleCols, setSupplierVisibleCols] = useState(initVisibleCols);
   const [supplierColOrder, setSupplierColOrder] = useState(initOrder);
   const [supplierColWidths, setSupplierColWidths] = useState([]);
-  const [filteredSuppliers, setFilteredSuppliers] = useState([
-    {
-      id: 1,
-      code: 'NCC001',
-      name: 'Công ty TNHH ABC',
-      phone: '0901234567',
-      address: '123 Lê Lợi, Q.1, TP.HCM',
-      taxCode: '0301234567',
-      productType: 'Thực phẩm',
-      note: 'Nhà cung cấp uy tín',
-      status: 'active',
-    },
-    {
-      id: 2,
-      code: 'NCC002',
-      name: 'Công ty CP XYZ',
-      phone: '0912345678',
-      address: '456 Nguyễn Trãi, Q.5, TP.HCM',
-      taxCode: '0312345678',
-      productType: 'Đồ uống',
-      note: '',
-      status: 'inactive',
-    },
-    {
-      id: 3,
-      code: 'NCC003',
-      name: 'Cửa hàng Minh Châu',
-      phone: '0987654321',
-      address: '789 Trần Hưng Đạo, Q.1, TP.HCM',
-      taxCode: '0323456789',
-      productType: 'Gia vị',
-      note: 'Chuyên gia vị nhập khẩu',
-      status: 'active',
-    },
-  ]);
-  const [formData, setFormData] = useState({ code: '', name: '', phone: '', taxCode: '', productType: '', status: '', address: '', note: '' });
+  const [suppliers, setSuppliers] = useState([]);
+  const [formData, setFormData] = useState({ code: '', name: '', phone: '', taxCode: '', productType: '', status: 'active', address: '', note: '' });
   const [productTypes, setProductTypes] = useState([]);
   const supplierTableRef = useRef(null);
   const supplierColSettingRef = useRef(null);
@@ -173,20 +142,111 @@ function Suppliers() {
   };
 
   // Dummy handlers để tránh lỗi
-  const resetForm = () => {};
-  const handleExport = () => {};
-  const handleImport = () => {};
-  const handleEdit = () => {};
-  const handleDelete = () => {};
-  const handleSubmit = (e) => { e.preventDefault(); };
-  const handleInputChange = () => {};
+  const resetForm = () => {
+    setFormData({ code: '', name: '', phone: '', taxCode: '', productType: '', status: 'active', address: '', note: '' });
+    setEditingItem(null);
+  };
+  
+  const handleExport = () => {
+    console.log('Export Excel');
+  };
+  
+  const handleImport = () => {
+    console.log('Import Excel');
+  };
+  
+  const handleEdit = (supplier) => {
+    setEditingItem(supplier);
+    setFormData({
+      code: supplier.code,
+      name: supplier.name,
+      phone: supplier.phone || '',
+      taxCode: supplier.taxCode || '',
+      productType: supplier.productType || '',
+      status: supplier.status,
+      address: supplier.address || '',
+      note: supplier.note || ''
+    });
+    setShowModal(true);
+  };
+  
+  const handleDelete = async (id) => {
+    if (!window.confirm('Bạn có chắc muốn xóa nhà cung cấp này?')) return;
+    
+    setLoading(true);
+    try {
+      await api.delete(`${API_ENDPOINTS.suppliers}/${id}`);
+      await fetchSuppliers();
+      alert('Xóa thành công!');
+    } catch (error) {
+      console.error('Error deleting supplier:', error);
+      alert('Có lỗi xảy ra khi xóa!');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handleSubmit = async (e) => {
+    e.preventDefault();
+    
+    if (!formData.name || !formData.code) {
+      alert('Vui lòng nhập đầy đủ thông tin bắt buộc!');
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      if (editingItem) {
+        await api.put(`${API_ENDPOINTS.suppliers}/${editingItem.id}`, formData);
+        alert('Cập nhật thành công!');
+      } else {
+        await api.post(API_ENDPOINTS.suppliers, formData);
+        alert('Thêm mới thành công!');
+      }
+      await fetchSuppliers();
+      setShowModal(false);
+      resetForm();
+    } catch (error) {
+      console.error('Error saving supplier:', error);
+      alert('Có lỗi xảy ra!');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  const handleInputChange = (e) => {
+    const { name, value, type, checked } = e.target;
+    setFormData(prev => ({
+      ...prev,
+      [name]: type === 'checkbox' ? (checked ? 'active' : 'inactive') : value
+    }));
+  };
+  
+  // Load suppliers from API
+  const fetchSuppliers = async () => {
+    setLoading(true);
+    try {
+      const response = await api.get(API_ENDPOINTS.suppliers);
+      setSuppliers(response.data);
+    } catch (error) {
+      console.error('Error fetching suppliers:', error);
+      alert('Không thể tải dữ liệu nhà cung cấp!');
+    } finally {
+      setLoading(false);
+    }
+  };
+  
+  useEffect(() => {
+    fetchSuppliers();
+  }, []);
+  
   const handleColDragStart = () => {};
   const handleColDragOver = () => {};
   const handleColDrop = () => {};
   const handleSupplierMouseDown = () => {};
 
   // Apply column filters
-  const displayedSuppliers = applyFilters(filteredSuppliers, searchTerm, ['code', 'name', 'phone', 'taxCode', 'productType']);
+  const displayedSuppliers = applyFilters(suppliers, searchTerm, ['code', 'name', 'phone', 'taxCode', 'productType']);
 
   return (
     <div className="setup-page">

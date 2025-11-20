@@ -19,6 +19,8 @@ export const useColumnFilter = () => {
 
   // Hàm filter dữ liệu
   const applyFilters = (data, searchTerm = '', searchFields = []) => {
+    if (!Array.isArray(data)) return [];
+    
     return data.filter(item => {
       // Search term filter
       if (searchTerm && searchFields.length > 0) {
