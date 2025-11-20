@@ -14,8 +14,8 @@ function Suppliers() {
   const [showSupplierColSetting, setShowSupplierColSetting] = useState(false);
   const [loading, setLoading] = useState(false);
   
-  // Key lưu localStorage
-  const SUPPLIER_COLS_KEY = 'supplier_table_cols_v1';
+  // Key lưu localStorage - đổi v2 để reset cấu hình cũ
+  const SUPPLIER_COLS_KEY = 'supplier_table_cols_v2';
   // Lấy cấu hình cột từ localStorage nếu có
   const getInitialCols = () => {
     try {
@@ -27,23 +27,51 @@ function Suppliers() {
     return [
       [
         'code',
-        'name',
+        'vatName',
+        'vatExportName',
+        'customerGroup',
+        'customerType',
         'phone',
+        'fax',
+        'email',
         'address',
+        'vatAddress',
         'taxCode',
-        'productType',
+        'account',
+        'salesSchedule',
+        'vehicle',
+        'printOrder',
+        'businessType',
+        'debtLimit',
+        'debtTerm',
+        'initialDebt',
         'note',
+        'exportVAT',
         'status',
         'actions',
       ],
       [
         'code',
-        'name',
+        'vatName',
+        'vatExportName',
+        'customerGroup',
+        'customerType',
         'phone',
+        'fax',
+        'email',
         'address',
+        'vatAddress',
         'taxCode',
-        'productType',
+        'account',
+        'salesSchedule',
+        'vehicle',
+        'printOrder',
+        'businessType',
+        'debtLimit',
+        'debtTerm',
+        'initialDebt',
         'note',
+        'exportVAT',
         'status',
         'actions',
       ]
@@ -54,18 +82,55 @@ function Suppliers() {
   const [supplierColOrder, setSupplierColOrder] = useState(initOrder);
   const [supplierColWidths, setSupplierColWidths] = useState([]);
   const [suppliers, setSuppliers] = useState([]);
-  const [formData, setFormData] = useState({ code: '', name: '', phone: '', taxCode: '', productType: '', status: 'active', address: '', note: '' });
+  const [formData, setFormData] = useState({ 
+    code: '', 
+    vatName: '', 
+    vatExportName: '',
+    address: '',
+    vatAddress: '', 
+    phone: '', 
+    fax: '',
+    email: '',
+    taxCode: '',
+    account: '',
+    customerGroup: '',
+    customerType: 'Lẻ',
+    salesSchedule: '',
+    vehicle: '',
+    printOrder: 0,
+    businessType: '',
+    debtLimit: 0,
+    debtTerm: '',
+    initialDebt: 0,
+    note: '', 
+    exportVAT: false,
+    status: 'active' 
+  });
   const [productTypes, setProductTypes] = useState([]);
   const supplierTableRef = useRef(null);
   const supplierColSettingRef = useRef(null);
   const [supplierColumns] = useState([
     { key: 'code', label: 'Mã nhà cung cấp' },
-    { key: 'name', label: 'Tên nhà cung cấp' },
+    { key: 'vatName', label: 'Tên khách hàng' },
+    { key: 'vatExportName', label: 'Tên xuất VAT' },
+    { key: 'customerGroup', label: 'Nhóm khách hàng' },
+    { key: 'customerType', label: 'Loại khách hàng' },
     { key: 'phone', label: 'Số điện thoại' },
+    { key: 'fax', label: 'Fax' },
+    { key: 'email', label: 'Email' },
     { key: 'address', label: 'Địa chỉ' },
+    { key: 'vatAddress', label: 'Địa chỉ xuất VAT' },
     { key: 'taxCode', label: 'Mã số thuế' },
-    { key: 'productType', label: 'Loại hàng' },
+    { key: 'account', label: 'Tài khoản' },
+    { key: 'salesSchedule', label: 'Lịch bán hàng' },
+    { key: 'vehicle', label: 'Xe' },
+    { key: 'printOrder', label: 'STT in' },
+    { key: 'businessType', label: 'Loại hình kinh doanh' },
+    { key: 'debtLimit', label: 'Hạn mức' },
+    { key: 'debtTerm', label: 'Hạn nợ' },
+    { key: 'initialDebt', label: 'Nợ ban đầu' },
     { key: 'note', label: 'Ghi chú' },
+    { key: 'exportVAT', label: 'Xuất VAT' },
     { key: 'status', label: 'Tình trạng' },
     { key: 'actions', label: 'Thao tác', fixed: true },
   ]);
@@ -73,12 +138,26 @@ function Suppliers() {
   const [dragOverColIndex, setDragOverColIndex] = useState(null);
   const defaultSupplierVisible = [
     'code',
-    'name',
+    'vatName',
+    'vatExportName',
+    'customerGroup',
+    'customerType',
     'phone',
+    'fax',
+    'email',
     'address',
+    'vatAddress',
     'taxCode',
-    'productType',
+    'account',
+    'salesSchedule',
+    'vehicle',
+    'printOrder',
+    'businessType',
+    'debtLimit',
+    'debtTerm',
+    'initialDebt',
     'note',
+    'exportVAT',
     'status',
     'actions',
   ];
@@ -143,7 +222,30 @@ function Suppliers() {
 
   // Dummy handlers để tránh lỗi
   const resetForm = () => {
-    setFormData({ code: '', name: '', phone: '', taxCode: '', productType: '', status: 'active', address: '', note: '' });
+    setFormData({ 
+      code: '', 
+      vatName: '', 
+      vatExportName: '',
+      address: '',
+      vatAddress: '',
+      phone: '', 
+      fax: '',
+      email: '',
+      taxCode: '', 
+      account: '',
+      customerGroup: '',
+      customerType: 'retail',
+      salesSchedule: '',
+      vehicle: '',
+      printOrder: 0,
+      businessType: '',
+      debtLimit: 0,
+      debtTerm: '',
+      initialDebt: 0,
+      note: '',
+      exportVAT: false,
+      status: 'active' 
+    });
     setEditingItem(null);
   };
   
@@ -159,13 +261,27 @@ function Suppliers() {
     setEditingItem(supplier);
     setFormData({
       code: supplier.code,
-      name: supplier.name,
-      phone: supplier.phone || '',
-      taxCode: supplier.taxCode || '',
-      productType: supplier.productType || '',
-      status: supplier.status,
+      vatName: supplier.vatName || '',
+      vatExportName: supplier.vatExportName || '',
       address: supplier.address || '',
-      note: supplier.note || ''
+      vatAddress: supplier.vatAddress || '',
+      phone: supplier.phone || '',
+      fax: supplier.fax || '',
+      email: supplier.email || '',
+      taxCode: supplier.taxCode || '',
+      account: supplier.account || '',
+      customerGroup: supplier.customerGroup || '',
+      customerType: supplier.customerType || 'retail',
+      salesSchedule: supplier.salesSchedule || '',
+      vehicle: supplier.vehicle || '',
+      printOrder: supplier.printOrder || 0,
+      businessType: supplier.businessType || '',
+      debtLimit: supplier.debtLimit || 0,
+      debtTerm: supplier.debtTerm || '',
+      initialDebt: supplier.initialDebt || 0,
+      note: supplier.note || '',
+      exportVAT: supplier.exportVAT || false,
+      status: supplier.status || 'active'
     });
     setShowModal(true);
   };
@@ -189,7 +305,7 @@ function Suppliers() {
   const handleSubmit = async (e) => {
     e.preventDefault();
     
-    if (!formData.name || !formData.code) {
+    if (!formData.vatName || !formData.code || !formData.customerGroup || !formData.customerType) {
       alert('Vui lòng nhập đầy đủ thông tin bắt buộc!');
       return;
     }
@@ -208,7 +324,7 @@ function Suppliers() {
       resetForm();
     } catch (error) {
       console.error('Error saving supplier:', error);
-      alert('Có lỗi xảy ra!');
+      alert('Có lỗi xảy ra: ' + (error.response?.data?.message || error.message));
     } finally {
       setLoading(false);
     }
@@ -226,8 +342,9 @@ function Suppliers() {
   const fetchSuppliers = async () => {
     setLoading(true);
     try {
-      const response = await api.get(API_ENDPOINTS.suppliers);
-      setSuppliers(response.data);
+      const data = await api.get(API_ENDPOINTS.suppliers);
+      console.log('Fetched suppliers:', data);
+      setSuppliers(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching suppliers:', error);
       alert('Không thể tải dữ liệu nhà cung cấp!');
@@ -246,7 +363,7 @@ function Suppliers() {
   const handleSupplierMouseDown = () => {};
 
   // Apply column filters
-  const displayedSuppliers = applyFilters(suppliers, searchTerm, ['code', 'name', 'phone', 'taxCode', 'productType']);
+  const displayedSuppliers = applyFilters(suppliers, searchTerm, ['code', 'vatName', 'vatExportName', 'phone', 'email', 'taxCode', 'customerGroup', 'customerType', 'address', 'vatAddress', 'note']);
 
   return (
     <div className="setup-page">
@@ -442,6 +559,23 @@ function Suppliers() {
                     if (!supplierVisibleCols.includes(key)) return null;
                     const col = supplierColumns.find(c => c.key === key);
                     if (!col) return null;
+                    
+                    if (col.key === 'exportVAT') {
+                      return (
+                        <td key={col.key}>
+                          <input type="checkbox" checked={supplier.exportVAT} disabled />
+                        </td>
+                      );
+                    }
+                    
+                    if (col.key === 'debtLimit' || col.key === 'initialDebt') {
+                      return (
+                        <td key={col.key} style={{ textAlign: 'right' }}>
+                          {supplier[col.key]?.toLocaleString('vi-VN')}
+                        </td>
+                      );
+                    }
+                    
                     if (col.key === 'status') {
                       return (
                         <td key={col.key}>
@@ -489,45 +623,129 @@ function Suppliers() {
       {/* Modal */}
       {showModal && (
         <div className="modal-overlay">
-          <div className="modal-content">
+          <div className="modal-content" style={{ maxWidth: '800px' }}>
             <div className="modal-header">
-              <h3>{editingItem ? 'Chỉnh sửa' : 'Thêm mới'} nhà cung cấp</h3>
+              <h3>THÔNG TIN KHÁCH HÀNG</h3>
               <button className="close-btn" onClick={() => setShowModal(false)}>×</button>
             </div>
 
             <form onSubmit={handleSubmit}>
-              <div className="form-grid">
+              <div className="form-grid" style={{ gridTemplateColumns: 'repeat(2, 1fr)', gap: '16px' }}>
+                {/* Row 1 */}
                 <div className="form-group">
-                  <label>Mã nhà cung cấp <span className="required">*</span></label>
+                  <label>Nhóm khách hàng <span className="required">*</span></label>
+                  <select
+                    name="customerGroup"
+                    value={formData.customerGroup || ''}
+                    onChange={handleInputChange}
+                    required
+                    style={{ border: '1px solid #ddd' }}
+                  >
+                    <option value="">Chọn nhóm khách hàng</option>
+                    <option value="retail">Khách lẻ</option>
+                    <option value="wholesale">Khách sỉ</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Mã khách hàng <span className="required">*</span></label>
                   <input
                     type="text"
                     name="code"
                     value={formData.code}
                     onChange={handleInputChange}
-                    placeholder="Nhập mã nhà cung cấp"
                     required
+                    style={{ border: '1px solid #ddd' }}
                   />
                 </div>
+
+                {/* Row 2 */}
                 <div className="form-group">
-                  <label>Tên nhà cung cấp <span className="required">*</span></label>
+                  <label>Tên khách hàng <span className="required">*</span></label>
                   <input
                     type="text"
-                    name="name"
-                    value={formData.name}
+                    name="vatName"
+                    value={formData.vatName}
                     onChange={handleInputChange}
-                    placeholder="Nhập tên nhà cung cấp"
                     required
+                    style={{ border: '1px solid #ddd' }}
                   />
                 </div>
                 <div className="form-group">
-                  <label>Số điện thoại <span className="required">*</span></label>
+                  <label>Tên xuất VAT</label>
+                  <input
+                    type="text"
+                    name="vatExportName"
+                    value={formData.vatExportName || ''}
+                    onChange={handleInputChange}
+                    style={{ border: '1px solid #ddd' }}
+                  />
+                </div>
+
+                {/* Row 3 */}
+                <div className="form-group">
+                  <label>Địa chỉ</label>
+                  <input
+                    type="text"
+                    name="address"
+                    value={formData.address || ''}
+                    onChange={handleInputChange}
+                    style={{ border: '1px solid #ddd' }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Địa chỉ xuất VAT</label>
+                  <input
+                    type="text"
+                    name="vatAddress"
+                    value={formData.vatAddress}
+                    onChange={handleInputChange}
+                    style={{ border: '1px solid #ddd' }}
+                  />
+                </div>
+
+                {/* Row 4 */}
+                <div className="form-group">
+                  <label>Số điện thoại</label>
                   <input
                     type="tel"
                     name="phone"
                     value={formData.phone}
                     onChange={handleInputChange}
-                    placeholder="Nhập số điện thoại"
-                    required
+                    style={{ border: '1px solid #ddd' }}
+                  />
+                </div>
+                <div className="form-group">
+                  <label>Fax</label>
+                  <input
+                    type="text"
+                    name="fax"
+                    value={formData.fax || ''}
+                    onChange={handleInputChange}
+                    style={{ border: '1px solid #ddd' }}
+                  />
+                </div>
+
+                {/* Row 5 */}
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label>Địa chỉ mail</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                    style={{ border: '1px solid #ddd' }}
+                  />
+                </div>
+
+                {/* Row 6 */}
+                <div className="form-group">
+                  <label>Tài khoản</label>
+                  <input
+                    type="text"
+                    name="account"
+                    value={formData.account}
+                    onChange={handleInputChange}
+                    style={{ border: '1px solid #ddd' }}
                   />
                 </div>
                 <div className="form-group">
@@ -537,64 +755,145 @@ function Suppliers() {
                     name="taxCode"
                     value={formData.taxCode}
                     onChange={handleInputChange}
-                    placeholder="Nhập mã số thuế"
+                    style={{ border: '1px solid #ddd' }}
+                  />
+                </div>
+
+                {/* Row 7 */}
+                <div className="form-group">
+                  <label>Loại khách hàng <span className="required">*</span></label>
+                  <select
+                    name="customerType"
+                    value={formData.customerType || 'retail'}
+                    onChange={handleInputChange}
+                    required
+                    style={{ border: '1px solid #ddd' }}
+                  >
+                    <option value="retail">Lẻ</option>
+                    <option value="wholesale">Sỉ</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>Lịch bán hàng</label>
+                  <input
+                    type="text"
+                    name="salesSchedule"
+                    value={formData.salesSchedule || ''}
+                    onChange={handleInputChange}
+                    style={{ border: '1px solid #ddd' }}
+                  />
+                </div>
+
+                {/* Row 8 */}
+                <div className="form-group">
+                  <label>Xe</label>
+                  <select
+                    name="vehicle"
+                    value={formData.vehicle || ''}
+                    onChange={handleInputChange}
+                    style={{ border: '1px solid #ddd' }}
+                  >
+                    <option value="">Chọn xe</option>
+                    <option value="xe1">Xe 1</option>
+                    <option value="xe2">Xe 2</option>
+                  </select>
+                </div>
+                <div className="form-group">
+                  <label>STT in</label>
+                  <input
+                    type="number"
+                    name="printOrder"
+                    value={formData.printOrder || 0}
+                    onChange={handleInputChange}
+                    style={{ border: '1px solid #ddd' }}
+                  />
+                </div>
+
+                {/* Row 9 */}
+                <div className="form-group">
+                  <label>Loại hình kinh doanh</label>
+                  <input
+                    type="text"
+                    name="businessType"
+                    value={formData.businessType || ''}
+                    onChange={handleInputChange}
+                    style={{ border: '1px solid #ddd' }}
                   />
                 </div>
                 <div className="form-group">
-                  <label>Loại hàng</label>
-                  <select
-                    name="productType"
-                    value={formData.productType}
+                  <label>Hạn mức</label>
+                  <input
+                    type="number"
+                    name="debtLimit"
+                    value={formData.debtLimit}
                     onChange={handleInputChange}
-                  >
-                    <option value="">Chọn loại hàng</option>
-                    {productTypes.map(type => (
-                      <option key={type} value={type}>{type}</option>
-                    ))}
-                  </select>
+                    style={{ border: '1px solid #ddd' }}
+                  />
+                </div>
+
+                {/* Row 10 */}
+                <div className="form-group">
+                  <label>Hạn nợ</label>
+                  <input
+                    type="date"
+                    name="debtTerm"
+                    value={formData.debtTerm}
+                    onChange={handleInputChange}
+                    style={{ border: '1px solid #ddd' }}
+                  />
                 </div>
                 <div className="form-group">
-                  <label>Tình trạng</label>
-                  <select
-                    name="status"
-                    value={formData.status}
+                  <label>Nợ ban đầu</label>
+                  <input
+                    type="number"
+                    name="initialDebt"
+                    value={formData.initialDebt}
                     onChange={handleInputChange}
-                  >
-                    <option value="active">Hoạt động</option>
-                    <option value="inactive">Ngưng hoạt động</option>
-                  </select>
+                    style={{ border: '1px solid #ddd' }}
+                  />
+                </div>
+
+                {/* Row 11 - Full width */}
+                <div className="form-group" style={{ gridColumn: 'span 2' }}>
+                  <label>Ghi chú</label>
+                  <textarea
+                    name="note"
+                    value={formData.note}
+                    onChange={handleInputChange}
+                    rows="3"
+                    style={{ border: '1px solid #ddd', resize: 'vertical' }}
+                  />
+                </div>
+
+                {/* Row 12 - Checkboxes */}
+                <div style={{ gridColumn: 'span 2', display: 'flex', gap: '20px', alignItems: 'center' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    <input
+                      type="checkbox"
+                      name="exportVAT"
+                      checked={formData.exportVAT || false}
+                      onChange={(e) => setFormData({ ...formData, exportVAT: e.target.checked })}
+                    />
+                    <span>Xuất VAT</span>
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '8px', margin: 0 }}>
+                    <input
+                      type="checkbox"
+                      name="inactive"
+                      checked={formData.status === 'inactive'}
+                      onChange={(e) => setFormData({ ...formData, status: e.target.checked ? 'inactive' : 'active' })}
+                    />
+                    <span>Ngưng hoạt động</span>
+                  </label>
                 </div>
               </div>
 
-              <div className="form-group full-width">
-                <label>Địa chỉ <span className="required">*</span></label>
-                <textarea
-                  name="address"
-                  value={formData.address}
-                  onChange={handleInputChange}
-                  placeholder="Nhập địa chỉ nhà cung cấp"
-                  rows="3"
-                  required
-                />
-              </div>
-
-              <div className="form-group full-width">
-                <label>Ghi chú</label>
-                <textarea
-                  name="note"
-                  value={formData.note}
-                  onChange={handleInputChange}
-                  rows="3"
-                  placeholder="Nhập ghi chú về nhà cung cấp"
-                />
-              </div>
-
-              <div className="form-actions">
-                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">
-                  Hủy
+              <div className="form-actions" style={{ marginTop: '20px', display: 'flex', gap: '10px', justifyContent: 'center' }}>
+                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary" style={{ minWidth: '100px' }}>
+                  Đóng
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  {editingItem ? 'Cập nhật' : 'Thêm mới'}
+                <button type="submit" className="btn btn-primary" style={{ minWidth: '100px', background: '#52c41a', borderColor: '#52c41a' }}>
+                  {editingItem ? 'Lưu lại' : 'Lưu (Ctrl+Y)'}
                 </button>
               </div>
             </form>
