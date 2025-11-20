@@ -9,6 +9,7 @@ const TransactionContents = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [contents, setContents] = useState([]);
+  const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
 
   useEffect(() => {
     fetchTransactionContents();
@@ -100,11 +101,7 @@ const TransactionContents = () => {
     }
   };
 
-  const filteredContents = contents.filter(content =>
-    content.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    content.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    content.type.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredContents = applyFilters(contents, searchTerm, ['name', 'code', 'type', 'note']);
 
   const handleExport = () => {
     alert('Chức năng export Excel đang được phát triển');
@@ -419,7 +416,26 @@ const TransactionContents = () => {
                           style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
                         />
                       )}
-                      {col.label}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                        <span>{col.label}</span>
+                        {col.key !== 'actions' && (
+                          <span 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowFilterPopup(showFilterPopup === col.key ? null : col.key);
+                            }}
+                            style={{ 
+                              cursor: 'pointer', 
+                              fontSize: '14px', 
+                              opacity: columnFilters[col.key] ? 1 : 0.5,
+                              color: columnFilters[col.key] ? '#1890ff' : 'inherit'
+                            }}
+                          >
+                            🔍
+                          </span>
+                        )}
+                      </div>
+                      {col.key !== 'actions' && renderFilterPopup(col.key, col.label)}
                       {/* Mép phải */}
                       {idx < arr.length - 1 && contentVisibleCols.includes(arr[idx + 1].key) && (
                         <span

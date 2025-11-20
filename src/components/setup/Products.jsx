@@ -1,10 +1,12 @@
 import React, { useState, useRef } from 'react';
 import './SetupPage.css';
+import useColumnFilter from '../../hooks/useColumnFilter.jsx';
 
 const Products = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
 
   const [products, setProducts] = useState([
     {
@@ -172,11 +174,7 @@ const Products = () => {
     }
   };
 
-  const filteredProducts = products.filter(product =>
-    product.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    product.barcode.includes(searchTerm)
-  );
+  const filteredProducts = applyFilters(products, searchTerm, ['code', 'name', 'barcode', 'category', 'vatName', 'baseUnit']);
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -467,6 +465,17 @@ const Products = () => {
                         />
                       )}
                       {col.label}
+                      {/* Filter icon - only show for non-actions columns */}
+                      {col.key !== 'actions' && (
+                        <span
+                          onClick={() => setShowFilterPopup(col.key)}
+                          style={{ marginLeft: '8px', cursor: 'pointer', fontSize: '14px' }}
+                        >
+                          🔍
+                        </span>
+                      )}
+                      {/* Filter popup */}
+                      {renderFilterPopup(col.key, col.label, false)}
                       {/* Mép phải */}
                       {idx < arr.length - 1 && productVisibleCols.includes(arr[idx + 1]) && (
                         <span

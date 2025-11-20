@@ -8,6 +8,7 @@ const Customers = () => {
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
+  const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
 
   const [customers, setCustomers] = useState([]);
 
@@ -126,11 +127,7 @@ const Customers = () => {
     }
   };
 
-  const filteredCustomers = customers.filter(customer =>
-    customer.vatName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    customer.phone.includes(searchTerm)
-  );
+  const filteredCustomers = applyFilters(customers, searchTerm, ['vatName', 'code', 'phone', 'email', 'customerType']);
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -391,6 +388,17 @@ const Customers = () => {
                         />
                       )}
                       {col.label}
+                      {/* Filter icon - only show for non-actions columns */}
+                      {col.key !== 'actions' && (
+                        <span
+                          onClick={() => setShowFilterPopup(col.key)}
+                          style={{ marginLeft: '8px', cursor: 'pointer', fontSize: '14px' }}
+                        >
+                          🔍
+                        </span>
+                      )}
+                      {/* Filter popup */}
+                      {renderFilterPopup(col.key, col.label, false)}
                       {/* Mép phải */}
                       {idx < arr.length - 1 && customerVisibleCols.includes(arr[idx + 1].key) && (
                         <span

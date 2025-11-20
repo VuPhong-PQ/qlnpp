@@ -1,10 +1,12 @@
 import React, { useState, useRef } from 'react';
 import './SetupPage.css';
+import useColumnFilter from '../../hooks/useColumnFilter.jsx';
 
 const Warehouses = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
 
   const [warehouses, setWarehouses] = useState([
     {
@@ -105,12 +107,7 @@ const Warehouses = () => {
     }
   };
 
-  const filteredWarehouses = warehouses.filter(warehouse =>
-    warehouse.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    warehouse.code.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    warehouse.managerName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    warehouse.address.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredWarehouses = applyFilters(warehouses, searchTerm, ['code', 'name', 'managerName', 'address', 'phone']);
 
   const handleExport = () => {
     alert('Chức năng export Excel đang được phát triển');
@@ -372,6 +369,17 @@ const Warehouses = () => {
                         />
                       )}
                       {col.label}
+                      {/* Filter icon - only show for non-actions columns */}
+                      {col.key !== 'actions' && (
+                        <span
+                          onClick={() => setShowFilterPopup(col.key)}
+                          style={{ marginLeft: '8px', cursor: 'pointer', fontSize: '14px' }}
+                        >
+                          🔍
+                        </span>
+                      )}
+                      {/* Filter popup */}
+                      {renderFilterPopup(col.key, col.label, false)}
                       {/* Mép phải */}
                       {idx < arr.length - 1 && warehouseVisibleCols.includes(arr[idx + 1]) && (
                         <span

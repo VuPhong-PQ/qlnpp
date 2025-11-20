@@ -1,11 +1,13 @@
 
 import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
+import useColumnFilter from '../../hooks/useColumnFilter.jsx';
 
 function Suppliers() {
 
   // Tạo các state và hàm tạm thời để tránh lỗi ReferenceError
   const [searchTerm, setSearchTerm] = useState('');
+  const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [showSupplierColSetting, setShowSupplierColSetting] = useState(false);
@@ -183,6 +185,9 @@ function Suppliers() {
   const handleColDrop = () => {};
   const handleSupplierMouseDown = () => {};
 
+  // Apply column filters
+  const displayedSuppliers = applyFilters(filteredSuppliers, searchTerm, ['code', 'name', 'phone', 'taxCode', 'productType']);
+
   return (
     <div className="setup-page">
       <div className="page-header">
@@ -346,6 +351,17 @@ function Suppliers() {
                         />
                       )}
                       {col.label}
+                      {/* Filter icon - only show for non-actions columns */}
+                      {col.key !== 'actions' && (
+                        <span
+                          onClick={() => setShowFilterPopup(col.key)}
+                          style={{ marginLeft: '8px', cursor: 'pointer', fontSize: '14px' }}
+                        >
+                          🔍
+                        </span>
+                      )}
+                      {/* Filter popup */}
+                      {renderFilterPopup(col.key, col.label, false)}
                       {/* Mép phải */}
                       {idx < arr.length - 1 && supplierVisibleCols.includes(arr[idx + 1]) && (
                         <span
@@ -360,7 +376,7 @@ function Suppliers() {
               </tr>
             </thead>
             <tbody>
-              {filteredSuppliers.map((supplier) => (
+              {displayedSuppliers.map((supplier) => (
                 <tr key={supplier.id}>
                   {supplierColOrder.map((key) => {
                     if (!supplierVisibleCols.includes(key)) return null;
@@ -403,7 +419,7 @@ function Suppliers() {
           </table>
         </div>
 
-        {filteredSuppliers.length === 0 && (
+        {displayedSuppliers.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
             Không tìm thấy nhà cung cấp nào
           </div>

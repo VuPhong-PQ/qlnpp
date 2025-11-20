@@ -9,6 +9,7 @@ const CustomerGroups = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [customerGroups, setCustomerGroups] = useState([]);
+  const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
 
   useEffect(() => {
     fetchCustomerGroups();
@@ -98,10 +99,7 @@ const CustomerGroups = () => {
     }
   };
 
-  const filteredGroups = customerGroups.filter(group =>
-    group.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    group.code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredGroups = applyFilters(customerGroups, searchTerm, ['name', 'code', 'salesSchedule', 'note']);
 
   const handleExport = () => {
     // Logic export to Excel
@@ -360,7 +358,26 @@ const CustomerGroups = () => {
                         style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
                       />
                     )}
-                    {col.label}
+                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                      <span>{col.label}</span>
+                      {col.key !== 'actions' && (
+                        <span 
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setShowFilterPopup(showFilterPopup === col.key ? null : col.key);
+                          }}
+                          style={{ 
+                            cursor: 'pointer', 
+                            fontSize: '14px', 
+                            opacity: columnFilters[col.key] ? 1 : 0.5,
+                            color: columnFilters[col.key] ? '#1890ff' : 'inherit'
+                          }}
+                        >
+                          🔍
+                        </span>
+                      )}
+                    </div>
+                    {col.key !== 'actions' && renderFilterPopup(col.key, col.label)}
                     {/* Mép phải */}
                     {idx < arr.length - 1 && groupVisibleCols.includes(arr[idx + 1].key) && (
                       <span
