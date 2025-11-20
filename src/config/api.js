@@ -10,6 +10,7 @@ export const API_ENDPOINTS = {
   transactionContents: `${API_BASE_URL}/transactioncontents`,
   accountFunds: `${API_BASE_URL}/accountfunds`,
   companyInfos: `${API_BASE_URL}/companyinfos`,
+  bankLoans: `${API_BASE_URL}/bankloans`,
   
   // Main - Danh mục chính
   products: `${API_BASE_URL}/products`,

@@ -1,11 +1,13 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
+import { API_ENDPOINTS, api } from '../../config/api';
 
 const AccountsFunds = () => {
   const [activeTab, setActiveTab] = useState('funds');
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
 
 
   // --- Kéo-thả, hiển thị, lưu cấu hình cột bảng quỹ tiền ---
@@ -100,6 +102,11 @@ const AccountsFunds = () => {
   const [showLoanColSetting, setShowLoanColSetting] = useState(false);
   const loanColSettingRef = useRef(null);
 
+  // State cho column filters
+  const [columnFilters, setColumnFilters] = useState({});
+  const [showFilterPopup, setShowFilterPopup] = useState(null);
+  const filterPopupRef = useRef(null);
+
   // Đóng popup + tự động lưu khi click ra ngoài cho popup cài đặt cột quỹ tiền
   useEffect(() => {
     if (!showFundColSetting) return;
@@ -123,6 +130,18 @@ const AccountsFunds = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showLoanColSetting]);
+
+  // Đóng filter popup khi click ra ngoài
+  React.useEffect(() => {
+    if (!showFilterPopup) return;
+    const handleClickOutside = (e) => {
+      if (filterPopupRef.current && !filterPopupRef.current.contains(e.target)) {
+        setShowFilterPopup(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, [showFilterPopup]);
 
   // Hàm xử lý kéo cột cho bảng quỹ tiền (kéo mép trái/phải)
   const handleFundMouseDown = (index, e, edge) => {
@@ -177,49 +196,46 @@ const AccountsFunds = () => {
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
   };
-  const [funds, setFunds] = useState([
-    {
-      id: 1,
-      code: 'QT001',
-      name: 'Quỹ tiền mặt',
-      accountHolder: 'Nguyễn Văn A',
-      accountNumber: '1234567890',
-      bank: 'Vietcombank',
-      branch: 'Chi nhánh Hà Nội',
-      initialBalance: 50000000,
-      note: 'Quỹ chính',
-      status: 'active'
-    },
-    {
-      id: 2,
-      code: 'QT002',
-      name: 'Tài khoản ngân hàng',
-      accountHolder: 'Công ty ABC',
-      accountNumber: '0987654321',
-      bank: 'VietinBank',
-      branch: 'Chi nhánh TP.HCM',
-      initialBalance: 100000000,
-      note: 'Tài khoản giao dịch',
-      status: 'active'
-    }
-  ]);
+  
+  const [funds, setFunds] = useState([]);
 
-  // Sample data for bank loans
-  const [bankLoans, setBankLoans] = useState([
-    {
-      id: 1,
-      accountNumber: 'VAY001',
-      loanName: 'Vay mua thiết bị',
-      loanDate: '2024-01-15',
-      dueDate: '2026-01-15',
-      interestPeriod: 'Hàng tháng',
-      interestCost: 1200000,
-      principalPayment: 5000000,
-      principalAmount: 100000000,
-      note: '8.5%',
-      status: 'active'
+  // Load funds from API
+  useEffect(() => {
+    loadFunds();
+  }, []);
+
+  const loadFunds = async () => {
+    try {
+      setLoading(true);
+      const data = await api.get(API_ENDPOINTS.accountFunds);
+      setFunds(data);
+    } catch (error) {
+      console.error('Error loading funds:', error);
+      alert('Không thể tải danh sách quỹ tài khoản');
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
+
+  const [bankLoans, setBankLoans] = useState([]);
+
+  // Load bank loans from API
+  useEffect(() => {
+    loadBankLoans();
+  }, []);
+
+  const loadBankLoans = async () => {
+    try {
+      setLoading(true);
+      const data = await api.get(API_ENDPOINTS.bankLoans);
+      setBankLoans(data);
+    } catch (error) {
+      console.error('Error loading bank loans:', error);
+      alert('Không thể tải danh sách nợ ngân hàng');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const [formData, setFormData] = useState({
     code: '',
@@ -249,28 +265,37 @@ const AccountsFunds = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (activeTab === 'funds') {
-      if (editingItem) {
-        setFunds(funds.map(item => 
-          item.id === editingItem.id ? { ...formData, id: editingItem.id } : item
-        ));
+    try {
+      setLoading(true);
+      if (activeTab === 'funds') {
+        if (editingItem) {
+          const dataWithId = { ...formData, id: editingItem.id };
+          await api.put(API_ENDPOINTS.accountFunds, editingItem.id, dataWithId);
+        } else {
+          await api.post(API_ENDPOINTS.accountFunds, formData);
+        }
+        await loadFunds();
       } else {
-        setFunds([...funds, { ...formData, id: Date.now() }]);
+        // Bank loans
+        if (editingItem) {
+          const dataWithId = { ...formData, id: editingItem.id };
+          await api.put(API_ENDPOINTS.bankLoans, editingItem.id, dataWithId);
+        } else {
+          await api.post(API_ENDPOINTS.bankLoans, formData);
+        }
+        await loadBankLoans();
       }
-    } else {
-      if (editingItem) {
-        setBankLoans(bankLoans.map(item => 
-          item.id === editingItem.id ? { ...formData, id: editingItem.id } : item
-        ));
-      } else {
-        setBankLoans([...bankLoans, { ...formData, id: Date.now() }]);
-      }
+      setShowModal(false);
+      setEditingItem(null);
+      resetForm();
+    } catch (error) {
+      console.error('Error saving:', error);
+      alert('Không thể lưu dữ liệu');
+    } finally {
+      setLoading(false);
     }
-    setShowModal(false);
-    setEditingItem(null);
-    resetForm();
   };
 
   const resetForm = () => {
@@ -300,12 +325,22 @@ const AccountsFunds = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa?')) {
-      if (activeTab === 'funds') {
-        setFunds(funds.filter(item => item.id !== id));
-      } else {
-        setBankLoans(bankLoans.filter(item => item.id !== id));
+      try {
+        setLoading(true);
+        if (activeTab === 'funds') {
+          await api.delete(API_ENDPOINTS.accountFunds, id);
+          await loadFunds();
+        } else {
+          await api.delete(API_ENDPOINTS.bankLoans, id);
+          await loadBankLoans();
+        }
+      } catch (error) {
+        console.error('Error deleting:', error);
+        alert('Không thể xóa dữ liệu');
+      } finally {
+        setLoading(false);
       }
     }
   };
@@ -315,10 +350,31 @@ const AccountsFunds = () => {
     fund.code.toLowerCase().includes(searchTerm.toLowerCase())
   );
 
-  const filteredBankLoans = bankLoans.filter(loan =>
-    loan.loanName.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    loan.accountNumber.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredBankLoans = bankLoans.filter(loan => {
+    // Search term filter
+    const matchesSearch = loan.loanName?.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      loan.accountNumber?.toLowerCase().includes(searchTerm.toLowerCase());
+    
+    if (!matchesSearch) return false;
+
+    // Column filters
+    for (const [key, value] of Object.entries(columnFilters)) {
+      if (!value) continue;
+      
+      const loanValue = loan[key];
+      
+      if (key === 'loanDate' || key === 'dueDate') {
+        // Date filters
+        if (value.from && new Date(loanValue) < new Date(value.from)) return false;
+        if (value.to && new Date(loanValue) > new Date(value.to)) return false;
+      } else if (typeof value === 'string') {
+        // Text filters
+        if (!loanValue?.toString().toLowerCase().includes(value.toLowerCase())) return false;
+      }
+    }
+    
+    return true;
+  });
 
   // Định dạng số tiền: chỉ có dấu phẩy, không có chữ "đ", luôn dùng dấu phẩy ngăn cách
   const formatCurrency = (amount) => {
@@ -653,7 +709,125 @@ const AccountsFunds = () => {
                           style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
                         />
                       )}
-                      {col.label}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                        <span>{col.label}</span>
+                        {col.key !== 'actions' && (
+                          <span 
+                            onClick={() => setShowFilterPopup(showFilterPopup === col.key ? null : col.key)}
+                            style={{ 
+                              cursor: 'pointer', 
+                              fontSize: '14px', 
+                              opacity: columnFilters[col.key] ? 1 : 0.5,
+                              color: columnFilters[col.key] ? '#1890ff' : 'inherit'
+                            }}
+                          >
+                            🔍
+                          </span>
+                        )}
+                      </div>
+                      
+                      {/* Filter Popup */}
+                      {showFilterPopup === col.key && (
+                        <div 
+                          ref={filterPopupRef}
+                          style={{
+                            position: 'absolute',
+                            top: '100%',
+                            left: 0,
+                            zIndex: 1000,
+                            background: 'white',
+                            border: '1px solid #d9d9d9',
+                            borderRadius: '4px',
+                            padding: '12px',
+                            minWidth: '250px',
+                            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                            marginTop: '4px'
+                          }}
+                        >
+                          {(col.key === 'loanDate' || col.key === 'dueDate') ? (
+                            <>
+                              <div style={{ marginBottom: '8px', fontWeight: 500 }}>Lọc {col.label}</div>
+                              <div style={{ marginBottom: '8px' }}>
+                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Ngày bắt đầu</label>
+                                <input
+                                  type="date"
+                                  value={columnFilters[col.key]?.from || ''}
+                                  onChange={(e) => setColumnFilters({
+                                    ...columnFilters,
+                                    [col.key]: { ...columnFilters[col.key], from: e.target.value }
+                                  })}
+                                  style={{ width: '100%', padding: '4px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                                />
+                              </div>
+                              <div style={{ marginBottom: '12px' }}>
+                                <label style={{ display: 'block', marginBottom: '4px', fontSize: '12px' }}>Ngày kết thúc</label>
+                                <input
+                                  type="date"
+                                  value={columnFilters[col.key]?.to || ''}
+                                  onChange={(e) => setColumnFilters({
+                                    ...columnFilters,
+                                    [col.key]: { ...columnFilters[col.key], to: e.target.value }
+                                  })}
+                                  style={{ width: '100%', padding: '4px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                                />
+                              </div>
+                            </>
+                          ) : (
+                            <>
+                              <div style={{ marginBottom: '8px', fontWeight: 500 }}>Tìm kiếm {col.label}</div>
+                              <input
+                                type="text"
+                                placeholder={`Nhập ${col.label.toLowerCase()}...`}
+                                value={columnFilters[col.key] || ''}
+                                onChange={(e) => setColumnFilters({ ...columnFilters, [col.key]: e.target.value })}
+                                style={{ 
+                                  width: '100%', 
+                                  padding: '6px 8px', 
+                                  border: '1px solid #d9d9d9', 
+                                  borderRadius: '4px',
+                                  marginBottom: '12px'
+                                }}
+                              />
+                            </>
+                          )}
+                          <div style={{ display: 'flex', gap: '8px' }}>
+                            <button
+                              onClick={() => {
+                                const newFilters = { ...columnFilters };
+                                delete newFilters[col.key];
+                                setColumnFilters(newFilters);
+                              }}
+                              style={{
+                                flex: 1,
+                                padding: '6px 12px',
+                                background: '#fff',
+                                border: '1px solid #d9d9d9',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '13px'
+                              }}
+                            >
+                              Xem tất cả
+                            </button>
+                            <button
+                              onClick={() => setShowFilterPopup(null)}
+                              style={{
+                                flex: 1,
+                                padding: '6px 12px',
+                                background: '#1890ff',
+                                color: 'white',
+                                border: 'none',
+                                borderRadius: '4px',
+                                cursor: 'pointer',
+                                fontSize: '13px'
+                              }}
+                            >
+                              Tìm
+                            </button>
+                          </div>
+                        </div>
+                      )}
+                      
                       {/* Mép phải */}
                       {idx < arr.length - 1 && loanVisibleCols.includes(arr[idx + 1].key) && (
                         <span
@@ -690,13 +864,13 @@ const AccountsFunds = () => {
                           <div className="action-buttons">
                             <button 
                               className="btn btn-secondary btn-small"
-                              onClick={() => handleEditLoan(loan)}
+                              onClick={() => handleEdit(loan)}
                             >
                               Sửa
                             </button>
                             <button 
                               className="btn btn-danger btn-small"
-                              onClick={() => handleDeleteLoan(loan.id)}
+                              onClick={() => handleDelete(loan.id)}
                             >
                               Xóa
                             </button>

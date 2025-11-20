@@ -21,6 +21,7 @@ namespace QlnppApi.Data
         public DbSet<AccountFund> AccountFunds { get; set; }
         public DbSet<TransactionContent> TransactionContents { get; set; }
         public DbSet<CompanyInfo> CompanyInfos { get; set; }
+        public DbSet<BankLoan> BankLoans { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
@@ -73,6 +74,18 @@ namespace QlnppApi.Data
 
             modelBuilder.Entity<AccountFund>()
                 .Property(a => a.InitialBalance)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<BankLoan>()
+                .Property(b => b.InterestCost)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<BankLoan>()
+                .Property(b => b.PrincipalPayment)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<BankLoan>()
+                .Property(b => b.PrincipalAmount)
                 .HasPrecision(18, 2);
         }
     }

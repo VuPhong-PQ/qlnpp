@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
+import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
 
 const Customers = () => {
   const [showModal, setShowModal] = useState(false);

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
+import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
 
 const ProductCategories = () => {
   const [showModal, setShowModal] = useState(false);
@@ -8,6 +9,7 @@ const ProductCategories = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
+  const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
 
   // Load data from API when component mounts
   useEffect(() => {
@@ -100,10 +102,7 @@ const ProductCategories = () => {
     }
   };
 
-  const filteredCategories = categories.filter(category =>
-    category.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    category.code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredCategories = applyFilters(categories, searchTerm, ['name', 'code', 'note']);
 
   const handleExport = () => {
     alert('Chức năng export Excel đang được phát triển');
@@ -373,7 +372,26 @@ const ProductCategories = () => {
                           style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
                         />
                       )}
-                      {col.label}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                        <span>{col.label}</span>
+                        {col.key !== 'actions' && (
+                          <span 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowFilterPopup(showFilterPopup === col.key ? null : col.key);
+                            }}
+                            style={{ 
+                              cursor: 'pointer', 
+                              fontSize: '14px', 
+                              opacity: columnFilters[col.key] ? 1 : 0.5,
+                              color: columnFilters[col.key] ? '#1890ff' : 'inherit'
+                            }}
+                          >
+                            🔍
+                          </span>
+                        )}
+                      </div>
+                      {col.key !== 'actions' && renderFilterPopup(col.key, col.label)}
                       {/* Mép phải */}
                       {idx < arr.length - 1 && categoryVisibleCols.includes(arr[idx + 1]) && (
                         <span
