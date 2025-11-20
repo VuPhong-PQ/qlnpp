@@ -1,53 +1,32 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
+import { API_ENDPOINTS, api } from '../../config/api';
 
 const Customers = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
 
-  const [customers, setCustomers] = useState([
-    {
-      id: 1,
-      customerGroup: 'KH001',
-      code: 'KH001001',
-      vatName: 'Công ty TNHH ABC',
-      vatAddress: '123 Đường Nguyễn Văn A, Quận 1, TP.HCM',
-      phone: '0901234567',
-      email: 'abc@company.com',
-      account: 'TK001',
-      taxCode: '0123456789',
-      customerType: 'Khách sỉ',
-      vehicle: 'Xe tải nhỏ',
-      printOrder: 1,
-      businessType: 'Bán lẻ',
-      debtLimit: 50000000,
-      debtTerm: '1 tháng',
-      initialDebt: 0,
-      note: 'Khách hàng VIP',
-      status: 'active'
-    },
-    {
-      id: 2,
-      customerGroup: 'KH002',
-      code: 'KH002001',
-      vatName: 'Cửa hàng XYZ',
-      vatAddress: '456 Đường Lê Văn B, Quận 2, TP.HCM',
-      phone: '0907654321',
-      email: 'xyz@shop.com',
-      account: 'TK002',
-      taxCode: '9876543210',
-      customerType: 'Khách lẻ',
-      vehicle: 'Xe máy',
-      printOrder: 2,
-      businessType: 'Tạp hóa',
-      debtLimit: 10000000,
-      debtTerm: '2 tuần',
-      initialDebt: 500000,
-      note: 'Khách hàng thường xuyên',
-      status: 'active'
+  const [customers, setCustomers] = useState([]);
+
+  // Load customers from API
+  useEffect(() => {
+    loadCustomers();
+  }, []);
+
+  const loadCustomers = async () => {
+    try {
+      setLoading(true);
+      const data = await api.get(API_ENDPOINTS.customers);
+      setCustomers(data);
+    } catch (error) {
+      console.error('Error loading customers:', error);
+      alert('Không thể tải danh sách khách hàng');
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
 
   const [formData, setFormData] = useState({
     customerGroup: '',
@@ -66,7 +45,7 @@ const Customers = () => {
     debtTerm: '',
     initialDebt: 0,
     note: '',
-    status: 'active'
+    status: 'Hoạt động'
   });
 
   const customerGroups = ['KH001', 'KH002', 'KH003'];
@@ -82,18 +61,25 @@ const Customers = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (editingItem) {
-      setCustomers(customers.map(item => 
-        item.id === editingItem.id ? { ...formData, id: editingItem.id } : item
-      ));
-    } else {
-      setCustomers([...customers, { ...formData, id: Date.now() }]);
+    try {
+      setLoading(true);
+      if (editingItem) {
+        await api.put(API_ENDPOINTS.customers, editingItem.id, formData);
+      } else {
+        await api.post(API_ENDPOINTS.customers, formData);
+      }
+      await loadCustomers();
+      setShowModal(false);
+      setEditingItem(null);
+      resetForm();
+    } catch (error) {
+      console.error('Error saving customer:', error);
+      alert('Không thể lưu khách hàng');
+    } finally {
+      setLoading(false);
     }
-    setShowModal(false);
-    setEditingItem(null);
-    resetForm();
   };
 
   const resetForm = () => {
@@ -114,7 +100,7 @@ const Customers = () => {
       debtTerm: '',
       initialDebt: 0,
       note: '',
-      status: 'active'
+      status: 'Hoạt động'
     });
   };
 
@@ -124,9 +110,18 @@ const Customers = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa khách hàng này?')) {
-      setCustomers(customers.filter(item => item.id !== id));
+      try {
+        setLoading(true);
+        await api.delete(API_ENDPOINTS.customers, id);
+        await loadCustomers();
+      } catch (error) {
+        console.error('Error deleting customer:', error);
+        alert('Không thể xóa khách hàng');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 

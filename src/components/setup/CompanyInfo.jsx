@@ -1,7 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import './SetupPage.css';
+import { API_ENDPOINTS, api } from '../../config/api';
 
 const CompanyInfo = () => {
+  const [loading, setLoading] = useState(false);
+  const [companyId, setCompanyId] = useState(null);
   const [formData, setFormData] = useState({
     companyName: '',
     businessCode: '',
@@ -15,6 +18,38 @@ const CompanyInfo = () => {
     transferNote: ''
   });
 
+  // Load company info from API
+  useEffect(() => {
+    loadCompanyInfo();
+  }, []);
+
+  const loadCompanyInfo = async () => {
+    try {
+      setLoading(true);
+      const data = await api.get(API_ENDPOINTS.companyInfos);
+      if (data && data.length > 0) {
+        const company = data[0]; // Chỉ có 1 bản ghi company info
+        setCompanyId(company.id);
+        setFormData({
+          companyName: company.companyName || '',
+          businessCode: company.businessCode || '',
+          representative: company.representative || '',
+          position: company.position || '',
+          address: company.address || '',
+          email: company.email || '',
+          phone: company.phone || '',
+          bankName: company.bankName || '',
+          accountNumber: company.accountNumber || '',
+          transferNote: company.transferNote || ''
+        });
+      }
+    } catch (error) {
+      console.error('Error loading company info:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleInputChange = (e) => {
     const { name, value } = e.target;
     setFormData({
@@ -23,26 +58,34 @@ const CompanyInfo = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    console.log('Company Info Data:', formData);
-    // Xử lý lưu dữ liệu
-    alert('Thông tin doanh nghiệp đã được lưu thành công!');
+    try {
+      setLoading(true);
+      if (companyId) {
+        // Cập nhật thông tin hiện tại - gửi kèm Id trong body
+        const dataWithId = { ...formData, id: companyId };
+        await api.put(API_ENDPOINTS.companyInfos, companyId, dataWithId);
+        alert('Thông tin doanh nghiệp đã được cập nhật thành công!');
+      } else {
+        // Tạo mới (lần đầu)
+        const newCompany = await api.post(API_ENDPOINTS.companyInfos, formData);
+        setCompanyId(newCompany.id);
+        alert('Thông tin doanh nghiệp đã được lưu thành công!');
+      }
+      await loadCompanyInfo();
+    } catch (error) {
+      console.error('Error saving company info:', error);
+      alert('Không thể lưu thông tin doanh nghiệp');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleReset = () => {
-    setFormData({
-      companyName: '',
-      businessCode: '',
-      representative: '',
-      position: '',
-      address: '',
-      email: '',
-      phone: '',
-      bankName: '',
-      accountNumber: '',
-      transferNote: ''
-    });
+    if (window.confirm('Bạn có chắc chắn muốn làm mới form?')) {
+      loadCompanyInfo(); // Load lại dữ liệu từ server
+    }
   };
 
   return (
@@ -51,6 +94,8 @@ const CompanyInfo = () => {
         <h1>Thông tin doanh nghiệp</h1>
         <p>Cập nhật thông tin cơ bản của doanh nghiệp</p>
       </div>
+
+      {loading && <div className="loading">Đang tải...</div>}
 
       <div className="form-container">
         <form onSubmit={handleSubmit} className="setup-form">
@@ -196,11 +241,11 @@ const CompanyInfo = () => {
           </div>
 
           <div className="form-actions">
-            <button type="button" onClick={handleReset} className="btn btn-secondary">
+            <button type="button" onClick={handleReset} className="btn btn-secondary" disabled={loading}>
               Làm mới
             </button>
-            <button type="submit" className="btn btn-primary">
-              Lưu thông tin
+            <button type="submit" className="btn btn-primary" disabled={loading}>
+              {loading ? 'Đang lưu...' : 'Lưu thông tin'}
             </button>
           </div>
         </form>
