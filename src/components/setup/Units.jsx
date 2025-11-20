@@ -1,41 +1,31 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
+import { API_ENDPOINTS, api } from '../../config/api';
 
 const Units = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [units, setUnits] = useState([]);
 
-  const [units, setUnits] = useState([
-    {
-      id: 1,
-      code: 'CAI',
-      name: 'Cái',
-      note: 'Đơn vị đếm cho các sản phẩm rời',
-      status: 'active'
-    },
-    {
-      id: 2,
-      code: 'KG',
-      name: 'Kilogram',
-      note: 'Đơn vị khối lượng',
-      status: 'active'
-    },
-    {
-      id: 3,
-      code: 'THUNG',
-      name: 'Thùng',
-      note: 'Đơn vị đóng gói lớn',
-      status: 'active'
-    },
-    {
-      id: 4,
-      code: 'GOI',
-      name: 'Gói',
-      note: 'Đơn vị đóng gói nhỏ',
-      status: 'inactive'
+  // Load data from API when component mounts
+  useEffect(() => {
+    fetchUnits();
+  }, []);
+
+  const fetchUnits = async () => {
+    try {
+      setLoading(true);
+      const data = await api.get(API_ENDPOINTS.units);
+      setUnits(data);
+    } catch (error) {
+      console.error('Error fetching units:', error);
+      alert('Không thể tải dữ liệu đơn vị tính. Vui lòng kiểm tra kết nối API.');
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
 
   const [formData, setFormData] = useState({
     code: '',
@@ -52,18 +42,29 @@ const Units = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (editingItem) {
-      setUnits(units.map(item => 
-        item.id === editingItem.id ? { ...formData, id: editingItem.id } : item
-      ));
-    } else {
-      setUnits([...units, { ...formData, id: Date.now() }]);
+    try {
+      setLoading(true);
+      if (editingItem) {
+        // Update existing unit
+        await api.put(API_ENDPOINTS.units, editingItem.id, formData);
+        alert('Cập nhật đơn vị tính thành công!');
+      } else {
+        // Create new unit
+        await api.post(API_ENDPOINTS.units, formData);
+        alert('Thêm đơn vị tính thành công!');
+      }
+      await fetchUnits(); // Reload data
+      setShowModal(false);
+      setEditingItem(null);
+      resetForm();
+    } catch (error) {
+      console.error('Error saving unit:', error);
+      alert('Có lỗi xảy ra khi lưu dữ liệu. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
     }
-    setShowModal(false);
-    setEditingItem(null);
-    resetForm();
   };
 
   const resetForm = () => {
@@ -81,9 +82,19 @@ const Units = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa đơn vị tính này?')) {
-      setUnits(units.filter(item => item.id !== id));
+      try {
+        setLoading(true);
+        await api.delete(API_ENDPOINTS.units, id);
+        alert('Xóa đơn vị tính thành công!');
+        await fetchUnits(); // Reload data
+      } catch (error) {
+        console.error('Error deleting unit:', error);
+        alert('Có lỗi xảy ra khi xóa dữ liệu. Vui lòng thử lại.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 

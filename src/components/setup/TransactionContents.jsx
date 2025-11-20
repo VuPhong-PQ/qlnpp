@@ -1,53 +1,30 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
+import { API_ENDPOINTS, api } from '../../config/api';
 
 const TransactionContents = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [contents, setContents] = useState([]);
 
-  const [contents, setContents] = useState([
-    {
-      id: 1,
-      type: 'Thu',
-      code: 'THU001',
-      name: 'Thu tiền bán hàng',
-      note: 'Thu tiền từ khách hàng khi bán hàng',
-      status: 'active'
-    },
-    {
-      id: 2,
-      type: 'Chi',
-      code: 'CHI001',
-      name: 'Chi phí vận chuyển',
-      note: 'Chi phí vận chuyển hàng hóa',
-      status: 'active'
-    },
-    {
-      id: 3,
-      type: 'Xuất',
-      code: 'XUAT001',
-      name: 'Xuất bán hàng',
-      note: 'Xuất hàng để bán cho khách',
-      status: 'active'
-    },
-    {
-      id: 4,
-      type: 'Nhập',
-      code: 'NHAP001',
-      name: 'Nhập từ nhà cung cấp',
-      note: 'Nhập hàng từ nhà cung cấp',
-      status: 'active'
-    },
-    {
-      id: 5,
-      type: 'Chi',
-      code: 'CHI002',
-      name: 'Chi phí điện nước',
-      note: 'Chi phí điện nước văn phòng',
-      status: 'inactive'
+  useEffect(() => {
+    fetchTransactionContents();
+  }, []);
+
+  const fetchTransactionContents = async () => {
+    try {
+      setLoading(true);
+      const data = await api.get(API_ENDPOINTS.transactionContents);
+      setContents(data);
+    } catch (error) {
+      console.error('Error fetching transaction contents:', error);
+      alert('Không thể tải dữ liệu nội dung giao dịch. Vui lòng kiểm tra kết nối API.');
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
 
   const [formData, setFormData] = useState({
     type: '',
@@ -67,18 +44,27 @@ const TransactionContents = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (editingItem) {
-      setContents(contents.map(item => 
-        item.id === editingItem.id ? { ...formData, id: editingItem.id } : item
-      ));
-    } else {
-      setContents([...contents, { ...formData, id: Date.now() }]);
+    try {
+      setLoading(true);
+      if (editingItem) {
+        await api.put(API_ENDPOINTS.transactionContents, editingItem.id, formData);
+        alert('Cập nhật nội dung giao dịch thành công!');
+      } else {
+        await api.post(API_ENDPOINTS.transactionContents, formData);
+        alert('Thêm nội dung giao dịch thành công!');
+      }
+      await fetchTransactionContents();
+      setShowModal(false);
+      setEditingItem(null);
+      resetForm();
+    } catch (error) {
+      console.error('Error saving transaction content:', error);
+      alert('Có lỗi xảy ra khi lưu dữ liệu. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
     }
-    setShowModal(false);
-    setEditingItem(null);
-    resetForm();
   };
 
   const resetForm = () => {
@@ -97,9 +83,19 @@ const TransactionContents = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (id) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa nội dung này?')) {
-      setContents(contents.filter(item => item.id !== id));
+  const handleDelete = async (id) => {
+    if (window.confirm('Bạn có chắc chắn muốn xóa nội dung giao dịch này?')) {
+      try {
+        setLoading(true);
+        await api.delete(API_ENDPOINTS.transactionContents, id);
+        alert('Xóa nội dung giao dịch thành công!');
+        await fetchTransactionContents();
+      } catch (error) {
+        console.error('Error deleting transaction content:', error);
+        alert('Có lỗi xảy ra khi xóa dữ liệu. Vui lòng thử lại.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 

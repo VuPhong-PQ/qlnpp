@@ -1,37 +1,31 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
+import { API_ENDPOINTS, api } from '../../config/api';
 
 const ProductCategories = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [categories, setCategories] = useState([]);
 
-  const [categories, setCategories] = useState([
-    {
-      id: 1,
-      code: 'LH001',
-      name: 'Điện tử - Gia dụng',
-      noGroupOrder: false,
-      note: 'Các sản phẩm điện tử và gia dụng',
-      status: 'active'
-    },
-    {
-      id: 2,
-      code: 'LH002',
-      name: 'Thực phẩm tươi sống',
-      noGroupOrder: true,
-      note: 'Thực phẩm cần bảo quản lạnh, không gộp đơn',
-      status: 'active'
-    },
-    {
-      id: 3,
-      code: 'LH003',
-      name: 'Văn phòng phẩm',
-      noGroupOrder: false,
-      note: 'Đồ dùng văn phòng, học tập',
-      status: 'inactive'
+  // Load data from API when component mounts
+  useEffect(() => {
+    fetchCategories();
+  }, []);
+
+  const fetchCategories = async () => {
+    try {
+      setLoading(true);
+      const data = await api.get(API_ENDPOINTS.productCategories);
+      setCategories(data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+      alert('Không thể tải dữ liệu loại hàng. Vui lòng kiểm tra kết nối API.');
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
 
   const [formData, setFormData] = useState({
     code: '',
@@ -49,18 +43,29 @@ const ProductCategories = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (editingItem) {
-      setCategories(categories.map(item => 
-        item.id === editingItem.id ? { ...formData, id: editingItem.id } : item
-      ));
-    } else {
-      setCategories([...categories, { ...formData, id: Date.now() }]);
+    try {
+      setLoading(true);
+      if (editingItem) {
+        // Update existing category
+        await api.put(API_ENDPOINTS.productCategories, editingItem.id, formData);
+        alert('Cập nhật loại hàng thành công!');
+      } else {
+        // Create new category
+        await api.post(API_ENDPOINTS.productCategories, formData);
+        alert('Thêm loại hàng thành công!');
+      }
+      await fetchCategories(); // Reload data
+      setShowModal(false);
+      setEditingItem(null);
+      resetForm();
+    } catch (error) {
+      console.error('Error saving category:', error);
+      alert('Có lỗi xảy ra khi lưu dữ liệu. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
     }
-    setShowModal(false);
-    setEditingItem(null);
-    resetForm();
   };
 
   const resetForm = () => {
@@ -79,9 +84,19 @@ const ProductCategories = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa loại hàng này?')) {
-      setCategories(categories.filter(item => item.id !== id));
+      try {
+        setLoading(true);
+        await api.delete(API_ENDPOINTS.productCategories, id);
+        alert('Xóa loại hàng thành công!');
+        await fetchCategories(); // Reload data
+      } catch (error) {
+        console.error('Error deleting category:', error);
+        alert('Có lỗi xảy ra khi xóa dữ liệu. Vui lòng thử lại.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 

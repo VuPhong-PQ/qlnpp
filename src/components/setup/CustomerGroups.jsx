@@ -1,37 +1,30 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
+import { API_ENDPOINTS, api } from '../../config/api';
 
 const CustomerGroups = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [customerGroups, setCustomerGroups] = useState([]);
 
-  const [customerGroups, setCustomerGroups] = useState([
-    {
-      id: 1,
-      code: 'KH001',
-      name: 'Khách sỉ',
-      salesSchedule: 'Thứ 2, 4, 6',
-      note: 'Nhóm khách hàng sỉ, ưu tiên giao hàng',
-      status: 'active'
-    },
-    {
-      id: 2,
-      code: 'KH002',
-      name: 'Khách lẻ',
-      salesSchedule: 'Hàng ngày',
-      note: 'Nhóm khách hàng lẻ',
-      status: 'active'
-    },
-    {
-      id: 3,
-      code: 'KH003',
-      name: 'Siêu thị',
-      salesSchedule: 'Thứ 3, 5, 7',
-      note: 'Nhóm siêu thị, cần hỗ trợ đặc biệt',
-      status: 'inactive'
+  useEffect(() => {
+    fetchCustomerGroups();
+  }, []);
+
+  const fetchCustomerGroups = async () => {
+    try {
+      setLoading(true);
+      const data = await api.get(API_ENDPOINTS.customerGroups);
+      setCustomerGroups(data);
+    } catch (error) {
+      console.error('Error fetching customer groups:', error);
+      alert('Không thể tải dữ liệu nhóm khách hàng. Vui lòng kiểm tra kết nối API.');
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
 
   const [formData, setFormData] = useState({
     code: '',
@@ -49,18 +42,27 @@ const CustomerGroups = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (editingItem) {
-      setCustomerGroups(customerGroups.map(item => 
-        item.id === editingItem.id ? { ...formData, id: editingItem.id } : item
-      ));
-    } else {
-      setCustomerGroups([...customerGroups, { ...formData, id: Date.now() }]);
+    try {
+      setLoading(true);
+      if (editingItem) {
+        await api.put(API_ENDPOINTS.customerGroups, editingItem.id, formData);
+        alert('Cập nhật nhóm khách hàng thành công!');
+      } else {
+        await api.post(API_ENDPOINTS.customerGroups, formData);
+        alert('Thêm nhóm khách hàng thành công!');
+      }
+      await fetchCustomerGroups();
+      setShowModal(false);
+      setEditingItem(null);
+      resetForm();
+    } catch (error) {
+      console.error('Error saving customer group:', error);
+      alert('Có lỗi xảy ra khi lưu dữ liệu. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
     }
-    setShowModal(false);
-    setEditingItem(null);
-    resetForm();
   };
 
   const resetForm = () => {
@@ -79,9 +81,19 @@ const CustomerGroups = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa nhóm khách hàng này?')) {
-      setCustomerGroups(customerGroups.filter(item => item.id !== id));
+      try {
+        setLoading(true);
+        await api.delete(API_ENDPOINTS.customerGroups, id);
+        alert('Xóa nhóm khách hàng thành công!');
+        await fetchCustomerGroups();
+      } catch (error) {
+        console.error('Error deleting customer group:', error);
+        alert('Có lỗi xảy ra khi xóa dữ liệu. Vui lòng thử lại.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
