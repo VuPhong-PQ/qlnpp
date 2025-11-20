@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
+import useColumnFilter from '../../hooks/useColumnFilter.jsx';
 
 const AccountsFunds = () => {
   const [activeTab, setActiveTab] = useState('funds');
@@ -8,7 +9,9 @@ const AccountsFunds = () => {
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
-
+  
+  // Column filter hook
+  const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
 
   // --- Kéo-thả, hiển thị, lưu cấu hình cột bảng quỹ tiền ---
   const fundTableRef = useRef(null);
@@ -345,10 +348,7 @@ const AccountsFunds = () => {
     }
   };
 
-  const filteredFunds = funds.filter(fund =>
-    fund.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-    fund.code.toLowerCase().includes(searchTerm.toLowerCase())
-  );
+  const filteredFunds = applyFilters(funds, searchTerm, ['name', 'code', 'accountHolder', 'accountNumber', 'bank', 'branch', 'note']);
 
   const filteredBankLoans = bankLoans.filter(loan => {
     // Search term filter
@@ -541,6 +541,17 @@ const AccountsFunds = () => {
                         />
                       )}
                       {col.label}
+                      {/* Filter icon */}
+                      {col.key !== 'actions' && (
+                        <span
+                          onClick={() => setShowFilterPopup(col.key)}
+                          style={{ marginLeft: '8px', cursor: 'pointer', fontSize: '14px' }}
+                        >
+                          🔍
+                        </span>
+                      )}
+                      {/* Filter popup */}
+                      {renderFilterPopup(col.key, col.label, false)}
                       {/* Mép phải */}
                       {idx < arr.length - 1 && fundVisibleCols.includes(arr[idx + 1].key) && (
                         <span

@@ -17,7 +17,7 @@
 .setup-page {
   padding: 30px;
   background: #f8f9fa;
-  min-height: calc(100vh - 60px);
+  min-height: auto;
 }
 
 .page-header {
