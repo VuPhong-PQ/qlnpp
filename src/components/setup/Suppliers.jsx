@@ -14,6 +14,11 @@ function Suppliers() {
   const [showSupplierColSetting, setShowSupplierColSetting] = useState(false);
   const [loading, setLoading] = useState(false);
   
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState(null);
+  const [selectedSupplier, setSelectedSupplier] = useState(null);
+  const contextMenuRef = useRef(null);
+  
   // Key lưu localStorage - đổi v2 để reset cấu hình cũ
   const SUPPLIER_COLS_KEY = 'supplier_table_cols_v2';
   // Lấy cấu hình cột từ localStorage nếu có
@@ -174,6 +179,18 @@ function Suppliers() {
     saveColConfig(supplierVisibleCols, supplierColOrder);
   }, [supplierVisibleCols, supplierColOrder]);
 
+  // Đóng context menu khi click ra ngoài
+  useEffect(() => {
+    if (!contextMenu) return;
+    const handleClick = (e) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(e.target)) {
+        setContextMenu(null);
+      }
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [contextMenu]);
+
   // Đóng popup khi click ra ngoài và tự động lưu
   useEffect(() => {
     if (!showSupplierColSetting) return;
@@ -255,6 +272,37 @@ function Suppliers() {
   
   const handleImport = () => {
     console.log('Import Excel');
+  };
+  
+  // Context menu handlers
+  const handleRowRightClick = (e, supplier) => {
+    e.preventDefault();
+    setSelectedSupplier(supplier);
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY
+    });
+  };
+
+  const handleViewDetail = () => {
+    if (selectedSupplier) {
+      handleEdit(selectedSupplier);
+      setContextMenu(null);
+    }
+  };
+
+  const handleContextEdit = () => {
+    if (selectedSupplier) {
+      handleEdit(selectedSupplier);
+      setContextMenu(null);
+    }
+  };
+
+  const handleContextDelete = () => {
+    if (selectedSupplier) {
+      handleDelete(selectedSupplier.id);
+      setContextMenu(null);
+    }
   };
   
   const handleEdit = (supplier) => {
@@ -554,7 +602,11 @@ function Suppliers() {
             </thead>
             <tbody>
               {displayedSuppliers.map((supplier) => (
-                <tr key={supplier.id}>
+                <tr 
+                  key={supplier.id}
+                  onContextMenu={(e) => handleRowRightClick(e, supplier)}
+                  style={{ cursor: 'context-menu' }}
+                >
                   {supplierColOrder.map((key) => {
                     if (!supplierVisibleCols.includes(key)) return null;
                     const col = supplierColumns.find(c => c.key === key);
@@ -897,6 +949,66 @@ function Suppliers() {
                 </button>
               </div>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Context Menu */}
+      {contextMenu && (
+        <div
+          ref={contextMenuRef}
+          style={{
+            position: 'fixed',
+            top: contextMenu.y,
+            left: contextMenu.x,
+            background: 'white',
+            border: '1px solid #d9d9d9',
+            borderRadius: '4px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            zIndex: 10000,
+            minWidth: '160px',
+            padding: '4px 0'
+          }}
+        >
+          <div
+            onClick={handleViewDetail}
+            style={{
+              padding: '8px 16px',
+              cursor: 'pointer',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={(e) => e.target.style.background = '#f5f5f5'}
+            onMouseLeave={(e) => e.target.style.background = 'white'}
+          >
+            <span style={{ marginRight: '8px' }}>👁️</span>
+            Xem chi tiết
+          </div>
+          <div
+            onClick={handleContextEdit}
+            style={{
+              padding: '8px 16px',
+              cursor: 'pointer',
+              transition: 'background 0.2s'
+            }}
+            onMouseEnter={(e) => e.target.style.background = '#f5f5f5'}
+            onMouseLeave={(e) => e.target.style.background = 'white'}
+          >
+            <span style={{ marginRight: '8px' }}>✏️</span>
+            Sửa
+          </div>
+          <div
+            onClick={handleContextDelete}
+            style={{
+              padding: '8px 16px',
+              cursor: 'pointer',
+              transition: 'background 0.2s',
+              color: '#ff4d4f'
+            }}
+            onMouseEnter={(e) => e.target.style.background = '#fff1f0'}
+            onMouseLeave={(e) => e.target.style.background = 'white'}
+          >
+            <span style={{ marginRight: '8px' }}>🗑️</span>
+            Xóa
           </div>
         </div>
       )}
