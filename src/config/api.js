@@ -17,6 +17,7 @@ export const API_ENDPOINTS = {
   customers: `${API_BASE_URL}/customers`,
   suppliers: `${API_BASE_URL}/suppliers`,
   warehouses: `${API_BASE_URL}/warehouses`,
+  vehicles: `${API_BASE_URL}/vehicles`,
   orders: `${API_BASE_URL}/orders`,
 };
 

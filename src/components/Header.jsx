@@ -29,7 +29,8 @@ const Header = () => {
         { name: 'Danh sách hàng hóa', path: '/setup/products' },
         { name: 'Danh sách đơn vị tính', path: '/setup/units' },
         { name: 'Nội dung thu, chi, xuất, nhập', path: '/setup/transaction-contents' },
-        { name: 'Danh sách kho hàng', path: '/setup/warehouses' }
+        { name: 'Danh sách kho hàng', path: '/setup/warehouses' },
+        { name: 'Khai báo xe', path: '/setup/vehicles' }
       ]
     },
     {

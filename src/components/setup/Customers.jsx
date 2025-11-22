@@ -11,6 +11,10 @@ const Customers = () => {
   const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
 
   const [customers, setCustomers] = useState([]);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
 
   // Load customers from API
   useEffect(() => {
@@ -33,25 +37,31 @@ const Customers = () => {
   const [formData, setFormData] = useState({
     customerGroup: '',
     code: '',
+    name: '',
     vatName: '',
+    address: '',
     vatAddress: '',
     phone: '',
+    position: '',
     email: '',
     account: '',
     taxCode: '',
     customerType: '',
+    salesSchedule: '',
     vehicle: '',
-    printOrder: 0,
+    printIn: '',
     businessType: '',
     debtLimit: 0,
     debtTerm: '',
     initialDebt: 0,
     note: '',
+    exportVat: false,
+    isInactive: false,
     status: 'Hoạt động'
   });
 
   const customerGroups = ['KH001', 'KH002', 'KH003'];
-  const customerTypes = ['Khách sỉ', 'Khách lẻ', 'Siêu thị', 'Tạp hóa', 'Nhà hàng'];
+  const customerTypes = ['Lẻ', 'Sỉ', 'Siêu thị', 'Tạp hóa', 'Nhà hàng'];
   const businessTypes = ['Bán lẻ', 'Bán sỉ', 'Tạp hóa', 'Siêu thị', 'Nhà hàng', 'Khách sạn'];
   const debtTerms = ['1 tuần', '2 tuần', '1 tháng', '2 tháng', '3 tháng'];
 
@@ -88,20 +98,26 @@ const Customers = () => {
     setFormData({
       customerGroup: '',
       code: '',
+      name: '',
       vatName: '',
+      address: '',
       vatAddress: '',
       phone: '',
+      position: '',
       email: '',
       account: '',
       taxCode: '',
       customerType: '',
+      salesSchedule: '',
       vehicle: '',
-      printOrder: 0,
+      printIn: '',
       businessType: '',
       debtLimit: 0,
       debtTerm: '',
       initialDebt: 0,
       note: '',
+      exportVat: false,
+      isInactive: false,
       status: 'Hoạt động'
     });
   };
@@ -127,7 +143,18 @@ const Customers = () => {
     }
   };
 
-  const filteredCustomers = applyFilters(customers, searchTerm, ['vatName', 'code', 'phone', 'email', 'customerType']);
+  const filteredCustomers = applyFilters(customers, searchTerm, ['name', 'vatName', 'code', 'phone', 'email', 'customerType', 'position']);
+
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredCustomers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedCustomers = filteredCustomers.slice(startIndex, endIndex);
+
+  // Reset to page 1 when search term changes
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, columnFilters]);
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -143,28 +170,48 @@ const Customers = () => {
   const defaultCustomerColumns = [
     { key: 'customerGroup', label: 'Nhóm KH' },
     { key: 'code', label: 'Mã KH' },
+    { key: 'name', label: 'Tên khách hàng' },
     { key: 'vatName', label: 'Tên xuất VAT' },
+    { key: 'address', label: 'Địa chỉ' },
     { key: 'vatAddress', label: 'Địa chỉ xuất VAT' },
     { key: 'phone', label: 'Số điện thoại' },
+    { key: 'position', label: 'Vị trí' },
     { key: 'email', label: 'Email' },
+    { key: 'account', label: 'Tài khoản' },
     { key: 'taxCode', label: 'Mã số thuế' },
     { key: 'customerType', label: 'Loại KH' },
-    { key: 'debtLimit', label: 'Hạn mức công nợ' },
+    { key: 'salesSchedule', label: 'Lịch bán hàng' },
+    { key: 'vehicle', label: 'Xe' },
+    { key: 'printIn', label: 'STT in' },
+    { key: 'businessType', label: 'Loại hình KD' },
+    { key: 'debtLimit', label: 'Hạn mức' },
     { key: 'debtTerm', label: 'Hạn nợ' },
-    { key: 'initialDebt', label: 'Công nợ ban đầu' },
+    { key: 'initialDebt', label: 'Nợ ban đầu' },
+    { key: 'note', label: 'Ghi chú' },
+    { key: 'exportVat', label: 'Xuất VAT' },
+    { key: 'isInactive', label: 'Ngưng HĐ' },
     { key: 'status', label: 'Trạng thái' },
     { key: 'actions', label: 'Thao tác', fixed: true }
   ];
-  const defaultCustomerWidths = [100, 100, 160, 180, 110, 120, 110, 110, 130, 100, 130, 110, 110];
+  const defaultCustomerWidths = [100, 100, 160, 160, 180, 180, 110, 100, 120, 100, 110, 100, 120, 80, 80, 120, 110, 100, 110, 150, 90, 90, 110, 110];
   const [customerColumns, setCustomerColumns] = useState(() => {
     const saved = localStorage.getItem('customerColumns');
     if (saved) {
       try {
         const arr = JSON.parse(saved);
-        return arr.map(col => {
-          const def = defaultCustomerColumns.find(d => d.key === col.key);
-          return def ? { ...def, ...col } : col;
+        // Merge saved columns with default columns to include any new columns
+        const mergedColumns = [...defaultCustomerColumns];
+        const savedKeys = arr.map(c => c.key);
+        
+        // Update existing columns with saved state
+        arr.forEach(savedCol => {
+          const index = mergedColumns.findIndex(c => c.key === savedCol.key);
+          if (index !== -1) {
+            mergedColumns[index] = { ...mergedColumns[index], ...savedCol };
+          }
         });
+        
+        return mergedColumns;
       } catch {
         return defaultCustomerColumns;
       }
@@ -176,7 +223,15 @@ const Customers = () => {
     if (saved) {
       try {
         const arr = JSON.parse(saved);
-        if (Array.isArray(arr) && arr.length === defaultCustomerWidths.length) return arr;
+        // If saved widths length doesn't match, merge with defaults
+        if (Array.isArray(arr)) {
+          if (arr.length === defaultCustomerWidths.length) {
+            return arr;
+          } else if (arr.length < defaultCustomerWidths.length) {
+            // Add missing widths from defaults
+            return [...arr, ...defaultCustomerWidths.slice(arr.length)];
+          }
+        }
       } catch {}
     }
     return defaultCustomerWidths;
@@ -186,7 +241,11 @@ const Customers = () => {
     const saved = localStorage.getItem('customerVisibleCols');
     if (saved) {
       try {
-        return JSON.parse(saved);
+        const savedCols = JSON.parse(saved);
+        // Add any new columns that are not in saved list
+        const allKeys = defaultCustomerColumns.map(c => c.key);
+        const newKeys = allKeys.filter(k => !savedCols.includes(k) && k !== 'actions');
+        return [...savedCols, ...newKeys];
       } catch {}
     }
     return defaultCustomerVisible;
@@ -367,8 +426,8 @@ const Customers = () => {
           )}
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
-          <table className="data-table" ref={customerTableRef}>
+        <div style={{ overflowX: 'auto', maxWidth: '100%' }}>
+          <table className="data-table" ref={customerTableRef} style={{ minWidth: '2000px' }}>
             <colgroup>
               {customerColumns.map((col, i) => (
                 customerVisibleCols.includes(col.key) ? <col key={col.key} style={{ width: customerColWidths[i] }} /> : null
@@ -413,7 +472,7 @@ const Customers = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredCustomers.map((customer) => (
+              {paginatedCustomers.map((customer) => (
                 <tr key={customer.id}>
                   {customerColumns.map((col, idx) => {
                     if (!customerVisibleCols.includes(col.key)) return null;
@@ -427,7 +486,14 @@ const Customers = () => {
                       );
                     }
                     if (col.key === 'debtLimit' || col.key === 'initialDebt') {
-                      return <td key={col.key}>{formatCurrency(customer[col.key])}</td>;
+                      return <td key={col.key}>{formatCurrency(customer[col.key] || 0)}</td>;
+                    }
+                    if (col.key === 'exportVat' || col.key === 'isInactive') {
+                      return (
+                        <td key={col.key}>
+                          <span>{customer[col.key] ? '✓' : ''}</span>
+                        </td>
+                      );
                     }
                     if (col.key === 'actions') {
                       return (
@@ -449,7 +515,7 @@ const Customers = () => {
                         </td>
                       );
                     }
-                    return <td key={col.key}>{customer[col.key]}</td>;
+                    return <td key={col.key}>{customer[col.key] || ''}</td>;
                   })}
                 </tr>
               ))}
@@ -460,6 +526,48 @@ const Customers = () => {
         {filteredCustomers.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
             Không tìm thấy khách hàng nào
+          </div>
+        )}
+
+        {/* Pagination Controls */}
+        {filteredCustomers.length > 0 && (
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '0 10px' }}>
+            <div style={{ color: '#666' }}>
+              Hiển thị {startIndex + 1} - {Math.min(endIndex, filteredCustomers.length)} / {filteredCustomers.length} khách hàng
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button 
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                style={{ padding: '6px 12px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1 }}
+              >
+                ««
+              </button>
+              <button 
+                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                disabled={currentPage === 1}
+                style={{ padding: '6px 12px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1 }}
+              >
+                «
+              </button>
+              <span style={{ padding: '6px 12px' }}>
+                Trang {currentPage} / {totalPages}
+              </span>
+              <button 
+                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                disabled={currentPage === totalPages}
+                style={{ padding: '6px 12px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1 }}
+              >
+                »
+              </button>
+              <button 
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                style={{ padding: '6px 12px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1 }}
+              >
+                »»
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -475,93 +583,113 @@ const Customers = () => {
 
             <form onSubmit={handleSubmit}>
               <div className="form-section">
-                <h4>Thông tin cơ bản</h4>
+                <h4>THÔNG TIN KHÁCH HÀNG</h4>
                 <div className="form-grid">
                   <div className="form-group">
-                    <label>Nhóm khách hàng <span className="required">*</span></label>
-                    <select
-                      name="customerGroup"
-                      value={formData.customerGroup}
-                      onChange={handleInputChange}
-                      required
-                    >
-                      <option value="">Chọn nhóm khách hàng</option>
-                      {customerGroups.map(group => (
-                        <option key={group} value={group}>{group}</option>
-                      ))}
-                    </select>
+                    <label><span className="required">*</span> Nhóm khách hàng</label>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <select
+                        name="customerGroup"
+                        value={formData.customerGroup}
+                        onChange={handleInputChange}
+                        required
+                        style={{ flex: 1 }}
+                      >
+                        <option value="">Chọn nhóm khách hàng</option>
+                        {customerGroups.map(group => (
+                          <option key={group} value={group}>{group}</option>
+                        ))}
+                      </select>
+                      <button type="button" style={{ padding: '6px 12px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>✓</button>
+                    </div>
                   </div>
                   <div className="form-group">
-                    <label>Mã khách hàng <span className="required">*</span></label>
-                    <input
-                      type="text"
-                      name="code"
-                      value={formData.code}
-                      onChange={handleInputChange}
-                      placeholder="Nhập mã khách hàng"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Tên xuất VAT <span className="required">*</span></label>
-                    <input
-                      type="text"
-                      name="vatName"
-                      value={formData.vatName}
-                      onChange={handleInputChange}
-                      placeholder="Nhập tên xuất VAT"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Mã số thuế <span className="required">*</span></label>
-                    <input
-                      type="text"
-                      name="taxCode"
-                      value={formData.taxCode}
-                      onChange={handleInputChange}
-                      placeholder="Nhập mã số thuế"
-                      required
-                    />
+                    <label><span className="required">*</span> Mã khách hàng</label>
+                    <div style={{ display: 'flex', gap: '4px' }}>
+                      <input
+                        type="text"
+                        name="code"
+                        value={formData.code}
+                        onChange={handleInputChange}
+                        placeholder="Chọn nhóm khách hàng"
+                        required
+                        style={{ flex: 1 }}
+                      />
+                      <button type="button" style={{ padding: '6px 12px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>✓</button>
+                    </div>
                   </div>
                 </div>
                 <div className="form-group full-width">
-                  <label>Địa chỉ xuất VAT <span className="required">*</span></label>
+                  <label><span className="required">*</span> Tên khách hàng</label>
+                  <div style={{ display: 'flex', gap: '4px' }}>
+                    <input
+                      type="text"
+                      name="name"
+                      value={formData.name}
+                      onChange={handleInputChange}
+                      required
+                      style={{ flex: 1 }}
+                    />
+                    <button type="button" style={{ padding: '6px 12px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>✓</button>
+                  </div>
+                </div>
+                <div className="form-group full-width">
+                  <label>Tên xuất VAT</label>
+                  <input
+                    type="text"
+                    name="vatName"
+                    value={formData.vatName}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                <div className="form-group full-width">
+                  <label>Địa chỉ</label>
+                  <textarea
+                    name="address"
+                    value={formData.address}
+                    onChange={handleInputChange}
+                    rows="2"
+                  />
+                </div>
+                <div className="form-group full-width">
+                  <label>Địa chỉ xuất VAT</label>
                   <textarea
                     name="vatAddress"
                     value={formData.vatAddress}
                     onChange={handleInputChange}
-                    placeholder="Nhập địa chỉ xuất VAT"
                     rows="2"
-                    required
                   />
                 </div>
-              </div>
-
-              <div className="form-section">
-                <h4>Thông tin liên hệ</h4>
                 <div className="form-grid">
                   <div className="form-group">
-                    <label>Số điện thoại <span className="required">*</span></label>
+                    <label>Số điện thoại</label>
                     <input
                       type="tel"
                       name="phone"
                       value={formData.phone}
                       onChange={handleInputChange}
-                      placeholder="Nhập số điện thoại"
-                      required
                     />
                   </div>
                   <div className="form-group">
-                    <label>Email</label>
+                    <label>Vị trí</label>
                     <input
-                      type="email"
-                      name="email"
-                      value={formData.email}
+                      type="text"
+                      name="position"
+                      value={formData.position}
                       onChange={handleInputChange}
-                      placeholder="Nhập email"
                     />
                   </div>
+                </div>
+                <div className="form-group full-width">
+                  <label>Địa chỉ mail</label>
+                  <input
+                    type="email"
+                    name="email"
+                    value={formData.email}
+                    onChange={handleInputChange}
+                  />
+                </div>
+                <div className="form-grid">
                   <div className="form-group">
                     <label>Tài khoản</label>
                     <input
@@ -569,15 +697,26 @@ const Customers = () => {
                       name="account"
                       value={formData.account}
                       onChange={handleInputChange}
-                      placeholder="Nhập tài khoản"
                     />
                   </div>
                   <div className="form-group">
-                    <label>Loại khách hàng</label>
+                    <label>Mã số thuế</label>
+                    <input
+                      type="text"
+                      name="taxCode"
+                      value={formData.taxCode}
+                      onChange={handleInputChange}
+                    />
+                  </div>
+                </div>
+                <div className="form-grid">
+                  <div className="form-group">
+                    <label><span className="required">*</span> Loại khách hàng</label>
                     <select
                       name="customerType"
                       value={formData.customerType}
                       onChange={handleInputChange}
+                      required
                     >
                       <option value="">Chọn loại khách hàng</option>
                       {customerTypes.map(type => (
@@ -585,12 +724,38 @@ const Customers = () => {
                       ))}
                     </select>
                   </div>
+                  <div className="form-group">
+                    <label>Lịch bán hàng</label>
+                    <input
+                      type="text"
+                      name="salesSchedule"
+                      value={formData.salesSchedule}
+                      onChange={handleInputChange}
+                    />
+                  </div>
                 </div>
-              </div>
-
-              <div className="form-section">
-                <h4>Thông tin kinh doanh</h4>
-                <div className="form-grid">
+                <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
+                  <div className="form-group">
+                    <label>Xe</label>
+                    <select
+                      name="vehicle"
+                      value={formData.vehicle}
+                      onChange={handleInputChange}
+                    >
+                      <option value="">Chọn xe</option>
+                      <option value="0">0</option>
+                    </select>
+                  </div>
+                  <div className="form-group">
+                    <label>STT in</label>
+                    <input
+                      type="text"
+                      name="printIn"
+                      value={formData.printIn}
+                      onChange={handleInputChange}
+                      defaultValue="0"
+                    />
+                  </div>
                   <div className="form-group">
                     <label>Loại hình kinh doanh</label>
                     <select
@@ -598,80 +763,41 @@ const Customers = () => {
                       value={formData.businessType}
                       onChange={handleInputChange}
                     >
-                      <option value="">Chọn loại hình kinh doanh</option>
+                      <option value="">Chọn loại hình</option>
                       {businessTypes.map(type => (
                         <option key={type} value={type}>{type}</option>
                       ))}
                     </select>
                   </div>
-                  <div className="form-group">
-                    <label>Xe (ghi chú)</label>
-                    <input
-                      type="text"
-                      name="vehicle"
-                      value={formData.vehicle}
-                      onChange={handleInputChange}
-                      placeholder="Nhập thông tin xe"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Số thứ tự in</label>
-                    <input
-                      type="number"
-                      name="printOrder"
-                      value={formData.printOrder}
-                      onChange={handleInputChange}
-                      placeholder="Nhập số thứ tự"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Trạng thái</label>
-                    <select
-                      name="status"
-                      value={formData.status}
-                      onChange={handleInputChange}
-                    >
-                      <option value="active">Hoạt động</option>
-                      <option value="inactive">Ngưng hoạt động</option>
-                    </select>
-                  </div>
                 </div>
-              </div>
-
-              <div className="form-section">
-                <h4>Thông tin công nợ</h4>
-                <div className="form-grid">
+                <div className="form-grid" style={{ gridTemplateColumns: '1fr 1fr 1fr' }}>
                   <div className="form-group">
-                    <label>Hạn mức công nợ</label>
+                    <label>Hạn mức</label>
                     <input
                       type="number"
                       name="debtLimit"
                       value={formData.debtLimit}
                       onChange={handleInputChange}
-                      placeholder="Nhập hạn mức công nợ"
+                      defaultValue="0"
                     />
                   </div>
                   <div className="form-group">
                     <label>Hạn nợ</label>
-                    <select
+                    <input
+                      type="text"
                       name="debtTerm"
                       value={formData.debtTerm}
                       onChange={handleInputChange}
-                    >
-                      <option value="">Chọn hạn nợ</option>
-                      {debtTerms.map(term => (
-                        <option key={term} value={term}>{term}</option>
-                      ))}
-                    </select>
+                    />
                   </div>
                   <div className="form-group">
-                    <label>Công nợ ban đầu</label>
+                    <label>Nợ ban đầu</label>
                     <input
                       type="number"
                       name="initialDebt"
                       value={formData.initialDebt}
                       onChange={handleInputChange}
-                      placeholder="Nhập công nợ ban đầu"
+                      defaultValue="0"
                     />
                   </div>
                 </div>
@@ -682,17 +808,39 @@ const Customers = () => {
                     value={formData.note}
                     onChange={handleInputChange}
                     rows="3"
-                    placeholder="Nhập ghi chú về khách hàng"
                   />
+                </div>
+                <div style={{ display: 'flex', gap: '20px', marginTop: '12px' }}>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input
+                      type="checkbox"
+                      name="exportVat"
+                      checked={formData.exportVat}
+                      onChange={(e) => setFormData({...formData, exportVat: e.target.checked})}
+                    />
+                    Xuất VAT
+                  </label>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                    <input
+                      type="checkbox"
+                      name="isInactive"
+                      checked={formData.isInactive}
+                      onChange={(e) => setFormData({...formData, isInactive: e.target.checked})}
+                    />
+                    Ngưng hoạt động
+                  </label>
                 </div>
               </div>
 
-              <div className="form-actions">
-                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">
-                  Hủy
+              <div className="form-actions" style={{ display: 'flex', justifyContent: 'center', gap: '12px', marginTop: '20px' }}>
+                <button type="submit" className="btn btn-primary" style={{ minWidth: '100px' }}>
+                  Lưu lại
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  {editingItem ? 'Cập nhật' : 'Thêm mới'}
+                <button type="button" className="btn btn-success" style={{ minWidth: '120px' }}>
+                  Lưu (copy)
+                </button>
+                <button type="button" onClick={() => setShowModal(false)} className="btn btn-danger" style={{ minWidth: '100px' }}>
+                  Đóng
                 </button>
               </div>
             </form>

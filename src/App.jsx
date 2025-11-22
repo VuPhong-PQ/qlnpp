@@ -12,6 +12,7 @@ import Products from './components/setup/Products';
 import Units from './components/setup/Units';
 import TransactionContents from './components/setup/TransactionContents';
 import Warehouses from './components/setup/Warehouses';
+import Vehicles from './components/setup/Vehicles';
 import QuotationTable from './components/business/QuotationTable';
 import ImportGoods from './components/business/ImportGoods';
 import WarehouseTransfer from './components/business/WarehouseTransfer';
@@ -44,6 +45,7 @@ function App() {
             <Route path="/setup/units" element={<Units />} />
             <Route path="/setup/transaction-contents" element={<TransactionContents />} />
             <Route path="/setup/warehouses" element={<Warehouses />} />
+            <Route path="/setup/vehicles" element={<Vehicles />} />
             <Route path="/business/quotation-table" element={<QuotationTable />} />
             <Route path="/business/import-goods" element={<ImportGoods />} />
             <Route path="/business/warehouse-transfer" element={<WarehouseTransfer />} />

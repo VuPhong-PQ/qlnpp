@@ -22,6 +22,7 @@ namespace QlnppApi.Data
         public DbSet<TransactionContent> TransactionContents { get; set; }
         public DbSet<CompanyInfo> CompanyInfos { get; set; }
         public DbSet<BankLoan> BankLoans { get; set; }
+        public DbSet<Vehicle> Vehicles { get; set; }
 
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
