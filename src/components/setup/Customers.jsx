@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
+import OpenStreetMapModal from '../OpenStreetMapModal';
 
 const Customers = () => {
   const [showModal, setShowModal] = useState(false);
@@ -15,6 +16,10 @@ const Customers = () => {
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
+
+  // Google Maps state
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [selectedCustomerForMap, setSelectedCustomerForMap] = useState(null);
 
   // Load customers from API
   useEffect(() => {
@@ -161,6 +166,11 @@ const Customers = () => {
       style: 'currency',
       currency: 'VND'
     }).format(amount);
+  };
+
+  const handleShowLocation = (customer) => {
+    setSelectedCustomerForMap(customer);
+    setShowMapModal(true);
   };
 
 
@@ -481,6 +491,26 @@ const Customers = () => {
                         <td key={col.key}>
                           <span className={`status-badge ${customer.status === 'active' ? 'status-active' : 'status-inactive'}`}>
                             {customer.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
+                          </span>
+                        </td>
+                      );
+                    }
+                    if (col.key === 'position') {
+                      return (
+                        <td key={col.key}>
+                          <span 
+                            onClick={() => handleShowLocation(customer)}
+                            style={{ 
+                              color: '#2196F3', 
+                              cursor: 'pointer',
+                              textDecoration: 'underline',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: '4px'
+                            }}
+                            title="Xem vị trí trên bản đồ"
+                          >
+                            📍 {customer.position || 'Chưa có vị trí'}
                           </span>
                         </td>
                       );
@@ -847,6 +877,13 @@ const Customers = () => {
           </div>
         </div>
       )}
+
+      {/* OpenStreetMap Modal */}
+      <OpenStreetMapModal 
+        isOpen={showMapModal}
+        onClose={() => setShowMapModal(false)}
+        customer={selectedCustomerForMap}
+      />
     </div>
   );
 };

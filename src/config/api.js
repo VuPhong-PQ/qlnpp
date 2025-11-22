@@ -19,6 +19,7 @@ export const API_ENDPOINTS = {
   warehouses: `${API_BASE_URL}/warehouses`,
   vehicles: `${API_BASE_URL}/vehicles`,
   orders: `${API_BASE_URL}/orders`,
+  geocoding: `${API_BASE_URL}/geocoding`,
 };
 
 // API Helper functions

@@ -6,5 +6,8 @@ export default defineConfig({
   plugins: [react()],
   server: {
     open: 'chrome'
+  },
+  optimizeDeps: {
+    include: ['leaflet', 'react-leaflet']
   }
 })
