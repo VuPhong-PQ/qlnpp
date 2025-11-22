@@ -61,8 +61,7 @@ const Customers = () => {
     initialDebt: 0,
     note: '',
     exportVat: false,
-    isInactive: false,
-    status: 'Hoạt động'
+    isInactive: false
   });
 
   const customerGroups = ['KH001', 'KH002', 'KH003'];
@@ -122,8 +121,7 @@ const Customers = () => {
       initialDebt: 0,
       note: '',
       exportVat: false,
-      isInactive: false,
-      status: 'Hoạt động'
+      isInactive: false
     });
   };
 
@@ -200,10 +198,9 @@ const Customers = () => {
     { key: 'note', label: 'Ghi chú' },
     { key: 'exportVat', label: 'Xuất VAT' },
     { key: 'isInactive', label: 'Ngưng HĐ' },
-    { key: 'status', label: 'Trạng thái' },
     { key: 'actions', label: 'Thao tác', fixed: true }
   ];
-  const defaultCustomerWidths = [100, 100, 160, 160, 180, 180, 110, 100, 120, 100, 110, 100, 120, 80, 80, 120, 110, 100, 110, 150, 90, 90, 110, 110];
+  const defaultCustomerWidths = [100, 100, 160, 160, 180, 180, 110, 100, 120, 100, 110, 100, 120, 80, 80, 120, 110, 100, 110, 150, 90, 90, 110];
   const [customerColumns, setCustomerColumns] = useState(() => {
     const saved = localStorage.getItem('customerColumns');
     if (saved) {
@@ -486,15 +483,6 @@ const Customers = () => {
                 <tr key={customer.id}>
                   {customerColumns.map((col, idx) => {
                     if (!customerVisibleCols.includes(col.key)) return null;
-                    if (col.key === 'status') {
-                      return (
-                        <td key={col.key}>
-                          <span className={`status-badge ${customer.status === 'active' ? 'status-active' : 'status-inactive'}`}>
-                            {customer.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
-                          </span>
-                        </td>
-                      );
-                    }
                     if (col.key === 'position') {
                       return (
                         <td key={col.key}>
