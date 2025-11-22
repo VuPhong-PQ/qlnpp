@@ -77,7 +77,7 @@ const Customers = () => {
     });
   };
 
-  const handleSubmit = async (e) => {
+  const handleSubmit = async (e, saveAndCopy = false) => {
     e.preventDefault();
     try {
       setLoading(true);
@@ -87,15 +87,32 @@ const Customers = () => {
         await api.post(API_ENDPOINTS.customers, formData);
       }
       await loadCustomers();
-      setShowModal(false);
-      setEditingItem(null);
-      resetForm();
+      
+      if (saveAndCopy) {
+        // Giữ nguyên dữ liệu, chỉ reset một số trường
+        setFormData({
+          ...formData,
+          code: '', // Reset mã KH để tạo mã mới
+          id: undefined // Xóa ID để tạo bản ghi mới
+        });
+        setEditingItem(null);
+        // Không đóng modal, không reset form hoàn toàn
+      } else {
+        // Lưu bình thường - đóng modal và reset form
+        setShowModal(false);
+        setEditingItem(null);
+        resetForm();
+      }
     } catch (error) {
       console.error('Error saving customer:', error);
       alert('Không thể lưu khách hàng');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleSaveAndCopy = (e) => {
+    handleSubmit(e, true);
   };
 
   const resetForm = () => {
@@ -854,7 +871,7 @@ const Customers = () => {
                 <button type="submit" className="btn btn-primary" style={{ minWidth: '100px' }}>
                   Lưu lại
                 </button>
-                <button type="button" className="btn btn-success" style={{ minWidth: '120px' }}>
+                <button type="button" onClick={handleSaveAndCopy} className="btn btn-success" style={{ minWidth: '120px' }}>
                   Lưu (copy)
                 </button>
                 <button type="button" onClick={() => setShowModal(false)} className="btn btn-danger" style={{ minWidth: '100px' }}>
