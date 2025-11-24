@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
+import { useExcelImportExport } from '../../hooks/useExcelImportExport.jsx';
+import { ExcelButtons } from '../common/ExcelButtons.jsx';
 
 const TransactionContents = () => {
   const [showModal, setShowModal] = useState(false);
@@ -27,6 +29,50 @@ const TransactionContents = () => {
       setLoading(false);
     }
   };
+
+  // Excel Import/Export
+  const {
+    handleExportExcel,
+    handleImportExcel,
+    handleFileChange,
+    fileInputRef
+  } = useExcelImportExport({
+    data: contents,
+    loadData: fetchTransactionContents,
+    apiPost: (data) => api.post(API_ENDPOINTS.transactionContents, data),
+    columnMapping: {
+      'Mã nội dung': 'code',
+      'Tên nội dung': 'name',
+      'Kiểu': 'type',
+      'Tài khoản Nợ': 'debtAccount',
+      'Tài khoản Có': 'creditAccount',
+      'Ghi chú': 'note',
+      'Trạng thái': 'status'
+    },
+    requiredFields: ['Mã nội dung', 'Tên nội dung'],
+    filename: 'Danh_sach_noi_dung_giao_dich',
+    sheetName: 'Nội dung GD',
+    transformDataForExport: (item) => ({
+      'Mã nội dung': item.code || '',
+      'Tên nội dung': item.name || '',
+      'Kiểu': item.type || '',
+      'Tài khoản Nợ': item.debtAccount || '',
+      'Tài khoản Có': item.creditAccount || '',
+      'Ghi chú': item.note || '',
+      'Trạng thái': item.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'
+    }),
+    transformDataForImport: (row) => ({
+      code: row['Mã nội dung'],
+      name: row['Tên nội dung'],
+      type: row['Kiểu'] || '',
+      debtAccount: row['Tài khoản Nợ'] || '',
+      creditAccount: row['Tài khoản Có'] || '',
+      note: row['Ghi chú'] || '',
+      status: row['Trạng thái'] === 'Ngưng hoạt động' ? 'inactive' : 'active'
+    }),
+    onImportStart: () => setLoading(true),
+    onImportComplete: () => setLoading(false)
+  });
 
   const [formData, setFormData] = useState({
     type: '',
@@ -298,12 +344,13 @@ const TransactionContents = () => {
             >
               + Thêm nội dung
             </button>
-            <button className="btn btn-success" onClick={handleExport}>
-              📤 Export Excel
-            </button>
-            <button className="btn btn-secondary" onClick={handleImport}>
-              📥 Import Excel
-            </button>
+            <ExcelButtons 
+              onExport={handleExportExcel}
+              onImport={handleImportExcel}
+              onFileChange={handleFileChange}
+              fileInputRef={fileInputRef}
+              disabled={loading}
+            />
             <button
               className="btn btn-settings"
               style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}

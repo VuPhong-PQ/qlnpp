@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
 import useColumnFilter from '../../hooks/useColumnFilter.jsx';
+import { useExcelImportExport } from '../../hooks/useExcelImportExport.jsx';
+import { ExcelButtons } from '../common/ExcelButtons.jsx';
 
 const AccountsFunds = () => {
   const [activeTab, setActiveTab] = useState('funds');
@@ -223,6 +225,94 @@ const AccountsFunds = () => {
     }
   };
 
+  // Excel Import/Export hook for AccountFunds
+  const { handleExportExcel, handleImportExcel, handleFileChange, fileInputRef } = useExcelImportExport({
+    entityName: 'AccountFund',
+    columnMapping: [
+      { header: 'Mã quỹ', field: 'code' },
+      { header: 'Tên quỹ', field: 'name' },
+      { header: 'Chủ tài khoản', field: 'accountHolder' },
+      { header: 'Số tài khoản', field: 'accountNumber' },
+      { header: 'Ngân hàng', field: 'bank' },
+      { header: 'Chi nhánh', field: 'branch' },
+      { header: 'Số dư ban đầu', field: 'initialBalance' },
+      { header: 'Ghi chú', field: 'note' },
+      { header: 'Trạng thái', field: 'status' }
+    ],
+    apiEndpoint: API_ENDPOINTS.accountFunds,
+    fetchData: loadFunds,
+    transformDataForExport: (item) => ({
+      'Mã quỹ': item.code || '',
+      'Tên quỹ': item.name || '',
+      'Chủ tài khoản': item.accountHolder || '',
+      'Số tài khoản': item.accountNumber || '',
+      'Ngân hàng': item.bank || '',
+      'Chi nhánh': item.branch || '',
+      'Số dư ban đầu': item.initialBalance || 0,
+      'Ghi chú': item.note || '',
+      'Trạng thái': item.status ? 'Ngưng' : 'Hoạt động'
+    }),
+    transformDataForImport: (row) => ({
+      code: row['Mã quỹ']?.toString().trim() || '',
+      name: row['Tên quỹ']?.toString().trim() || '',
+      accountHolder: row['Chủ tài khoản']?.toString().trim() || '',
+      accountNumber: row['Số tài khoản']?.toString().trim() || '',
+      bank: row['Ngân hàng']?.toString().trim() || '',
+      branch: row['Chi nhánh']?.toString().trim() || '',
+      initialBalance: parseFloat(row['Số dư ban đầu']) || 0,
+      note: row['Ghi chú']?.toString().trim() || '',
+      status: row['Trạng thái']?.toString().toLowerCase().includes('ngưng') ? true : false
+    })
+  });
+
+  // Excel Import/Export hook for BankLoans
+  const { 
+    handleExportExcel: handleExportExcelLoans, 
+    handleImportExcel: handleImportExcelLoans, 
+    handleFileChange: handleFileChangeLoans, 
+    fileInputRef: fileInputRefLoans 
+  } = useExcelImportExport({
+    entityName: 'BankLoan',
+    columnMapping: [
+      { header: 'Số tài khoản', field: 'accountNumber' },
+      { header: 'Tên khoản nợ NH', field: 'loanName' },
+      { header: 'Ngày vay', field: 'loanDate' },
+      { header: 'Ngày đáo hạn', field: 'dueDate' },
+      { header: 'Kỳ trả lãi', field: 'interestPeriod' },
+      { header: 'CP lãi', field: 'interestCost' },
+      { header: 'Trả gốc hàng kỳ', field: 'principalPayment' },
+      { header: 'Tiền trả gốc', field: 'principalAmount' },
+      { header: 'Ghi chú (%)', field: 'note' },
+      { header: 'Tình trạng', field: 'status' }
+    ],
+    apiEndpoint: API_ENDPOINTS.bankLoans,
+    fetchData: loadBankLoans,
+    transformDataForExport: (item) => ({
+      'Số tài khoản': item.accountNumber || '',
+      'Tên khoản nợ NH': item.loanName || '',
+      'Ngày vay': item.loanDate || '',
+      'Ngày đáo hạn': item.dueDate || '',
+      'Kỳ trả lãi': item.interestPeriod || '',
+      'CP lãi': item.interestCost || 0,
+      'Trả gốc hàng kỳ': item.principalPayment || 0,
+      'Tiền trả gốc': item.principalAmount || 0,
+      'Ghi chú (%)': item.note || '',
+      'Tình trạng': item.status || ''
+    }),
+    transformDataForImport: (row) => ({
+      accountNumber: row['Số tài khoản']?.toString().trim() || '',
+      loanName: row['Tên khoản nợ NH']?.toString().trim() || '',
+      loanDate: row['Ngày vay']?.toString().trim() || '',
+      dueDate: row['Ngày đáo hạn']?.toString().trim() || '',
+      interestPeriod: row['Kỳ trả lãi']?.toString().trim() || '',
+      interestCost: parseFloat(row['CP lãi']) || 0,
+      principalPayment: parseFloat(row['Trả gốc hàng kỳ']) || 0,
+      principalAmount: parseFloat(row['Tiền trả gốc']) || 0,
+      note: row['Ghi chú (%)']?.toString().trim() || '',
+      status: row['Tình trạng']?.toString().trim() || ''
+    })
+  });
+
   const [formData, setFormData] = useState({
     code: '',
     name: '',
@@ -387,8 +477,13 @@ const AccountsFunds = () => {
           >
             + Thêm quỹ
           </button>
-          <button className="btn btn-success">📤 Export Excel</button>
-          <button className="btn btn-secondary">📥 Import Excel</button>
+          <ExcelButtons 
+            onExport={handleExportExcel}
+            onImport={handleImportExcel}
+            onFileChange={handleFileChange}
+            fileInputRef={fileInputRef}
+            disabled={loading}
+          />
           <button
             className="btn btn-settings"
             style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}
@@ -592,8 +687,13 @@ const AccountsFunds = () => {
               >
                 + Thêm khoản vay
               </button>
-              <button className="btn btn-success">📤 Export Excel</button>
-              <button className="btn btn-secondary">📥 Import Excel</button>
+              <ExcelButtons 
+                onExport={handleExportExcelLoans}
+                onImport={handleImportExcelLoans}
+                onFileChange={handleFileChangeLoans}
+                fileInputRef={fileInputRefLoans}
+                disabled={loading}
+              />
               <button
                 className="btn btn-settings"
                 style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}

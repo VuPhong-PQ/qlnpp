@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
+import { exportToExcelWithHeader, importFromExcel } from '../../utils/excelUtils';
 
 const CustomerGroups = () => {
   const [showModal, setShowModal] = useState(false);
@@ -9,11 +10,28 @@ const CustomerGroups = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [customerGroups, setCustomerGroups] = useState([]);
+  const [companyInfo, setCompanyInfo] = useState(null);
   const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
 
   useEffect(() => {
     fetchCustomerGroups();
+    fetchCompanyInfo();
   }, []);
+
+  const fetchCompanyInfo = async () => {
+    try {
+      const data = await api.get(API_ENDPOINTS.companyInfos);
+      if (data && data.length > 0) {
+        setCompanyInfo({
+          name: data[0].companyName || '',
+          address: data[0].address || '',
+          phone: data[0].phone || ''
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching company info:', error);
+    }
+  };
 
   const fetchCustomerGroups = async () => {
     try {
@@ -25,6 +43,101 @@ const CustomerGroups = () => {
       alert('Không thể tải dữ liệu nhóm khách hàng. Vui lòng kiểm tra kết nối API.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Excel Import/Export
+  const fileInputRef = useRef(null);
+
+  const handleExportExcel = () => {
+    if (customerGroups.length === 0) {
+      alert('Không có dữ liệu để xuất!');
+      return;
+    }
+
+    const excelData = customerGroups.map(item => ({
+      'Người tạo': '',
+      'Thời gian tạo': '',
+      'Người sửa': '',
+      'Thời gian sửa': '',
+      'Id': item.id || '',
+      'Mã': item.code || '',
+      'Tên': item.name || '',
+      'Lịch bán hàng/Vùng hoạt động': item.salesSchedule || '',
+      'Ghi chú': item.note || '',
+      'Trạng thái': item.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'
+    }));
+
+    exportToExcelWithHeader(
+      excelData,
+      'Danh_sach_nhom_khach_hang',
+      'DANH SÁCH NHÓM KH',
+      companyInfo
+    );
+  };
+
+  const handleImportExcel = () => {
+    fileInputRef.current.click();
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      setLoading(true);
+      
+      // Import with skipRows=7 to skip company header and title
+      importFromExcel(file, async (jsonData) => {
+        console.log('Imported data:', jsonData);
+        
+        let successCount = 0;
+        let errorCount = 0;
+        const errors = [];
+
+        for (const row of jsonData) {
+          try {
+            const newItem = {
+              code: row['Mã']?.toString().trim() || '',
+              name: row['Tên']?.toString().trim() || '',
+              salesSchedule: row['Lịch bán hàng/Vùng hoạt động']?.toString().trim() || '',
+              note: row['Ghi chú']?.toString().trim() || '',
+              status: row['Trạng thái']?.toString().toLowerCase().includes('ngưng') ? 'inactive' : 'active'
+            };
+
+            if (!newItem.code || !newItem.name) {
+              errors.push(`Dòng thiếu mã hoặc tên: ${JSON.stringify(row)}`);
+              errorCount++;
+              continue;
+            }
+
+            await api.post(API_ENDPOINTS.customerGroups, newItem);
+            successCount++;
+          } catch (error) {
+            console.error('Error importing row:', error);
+            errors.push(`Lỗi: ${error.message}`);
+            errorCount++;
+          }
+        }
+
+        await fetchCustomerGroups();
+        
+        let message = `Import hoàn tất!\n- Thành công: ${successCount}\n- Lỗi: ${errorCount}`;
+        if (errors.length > 0) {
+          message += `\n\nChi tiết lỗi:\n${errors.slice(0, 5).join('\n')}`;
+          if (errors.length > 5) {
+            message += `\n... và ${errors.length - 5} lỗi khác`;
+          }
+        }
+        alert(message);
+      }, 7); // Skip 7 rows (company info + title + headers)
+      
+    } catch (error) {
+      console.error('Error importing:', error);
+      alert('Lỗi khi import file: ' + error.message);
+    } finally {
+      setLoading(false);
+      e.target.value = '';
     }
   };
 
@@ -242,12 +355,27 @@ const CustomerGroups = () => {
             >
               + Thêm nhóm
             </button>
-            <button className="btn btn-success" onClick={handleExport}>
+            <button 
+              className="btn btn-success" 
+              onClick={handleExportExcel}
+              disabled={loading}
+            >
               📤 Export Excel
             </button>
-            <button className="btn btn-secondary" onClick={handleImport}>
+            <button 
+              className="btn btn-secondary" 
+              onClick={handleImportExcel}
+              disabled={loading}
+            >
               📥 Import Excel
             </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              accept=".xlsx, .xls"
+              onChange={handleFileChange}
+            />
             <button
               className="btn btn-settings"
               style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}

@@ -2,6 +2,8 @@ import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
+import { useExcelImportExport } from '../../hooks/useExcelImportExport.jsx';
+import { ExcelButtons } from '../common/ExcelButtons.jsx';
 
 const ProductCategories = () => {
   const [showModal, setShowModal] = useState(false);
@@ -28,6 +30,41 @@ const ProductCategories = () => {
       setLoading(false);
     }
   };
+
+  // Excel Import/Export
+  const {
+    handleExportExcel,
+    handleImportExcel,
+    handleFileChange,
+    fileInputRef
+  } = useExcelImportExport({
+    data: categories,
+    loadData: fetchCategories,
+    apiPost: (data) => api.post(API_ENDPOINTS.productCategories, data),
+    columnMapping: {
+      'Mã danh mục': 'code',
+      'Tên danh mục': 'name',
+      'Ghi chú': 'note',
+      'Trạng thái': 'status'
+    },
+    requiredFields: ['Mã danh mục', 'Tên danh mục'],
+    filename: 'Danh_sach_danh_muc_san_pham',
+    sheetName: 'Danh mục SP',
+    transformDataForExport: (item) => ({
+      'Mã danh mục': item.code || '',
+      'Tên danh mục': item.name || '',
+      'Ghi chú': item.note || '',
+      'Trạng thái': item.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'
+    }),
+    transformDataForImport: (row) => ({
+      code: row['Mã danh mục'],
+      name: row['Tên danh mục'],
+      note: row['Ghi chú'] || '',
+      status: row['Trạng thái'] === 'Ngưng hoạt động' ? 'inactive' : 'active'
+    }),
+    onImportStart: () => setLoading(true),
+    onImportComplete: () => setLoading(false)
+  });
 
   const [formData, setFormData] = useState({
     code: '',
@@ -248,12 +285,13 @@ const ProductCategories = () => {
             >
               + Thêm loại hàng
             </button>
-            <button className="btn btn-success" onClick={handleExport}>
-              📤 Export Excel
-            </button>
-            <button className="btn btn-secondary" onClick={handleImport}>
-              📥 Import Excel
-            </button>
+            <ExcelButtons 
+              onExport={handleExportExcel}
+              onImport={handleImportExcel}
+              onFileChange={handleFileChange}
+              fileInputRef={fileInputRef}
+              disabled={loading}
+            />
             <button
               className="btn btn-settings"
               style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}

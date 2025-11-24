@@ -3,6 +3,7 @@ import './SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
 import OpenStreetMapModal from '../OpenStreetMapModal';
+import { exportToExcel, importFromExcel, validateImportData } from '../../utils/excelUtils';
 
 const Customers = () => {
   const [showModal, setShowModal] = useState(false);
@@ -12,6 +13,7 @@ const Customers = () => {
   const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
 
   const [customers, setCustomers] = useState([]);
+  const [customerGroups, setCustomerGroups] = useState([]);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -21,9 +23,19 @@ const Customers = () => {
   const [showMapModal, setShowMapModal] = useState(false);
   const [selectedCustomerForMap, setSelectedCustomerForMap] = useState(null);
 
-  // Load customers from API
+  // Get max print order number
+  const getMaxPrintOrder = () => {
+    if (customers.length === 0) return 0;
+    const printOrders = customers
+      .map(c => parseInt(c.printIn) || 0)
+      .filter(n => !isNaN(n));
+    return printOrders.length > 0 ? Math.max(...printOrders) : 0;
+  };
+
+  // Load customers and customer groups from API
   useEffect(() => {
     loadCustomers();
+    loadCustomerGroups();
   }, []);
 
   const loadCustomers = async () => {
@@ -36,6 +48,16 @@ const Customers = () => {
       alert('Không thể tải danh sách khách hàng');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const loadCustomerGroups = async () => {
+    try {
+      const data = await api.get(API_ENDPOINTS.customerGroups);
+      setCustomerGroups(data);
+    } catch (error) {
+      console.error('Error loading customer groups:', error);
+      alert('Không thể tải danh sách nhóm khách hàng');
     }
   };
 
@@ -64,7 +86,6 @@ const Customers = () => {
     isInactive: false
   });
 
-  const customerGroups = ['KH001', 'KH002', 'KH003'];
   const customerTypes = ['Lẻ', 'Sỉ', 'Siêu thị', 'Tạp hóa', 'Nhà hàng'];
   const businessTypes = ['Bán lẻ', 'Bán sỉ', 'Tạp hóa', 'Siêu thị', 'Nhà hàng', 'Khách sạn'];
   const debtTerms = ['1 tuần', '2 tuần', '1 tháng', '2 tháng', '3 tháng'];
@@ -79,6 +100,39 @@ const Customers = () => {
 
   const handleSubmit = async (e, saveAndCopy = false) => {
     e.preventDefault();
+    
+    // Validate unique fields
+    const isDuplicate = customers.some(customer => {
+      // Bỏ qua khách hàng đang edit
+      if (editingItem && customer.id === editingItem.id) {
+        return false;
+      }
+      
+      // Kiểm tra mã khách hàng
+      if (formData.code && customer.code === formData.code) {
+        alert(`Mã khách hàng "${formData.code}" đã tồn tại. Vui lòng nhập mã khác.`);
+        return true;
+      }
+      
+      // Kiểm tra mã số thuế (nếu có nhập)
+      if (formData.taxCode && formData.taxCode.trim() !== '' && customer.taxCode === formData.taxCode) {
+        alert(`Mã số thuế "${formData.taxCode}" đã tồn tại. Vui lòng nhập mã khác.`);
+        return true;
+      }
+      
+      // Kiểm tra STT in (nếu có nhập)
+      if (formData.printIn && formData.printIn.trim() !== '' && customer.printIn === formData.printIn) {
+        alert(`STT in "${formData.printIn}" đã tồn tại. Vui lòng nhập số khác.`);
+        return true;
+      }
+      
+      return false;
+    });
+    
+    if (isDuplicate) {
+      return; // Dừng lại nếu có trùng lặp
+    }
+    
     try {
       setLoading(true);
       if (editingItem) {
@@ -93,6 +147,8 @@ const Customers = () => {
         setFormData({
           ...formData,
           code: '', // Reset mã KH để tạo mã mới
+          taxCode: '', // Reset mã số thuế
+          printIn: '', // Reset STT in
           id: undefined // Xóa ID để tạo bản ghi mới
         });
         setEditingItem(null);
@@ -186,6 +242,129 @@ const Customers = () => {
   const handleShowLocation = (customer) => {
     setSelectedCustomerForMap(customer);
     setShowMapModal(true);
+  };
+
+  // --- Excel Import/Export ---
+  const handleExportExcel = () => {
+    if (customers.length === 0) {
+      alert('Không có dữ liệu để xuất!');
+      return;
+    }
+
+    // Map data to Excel format with Vietnamese headers
+    const excelData = customers.map(customer => ({
+      'Nhóm KH': customer.customerGroup || '',
+      'Mã KH': customer.code || '',
+      'Tên khách hàng': customer.name || '',
+      'Tên xuất VAT': customer.vatName || '',
+      'Địa chỉ': customer.address || '',
+      'Địa chỉ VAT': customer.vatAddress || '',
+      'Điện thoại': customer.phone || '',
+      'Vị trí': customer.position || '',
+      'Email': customer.email || '',
+      'Tài khoản': customer.account || '',
+      'Mã số thuế': customer.taxCode || '',
+      'Loại KH': customer.customerType || '',
+      'Lịch bán hàng': customer.salesSchedule || '',
+      'Xe': customer.vehicle || '',
+      'STT in': customer.printIn || '',
+      'Loại hình KD': customer.businessType || '',
+      'Hạn mức': customer.debtLimit || 0,
+      'Hạn nợ': customer.debtTerm || '',
+      'Nợ ban đầu': customer.initialDebt || 0,
+      'Ghi chú': customer.note || '',
+      'Xuất VAT': customer.exportVat ? 'Có' : 'Không',
+      'Ngưng HĐ': customer.isInactive ? 'Có' : 'Không'
+    }));
+
+    exportToExcel(excelData, 'Danh_sach_khach_hang', 'Khách hàng');
+  };
+
+  const fileInputRef = useRef(null);
+
+  const handleImportExcel = () => {
+    fileInputRef.current.click();
+  };
+
+  const handleFileChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    importFromExcel(file, async (data) => {
+      // Validate required fields
+      const requiredFields = ['Mã KH', 'Tên khách hàng'];
+      const validation = validateImportData(data, requiredFields);
+
+      if (!validation.isValid) {
+        alert('Lỗi dữ liệu:\n' + validation.errors.join('\n'));
+        return;
+      }
+
+      // Confirm import
+      if (!window.confirm(`Bạn có chắc muốn nhập ${data.length} khách hàng từ file Excel?`)) {
+        return;
+      }
+
+      try {
+        setLoading(true);
+        let successCount = 0;
+        let errorCount = 0;
+        const errors = [];
+
+        for (const row of data) {
+          try {
+            const customerData = {
+              customerGroup: row['Nhóm KH'] || '',
+              code: row['Mã KH'],
+              name: row['Tên khách hàng'],
+              vatName: row['Tên xuất VAT'] || '',
+              address: row['Địa chỉ'] || '',
+              vatAddress: row['Địa chỉ VAT'] || '',
+              phone: row['Điện thoại'] || '',
+              position: row['Vị trí'] || '',
+              email: row['Email'] || '',
+              account: row['Tài khoản'] || '',
+              taxCode: row['Mã số thuế'] || '',
+              customerType: row['Loại KH'] || '',
+              salesSchedule: row['Lịch bán hàng'] || '',
+              vehicle: row['Xe'] || '',
+              printIn: row['STT in'] || '',
+              businessType: row['Loại hình KD'] || '',
+              debtLimit: parseFloat(row['Hạn mức']) || 0,
+              debtTerm: row['Hạn nợ'] || '',
+              initialDebt: parseFloat(row['Nợ ban đầu']) || 0,
+              note: row['Ghi chú'] || '',
+              exportVat: row['Xuất VAT'] === 'Có' || row['Xuất VAT'] === true,
+              isInactive: row['Ngưng HĐ'] === 'Có' || row['Ngưng HĐ'] === true
+            };
+
+            await api.post(API_ENDPOINTS.customers, customerData);
+            successCount++;
+          } catch (error) {
+            errorCount++;
+            errors.push(`Mã KH ${row['Mã KH']}: ${error.message}`);
+          }
+        }
+
+        await loadCustomers();
+        
+        let message = `Import hoàn tất!\nThành công: ${successCount}\nLỗi: ${errorCount}`;
+        if (errors.length > 0 && errors.length <= 5) {
+          message += '\n\nChi tiết lỗi:\n' + errors.join('\n');
+        } else if (errors.length > 5) {
+          message += '\n\nCó nhiều lỗi. Xem console để biết chi tiết.';
+          console.error('Import errors:', errors);
+        }
+        
+        alert(message);
+      } catch (error) {
+        console.error('Error importing customers:', error);
+        alert('Lỗi khi nhập dữ liệu: ' + error.message);
+      } finally {
+        setLoading(false);
+        e.target.value = ''; // Reset file input
+      }
+    });
   };
 
 
@@ -357,8 +536,19 @@ const Customers = () => {
             >
               + Thêm khách hàng
             </button>
-            <button className="btn btn-success">📤 Export Excel</button>
-            <button className="btn btn-secondary">📥 Import Excel</button>
+            <button className="btn btn-success" onClick={handleExportExcel}>
+              📤 Export Excel
+            </button>
+            <button className="btn btn-secondary" onClick={handleImportExcel}>
+              📥 Import Excel
+            </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              accept=".xlsx,.xls"
+              onChange={handleFileChange}
+            />
             <button
               className="btn btn-settings"
               style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}
@@ -632,7 +822,9 @@ const Customers = () => {
                       >
                         <option value="">Chọn nhóm khách hàng</option>
                         {customerGroups.map(group => (
-                          <option key={group} value={group}>{group}</option>
+                          <option key={group.id} value={group.code}>
+                            {group.code} - {group.name}
+                          </option>
                         ))}
                       </select>
                       <button type="button" style={{ padding: '6px 12px', background: '#4CAF50', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>✓</button>
@@ -782,14 +974,33 @@ const Customers = () => {
                     </select>
                   </div>
                   <div className="form-group">
-                    <label>STT in</label>
+                    <label>
+                      STT in
+                      <span style={{ 
+                        marginLeft: '8px', 
+                        fontSize: '12px', 
+                        color: '#ff9800',
+                        fontWeight: 'normal'
+                      }}>
+                        (Số lớn nhất hiện tại: {getMaxPrintOrder()})
+                      </span>
+                    </label>
                     <input
-                      type="text"
+                      type="number"
                       name="printIn"
                       value={formData.printIn}
                       onChange={handleInputChange}
-                      defaultValue="0"
+                      placeholder="Nhập số thứ tự in"
+                      min="0"
                     />
+                    <small style={{ 
+                      display: 'block', 
+                      marginTop: '4px', 
+                      color: '#666',
+                      fontSize: '11px'
+                    }}>
+                      💡 Số lớn hơn sẽ in trước (đứng đầu danh sách)
+                    </small>
                   </div>
                   <div className="form-group">
                     <label>Loại hình kinh doanh</label>
