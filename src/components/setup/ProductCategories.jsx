@@ -11,7 +11,15 @@ const ProductCategories = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
-  const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
+  const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters, showFilterPopup } = useColumnFilter();
+  
+  // Phân trang
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  
+  // Context menu (chuột phải)
+  const [contextMenu, setContextMenu] = useState(null);
+  const [selectedRow, setSelectedRow] = useState(null);
 
   // Load data from API when component mounts
   useEffect(() => {
@@ -87,8 +95,9 @@ const ProductCategories = () => {
     try {
       setLoading(true);
       if (editingItem) {
-        // Update existing category
-        await api.put(API_ENDPOINTS.productCategories, editingItem.id, formData);
+        // Update existing category - include id in the data
+        const dataToUpdate = { ...formData, id: editingItem.id };
+        await api.put(API_ENDPOINTS.productCategories, editingItem.id, dataToUpdate);
         alert('Cập nhật loại hàng thành công!');
       } else {
         // Create new category
@@ -119,7 +128,13 @@ const ProductCategories = () => {
 
   const handleEdit = (item) => {
     setEditingItem(item);
-    setFormData(item);
+    setFormData({
+      code: item.code || '',
+      name: item.name || '',
+      noGroupOrder: item.noGroupOrder || false,
+      note: item.note || '',
+      status: item.status || 'active'
+    });
     setShowModal(true);
   };
 
@@ -140,6 +155,50 @@ const ProductCategories = () => {
   };
 
   const filteredCategories = applyFilters(categories, searchTerm, ['name', 'code', 'note']);
+  
+  // Tính toán phân trang
+  const totalPages = Math.ceil(filteredCategories.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedCategories = filteredCategories.slice(startIndex, endIndex);
+  
+  // Reset về trang 1 khi filter thay đổi
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, columnFilters]);
+  
+  // Đóng context menu khi click ra ngoài
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [contextMenu]);
+  
+  // Xử lý chuột phải
+  const handleContextMenu = (e, category) => {
+    e.preventDefault();
+    setSelectedRow(category);
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY
+    });
+  };
+  
+  const handleContextEdit = () => {
+    if (selectedRow) {
+      handleEdit(selectedRow);
+      setContextMenu(null);
+    }
+  };
+  
+  const handleContextDelete = () => {
+    if (selectedRow) {
+      handleDelete(selectedRow.id);
+      setContextMenu(null);
+    }
+  };
 
   const handleExport = () => {
     alert('Chức năng export Excel đang được phát triển');
@@ -163,12 +222,16 @@ const ProductCategories = () => {
   ];
   const defaultCategoryOrder = categoryColumns.map(col => col.key);
   // Mặc định chỉ các cột này hiển thị và đúng thứ tự khi "Làm lại"
-  const defaultCategoryVisible = ['code', 'name', 'noGroupOrder', 'note', 'status'];
+  const defaultCategoryVisible = ['code', 'name', 'noGroupOrder', 'note', 'status', 'actions'];
   // Lấy cấu hình cột từ localStorage nếu có
   const getInitialCategoryCols = () => {
     try {
       const saved = JSON.parse(localStorage.getItem(CATEGORY_COLS_KEY));
       if (saved && Array.isArray(saved.visibleCols) && Array.isArray(saved.order)) {
+        // Nếu cấu hình cũ không có cột actions, reset về mặc định
+        if (!saved.visibleCols.includes('actions')) {
+          return [defaultCategoryVisible, defaultCategoryOrder];
+        }
         return [saved.visibleCols, saved.order];
       }
     } catch {}
@@ -388,14 +451,14 @@ const ProductCategories = () => {
           )}
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', maxHeight: 'calc(100vh - 320px)', overflowY: 'auto', position: 'relative' }}>
           <table className="data-table" ref={categoryTableRef}>
             <colgroup>
               {categoryColOrder.map((key, i) => (
                 categoryVisibleCols.includes(key) ? <col key={key} style={{ width: categoryColWidths[i] }} /> : null
               ))}
             </colgroup>
-            <thead>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8f9fa' }}>
               <tr>
                 {categoryColOrder.map((key, idx, arr) => {
                   const col = categoryColumns.find(c => c.key === key);
@@ -444,8 +507,12 @@ const ProductCategories = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredCategories.map((category) => (
-                <tr key={category.id}>
+              {paginatedCategories.map((category) => (
+                <tr 
+                  key={category.id}
+                  onContextMenu={(e) => handleContextMenu(e, category)}
+                  style={{ cursor: 'context-menu' }}
+                >
                   {categoryColOrder.map((key, idx) => {
                     if (!categoryVisibleCols.includes(key)) return null;
                     const col = categoryColumns.find(c => c.key === key);
@@ -496,12 +563,136 @@ const ProductCategories = () => {
           </table>
         </div>
 
+        {/* Phân trang */}
+        {filteredCategories.length > 0 && (
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            padding: '16px 0',
+            borderTop: '1px solid #e0e0e0',
+            marginTop: '8px'
+          }}>
+            <div style={{ color: '#6c757d', fontSize: '14px' }}>
+              Hiển thị {startIndex + 1}-{Math.min(endIndex, filteredCategories.length)} trong tổng số {filteredCategories.length} bản ghi
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button 
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #ddd',
+                  background: currentPage === 1 ? '#f5f5f5' : '#fff',
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                  borderRadius: '4px'
+                }}
+              >
+                ⏮ Đầu
+              </button>
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #ddd',
+                  background: currentPage === 1 ? '#f5f5f5' : '#fff',
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                  borderRadius: '4px'
+                }}
+              >
+                ◀ Trước
+              </button>
+              <span style={{ padding: '0 12px', color: '#333' }}>
+                Trang {currentPage} / {totalPages}
+              </span>
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #ddd',
+                  background: currentPage === totalPages ? '#f5f5f5' : '#fff',
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                  borderRadius: '4px'
+                }}
+              >
+                Sau ▶
+              </button>
+              <button 
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #ddd',
+                  background: currentPage === totalPages ? '#f5f5f5' : '#fff',
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                  borderRadius: '4px'
+                }}
+              >
+                Cuối ⏭
+              </button>
+            </div>
+          </div>
+        )}
+
         {filteredCategories.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
             Không tìm thấy loại hàng nào
           </div>
         )}
       </div>
+
+      {/* Context Menu chuột phải */}
+      {contextMenu && (
+        <div
+          style={{
+            position: 'fixed',
+            top: contextMenu.y,
+            left: contextMenu.x,
+            background: 'white',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            zIndex: 10000,
+            minWidth: '150px'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            onClick={handleContextEdit}
+            style={{
+              padding: '8px 16px',
+              cursor: 'pointer',
+              borderBottom: '1px solid #f0f0f0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+            onMouseEnter={(e) => e.target.style.background = '#f5f5f5'}
+            onMouseLeave={(e) => e.target.style.background = 'white'}
+          >
+            <span>✏️</span>
+            <span>Xem chi tiết</span>
+          </div>
+          <div
+            onClick={handleContextDelete}
+            style={{
+              padding: '8px 16px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              color: '#dc3545'
+            }}
+            onMouseEnter={(e) => e.target.style.background = '#fff5f5'}
+            onMouseLeave={(e) => e.target.style.background = 'white'}
+          >
+            <span>🗑️</span>
+            <span>Xóa</span>
+          </div>
+        </div>
+      )}
 
       {/* Modal */}
       {showModal && (

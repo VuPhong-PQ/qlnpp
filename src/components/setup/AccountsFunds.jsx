@@ -227,6 +227,7 @@ const AccountsFunds = () => {
 
   // Excel Import/Export hook for AccountFunds
   const { handleExportExcel, handleImportExcel, handleFileChange, fileInputRef } = useExcelImportExport({
+    data: funds,
     entityName: 'AccountFund',
     columnMapping: [
       { header: 'Mã quỹ', field: 'code' },
@@ -272,6 +273,7 @@ const AccountsFunds = () => {
     handleFileChange: handleFileChangeLoans, 
     fileInputRef: fileInputRefLoans 
   } = useExcelImportExport({
+    data: bankLoans,
     entityName: 'BankLoan',
     columnMapping: [
       { header: 'Số tài khoản', field: 'accountNumber' },

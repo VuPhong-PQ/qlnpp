@@ -3,6 +3,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
 import useColumnFilter from '../../hooks/useColumnFilter.jsx';
 import { API_ENDPOINTS, api } from '../../config/api';
+import { useExcelImportExport } from '../../hooks/useExcelImportExport.jsx';
 
 function Suppliers() {
 
@@ -405,6 +406,95 @@ function Suppliers() {
     fetchSuppliers();
   }, []);
   
+  // Excel Import/Export hook for Suppliers
+  const {
+    handleExportExcel,
+    handleImportExcel,
+    handleFileChange,
+    fileInputRef
+  } = useExcelImportExport({
+    data: suppliers,
+    loadData: fetchSuppliers,
+    apiPost: (data) => api.post(API_ENDPOINTS.suppliers, data),
+    columnMapping: {
+      'Mã NCC': 'code',
+      'Tên nhà cung cấp': 'vatName',
+      'Tên xuất VAT': 'vatExportName',
+      'Địa chỉ': 'address',
+      'Địa chỉ VAT': 'vatAddress',
+      'Điện thoại': 'phone',
+      'Fax': 'fax',
+      'Email': 'email',
+      'Mã số thuế': 'taxCode',
+      'Tài khoản': 'account',
+      'Nhóm KH': 'customerGroup',
+      'Loại KH': 'customerType',
+      'Lịch bán hàng': 'salesSchedule',
+      'Xe': 'vehicle',
+      'STT in': 'printOrder',
+      'Loại hình KD': 'businessType',
+      'Hạn mức': 'debtLimit',
+      'Hạn nợ': 'debtTerm',
+      'Nợ ban đầu': 'initialDebt',
+      'Ghi chú': 'note',
+      'Xuất VAT': 'exportVAT',
+      'Trạng thái': 'status'
+    },
+    requiredFields: ['Mã NCC', 'Tên nhà cung cấp'],
+    filename: 'Danh_sach_nha_cung_cap',
+    sheetName: 'Nhà cung cấp',
+    transformDataForExport: (item) => ({
+      'Mã NCC': item.code || '',
+      'Tên nhà cung cấp': item.vatName || '',
+      'Tên xuất VAT': item.vatExportName || '',
+      'Địa chỉ': item.address || '',
+      'Địa chỉ VAT': item.vatAddress || '',
+      'Điện thoại': item.phone || '',
+      'Fax': item.fax || '',
+      'Email': item.email || '',
+      'Mã số thuế': item.taxCode || '',
+      'Tài khoản': item.account || '',
+      'Nhóm KH': item.customerGroup || '',
+      'Loại KH': item.customerType || '',
+      'Lịch bán hàng': item.salesSchedule || '',
+      'Xe': item.vehicle || '',
+      'STT in': item.printOrder || '',
+      'Loại hình KD': item.businessType || '',
+      'Hạn mức': item.debtLimit || 0,
+      'Hạn nợ': item.debtTerm || '',
+      'Nợ ban đầu': item.initialDebt || 0,
+      'Ghi chú': item.note || '',
+      'Xuất VAT': item.exportVAT ? 'Có' : 'Không',
+      'Trạng thái': item.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'
+    }),
+    transformDataForImport: (row) => ({
+      code: row['Mã NCC']?.toString().trim() || '',
+      vatName: row['Tên nhà cung cấp']?.toString().trim() || '',
+      vatExportName: row['Tên xuất VAT']?.toString().trim() || '',
+      address: row['Địa chỉ']?.toString().trim() || '',
+      vatAddress: row['Địa chỉ VAT']?.toString().trim() || '',
+      phone: row['Điện thoại']?.toString().trim() || '',
+      fax: row['Fax']?.toString().trim() || '',
+      email: row['Email']?.toString().trim() || '',
+      taxCode: row['Mã số thuế']?.toString().trim() || '',
+      account: row['Tài khoản']?.toString().trim() || '',
+      customerGroup: row['Nhóm KH']?.toString().trim() || '',
+      customerType: row['Loại KH']?.toString().trim() || '',
+      salesSchedule: row['Lịch bán hàng']?.toString().trim() || '',
+      vehicle: row['Xe']?.toString().trim() || '',
+      printOrder: row['STT in']?.toString().trim() || '',
+      businessType: row['Loại hình KD']?.toString().trim() || '',
+      debtLimit: parseFloat(row['Hạn mức']) || 0,
+      debtTerm: row['Hạn nợ']?.toString().trim() || '',
+      initialDebt: parseFloat(row['Nợ ban đầu']) || 0,
+      note: row['Ghi chú']?.toString().trim() || '',
+      exportVAT: row['Xuất VAT']?.toString().toLowerCase() === 'có' || row['Xuất VAT']?.toString().toLowerCase() === 'true',
+      status: row['Trạng thái']?.toString().toLowerCase().includes('ngưng') ? 'inactive' : 'active'
+    }),
+    onImportStart: () => setLoading(true),
+    onImportComplete: () => setLoading(false)
+  });
+  
   const handleColDragStart = () => {};
   const handleColDragOver = () => {};
   const handleColDrop = () => {};
@@ -440,12 +530,19 @@ function Suppliers() {
             >
               + Thêm nhà cung cấp
             </button>
-            <button className="btn btn-success" onClick={handleExport}>
+            <button className="btn btn-success" onClick={handleExportExcel} disabled={loading}>
               📤 Export Excel
             </button>
-            <button className="btn btn-secondary" onClick={handleImport}>
+            <button className="btn btn-secondary" onClick={handleImportExcel} disabled={loading}>
               📥 Import Excel
             </button>
+            <input
+              type="file"
+              ref={fileInputRef}
+              style={{ display: 'none' }}
+              accept=".xlsx, .xls"
+              onChange={handleFileChange}
+            />
             <button
               className="btn btn-settings"
               style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}
