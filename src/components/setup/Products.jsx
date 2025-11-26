@@ -1,102 +1,103 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
-import useColumnFilter from '../../hooks/useColumnFilter.jsx';
+import { API_ENDPOINTS, api } from '../../config/api';
+import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
+import { useExcelImportExport } from '../../hooks/useExcelImportExport.jsx';
+import { ExcelButtons } from '../common/ExcelButtons.jsx';
 
 const Products = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
-  const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
+  const [loading, setLoading] = useState(false);
+  const [products, setProducts] = useState([]);
+  const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters, showFilterPopup } = useColumnFilter();
+  
+  // Phân trang
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 10;
+  
+  // Context menu (chuột phải)
+  const [contextMenu, setContextMenu] = useState(null);
+  const [selectedRow, setSelectedRow] = useState(null);
+  
+  // Checkbox chọn nhiều
+  const [selectedRows, setSelectedRows] = useState([]);
 
-  const [products, setProducts] = useState([
-    {
-      id: 1,
-      category: 'LH001',
-      barcode: '8936000123456',
-      code: 'SP001',
-      name: 'Tivi Samsung 43 inch',
-      vatName: 'Tivi Samsung 43 inch Smart TV',
-      description: 'Tivi Samsung 43 inch màn hình phẳng',
-      shelfLife: 24,
-      baseUnit: 'Cái',
-      retailPrice: 12000000,
-      wholesalePrice: 11000000,
-      weight: 15.5,
-      volume: 0.8,
-      unit1: 'Thùng',
-      conversion1: 1,
-      retailPrice1: 12000000,
-      wholesalePrice1: 11000000,
-      weight1: 15.5,
-      volume1: 0.8,
-      unit2: '',
-      conversion2: 0,
-      weight2: 0,
-      volume2: 0,
-      defaultUnit: 'Cái',
-      minStock: 5,
-      discount: 5,
-      note: 'Sản phẩm hot',
-      promotion: 'Giảm 10% cho đơn từ 2 cái',
-      status: 'active'
-    },
-    {
-      id: 2,
-      category: 'LH002',
-      barcode: '2345678901234',
-      code: 'SP002',
-      name: 'Thịt bò úc',
-      vatName: 'Thịt bò nhập khẩu Úc',
-      description: 'Thịt bò tươi nhập từ Úc',
-      shelfLife: 0.5,
-      baseUnit: 'Kg',
-      retailPrice: 450000,
-      wholesalePrice: 420000,
-      weight: 1,
-      volume: 0.001,
-      unit1: 'Thùng',
-      conversion1: 10,
-      retailPrice1: 4500000,
-      wholesalePrice1: 4200000,
-      weight1: 10,
-      volume1: 0.01,
-      unit2: '',
-      conversion2: 0,
-      weight2: 0,
-      volume2: 0,
-      defaultUnit: 'Kg',
-      minStock: 50,
-      discount: 0,
-      note: 'Bảo quản lạnh',
-      promotion: '',
-      status: 'active'
+  // Load data from API
+  useEffect(() => {
+    fetchProducts();
+  }, []);
+
+  const fetchProducts = async () => {
+    try {
+      setLoading(true);
+      const data = await api.get(API_ENDPOINTS.products);
+      setProducts(data);
+    } catch (error) {
+      console.error('Error fetching products:', error);
+      alert('Không thể tải dữ liệu sản phẩm. Vui lòng kiểm tra kết nối API.');
+    } finally {
+      setLoading(false);
     }
-  ]);
+  };
 
   const [formData, setFormData] = useState({
     category: '',
-    barcode: '',
     code: '',
+    barcode: '',
     name: '',
     vatName: '',
     description: '',
     shelfLife: 0,
     baseUnit: '',
-    retailPrice: 0,
-    wholesalePrice: 0,
-    weight: 0,
-    volume: 0,
     unit1: '',
-    conversion1: 0,
-    retailPrice1: 0,
-    wholesalePrice1: 0,
-    weight1: 0,
-    volume1: 0,
     unit2: '',
-    conversion2: 0,
-    weight2: 0,
-    volume2: 0,
+    unit3: '',
+    unit4: '',
     defaultUnit: '',
+    conversion1: 0,
+    conversion2: 0,
+    conversion3: 0,
+    conversion4: 0,
+    importPrice: 0,
+    importPrice1: 0,
+    importPrice2: 0,
+    importPrice3: 0,
+    importPrice4: 0,
+    retailPrice: 0,
+    retailPrice1: 0,
+    retailPrice2: 0,
+    retailPrice3: 0,
+    retailPrice4: 0,
+    retailDiscount1: 0,
+    retailDiscount2: 0,
+    retailDiscount3: 0,
+    retailDiscount4: 0,
+    wholesalePrice: 0,
+    wholesalePrice1: 0,
+    wholesalePrice2: 0,
+    wholesalePrice3: 0,
+    wholesalePrice4: 0,
+    wholesaleDiscount1: 0,
+    wholesaleDiscount2: 0,
+    wholesaleDiscount3: 0,
+    wholesaleDiscount4: 0,
+    weight: 0,
+    weight1: 0,
+    weight2: 0,
+    weight3: 0,
+    weight4: 0,
+    volume: 0,
+    volume1: 0,
+    volume2: 0,
+    volume3: 0,
+    volume4: 0,
+    shippingFee: 0,
+    shippingFee1: 0,
+    shippingFee2: 0,
+    shippingFee3: 0,
+    shippingFee4: 0,
     minStock: 0,
     discount: 0,
     note: '',
@@ -115,45 +116,107 @@ const Products = () => {
     });
   };
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (editingItem) {
-      setProducts(products.map(item => 
-        item.id === editingItem.id ? { ...formData, id: editingItem.id } : item
-      ));
-    } else {
-      setProducts([...products, { ...formData, id: Date.now() }]);
+    try {
+      setLoading(true);
+      if (editingItem) {
+        const dataToUpdate = { ...formData, id: editingItem.id };
+        await api.put(API_ENDPOINTS.products, editingItem.id, dataToUpdate);
+        alert('Cập nhật sản phẩm thành công!');
+      } else {
+        await api.post(API_ENDPOINTS.products, formData);
+        alert('Thêm sản phẩm thành công!');
+      }
+      await fetchProducts();
+      setShowModal(false);
+      setEditingItem(null);
+      resetForm();
+    } catch (error) {
+      console.error('Error saving product:', error);
+      alert('Có lỗi xảy ra khi lưu dữ liệu. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
     }
-    setShowModal(false);
-    setEditingItem(null);
-    resetForm();
+  };
+  
+  // Xử lý lưu copy
+  const handleSaveCopy = async (e) => {
+    e.preventDefault();
+    try {
+      setLoading(true);
+      // Tạo bản sao mới không có ID
+      const copyData = { ...formData };
+      delete copyData.id;
+      await api.post(API_ENDPOINTS.products, copyData);
+      alert('Sao chép sản phẩm thành công!');
+      await fetchProducts();
+      // Giữ modal mở và giữ nguyên dữ liệu để tiếp tục sao chép
+    } catch (error) {
+      console.error('Error copying product:', error);
+      alert('Có lỗi xảy ra khi sao chép dữ liệu. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const resetForm = () => {
     setFormData({
       category: '',
-      barcode: '',
       code: '',
+      barcode: '',
       name: '',
       vatName: '',
       description: '',
       shelfLife: 0,
       baseUnit: '',
-      retailPrice: 0,
-      wholesalePrice: 0,
-      weight: 0,
-      volume: 0,
       unit1: '',
-      conversion1: 0,
-      retailPrice1: 0,
-      wholesalePrice1: 0,
-      weight1: 0,
-      volume1: 0,
       unit2: '',
-      conversion2: 0,
-      weight2: 0,
-      volume2: 0,
+      unit3: '',
+      unit4: '',
       defaultUnit: '',
+      conversion1: 0,
+      conversion2: 0,
+      conversion3: 0,
+      conversion4: 0,
+      importPrice: 0,
+      importPrice1: 0,
+      importPrice2: 0,
+      importPrice3: 0,
+      importPrice4: 0,
+      retailPrice: 0,
+      retailPrice1: 0,
+      retailPrice2: 0,
+      retailPrice3: 0,
+      retailPrice4: 0,
+      retailDiscount1: 0,
+      retailDiscount2: 0,
+      retailDiscount3: 0,
+      retailDiscount4: 0,
+      wholesalePrice: 0,
+      wholesalePrice1: 0,
+      wholesalePrice2: 0,
+      wholesalePrice3: 0,
+      wholesalePrice4: 0,
+      wholesaleDiscount1: 0,
+      wholesaleDiscount2: 0,
+      wholesaleDiscount3: 0,
+      wholesaleDiscount4: 0,
+      weight: 0,
+      weight1: 0,
+      weight2: 0,
+      weight3: 0,
+      weight4: 0,
+      volume: 0,
+      volume1: 0,
+      volume2: 0,
+      volume3: 0,
+      volume4: 0,
+      shippingFee: 0,
+      shippingFee1: 0,
+      shippingFee2: 0,
+      shippingFee3: 0,
+      shippingFee4: 0,
       minStock: 0,
       discount: 0,
       note: '',
@@ -168,13 +231,82 @@ const Products = () => {
     setShowModal(true);
   };
 
-  const handleDelete = (id) => {
+  const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa sản phẩm này?')) {
-      setProducts(products.filter(item => item.id !== id));
+      try {
+        setLoading(true);
+        await api.delete(API_ENDPOINTS.products, id);
+        alert('Xóa sản phẩm thành công!');
+        await fetchProducts();
+      } catch (error) {
+        console.error('Error deleting product:', error);
+        alert('Có lỗi xảy ra khi xóa dữ liệu. Vui lòng thử lại.');
+      } finally {
+        setLoading(false);
+      }
     }
   };
 
   const filteredProducts = applyFilters(products, searchTerm, ['code', 'name', 'barcode', 'category', 'vatName', 'baseUnit']);
+  
+  // Tính toán phân trang
+  const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedProducts = filteredProducts.slice(startIndex, endIndex);
+  
+  // Reset về trang 1 khi filter thay đổi
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, columnFilters]);
+  
+  // Đóng context menu khi click ra ngoài
+  useEffect(() => {
+    const handleClickOutside = () => setContextMenu(null);
+    if (contextMenu) {
+      document.addEventListener('click', handleClickOutside);
+      return () => document.removeEventListener('click', handleClickOutside);
+    }
+  }, [contextMenu]);
+  
+  // Xử lý chuột phải
+  const handleContextMenu = (e, product) => {
+    e.preventDefault();
+    setSelectedRow(product);
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY
+    });
+  };
+  
+  const handleContextEdit = () => {
+    if (selectedRow) {
+      handleEdit(selectedRow);
+      setContextMenu(null);
+    }
+  };
+  
+  const handleContextDelete = () => {
+    if (selectedRow) {
+      handleDelete(selectedRow.id);
+      setContextMenu(null);
+    }
+  };
+  
+  // Xử lý checkbox
+  const handleSelectAll = (e) => {
+    if (e.target.checked) {
+      setSelectedRows(paginatedProducts.map(p => p.id));
+    } else {
+      setSelectedRows([]);
+    }
+  };
+  
+  const handleSelectRow = (id) => {
+    setSelectedRows(prev => 
+      prev.includes(id) ? prev.filter(i => i !== id) : [...prev, id]
+    );
+  };
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -183,27 +315,280 @@ const Products = () => {
     }).format(amount);
   };
 
+  // Excel Import/Export
+  const {
+    handleExportExcel,
+    handleImportExcel,
+    handleFileChange,
+    fileInputRef
+  } = useExcelImportExport({
+    data: products,
+    loadData: fetchProducts,
+    apiPost: (data) => api.post(API_ENDPOINTS.products, data),
+    columnMapping: {
+      'Loại hàng': 'category',
+      'Mã hàng hóa': 'code',
+      'Mã vạch': 'barcode',
+      'Tên hàng hóa': 'name',
+      'Tên hàng hóa VAT': 'vatName',
+      'Mô tả': 'description',
+      'Hạn sử dụng theo tháng': 'shelfLife',
+      'ĐVT': 'baseUnit',
+      'ĐVT1': 'unit1',
+      'ĐVT2': 'unit2',
+      'ĐVT3': 'unit3',
+      'ĐVT4': 'unit4',
+      'ĐVT mặc định': 'defaultUnit',
+      'Quy đổi 1': 'conversion1',
+      'Quy đổi 2': 'conversion2',
+      'Quy đổi 3': 'conversion3',
+      'Quy đổi 4': 'conversion4',
+      'Giá nhập': 'importPrice',
+      'Giá nhập1': 'importPrice1',
+      'Giá nhập2': 'importPrice2',
+      'Giá nhập3': 'importPrice3',
+      'Giá nhập4': 'importPrice4',
+      'Giá bán lẻ': 'retailPrice',
+      'Giá bán lẻ1': 'retailPrice1',
+      'Giá bán lẻ2': 'retailPrice2',
+      'Giá bán lẻ3': 'retailPrice3',
+      'Giá bán lẻ4': 'retailPrice4',
+      'Giảm bán lẻ 1': 'retailDiscount1',
+      'Giảm bán lẻ 2': 'retailDiscount2',
+      'Giảm bán lẻ 3': 'retailDiscount3',
+      'Giảm bán lẻ 4': 'retailDiscount4',
+      'Giá bán sỉ': 'wholesalePrice',
+      'Giá bán sỉ1': 'wholesalePrice1',
+      'Giá bán sỉ2': 'wholesalePrice2',
+      'Giá bán sỉ3': 'wholesalePrice3',
+      'Giá bán sỉ4': 'wholesalePrice4',
+      'Giảm bán sỉ 1': 'wholesaleDiscount1',
+      'Giảm bán sỉ 2': 'wholesaleDiscount2',
+      'Giảm bán sỉ 3': 'wholesaleDiscount3',
+      'Giảm bán sỉ 4': 'wholesaleDiscount4',
+      'Số Kg': 'weight',
+      'Số Kg1': 'weight1',
+      'Số Kg2': 'weight2',
+      'Số Kg3': 'weight3',
+      'Số Kg4': 'weight4',
+      'Số khối': 'volume',
+      'Số khối1': 'volume1',
+      'Số khối2': 'volume2',
+      'Số khối3': 'volume3',
+      'Số khối4': 'volume4',
+      'Phí vận chuyển': 'shippingFee',
+      'Phí vận chuyển1': 'shippingFee1',
+      'Phí vận chuyển2': 'shippingFee2',
+      'Phí vận chuyển3': 'shippingFee3',
+      'Phí vận chuyển4': 'shippingFee4',
+      'Tồn tối thiểu': 'minStock',
+      'Chiết khấu': 'discount',
+      'Ghi chú': 'note',
+      'Khuyến mãi': 'promotion',
+      'Trạng thái': 'status'
+    },
+    requiredFields: ['Loại hàng', 'Mã hàng hóa', 'Tên hàng hóa'],
+    filename: 'Danh_sach_hang_hoa',
+    sheetName: 'Hàng hóa',
+    transformDataForExport: (item) => ({
+      'Loại hàng': item.category || '',
+      'Mã hàng hóa': item.code || '',
+      'Mã vạch': item.barcode || '',
+      'Tên hàng hóa': item.name || '',
+      'Tên hàng hóa VAT': item.vatName || '',
+      'Mô tả': item.description || '',
+      'Hạn sử dụng theo tháng': item.shelfLife || 0,
+      'ĐVT': item.baseUnit || '',
+      'ĐVT1': item.unit1 || '',
+      'ĐVT2': item.unit2 || '',
+      'ĐVT3': item.unit3 || '',
+      'ĐVT4': item.unit4 || '',
+      'ĐVT mặc định': item.defaultUnit || '',
+      'Quy đổi 1': item.conversion1 || 0,
+      'Quy đổi 2': item.conversion2 || 0,
+      'Quy đổi 3': item.conversion3 || 0,
+      'Quy đổi 4': item.conversion4 || 0,
+      'Giá nhập': item.importPrice || 0,
+      'Giá nhập1': item.importPrice1 || 0,
+      'Giá nhập2': item.importPrice2 || 0,
+      'Giá nhập3': item.importPrice3 || 0,
+      'Giá nhập4': item.importPrice4 || 0,
+      'Giá bán lẻ': item.retailPrice || 0,
+      'Giá bán lẻ1': item.retailPrice1 || 0,
+      'Giá bán lẻ2': item.retailPrice2 || 0,
+      'Giá bán lẻ3': item.retailPrice3 || 0,
+      'Giá bán lẻ4': item.retailPrice4 || 0,
+      'Giảm bán lẻ 1': item.retailDiscount1 || 0,
+      'Giảm bán lẻ 2': item.retailDiscount2 || 0,
+      'Giảm bán lẻ 3': item.retailDiscount3 || 0,
+      'Giảm bán lẻ 4': item.retailDiscount4 || 0,
+      'Giá bán sỉ': item.wholesalePrice || 0,
+      'Giá bán sỉ1': item.wholesalePrice1 || 0,
+      'Giá bán sỉ2': item.wholesalePrice2 || 0,
+      'Giá bán sỉ3': item.wholesalePrice3 || 0,
+      'Giá bán sỉ4': item.wholesalePrice4 || 0,
+      'Giảm bán sỉ 1': item.wholesaleDiscount1 || 0,
+      'Giảm bán sỉ 2': item.wholesaleDiscount2 || 0,
+      'Giảm bán sỉ 3': item.wholesaleDiscount3 || 0,
+      'Giảm bán sỉ 4': item.wholesaleDiscount4 || 0,
+      'Số Kg': item.weight || 0,
+      'Số Kg1': item.weight1 || 0,
+      'Số Kg2': item.weight2 || 0,
+      'Số Kg3': item.weight3 || 0,
+      'Số Kg4': item.weight4 || 0,
+      'Số khối': item.volume || 0,
+      'Số khối1': item.volume1 || 0,
+      'Số khối2': item.volume2 || 0,
+      'Số khối3': item.volume3 || 0,
+      'Số khối4': item.volume4 || 0,
+      'Phí vận chuyển': item.shippingFee || 0,
+      'Phí vận chuyển1': item.shippingFee1 || 0,
+      'Phí vận chuyển2': item.shippingFee2 || 0,
+      'Phí vận chuyển3': item.shippingFee3 || 0,
+      'Phí vận chuyển4': item.shippingFee4 || 0,
+      'Tồn tối thiểu': item.minStock || 0,
+      'Chiết khấu': item.discount || 0,
+      'Ghi chú': item.note || '',
+      'Khuyến mãi': item.promotion || '',
+      'Trạng thái': item.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'
+    }),
+    transformDataForImport: (row) => ({
+      category: row['Loại hàng'],
+      code: row['Mã hàng hóa'],
+      barcode: row['Mã vạch'] || '',
+      name: row['Tên hàng hóa'],
+      vatName: row['Tên hàng hóa VAT'] || '',
+      description: row['Mô tả'] || '',
+      shelfLife: parseFloat(row['Hạn sử dụng theo tháng']) || 0,
+      baseUnit: row['ĐVT'] || '',
+      unit1: row['ĐVT1'] || '',
+      unit2: row['ĐVT2'] || '',
+      unit3: row['ĐVT3'] || '',
+      unit4: row['ĐVT4'] || '',
+      defaultUnit: row['ĐVT mặc định'] || '',
+      conversion1: parseFloat(row['Quy đổi 1']) || 0,
+      conversion2: parseFloat(row['Quy đổi 2']) || 0,
+      conversion3: parseFloat(row['Quy đổi 3']) || 0,
+      conversion4: parseFloat(row['Quy đổi 4']) || 0,
+      importPrice: parseFloat(row['Giá nhập']) || 0,
+      importPrice1: parseFloat(row['Giá nhập1']) || 0,
+      importPrice2: parseFloat(row['Giá nhập2']) || 0,
+      importPrice3: parseFloat(row['Giá nhập3']) || 0,
+      importPrice4: parseFloat(row['Giá nhập4']) || 0,
+      retailPrice: parseFloat(row['Giá bán lẻ']) || 0,
+      retailPrice1: parseFloat(row['Giá bán lẻ1']) || 0,
+      retailPrice2: parseFloat(row['Giá bán lẻ2']) || 0,
+      retailPrice3: parseFloat(row['Giá bán lẻ3']) || 0,
+      retailPrice4: parseFloat(row['Giá bán lẻ4']) || 0,
+      retailDiscount1: parseFloat(row['Giảm bán lẻ 1']) || 0,
+      retailDiscount2: parseFloat(row['Giảm bán lẻ 2']) || 0,
+      retailDiscount3: parseFloat(row['Giảm bán lẻ 3']) || 0,
+      retailDiscount4: parseFloat(row['Giảm bán lẻ 4']) || 0,
+      wholesalePrice: parseFloat(row['Giá bán sỉ']) || 0,
+      wholesalePrice1: parseFloat(row['Giá bán sỉ1']) || 0,
+      wholesalePrice2: parseFloat(row['Giá bán sỉ2']) || 0,
+      wholesalePrice3: parseFloat(row['Giá bán sỉ3']) || 0,
+      wholesalePrice4: parseFloat(row['Giá bán sỉ4']) || 0,
+      wholesaleDiscount1: parseFloat(row['Giảm bán sỉ 1']) || 0,
+      wholesaleDiscount2: parseFloat(row['Giảm bán sỉ 2']) || 0,
+      wholesaleDiscount3: parseFloat(row['Giảm bán sỉ 3']) || 0,
+      wholesaleDiscount4: parseFloat(row['Giảm bán sỉ 4']) || 0,
+      weight: parseFloat(row['Số Kg']) || 0,
+      weight1: parseFloat(row['Số Kg1']) || 0,
+      weight2: parseFloat(row['Số Kg2']) || 0,
+      weight3: parseFloat(row['Số Kg3']) || 0,
+      weight4: parseFloat(row['Số Kg4']) || 0,
+      volume: parseFloat(row['Số khối']) || 0,
+      volume1: parseFloat(row['Số khối1']) || 0,
+      volume2: parseFloat(row['Số khối2']) || 0,
+      volume3: parseFloat(row['Số khối3']) || 0,
+      volume4: parseFloat(row['Số khối4']) || 0,
+      shippingFee: parseFloat(row['Phí vận chuyển']) || 0,
+      shippingFee1: parseFloat(row['Phí vận chuyển1']) || 0,
+      shippingFee2: parseFloat(row['Phí vận chuyển2']) || 0,
+      shippingFee3: parseFloat(row['Phí vận chuyển3']) || 0,
+      shippingFee4: parseFloat(row['Phí vận chuyển4']) || 0,
+      minStock: parseInt(row['Tồn tối thiểu']) || 0,
+      discount: parseFloat(row['Chiết khấu']) || 0,
+      note: row['Ghi chú'] || '',
+      promotion: row['Khuyến mãi'] || '',
+      status: row['Trạng thái'] === 'Ngưng hoạt động' ? 'inactive' : 'active'
+    }),
+    onImportStart: () => setLoading(true),
+    onImportComplete: () => setLoading(false)
+  });
+
   // Cột và độ rộng mặc định
   // --- CẤU HÌNH CỘT, DRAG, LƯU LOCALSTORAGE ---
-  const PRODUCT_COLS_KEY = 'products_table_cols_v1';
+  const PRODUCT_COLS_KEY = 'products_table_cols_v2'; // v2 để reset cấu hình cũ
   const productColumns = [
+    { key: 'select', label: 'STT', fixed: true },
     { key: 'category', label: 'Loại hàng' },
+    { key: 'code', label: 'Mã hàng hóa' },
     { key: 'barcode', label: 'Mã vạch' },
-    { key: 'code', label: 'Mã HH' },
     { key: 'name', label: 'Tên hàng hóa' },
-    { key: 'vatName', label: 'Tên hàng VAT' },
+    { key: 'vatName', label: 'Tên hàng hóa VAT' },
+    { key: 'description', label: 'Mô tả' },
     { key: 'shelfLife', label: 'HSD (tháng)' },
-    { key: 'baseUnit', label: 'ĐVT gốc' },
+    { key: 'baseUnit', label: 'ĐVT' },
+    { key: 'unit1', label: 'ĐVT1' },
+    { key: 'unit2', label: 'ĐVT2' },
+    { key: 'unit3', label: 'ĐVT3' },
+    { key: 'unit4', label: 'ĐVT4' },
+    { key: 'defaultUnit', label: 'ĐVT mặc định' },
+    { key: 'conversion1', label: 'Quy đổi 1' },
+    { key: 'conversion2', label: 'Quy đổi 2' },
+    { key: 'conversion3', label: 'Quy đổi 3' },
+    { key: 'conversion4', label: 'Quy đổi 4' },
+    { key: 'importPrice', label: 'Giá nhập' },
+    { key: 'importPrice1', label: 'Giá nhập1' },
+    { key: 'importPrice2', label: 'Giá nhập2' },
+    { key: 'importPrice3', label: 'Giá nhập3' },
+    { key: 'importPrice4', label: 'Giá nhập4' },
     { key: 'retailPrice', label: 'Giá bán lẻ' },
+    { key: 'retailPrice1', label: 'Giá bán lẻ1' },
+    { key: 'retailPrice2', label: 'Giá bán lẻ2' },
+    { key: 'retailPrice3', label: 'Giá bán lẻ3' },
+    { key: 'retailPrice4', label: 'Giá bán lẻ4' },
+    { key: 'retailDiscount1', label: 'Giảm bán lẻ 1' },
+    { key: 'retailDiscount2', label: 'Giảm bán lẻ 2' },
+    { key: 'retailDiscount3', label: 'Giảm bán lẻ 3' },
+    { key: 'retailDiscount4', label: 'Giảm bán lẻ 4' },
     { key: 'wholesalePrice', label: 'Giá bán sỉ' },
+    { key: 'wholesalePrice1', label: 'Giá bán sỉ1' },
+    { key: 'wholesalePrice2', label: 'Giá bán sỉ2' },
+    { key: 'wholesalePrice3', label: 'Giá bán sỉ3' },
+    { key: 'wholesalePrice4', label: 'Giá bán sỉ4' },
+    { key: 'wholesaleDiscount1', label: 'Giảm bán sỉ 1' },
+    { key: 'wholesaleDiscount2', label: 'Giảm bán sỉ 2' },
+    { key: 'wholesaleDiscount3', label: 'Giảm bán sỉ 3' },
+    { key: 'wholesaleDiscount4', label: 'Giảm bán sỉ 4' },
+    { key: 'weight', label: 'Số Kg' },
+    { key: 'weight1', label: 'Số Kg1' },
+    { key: 'weight2', label: 'Số Kg2' },
+    { key: 'weight3', label: 'Số Kg3' },
+    { key: 'weight4', label: 'Số Kg4' },
+    { key: 'volume', label: 'Số khối' },
+    { key: 'volume1', label: 'Số khối1' },
+    { key: 'volume2', label: 'Số khối2' },
+    { key: 'volume3', label: 'Số khối3' },
+    { key: 'volume4', label: 'Số khối4' },
+    { key: 'shippingFee', label: 'Phí vận chuyển' },
+    { key: 'shippingFee1', label: 'Phí vận chuyển1' },
+    { key: 'shippingFee2', label: 'Phí vận chuyển2' },
+    { key: 'shippingFee3', label: 'Phí vận chuyển3' },
+    { key: 'shippingFee4', label: 'Phí vận chuyển4' },
     { key: 'minStock', label: 'Tồn tối thiểu' },
-    { key: 'discount', label: 'Chiết khấu (%)' },
+    { key: 'discount', label: 'Chiết khấu' },
+    { key: 'note', label: 'Ghi chú' },
+    { key: 'promotion', label: 'Khuyến mãi' },
     { key: 'status', label: 'Trạng thái' },
     { key: 'actions', label: 'Thao tác', fixed: true }
   ];
   const defaultProductOrder = productColumns.map(col => col.key);
+  // Hiển thị tất cả các cột theo mặc định
   const defaultProductVisible = productColumns.map(col => col.key);
-  const defaultProductWidths = [120, 120, 100, 180, 180, 100, 100, 120, 120, 110, 110, 110, 110];
+  const defaultProductWidths = Array(productColumns.length).fill(120);
   // Lấy cấu hình cột từ localStorage nếu có
   const getInitialProductCols = () => {
     try {
@@ -338,8 +723,13 @@ const Products = () => {
             >
               + Thêm sản phẩm
             </button>
-            <button className="btn btn-success">📤 Export Excel</button>
-            <button className="btn btn-secondary">📥 Import Excel</button>
+            <ExcelButtons 
+              onExport={handleExportExcel}
+              onImport={handleImportExcel}
+              onFileChange={handleFileChange}
+              fileInputRef={fileInputRef}
+              disabled={loading}
+            />
             <button
               className="btn btn-settings"
               style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}
@@ -442,18 +832,32 @@ const Products = () => {
           )}
         </div>
 
-        <div style={{ overflowX: 'auto' }}>
+        <div style={{ overflowX: 'auto', maxHeight: 'calc(100vh - 320px)', overflowY: 'auto', position: 'relative' }}>
           <table className="data-table" ref={productTableRef}>
             <colgroup>
               {productColOrder.map((key, i) => (
                 productVisibleCols.includes(key) ? <col key={key} style={{ width: productColWidths[i] }} /> : null
               ))}
             </colgroup>
-            <thead>
+            <thead style={{ position: 'sticky', top: 0, zIndex: 10, background: '#f8f9fa' }}>
               <tr>
                 {productColOrder.map((key, idx, arr) => {
                   const col = productColumns.find(c => c.key === key);
                   if (!col || !productVisibleCols.includes(key)) return null;
+                  
+                  // Cột STT với checkbox
+                  if (col.key === 'select') {
+                    return (
+                      <th key={col.key} style={{ position: 'relative', width: '60px' }}>
+                        <input 
+                          type="checkbox"
+                          checked={selectedRows.length === paginatedProducts.length && paginatedProducts.length > 0}
+                          onChange={handleSelectAll}
+                        />
+                      </th>
+                    );
+                  }
+                  
                   return (
                     <th key={col.key} style={{ position: 'relative' }}>
                       {/* Mép trái */}
@@ -464,18 +868,26 @@ const Products = () => {
                           style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
                         />
                       )}
-                      {col.label}
-                      {/* Filter icon - only show for non-actions columns */}
-                      {col.key !== 'actions' && (
-                        <span
-                          onClick={() => setShowFilterPopup(col.key)}
-                          style={{ marginLeft: '8px', cursor: 'pointer', fontSize: '14px' }}
-                        >
-                          🔍
-                        </span>
-                      )}
-                      {/* Filter popup */}
-                      {renderFilterPopup(col.key, col.label, false)}
+                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                        <span>{col.label}</span>
+                        {col.key !== 'actions' && (
+                          <span 
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setShowFilterPopup(showFilterPopup === col.key ? null : col.key);
+                            }}
+                            style={{ 
+                              cursor: 'pointer', 
+                              fontSize: '14px', 
+                              opacity: columnFilters[col.key] ? 1 : 0.5,
+                              color: columnFilters[col.key] ? '#1890ff' : 'inherit'
+                            }}
+                          >
+                            🔍
+                          </span>
+                        )}
+                      </div>
+                      {col.key !== 'actions' && col.key !== 'select' && renderFilterPopup(col.key, col.label)}
                       {/* Mép phải */}
                       {idx < arr.length - 1 && productVisibleCols.includes(arr[idx + 1]) && (
                         <span
@@ -490,15 +902,38 @@ const Products = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredProducts.map((product) => (
-                <tr key={product.id}>
+              {paginatedProducts.map((product, index) => (
+                <tr 
+                  key={product.id}
+                  onContextMenu={(e) => handleContextMenu(e, product)}
+                  style={{ cursor: 'context-menu' }}
+                >
                   {productColOrder.map((key, idx) => {
                     if (!productVisibleCols.includes(key)) return null;
                     const col = productColumns.find(c => c.key === key);
                     if (!col) return null;
-                    if (col.key === 'retailPrice' || col.key === 'wholesalePrice') {
-                      return <td key={col.key}>{formatCurrency(product[col.key])}</td>;
+                    
+                    // Cột STT với checkbox
+                    if (col.key === 'select') {
+                      return (
+                        <td key={col.key} style={{ textAlign: 'center' }}>
+                          <input 
+                            type="checkbox"
+                            checked={selectedRows.includes(product.id)}
+                            onChange={() => handleSelectRow(product.id)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                          <span style={{ marginLeft: '8px' }}>{startIndex + index + 1}</span>
+                        </td>
+                      );
                     }
+                    
+                    // Các cột giá tiền
+                    if (col.key.includes('Price') || col.key.includes('Fee')) {
+                      return <td key={col.key}>{formatCurrency(product[col.key] || 0)}</td>;
+                    }
+                    
+                    // Cột trạng thái
                     if (col.key === 'status') {
                       return (
                         <td key={col.key}>
@@ -508,6 +943,8 @@ const Products = () => {
                         </td>
                       );
                     }
+                    
+                    // Cột thao tác
                     if (col.key === 'actions') {
                       return (
                         <td key={col.key}>
@@ -528,13 +965,87 @@ const Products = () => {
                         </td>
                       );
                     }
-                    return <td key={col.key}>{product[col.key]}</td>;
+                    
+                    return <td key={col.key}>{product[col.key] || ''}</td>;
                   })}
                 </tr>
               ))}
             </tbody>
           </table>
         </div>
+
+        {/* Phân trang */}
+        {filteredProducts.length > 0 && (
+          <div style={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center', 
+            padding: '16px 0',
+            borderTop: '1px solid #e0e0e0',
+            marginTop: '8px'
+          }}>
+            <div style={{ color: '#6c757d', fontSize: '14px' }}>
+              Hiển thị {startIndex + 1}-{Math.min(endIndex, filteredProducts.length)} trong tổng số {filteredProducts.length} bản ghi
+            </div>
+            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+              <button 
+                onClick={() => setCurrentPage(1)}
+                disabled={currentPage === 1}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #ddd',
+                  background: currentPage === 1 ? '#f5f5f5' : '#fff',
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                  borderRadius: '4px'
+                }}
+              >
+                ⏮ Đầu
+              </button>
+              <button 
+                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                disabled={currentPage === 1}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #ddd',
+                  background: currentPage === 1 ? '#f5f5f5' : '#fff',
+                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                  borderRadius: '4px'
+                }}
+              >
+                ◀ Trước
+              </button>
+              <span style={{ padding: '0 12px', color: '#333' }}>
+                Trang {currentPage} / {totalPages}
+              </span>
+              <button 
+                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                disabled={currentPage === totalPages}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #ddd',
+                  background: currentPage === totalPages ? '#f5f5f5' : '#fff',
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                  borderRadius: '4px'
+                }}
+              >
+                Sau ▶
+              </button>
+              <button 
+                onClick={() => setCurrentPage(totalPages)}
+                disabled={currentPage === totalPages}
+                style={{
+                  padding: '6px 12px',
+                  border: '1px solid #ddd',
+                  background: currentPage === totalPages ? '#f5f5f5' : '#fff',
+                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                  borderRadius: '4px'
+                }}
+              >
+                Cuối ⏭
+              </button>
+            </div>
+          </div>
+        )}
 
         {filteredProducts.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
@@ -543,365 +1054,538 @@ const Products = () => {
         )}
       </div>
 
+      {/* Context Menu chuột phải */}
+      {contextMenu && (
+        <div
+          style={{
+            position: 'fixed',
+            top: contextMenu.y,
+            left: contextMenu.x,
+            background: 'white',
+            border: '1px solid #ddd',
+            borderRadius: '4px',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            zIndex: 10000,
+            minWidth: '150px'
+          }}
+          onClick={(e) => e.stopPropagation()}
+        >
+          <div
+            onClick={() => {
+              resetForm();
+              setShowModal(true);
+              setEditingItem(null);
+              setContextMenu(null);
+            }}
+            style={{
+              padding: '8px 16px',
+              cursor: 'pointer',
+              borderBottom: '1px solid #f0f0f0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+          >
+            <span>➕</span>
+            <span>Thêm</span>
+          </div>
+          <div
+            onClick={handleContextEdit}
+            style={{
+              padding: '8px 16px',
+              cursor: 'pointer',
+              borderBottom: '1px solid #f0f0f0',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#f5f5f5'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+          >
+            <span>✏️</span>
+            <span>Xem chi tiết</span>
+          </div>
+          <div
+            onClick={handleContextDelete}
+            style={{
+              padding: '8px 16px',
+              cursor: 'pointer',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '8px',
+              color: '#dc3545'
+            }}
+            onMouseEnter={(e) => e.currentTarget.style.background = '#fff5f5'}
+            onMouseLeave={(e) => e.currentTarget.style.background = 'white'}
+          >
+            <span>🗑️</span>
+            <span>Xóa</span>
+          </div>
+        </div>
+      )}
+
       {/* Modal */}
       {showModal && (
         <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '900px', maxHeight: '90vh', overflow: 'auto' }}>
+          <div className="modal-content" style={{ maxWidth: '1400px', width: '95%', maxHeight: '90vh', overflow: 'auto' }}>
             <div className="modal-header">
-              <h3>{editingItem ? 'Chỉnh sửa' : 'Thêm mới'} sản phẩm</h3>
+              <h3>THÔNG TIN HÀNG HÓA</h3>
               <button className="close-btn" onClick={() => setShowModal(false)}>×</button>
             </div>
 
-            <form onSubmit={handleSubmit}>
-              <div className="form-section">
-                <h4>Thông tin cơ bản</h4>
-                <div className="form-grid">
-                  <div className="form-group">
-                    <label>Loại hàng <span className="required">*</span></label>
+            <form onSubmit={handleSubmit} style={{ padding: '0 8px' }}>
+              {/* Thông tin chính */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Loại hàng <span style={{ color: 'red' }}>*</span></label>
+                  <div style={{ display: 'flex', gap: '4px' }}>
                     <select
                       name="category"
                       value={formData.category}
                       onChange={handleInputChange}
                       required
+                      style={{ flex: 1, padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
                     >
                       <option value="">Chọn loại hàng</option>
                       {categories.map(cat => (
                         <option key={cat} value={cat}>{cat}</option>
                       ))}
                     </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Mã vạch</label>
-                    <input
-                      type="text"
-                      name="barcode"
-                      value={formData.barcode}
-                      onChange={handleInputChange}
-                      placeholder="Nhập mã vạch"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Mã hàng hóa <span className="required">*</span></label>
-                    <input
-                      type="text"
-                      name="code"
-                      value={formData.code}
-                      onChange={handleInputChange}
-                      placeholder="Nhập mã hàng hóa"
-                      required
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Hạn sử dụng (tháng)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      name="shelfLife"
-                      value={formData.shelfLife}
-                      onChange={handleInputChange}
-                      placeholder="VD: 24 hoặc 0.5"
-                    />
+                    <button type="button" style={{ width: '32px', padding: '0', background: '#1890ff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '16px' }}>+</button>
                   </div>
                 </div>
-
-                <div className="form-group full-width">
-                  <label>Tên hàng hóa <span className="required">*</span></label>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Mã vạch</label>
                   <input
                     type="text"
-                    name="name"
-                    value={formData.name}
+                    name="barcode"
+                    value={formData.barcode}
                     onChange={handleInputChange}
-                    placeholder="Nhập tên hàng hóa"
+                    placeholder="Mã vạch"
+                    style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Mã hàng <span style={{ color: 'red' }}>*</span></label>
+                  <input
+                    type="text"
+                    name="code"
+                    value={formData.code}
+                    onChange={handleInputChange}
+                    placeholder="Mã hàng"
                     required
-                  />
-                </div>
-
-                <div className="form-group full-width">
-                  <label>Tên hàng VAT</label>
-                  <input
-                    type="text"
-                    name="vatName"
-                    value={formData.vatName}
-                    onChange={handleInputChange}
-                    placeholder="Nhập tên hàng VAT"
-                  />
-                </div>
-
-                <div className="form-group full-width">
-                  <label>Mô tả</label>
-                  <textarea
-                    name="description"
-                    value={formData.description}
-                    onChange={handleInputChange}
-                    rows="2"
-                    placeholder="Nhập mô tả sản phẩm"
+                    style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
                   />
                 </div>
               </div>
 
-              <div className="form-section">
-                <h4>Đơn vị tính gốc</h4>
-                <div className="form-grid">
-                  <div className="form-group">
-                    <label>ĐVT gốc <span className="required">*</span></label>
-                    <select
-                      name="baseUnit"
-                      value={formData.baseUnit}
-                      onChange={handleInputChange}
-                      required
-                    >
-                      <option value="">Chọn đơn vị</option>
-                      {units.map(unit => (
-                        <option key={unit} value={unit}>{unit}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Giá bán lẻ</label>
-                    <input
-                      type="number"
-                      name="retailPrice"
-                      value={formData.retailPrice}
-                      onChange={handleInputChange}
-                      placeholder="Nhập giá bán lẻ"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Giá bán sỉ</label>
-                    <input
-                      type="number"
-                      name="wholesalePrice"
-                      value={formData.wholesalePrice}
-                      onChange={handleInputChange}
-                      placeholder="Nhập giá bán sỉ"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Số kg</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      name="weight"
-                      value={formData.weight}
-                      onChange={handleInputChange}
-                      placeholder="Nhập trọng lượng"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Số khối (m³)</label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      name="volume"
-                      value={formData.volume}
-                      onChange={handleInputChange}
-                      placeholder="Nhập thể tích"
-                    />
-                  </div>
+              {/* Tên hàng */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Tên hàng <span style={{ color: 'red' }}>*</span></label>
+                <input
+                  type="text"
+                  name="name"
+                  value={formData.name}
+                  onChange={handleInputChange}
+                  placeholder="Tên hàng hóa"
+                  required
+                  style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                />
+              </div>
+
+              {/* Tên hàng VAT */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Tên hàng VAT</label>
+                <input
+                  type="text"
+                  name="vatName"
+                  value={formData.vatName}
+                  onChange={handleInputChange}
+                  placeholder="Tên hàng VAT"
+                  style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                />
+              </div>
+
+              {/* Mô tả */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Mô tả</label>
+                <textarea
+                  name="description"
+                  value={formData.description}
+                  onChange={handleInputChange}
+                  rows="2"
+                  placeholder="Mô tả"
+                  style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', resize: 'vertical' }}
+                />
+              </div>
+
+              {/* HSD */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>HSD (Tháng)</label>
+                <input
+                  type="number"
+                  step="0.1"
+                  name="shelfLife"
+                  value={formData.shelfLife}
+                  onChange={handleInputChange}
+                  placeholder="0"
+                  style={{ width: '180px', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                />
+              </div>
+
+              {/* Bảng ĐVT */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#333' }}>ĐVT gốc</label>
+                <div style={{ overflowX: 'auto', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
+                  <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', tableLayout: 'fixed' }}>
+                    <thead>
+                      <tr style={{ background: '#fafafa' }}>
+                        <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>ĐVT</th>
+                        <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Giá nhập</th>
+                        <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Giá bán lẻ</th>
+                        <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Giá bán sỉ</th>
+                        <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '100px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Số Kg</th>
+                        <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '100px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Số khối</th>
+                        <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Tiền vận chuyển</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {/* ĐVT gốc */}
+                      <tr style={{ background: 'white' }}>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <select name="baseUnit" value={formData.baseUnit} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
+                            <option value="">Chọn ĐVT</option>
+                            {units.map(unit => (<option key={unit} value={unit}>{unit}</option>))}
+                          </select>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <input type="number" name="importPrice" value={formData.importPrice} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <input type="number" name="retailPrice" value={formData.retailPrice} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <input type="number" name="wholesalePrice" value={formData.wholesalePrice} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <input type="number" step="0.01" name="weight" value={formData.weight} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <input type="number" step="0.001" name="volume" value={formData.volume} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <input type="number" name="shippingFee" value={formData.shippingFee} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                      </tr>
+                      {/* ĐVT 1 */}
+                      <tr style={{ background: 'white' }}>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', minWidth: '35px' }}>ĐVT 1</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <select name="unit1" value={formData.unit1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
+                              <option value="">Chọn đơn vị tính 1</option>
+                              {units.map(unit => (<option key={unit} value={unit}>{unit}</option>))}
+                            </select>
+                            <input type="number" name="conversion1" value={formData.conversion1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Quy đổi 1" />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Quy đổi 1</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <input type="number" name="importPrice1" value={formData.importPrice1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="number" name="retailDiscount1" value={formData.retailDiscount1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm lẻ" />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán lẻ 1</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <input type="number" name="retailPrice1" value={formData.retailPrice1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="number" style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#f5f5f5' }} placeholder="0" disabled />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán sỉ 1</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <input type="number" name="wholesalePrice1" value={formData.wholesalePrice1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="number" name="wholesaleDiscount1" value={formData.wholesaleDiscount1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm sỉ" />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số Kg 1</label>
+                          </div>
+                          <input type="number" step="0.01" name="weight1" value={formData.weight1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số khối 1</label>
+                          </div>
+                          <input type="number" step="0.001" name="volume1" value={formData.volume1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Tiền vận chuyển 1</label>
+                          </div>
+                          <input type="number" name="shippingFee1" value={formData.shippingFee1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                      </tr>
+                      {/* ĐVT 2 */}
+                      <tr style={{ background: 'white' }}>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', minWidth: '35px' }}>ĐVT 2</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <select name="unit2" value={formData.unit2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
+                              <option value="">Chọn đơn vị tính 2</option>
+                              {units.map(unit => (<option key={unit} value={unit}>{unit}</option>))}
+                            </select>
+                            <input type="number" name="conversion2" value={formData.conversion2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Quy đổi 2" />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Quy đổi 2</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <input type="number" name="importPrice2" value={formData.importPrice2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="number" name="retailDiscount2" value={formData.retailDiscount2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm lẻ" />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán lẻ 2</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <input type="number" name="retailPrice2" value={formData.retailPrice2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="number" style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#f5f5f5' }} placeholder="0" disabled />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán sỉ 2</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <input type="number" name="wholesalePrice2" value={formData.wholesalePrice2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="number" name="wholesaleDiscount2" value={formData.wholesaleDiscount2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm sỉ" />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số Kg 2</label>
+                          </div>
+                          <input type="number" step="0.01" name="weight2" value={formData.weight2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số khối 2</label>
+                          </div>
+                          <input type="number" step="0.001" name="volume2" value={formData.volume2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Tiền vận chuyển 2</label>
+                          </div>
+                          <input type="number" name="shippingFee2" value={formData.shippingFee2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                      </tr>
+                      {/* ĐVT 3 */}
+                      <tr style={{ background: 'white' }}>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', minWidth: '35px' }}>ĐVT 3</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <select name="unit3" value={formData.unit3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
+                              <option value="">Chọn đơn vị tính 3</option>
+                              {units.map(unit => (<option key={unit} value={unit}>{unit}</option>))}
+                            </select>
+                            <input type="number" name="conversion3" value={formData.conversion3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Quy đổi 3" />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Quy đổi 3</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <input type="number" name="importPrice3" value={formData.importPrice3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="number" name="retailDiscount3" value={formData.retailDiscount3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm lẻ" />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán lẻ 3</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <input type="number" name="retailPrice3" value={formData.retailPrice3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="number" style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#f5f5f5' }} placeholder="0" disabled />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán sỉ 3</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <input type="number" name="wholesalePrice3" value={formData.wholesalePrice3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="number" name="wholesaleDiscount3" value={formData.wholesaleDiscount3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm sỉ" />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số Kg 3</label>
+                          </div>
+                          <input type="number" step="0.01" name="weight3" value={formData.weight3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số khối 3</label>
+                          </div>
+                          <input type="number" step="0.001" name="volume3" value={formData.volume3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Tiền vận chuyển 3</label>
+                          </div>
+                          <input type="number" name="shippingFee3" value={formData.shippingFee3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                      </tr>
+                      {/* ĐVT 4 */}
+                      <tr style={{ background: 'white' }}>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', minWidth: '35px' }}>ĐVT 4</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <select name="unit4" value={formData.unit4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
+                              <option value="">Chọn đơn vị tính 4</option>
+                              {units.map(unit => (<option key={unit} value={unit}>{unit}</option>))}
+                            </select>
+                            <input type="number" name="conversion4" value={formData.conversion4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Quy đổi 4" />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Quy đổi 4</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <input type="number" name="importPrice4" value={formData.importPrice4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="number" name="retailDiscount4" value={formData.retailDiscount4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm lẻ" />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán lẻ 4</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <input type="number" name="retailPrice4" value={formData.retailPrice4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="number" style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#f5f5f5' }} placeholder="0" disabled />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán sỉ 4</label>
+                          </div>
+                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
+                            <input type="number" name="wholesalePrice4" value={formData.wholesalePrice4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="number" name="wholesaleDiscount4" value={formData.wholesaleDiscount4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm sỉ" />
+                          </div>
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số Kg 4</label>
+                          </div>
+                          <input type="number" step="0.01" name="weight4" value={formData.weight4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số khối 4</label>
+                          </div>
+                          <input type="number" step="0.001" name="volume4" value={formData.volume4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
+                          <div style={{ marginBottom: '6px' }}>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Tiền vận chuyển 4</label>
+                          </div>
+                          <input type="number" name="shippingFee4" value={formData.shippingFee4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                        </td>
+                      </tr>
+                    </tbody>
+                  </table>
                 </div>
               </div>
 
-              <div className="form-section">
-                <h4>Đơn vị tính 1</h4>
-                <div className="form-grid">
-                  <div className="form-group">
-                    <label>ĐVT1</label>
-                    <select
-                      name="unit1"
-                      value={formData.unit1}
-                      onChange={handleInputChange}
-                    >
-                      <option value="">Chọn đơn vị</option>
-                      {units.map(unit => (
-                        <option key={unit} value={unit}>{unit}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Quy đổi 1</label>
-                    <input
-                      type="number"
-                      name="conversion1"
-                      value={formData.conversion1}
-                      onChange={handleInputChange}
-                      placeholder="Nhập tỷ lệ quy đổi"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Giá bán lẻ 1</label>
-                    <input
-                      type="number"
-                      name="retailPrice1"
-                      value={formData.retailPrice1}
-                      onChange={handleInputChange}
-                      placeholder="Nhập giá bán lẻ"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Giá bán sỉ 1</label>
-                    <input
-                      type="number"
-                      name="wholesalePrice1"
-                      value={formData.wholesalePrice1}
-                      onChange={handleInputChange}
-                      placeholder="Nhập giá bán sỉ"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Số kg 1</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      name="weight1"
-                      value={formData.weight1}
-                      onChange={handleInputChange}
-                      placeholder="Nhập trọng lượng"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Số khối 1</label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      name="volume1"
-                      value={formData.volume1}
-                      onChange={handleInputChange}
-                      placeholder="Nhập thể tích"
-                    />
-                  </div>
+              {/* ĐVT mặc định, Tồn tối thiểu, Chiết khấu */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '12px' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>ĐVT mặc định</label>
+                  <select name="defaultUnit" value={formData.defaultUnit} onChange={handleInputChange} style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
+                    <option value="">Chọn ĐVT</option>
+                    {units.map(unit => (<option key={unit} value={unit}>{unit}</option>))}
+                  </select>
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Tồn tối thiểu</label>
+                  <input type="number" name="minStock" value={formData.minStock} onChange={handleInputChange} placeholder="0" style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Chiết khấu</label>
+                  <input type="number" step="0.1" name="discount" value={formData.discount} onChange={handleInputChange} placeholder="0" style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} />
                 </div>
               </div>
 
-              <div className="form-section">
-                <h4>Đơn vị tính 2</h4>
-                <div className="form-grid">
-                  <div className="form-group">
-                    <label>ĐVT2</label>
-                    <select
-                      name="unit2"
-                      value={formData.unit2}
-                      onChange={handleInputChange}
-                    >
-                      <option value="">Chọn đơn vị</option>
-                      {units.map(unit => (
-                        <option key={unit} value={unit}>{unit}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Quy đổi 2</label>
-                    <input
-                      type="number"
-                      name="conversion2"
-                      value={formData.conversion2}
-                      onChange={handleInputChange}
-                      placeholder="Nhập tỷ lệ quy đổi"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Số kg 2</label>
-                    <input
-                      type="number"
-                      step="0.01"
-                      name="weight2"
-                      value={formData.weight2}
-                      onChange={handleInputChange}
-                      placeholder="Nhập trọng lượng"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Số khối 2</label>
-                    <input
-                      type="number"
-                      step="0.001"
-                      name="volume2"
-                      value={formData.volume2}
-                      onChange={handleInputChange}
-                      placeholder="Nhập thể tích"
-                    />
-                  </div>
+              {/* Ghi chú và Khuyến mãi */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Ghi chú</label>
+                <textarea name="note" value={formData.note} onChange={handleInputChange} rows="2" placeholder="Ghi chú" style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', resize: 'vertical' }} />
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Khuyến mãi</label>
+                <textarea name="promotion" value={formData.promotion} onChange={handleInputChange} rows="2" placeholder="Khuyến mãi" style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', resize: 'vertical' }} />
+              </div>
+
+              {/* Hình ảnh hàng hóa */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Hình ảnh hàng hóa</label>
+                <div style={{ border: '1px dashed #d9d9d9', borderRadius: '4px', padding: '20px', textAlign: 'center', background: '#fafafa' }}>
+                  <label style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '8px', cursor: 'pointer', color: '#1890ff' }}>
+                    <span style={{ fontSize: '24px' }}>📷</span>
+                    <span style={{ fontSize: '13px' }}>Click hoặc di chuyển file vào khung</span>
+                    <input type="file" accept="image/*" style={{ display: 'none' }} />
+                  </label>
                 </div>
               </div>
 
-              <div className="form-section">
-                <h4>Thông tin bổ sung</h4>
-                <div className="form-grid">
-                  <div className="form-group">
-                    <label>ĐVT mặc định</label>
-                    <select
-                      name="defaultUnit"
-                      value={formData.defaultUnit}
-                      onChange={handleInputChange}
-                    >
-                      <option value="">Chọn đơn vị mặc định</option>
-                      {units.map(unit => (
-                        <option key={unit} value={unit}>{unit}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div className="form-group">
-                    <label>Tồn tối thiểu</label>
-                    <input
-                      type="number"
-                      name="minStock"
-                      value={formData.minStock}
-                      onChange={handleInputChange}
-                      placeholder="Số lượng tồn tối thiểu"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Chiết khấu (%)</label>
-                    <input
-                      type="number"
-                      step="0.1"
-                      name="discount"
-                      value={formData.discount}
-                      onChange={handleInputChange}
-                      placeholder="Phần trăm chiết khấu"
-                    />
-                  </div>
-                  <div className="form-group">
-                    <label>Trạng thái</label>
-                    <select
-                      name="status"
-                      value={formData.status}
-                      onChange={handleInputChange}
-                    >
-                      <option value="active">Hoạt động</option>
-                      <option value="inactive">Ngưng hoạt động</option>
-                    </select>
-                  </div>
-                </div>
-
-                <div className="form-group full-width">
-                  <label>Ghi chú</label>
-                  <textarea
-                    name="note"
-                    value={formData.note}
-                    onChange={handleInputChange}
-                    rows="2"
-                    placeholder="Nhập ghi chú về sản phẩm"
-                  />
-                </div>
-
-                <div className="form-group full-width">
-                  <label>Khuyến mãi</label>
-                  <textarea
-                    name="promotion"
-                    value={formData.promotion}
-                    onChange={handleInputChange}
-                    rows="2"
-                    placeholder="Nhập thông tin chương trình khuyến mãi"
-                  />
-                </div>
+              {/* Trạng thái */}
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                  <input type="checkbox" checked={formData.status === 'inactive'} onChange={(e) => setFormData({...formData, status: e.target.checked ? 'inactive' : 'active'})} style={{ width: '16px', height: '16px' }} />
+                  <span>Ngưng hoạt động</span>
+                </label>
               </div>
 
-              <div className="form-actions">
-                <button type="button" onClick={() => setShowModal(false)} className="btn btn-secondary">
-                  Hủy
+              {/* Buttons */}
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '16px', borderTop: '1px solid #e8e8e8' }}>
+                <button type="submit" disabled={loading} style={{ padding: '8px 20px', fontSize: '13px', fontWeight: '500', background: '#52c41a', color: 'white', border: 'none', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
+                  💾 {editingItem ? 'Lưu' : 'Lưu'}
                 </button>
-                <button type="submit" className="btn btn-primary">
-                  {editingItem ? 'Cập nhật' : 'Thêm mới'}
+                {!editingItem && (
+                  <button type="button" onClick={handleSaveCopy} disabled={loading} style={{ padding: '8px 20px', fontSize: '13px', fontWeight: '500', background: '#1890ff', color: 'white', border: 'none', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
+                    📋 Lưu Copy
+                  </button>
+                )}
+                <button type="button" onClick={() => setShowModal(false)} style={{ padding: '8px 20px', fontSize: '13px', fontWeight: '500', background: '#ff4d4f', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                  ❌ Đóng
                 </button>
               </div>
             </form>
