@@ -13,6 +13,12 @@ const Products = () => {
   const [products, setProducts] = useState([]);
   const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters, showFilterPopup } = useColumnFilter();
   
+  // Modal thêm loại hàng
+  const [showCategoryModal, setShowCategoryModal] = useState(false);
+  const [categoryForm, setCategoryForm] = useState({ code: '', name: '', note: '', noGroupOrder: false });
+  const [categories, setCategories] = useState([]);
+  const [units, setUnits] = useState([]);
+  
   // Phân trang
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 10;
@@ -27,6 +33,8 @@ const Products = () => {
   // Load data from API
   useEffect(() => {
     fetchProducts();
+    fetchCategories();
+    fetchUnits();
   }, []);
 
   const fetchProducts = async () => {
@@ -39,6 +47,24 @@ const Products = () => {
       alert('Không thể tải dữ liệu sản phẩm. Vui lòng kiểm tra kết nối API.');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const fetchCategories = async () => {
+    try {
+      const data = await api.get(API_ENDPOINTS.productCategories);
+      setCategories(data);
+    } catch (error) {
+      console.error('Error fetching categories:', error);
+    }
+  };
+
+  const fetchUnits = async () => {
+    try {
+      const data = await api.get(API_ENDPOINTS.units);
+      setUnits(data);
+    } catch (error) {
+      console.error('Error fetching units:', error);
     }
   };
 
@@ -105,8 +131,52 @@ const Products = () => {
     status: 'active'
   });
 
-  const categories = ['LH001', 'LH002', 'LH003'];
-  const units = ['Cái', 'Kg', 'Thùng', 'Gói', 'Chai', 'Hộp', 'Bao'];
+  // Xử lý thêm loại hàng
+  const handleCategoryInputChange = (e) => {
+    const { name, value } = e.target;
+    setCategoryForm({ ...categoryForm, [name]: value });
+  };
+
+  const handleAddCategory = async (e) => {
+    e.preventDefault();
+    if (!categoryForm.code || !categoryForm.name) {
+      alert('Vui lòng nhập đầy đủ thông tin!');
+      return;
+    }
+    // Kiểm tra trùng mã
+    if (categories.some(cat => cat.code === categoryForm.code)) {
+      alert('Mã loại hàng đã tồn tại!');
+      return;
+    }
+    try {
+      setLoading(true);
+      // Gọi API để lưu loại hàng mới
+      const newCategory = {
+        code: categoryForm.code,
+        name: categoryForm.name,
+        noGroupOrder: categoryForm.noGroupOrder,
+        note: categoryForm.note,
+        status: 'active'
+      };
+      
+      const savedCategory = await api.post(API_ENDPOINTS.productCategories, newCategory);
+      
+      // Cập nhật danh sách categories
+      await fetchCategories();
+      
+      // Tự động chọn loại hàng vừa tạo
+      setFormData({ ...formData, category: savedCategory.code });
+      
+      alert('Thêm loại hàng thành công!');
+      setShowCategoryModal(false);
+      setCategoryForm({ code: '', name: '', note: '', noGroupOrder: false });
+    } catch (error) {
+      console.error('Error adding category:', error);
+      alert('Có lỗi xảy ra khi thêm loại hàng!');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   const handleInputChange = (e) => {
     const { name, value, type } = e.target;
@@ -520,7 +590,7 @@ const Products = () => {
 
   // Cột và độ rộng mặc định
   // --- CẤU HÌNH CỘT, DRAG, LƯU LOCALSTORAGE ---
-  const PRODUCT_COLS_KEY = 'products_table_cols_v2'; // v2 để reset cấu hình cũ
+  const PRODUCT_COLS_KEY = 'products_table_cols_v3'; // v3 để đảm bảo cột STT ở đầu
   const productColumns = [
     { key: 'select', label: 'STT', fixed: true },
     { key: 'category', label: 'Loại hàng' },
@@ -594,7 +664,11 @@ const Products = () => {
     try {
       const saved = JSON.parse(localStorage.getItem(PRODUCT_COLS_KEY));
       if (saved && Array.isArray(saved.visibleCols) && Array.isArray(saved.order)) {
-        return [saved.visibleCols, saved.order];
+        // Đảm bảo các cột fixed luôn ở đúng vị trí (select đầu, actions cuối)
+        const fixedCols = productColumns.filter(col => col.fixed).map(col => col.key);
+        const nonFixedCols = saved.order.filter(key => !productColumns.find(col => col.key === key)?.fixed);
+        const correctedOrder = ['select', ...nonFixedCols.filter(k => k !== 'select' && k !== 'actions'), 'actions'];
+        return [saved.visibleCols, correctedOrder];
       }
     } catch {}
     return [defaultProductVisible, defaultProductOrder];
@@ -609,6 +683,9 @@ const Products = () => {
   // Drag state cho popup
   const [popupDragIndex, setPopupDragIndex] = useState(null);
   const [popupDragOverIndex, setPopupDragOverIndex] = useState(null);
+  // Drag state cho header bảng
+  const [headerDragIndex, setHeaderDragIndex] = useState(null);
+  const [headerDragOverIndex, setHeaderDragOverIndex] = useState(null);
   // Lưu cấu hình cột vào localStorage
   const saveProductColConfig = (visibleCols, order) => {
     localStorage.setItem(PRODUCT_COLS_KEY, JSON.stringify({ visibleCols, order }));
@@ -640,8 +717,8 @@ const Products = () => {
     const dragged = cols[popupDragIndex];
     cols.splice(popupDragIndex, 1);
     cols.splice(popupDragOverIndex, 0, dragged);
-    // Thêm lại các cột fixed cuối cùng
-    const newOrder = [...cols, ...productColumns.filter(col => col.fixed).map(col => col.key)];
+    // Đảm bảo select ở đầu, actions ở cuối
+    const newOrder = ['select', ...cols.filter(k => k !== 'select' && k !== 'actions'), 'actions'];
     setProductColOrder(newOrder);
     setPopupDragIndex(null); setPopupDragOverIndex(null);
   };
@@ -669,20 +746,19 @@ const Products = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showProductColSetting]);
 
-  // Kéo cột
+  // Kéo cột để thay đổi kích thước
   const handleProductMouseDown = (index, e, edge) => {
     e.preventDefault();
+    e.stopPropagation();
     const startX = e.clientX;
     const startWidths = [...productColWidths];
     const onMouseMove = (moveEvent) => {
       const delta = moveEvent.clientX - startX;
       setProductColWidths((widths) => {
         const newWidths = [...widths];
-        if (edge === 'right' && index < widths.length - 1) {
+        if (edge === 'right') {
           newWidths[index] = Math.max(50, startWidths[index] + delta);
-          newWidths[index + 1] = Math.max(50, startWidths[index + 1] - delta);
         } else if (edge === 'left' && index > 0) {
-          newWidths[index] = Math.max(50, startWidths[index] - delta);
           newWidths[index - 1] = Math.max(50, startWidths[index - 1] + delta);
         }
         return newWidths;
@@ -696,11 +772,77 @@ const Products = () => {
     document.addEventListener('mouseup', onMouseUp);
   };
 
+  // Drag & drop để thay đổi thứ tự cột trên header
+  const handleHeaderDragStart = (key, idx) => {
+    const col = productColumns.find(c => c.key === key);
+    if (col?.fixed) return; // Không cho kéo cột cố định
+    setHeaderDragIndex(idx);
+  };
+
+  const handleHeaderDragOver = (idx, e) => {
+    e.preventDefault();
+    const col = productColumns.find(c => c.key === productColOrder[idx]);
+    if (col?.fixed) return; // Không cho thả vào cột cố định
+    setHeaderDragOverIndex(idx);
+  };
+
+  const handleHeaderDrop = (idx) => {
+    if (headerDragIndex === null || headerDragIndex === idx) {
+      setHeaderDragIndex(null);
+      setHeaderDragOverIndex(null);
+      return;
+    }
+    
+    const targetCol = productColumns.find(c => c.key === productColOrder[idx]);
+    if (targetCol?.fixed) {
+      setHeaderDragIndex(null);
+      setHeaderDragOverIndex(null);
+      return;
+    }
+
+    // Chỉ di chuyển các cột không fixed
+    const nonFixedCols = productColOrder.filter(k => !productColumns.find(col => col.key === k)?.fixed);
+    const draggedKey = productColOrder[headerDragIndex];
+    
+    // Tìm vị trí mới trong danh sách non-fixed
+    const oldIdx = nonFixedCols.indexOf(draggedKey);
+    const newIdx = nonFixedCols.indexOf(productColOrder[idx]);
+    
+    if (oldIdx !== -1 && newIdx !== -1) {
+      nonFixedCols.splice(oldIdx, 1);
+      nonFixedCols.splice(newIdx, 0, draggedKey);
+    }
+    
+    // Đảm bảo select ở đầu, actions ở cuối
+    const newOrder = ['select', ...nonFixedCols.filter(k => k !== 'select' && k !== 'actions'), 'actions'];
+    setProductColOrder(newOrder);
+    setHeaderDragIndex(null);
+    setHeaderDragOverIndex(null);
+  };
+
+  const handleHeaderDragEnd = () => {
+    setHeaderDragIndex(null);
+    setHeaderDragOverIndex(null);
+  };
+
   return (
     <div className="setup-page">
       <div className="page-header">
         <h1>Danh sách hàng hóa</h1>
         <p>Quản lý thông tin chi tiết sản phẩm và hàng hóa</p>
+        <div style={{ 
+          marginTop: '12px',
+          padding: '8px 16px',
+          background: '#e6f7ff',
+          border: '1px solid #91d5ff',
+          borderRadius: '4px',
+          display: 'inline-block',
+          fontSize: '14px',
+          color: '#0050b3',
+          fontWeight: 500
+        }}>
+          Tổng {products.length > 0 ? products.length.toLocaleString('vi-VN') : 0} sản phẩm
+        </div>
       </div>
 
       <div className="data-table-container">
@@ -770,14 +912,16 @@ const Products = () => {
                       // Thêm các cột chưa cố định vào visible, giữ nguyên các cột cố định nếu đã có
                       const newVisible = Array.from(new Set([...productVisibleCols, ...nonFixedCols, ...productColumns.filter(col => col.fixed).map(col => col.key)]));
                       setProductVisibleCols(newVisible);
-                      setProductColOrder([...nonFixedCols, ...productColumns.filter(col => col.fixed).map(col => col.key)]);
-                      saveProductColConfig(newVisible, [...nonFixedCols, ...productColumns.filter(col => col.fixed).map(col => col.key)]);
+                      const newOrder = ['select', ...nonFixedCols.filter(k => k !== 'select' && k !== 'actions'), 'actions'];
+                      setProductColOrder(newOrder);
+                      saveProductColConfig(newVisible, newOrder);
                     } else {
                       // Bỏ các cột chưa cố định khỏi visible, giữ lại cột cố định
                       const fixedCols = productColumns.filter(col => col.fixed).map(col => col.key);
                       setProductVisibleCols(fixedCols);
-                      setProductColOrder([...nonFixedCols, ...fixedCols]);
-                      saveProductColConfig(fixedCols, [...nonFixedCols, ...fixedCols]);
+                      const newOrder = ['select', ...nonFixedCols.filter(k => k !== 'select' && k !== 'actions'), 'actions'];
+                      setProductColOrder(newOrder);
+                      saveProductColConfig(fixedCols, newOrder);
                     }
                   }}
                   style={{ marginRight: 6 }}
@@ -788,6 +932,15 @@ const Products = () => {
                   onClick={handleResetCols}
                 >Làm lại</button>
               </div>
+              
+              {/* Cột cố định trái (STT) */}
+              <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Cố định trái</div>
+              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8, opacity: 0.7 }}>
+                <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
+                <input type="checkbox" checked disabled style={{ marginRight: 6 }} />
+                <span>STT</span>
+              </div>
+              
               <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
               {productColOrder.filter(key => !productColumns.find(col => col.key === key)?.fixed).map((key, idx) => {
                 const col = productColumns.find(c => c.key === key);
@@ -804,8 +957,8 @@ const Products = () => {
                       const dragged = cols[popupDragIndex];
                       cols.splice(popupDragIndex, 1);
                       cols.splice(idx, 0, dragged);
-                      // Thêm lại các cột fixed cuối cùng
-                      const newOrder = [...cols, ...productColumns.filter(col => col.fixed).map(col => col.key)];
+                      // Đảm bảo select ở đầu, actions ở cuối
+                      const newOrder = ['select', ...cols.filter(k => k !== 'select' && k !== 'actions'), 'actions'];
                       setProductColOrder(newOrder);
                       setPopupDragIndex(null); setPopupDragOverIndex(null);
                     }}
@@ -848,26 +1001,48 @@ const Products = () => {
                   // Cột STT với checkbox
                   if (col.key === 'select') {
                     return (
-                      <th key={col.key} style={{ position: 'relative', width: '60px' }}>
-                        <input 
-                          type="checkbox"
-                          checked={selectedRows.length === paginatedProducts.length && paginatedProducts.length > 0}
-                          onChange={handleSelectAll}
-                        />
+                      <th 
+                        key={col.key} 
+                        style={{ 
+                          position: 'relative', 
+                          width: '80px',
+                          minWidth: '80px',
+                          textAlign: 'center',
+                          background: '#fafafa',
+                          cursor: 'default'
+                        }}
+                      >
+                        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                          <input 
+                            type="checkbox"
+                            checked={selectedRows.length === paginatedProducts.length && paginatedProducts.length > 0}
+                            onChange={handleSelectAll}
+                            style={{ cursor: 'pointer' }}
+                          />
+                          <span>STT</span>
+                        </div>
                       </th>
                     );
                   }
                   
+                  const isDragging = headerDragIndex === idx;
+                  const isDragOver = headerDragOverIndex === idx && headerDragIndex !== null && headerDragIndex !== idx;
+                  const canDrag = !col.fixed;
+                  
                   return (
-                    <th key={col.key} style={{ position: 'relative' }}>
-                      {/* Mép trái */}
-                      {idx > 0 && productVisibleCols.includes(arr[idx - 1]) && (
-                        <span
-                          className="col-resizer left"
-                          onMouseDown={e => handleProductMouseDown(idx, e, 'left')}
-                          style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
-                        />
-                      )}
+                    <th 
+                      key={col.key} 
+                      draggable={canDrag}
+                      onDragStart={() => canDrag && handleHeaderDragStart(col.key, idx)}
+                      onDragOver={(e) => handleHeaderDragOver(idx, e)}
+                      onDrop={() => handleHeaderDrop(idx)}
+                      onDragEnd={handleHeaderDragEnd}
+                      style={{ 
+                        position: 'relative',
+                        opacity: isDragging ? 0.5 : 1,
+                        background: isDragOver ? '#e6f7ff' : undefined,
+                        cursor: canDrag ? 'move' : 'default'
+                      }}>
                       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
                         <span>{col.label}</span>
                         {col.key !== 'actions' && (
@@ -888,14 +1063,22 @@ const Products = () => {
                         )}
                       </div>
                       {col.key !== 'actions' && col.key !== 'select' && renderFilterPopup(col.key, col.label)}
-                      {/* Mép phải */}
-                      {idx < arr.length - 1 && productVisibleCols.includes(arr[idx + 1]) && (
-                        <span
-                          className="col-resizer right"
-                          onMouseDown={e => handleProductMouseDown(idx, e, 'right')}
-                          style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
-                        />
-                      )}
+                      {/* Mép phải để resize */}
+                      <span
+                        className="col-resizer right"
+                        onMouseDown={e => handleProductMouseDown(idx, e, 'right')}
+                        style={{ 
+                          position: 'absolute', 
+                          right: -3, 
+                          top: 0, 
+                          height: '100%', 
+                          width: 6, 
+                          cursor: 'col-resize', 
+                          zIndex: 10,
+                          background: 'transparent'
+                        }}
+                        title="Kéo để thay đổi kích thước cột"
+                      />
                     </th>
                   );
                 })}
@@ -916,14 +1099,17 @@ const Products = () => {
                     // Cột STT với checkbox
                     if (col.key === 'select') {
                       return (
-                        <td key={col.key} style={{ textAlign: 'center' }}>
-                          <input 
-                            type="checkbox"
-                            checked={selectedRows.includes(product.id)}
-                            onChange={() => handleSelectRow(product.id)}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                          <span style={{ marginLeft: '8px' }}>{startIndex + index + 1}</span>
+                        <td key={col.key} style={{ textAlign: 'center', background: '#fafafa' }}>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', gap: '8px' }}>
+                            <input 
+                              type="checkbox"
+                              checked={selectedRows.includes(product.id)}
+                              onChange={() => handleSelectRow(product.id)}
+                              onClick={(e) => e.stopPropagation()}
+                              style={{ cursor: 'pointer' }}
+                            />
+                            <span>{startIndex + index + 1}</span>
+                          </div>
                         </td>
                       );
                     }
@@ -1126,6 +1312,81 @@ const Products = () => {
         </div>
       )}
 
+      {/* Modal Thêm Loại Hàng */}
+      {showCategoryModal && (
+        <div className="modal-overlay">
+          <div className="modal-content" style={{ maxWidth: '500px', width: '90%' }}>
+            <div className="modal-header">
+              <h3>THÔNG TIN LOẠI HÀNG</h3>
+              <button className="close-btn" onClick={() => setShowCategoryModal(false)}>×</button>
+            </div>
+
+            <form onSubmit={handleAddCategory} style={{ padding: '0 8px' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Mã loại <span style={{ color: 'red' }}>*</span></label>
+                <input
+                  type="text"
+                  name="code"
+                  value={categoryForm.code}
+                  onChange={handleCategoryInputChange}
+                  placeholder="Nhập mã loại"
+                  required
+                  style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Tên loại <span style={{ color: 'red' }}>*</span></label>
+                <input
+                  type="text"
+                  name="name"
+                  value={categoryForm.name}
+                  onChange={handleCategoryInputChange}
+                  placeholder="Nhập tên loại"
+                  required
+                  style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    name="noGroupOrder"
+                    checked={categoryForm.noGroupOrder}
+                    onChange={(e) => setCategoryForm({...categoryForm, noGroupOrder: e.target.checked})}
+                    style={{ width: '16px', height: '16px' }} 
+                  />
+                  <span>Không cập đơn hàng</span>
+                </label>
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Ghi chú</label>
+                <textarea
+                  name="note"
+                  value={categoryForm.note}
+                  onChange={handleCategoryInputChange}
+                  rows="3"
+                  placeholder="Ghi chú"
+                  style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Buttons */}
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '16px', borderTop: '1px solid #e8e8e8' }}>
+                <button type="submit" disabled={loading} style={{ padding: '8px 20px', fontSize: '13px', fontWeight: '500', background: '#1890ff', color: 'white', border: 'none', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
+                  💾 Lưu lại
+                </button>
+                <button type="button" onClick={() => setShowCategoryModal(false)} style={{ padding: '8px 20px', fontSize: '13px', fontWeight: '500', background: '#ff4d4f', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                  ❌ Đóng
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
       {/* Modal */}
       {showModal && (
         <div className="modal-overlay">
@@ -1150,10 +1411,10 @@ const Products = () => {
                     >
                       <option value="">Chọn loại hàng</option>
                       {categories.map(cat => (
-                        <option key={cat} value={cat}>{cat}</option>
+                        <option key={cat.id} value={cat.code}>{cat.name}</option>
                       ))}
                     </select>
-                    <button type="button" style={{ width: '32px', padding: '0', background: '#1890ff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '16px' }}>+</button>
+                    <button type="button" onClick={() => setShowCategoryModal(true)} style={{ width: '32px', padding: '0', background: '#1890ff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '16px' }}>+</button>
                   </div>
                 </div>
                 <div>
@@ -1257,7 +1518,7 @@ const Products = () => {
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                           <select name="baseUnit" value={formData.baseUnit} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                             <option value="">Chọn ĐVT</option>
-                            {units.map(unit => (<option key={unit} value={unit}>{unit}</option>))}
+                            {units.map(unit => (<option key={unit.id} value={unit.code}>{unit.name}</option>))}
                           </select>
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
@@ -1288,7 +1549,7 @@ const Products = () => {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <select name="unit1" value={formData.unit1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                               <option value="">Chọn đơn vị tính 1</option>
-                              {units.map(unit => (<option key={unit} value={unit}>{unit}</option>))}
+                              {units.map(unit => (<option key={unit.id} value={unit.code}>{unit.name}</option>))}
                             </select>
                             <input type="number" name="conversion1" value={formData.conversion1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Quy đổi 1" />
                           </div>
@@ -1348,7 +1609,7 @@ const Products = () => {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <select name="unit2" value={formData.unit2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                               <option value="">Chọn đơn vị tính 2</option>
-                              {units.map(unit => (<option key={unit} value={unit}>{unit}</option>))}
+                              {units.map(unit => (<option key={unit.id} value={unit.code}>{unit.name}</option>))}
                             </select>
                             <input type="number" name="conversion2" value={formData.conversion2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Quy đổi 2" />
                           </div>
@@ -1408,7 +1669,7 @@ const Products = () => {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <select name="unit3" value={formData.unit3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                               <option value="">Chọn đơn vị tính 3</option>
-                              {units.map(unit => (<option key={unit} value={unit}>{unit}</option>))}
+                              {units.map(unit => (<option key={unit.id} value={unit.code}>{unit.name}</option>))}
                             </select>
                             <input type="number" name="conversion3" value={formData.conversion3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Quy đổi 3" />
                           </div>
@@ -1468,7 +1729,7 @@ const Products = () => {
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <select name="unit4" value={formData.unit4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                               <option value="">Chọn đơn vị tính 4</option>
-                              {units.map(unit => (<option key={unit} value={unit}>{unit}</option>))}
+                              {units.map(unit => (<option key={unit.id} value={unit.code}>{unit.name}</option>))}
                             </select>
                             <input type="number" name="conversion4" value={formData.conversion4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Quy đổi 4" />
                           </div>
@@ -1530,7 +1791,7 @@ const Products = () => {
                   <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>ĐVT mặc định</label>
                   <select name="defaultUnit" value={formData.defaultUnit} onChange={handleInputChange} style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                     <option value="">Chọn ĐVT</option>
-                    {units.map(unit => (<option key={unit} value={unit}>{unit}</option>))}
+                    {units.map(unit => (<option key={unit.id} value={unit.code}>{unit.name}</option>))}
                   </select>
                 </div>
                 <div>
