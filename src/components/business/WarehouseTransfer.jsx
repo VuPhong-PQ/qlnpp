@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import './BusinessPage.css';
+import { removeVietnameseTones } from '../../utils/searchUtils';
 
 const WarehouseTransfer = () => {
   const [showModal, setShowModal] = useState(false);
@@ -87,8 +88,10 @@ const WarehouseTransfer = () => {
   };
 
   const filteredTransfers = transfers.filter(transfer => {
-    const matchesSearch = transfer.transferNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         transfer.employee.toLowerCase().includes(searchTerm.toLowerCase());
+    const normalizedSearch = removeVietnameseTones(searchTerm.toLowerCase());
+    const normalizedNumber = removeVietnameseTones(transfer.transferNumber.toLowerCase());
+    const normalizedEmployee = removeVietnameseTones(transfer.employee.toLowerCase());
+    const matchesSearch = normalizedNumber.includes(normalizedSearch) || normalizedEmployee.includes(normalizedSearch);
     
     let matchesDate = true;
     if (searchFromDate || searchToDate) {

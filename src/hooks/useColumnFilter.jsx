@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
+import { removeVietnameseTones } from '../utils/searchUtils';
 
 export const useColumnFilter = () => {
   const [columnFilters, setColumnFilters] = useState({});
@@ -17,20 +18,23 @@ export const useColumnFilter = () => {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showFilterPopup]);
 
-  // Hàm filter dữ liệu
+  // Hàm filter dữ liệu với hỗ trợ tiếng Việt không dấu
   const applyFilters = (data, searchTerm = '', searchFields = []) => {
     if (!Array.isArray(data)) return [];
     
     return data.filter(item => {
-      // Search term filter
+      // Search term filter - hỗ trợ tiếng Việt không dấu
       if (searchTerm && searchFields.length > 0) {
-        const matchesSearch = searchFields.some(field => 
-          item[field]?.toString().toLowerCase().includes(searchTerm.toLowerCase())
-        );
+        const normalizedSearch = removeVietnameseTones(searchTerm.toLowerCase());
+        const matchesSearch = searchFields.some(field => {
+          const fieldValue = item[field]?.toString() || '';
+          const normalizedValue = removeVietnameseTones(fieldValue.toLowerCase());
+          return normalizedValue.includes(normalizedSearch);
+        });
         if (!matchesSearch) return false;
       }
 
-      // Column filters
+      // Column filters - hỗ trợ tiếng Việt không dấu
       for (const [key, value] of Object.entries(columnFilters)) {
         if (!value) continue;
         
@@ -41,8 +45,10 @@ export const useColumnFilter = () => {
           if (value.from && new Date(itemValue) < new Date(value.from)) return false;
           if (value.to && new Date(itemValue) > new Date(value.to)) return false;
         } else if (typeof value === 'string') {
-          // Text filters
-          if (!itemValue?.toString().toLowerCase().includes(value.toLowerCase())) return false;
+          // Text filters - hỗ trợ tiếng Việt không dấu
+          const normalizedFilter = removeVietnameseTones(value.toLowerCase());
+          const normalizedItemValue = removeVietnameseTones((itemValue?.toString() || '').toLowerCase());
+          if (!normalizedItemValue.includes(normalizedFilter)) return false;
         }
       }
       

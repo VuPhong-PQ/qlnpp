@@ -5,6 +5,7 @@ import './ImportGoods.css';
 import { Table, Button, Space, Popconfirm, Input, Modal } from 'antd';
 import { SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import { removeVietnameseTones } from '../../utils/searchUtils';
 
 const ImportGoods = () => {
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, record: null });
@@ -143,11 +144,17 @@ const ImportGoods = () => {
   };
 
   const filteredImports = imports.filter(importItem => {
-    const matchesSearch = importItem.importNumber.toLowerCase().includes(searchTerm.toLowerCase()) ||
-                         importItem.employee.toLowerCase().includes(searchTerm.toLowerCase());
+    const normalizedSearch = removeVietnameseTones(searchTerm.toLowerCase());
+    const normalizedNumber = removeVietnameseTones(importItem.importNumber.toLowerCase());
+    const normalizedEmployee = removeVietnameseTones(importItem.employee.toLowerCase());
+    const matchesSearch = normalizedNumber.includes(normalizedSearch) || normalizedEmployee.includes(normalizedSearch);
+    
     const matchesType = !importType || importItem.importType === importType;
     const matchesEmployee = !employee || importItem.employee === employee;
-    const matchesCode = !searchCode || importItem.importNumber.toLowerCase().includes(searchCode.toLowerCase());
+    
+    const normalizedCode = removeVietnameseTones(searchCode.toLowerCase());
+    const matchesCode = !searchCode || normalizedNumber.includes(normalizedCode);
+    
     // Lọc theo khoảng ngày nhập (so sánh yyyy-mm-dd)
     let matchesDate = true;
     if (dateFrom && dateTo) {
@@ -338,10 +345,18 @@ const ImportGoods = () => {
             onPressEnter={()=>setShowSearchModal(false)}
           />
           <div style={{maxHeight:180, overflowY:'auto'}}>
-            {imports.filter(i=>i.importNumber.toLowerCase().includes(searchCode.toLowerCase())).map(i=>(
+            {imports.filter(i=>{
+              const normalized = removeVietnameseTones(i.importNumber.toLowerCase());
+              const normalizedSearch = removeVietnameseTones(searchCode.toLowerCase());
+              return normalized.includes(normalizedSearch);
+            }).map(i=>(
               <div key={i.id} style={{padding:'4px 0', cursor:'pointer', color:'#1677ff'}} onClick={()=>{setSearchCode(i.importNumber); setShowSearchModal(false);}}>{i.importNumber}</div>
             ))}
-            {imports.filter(i=>i.importNumber.toLowerCase().includes(searchCode.toLowerCase())).length===0 && <div style={{color:'#bbb'}}>Không có số phiếu</div>}
+            {imports.filter(i=>{
+              const normalized = removeVietnameseTones(i.importNumber.toLowerCase());
+              const normalizedSearch = removeVietnameseTones(searchCode.toLowerCase());
+              return normalized.includes(normalizedSearch);
+            }).length===0 && <div style={{color:'#bbb'}}>Không có số phiếu</div>}
           </div>
         </Modal>
       </div>
