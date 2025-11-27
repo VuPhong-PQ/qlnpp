@@ -211,6 +211,26 @@ const Products = () => {
     });
   };
 
+  // Helpers to format price inputs with comma separators (display only)
+  const formatNumberWithCommas = (num) => {
+    if (num === null || num === undefined || num === '') return '';
+    const n = Number(num) || 0;
+    return n.toLocaleString('en-US');
+  };
+
+  const parseNumberFromString = (str) => {
+    if (str === null || str === undefined || str === '') return 0;
+    const cleaned = String(str).replace(/,/g, '').replace(/[^0-9.\-]/g, '');
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? 0 : parsed;
+  };
+
+  const handlePriceInputChange = (e) => {
+    const { name, value } = e.target;
+    const numeric = parseNumberFromString(value);
+    setFormData({ ...formData, [name]: numeric });
+  };
+
   const handleSubmit = async (e) => {
     e.preventDefault();
     try {
@@ -1558,8 +1578,8 @@ const Products = () => {
 
       {/* Modal Thêm Loại Hàng */}
       {showCategoryModal && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '500px', width: '90%' }}>
+        <div className="modal-overlay" style={{ zIndex: 1100 }}>
+          <div className="modal-content" style={{ maxWidth: '500px', width: '90%', zIndex: 1101 }}>
             <div className="modal-header">
               <h3>THÔNG TIN LOẠI HÀNG</h3>
               <button className="close-btn" onClick={() => setShowCategoryModal(false)}>×</button>
@@ -1686,68 +1706,68 @@ const Products = () => {
                 </div>
               </div>
 
-              {/* Tên hàng */}
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Tên hàng <span style={{ color: 'red' }}>*</span></label>
-                <input
-                  type="text"
-                  name="name"
-                  value={formData.name}
-                  onChange={handleInputChange}
-                  placeholder="Tên hàng hóa"
-                  required
-                  style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
-                />
+              {/* Tên hàng và Tên hàng VAT (cùng hàng) */}
+              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '16px', marginBottom: '12px', alignItems: 'start' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Tên hàng <span style={{ color: 'red' }}>*</span></label>
+                  <input
+                    type="text"
+                    name="name"
+                    value={formData.name}
+                    onChange={handleInputChange}
+                    placeholder="Tên hàng hóa"
+                    required
+                    style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Tên hàng VAT</label>
+                  <input
+                    type="text"
+                    name="vatName"
+                    value={formData.vatName}
+                    onChange={handleInputChange}
+                    placeholder="Tên hàng VAT"
+                    style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                  />
+                </div>
               </div>
 
-              {/* Tên hàng VAT */}
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Tên hàng VAT</label>
-                <input
-                  type="text"
-                  name="vatName"
-                  value={formData.vatName}
-                  onChange={handleInputChange}
-                  placeholder="Tên hàng VAT"
-                  style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
-                />
-              </div>
-
-              {/* Mô tả */}
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Mô tả</label>
-                <textarea
-                  name="description"
-                  value={formData.description}
-                  onChange={handleInputChange}
-                  rows="2"
-                  placeholder="Mô tả"
-                  style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', resize: 'vertical' }}
-                />
-              </div>
-
-              {/* HSD */}
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>HSD (Tháng)</label>
-                <input
-                  type="number"
-                  step="0.1"
-                  name="shelfLife"
-                  value={formData.shelfLife}
-                  onChange={handleInputChange}
-                  placeholder="0"
-                  style={{ width: '180px', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
-                />
+              {/* Mô tả và HSD trên cùng một hàng (tỷ lệ 90% / 10%) */}
+              <div style={{ display: 'grid', gridTemplateColumns: '9fr 1fr', gap: '16px', marginBottom: '12px', alignItems: 'start' }}>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Mô tả</label>
+                  <textarea
+                    name="description"
+                    value={formData.description}
+                    onChange={handleInputChange}
+                    rows="2"
+                    placeholder="Mô tả"
+                    style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', resize: 'vertical' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>HSD (Tháng)</label>
+                  <input
+                    type="number"
+                    step="0.1"
+                    name="shelfLife"
+                    value={formData.shelfLife}
+                    onChange={handleInputChange}
+                    placeholder="0"
+                    style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                  />
+                </div>
               </div>
 
               {/* Bảng ĐVT */}
               <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '8px', fontSize: '13px', fontWeight: '600', color: '#333' }}>ĐVT gốc</label>
+                
                 <div style={{ overflowX: 'auto', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', tableLayout: 'fixed' }}>
                     <thead>
                       <tr style={{ background: '#fafafa' }}>
-                        <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>ĐVT</th>
+                        <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>ĐVT Gốc</th>
                         <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Giá bán lẻ</th>
                         <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Giá bán sỉ</th>
                         <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '100px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Số Kg</th>
@@ -1764,10 +1784,10 @@ const Products = () => {
                           </select>
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <input type="number" name="retailPrice" value={formData.retailPrice} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                          <input type="text" name="retailPrice" value={formatNumberWithCommas(formData.retailPrice)} onChange={handlePriceInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <input type="number" name="wholesalePrice" value={formData.wholesalePrice} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                          <input type="text" name="wholesalePrice" value={formatNumberWithCommas(formData.wholesalePrice)} onChange={handlePriceInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                           <input type="number" step="0.01" name="weight" value={formData.weight} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
@@ -1795,7 +1815,7 @@ const Products = () => {
                             <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giá bán lẻ 1</label>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <input type="number" name="retailPrice1" value={formData.retailPrice1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="text" name="retailPrice1" value={formatNumberWithCommas(formData.retailPrice1)} onChange={handlePriceInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
                             <input type="number" name="retailDiscount1" value={formData.retailDiscount1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm lẻ" />
                           </div>
                         </td>
@@ -1804,7 +1824,7 @@ const Products = () => {
                             <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giá bán sỉ 1</label>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <input type="number" name="wholesalePrice1" value={formData.wholesalePrice1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="text" name="wholesalePrice1" value={formatNumberWithCommas(formData.wholesalePrice1)} onChange={handlePriceInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
                             <input type="number" name="wholesaleDiscount1" value={formData.wholesaleDiscount1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm sỉ" />
                           </div>
                         </td>
@@ -1840,7 +1860,7 @@ const Products = () => {
                             <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giá bán lẻ 2</label>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <input type="number" name="retailPrice2" value={formData.retailPrice2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="text" name="retailPrice2" value={formatNumberWithCommas(formData.retailPrice2)} onChange={handlePriceInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
                             <input type="number" name="retailDiscount2" value={formData.retailDiscount2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm lẻ" />
                           </div>
                         </td>
@@ -1849,7 +1869,7 @@ const Products = () => {
                             <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giá bán sỉ 2</label>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <input type="number" name="wholesalePrice2" value={formData.wholesalePrice2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="text" name="wholesalePrice2" value={formatNumberWithCommas(formData.wholesalePrice2)} onChange={handlePriceInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
                             <input type="number" name="wholesaleDiscount2" value={formData.wholesaleDiscount2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm sỉ" />
                           </div>
                         </td>
