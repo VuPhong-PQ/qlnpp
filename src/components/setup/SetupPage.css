@@ -270,6 +270,8 @@
   white-space: nowrap;
 }
 
+/* header-filter-input removed: using modal popup for search */
+
 .data-table td {
   padding: 12px;
   border-bottom: 1px solid #e9ecef;
@@ -597,4 +599,26 @@
     font-size: 13px;
     padding: 8px 10px;
   }
+}
+
+/* Context menu styles for right-click */
+.context-menu {
+  background: #fff;
+  border: 1px solid #eaeaea;
+  box-shadow: 0 6px 18px rgba(0,0,0,0.12);
+  border-radius: 8px;
+  min-width: 160px;
+  overflow: hidden;
+}
+.context-menu-item {
+  padding: 10px 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  color: #333;
+}
+.context-menu-item:hover {
+  background: #f5f7fb;
 }

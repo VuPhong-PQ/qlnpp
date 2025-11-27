@@ -12,7 +12,9 @@ const TransactionContents = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
   const [contents, setContents] = useState([]);
-  const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showOnlySelected, setShowOnlySelected] = useState(false);
+  const { applyFilters, renderFilterPopup, showFilterPopup, setShowFilterPopup, columnFilters, setColumnFilters } = useColumnFilter();
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -152,7 +154,10 @@ const TransactionContents = () => {
     }
   };
 
-  const filteredContents = applyFilters(contents, searchTerm, ['name', 'code', 'type', 'note']);
+  const baseFilteredContents = applyFilters(contents, searchTerm, ['name', 'code', 'type', 'note']);
+  const filteredContents = showOnlySelected
+    ? baseFilteredContents.filter(item => selectedIds.includes(item.id))
+    : baseFilteredContents;
   
   // Pagination calculations
   const totalPages = Math.ceil(filteredContents.length / itemsPerPage);
@@ -178,9 +183,15 @@ const TransactionContents = () => {
     }
   };
 
+  // Nếu người dùng tìm/lọc thì quay lại trang 1
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, columnFilters]);
+
 
   // Cột và độ rộng mặc định
   const initialContentColumns = [
+    { key: 'stt', label: 'Số TT', fixed: true },
     { key: 'type', label: 'Loại nội dung' },
     { key: 'code', label: 'Mã nội dung' },
     { key: 'name', label: 'Tên nội dung' },
@@ -188,7 +199,7 @@ const TransactionContents = () => {
     { key: 'status', label: 'Trạng thái' },
     { key: 'actions', label: 'Thao tác', fixed: true }
   ];
-  const defaultContentWidths = [120, 120, 180, 180, 110, 110];
+  const defaultContentWidths = [80, 120, 120, 180, 180, 110, 110];
   // LocalStorage keys
   const LS_KEY_COLS = 'transactionContentColumns';
   const LS_KEY_WIDTHS = 'transactionContentColWidths';
@@ -229,11 +240,40 @@ const TransactionContents = () => {
 
   const [contentColumns, setContentColumns] = useState(getInitialColumns());
   const [contentColWidths, setContentColWidths] = useState(getInitialWidths());
-  const [contentVisibleCols, setContentVisibleCols] = useState(getInitialVisible(getInitialColumns()));
+  // Ensure fixed columns (like stt, actions) are always visible even if localStorage was saved earlier
+  const initialVisibleFromLS = getInitialVisible(getInitialColumns());
+  const fixedKeys = initialContentColumns.filter(c => c.fixed).map(c => c.key);
+  const mergedInitialVisible = Array.from(new Set([...initialVisibleFromLS, ...fixedKeys]));
+  const [contentVisibleCols, setContentVisibleCols] = useState(mergedInitialVisible);
+  const toggleSelectAll = (checked) => {
+    if (checked) {
+      const ids = paginatedContents.map(i => i.id);
+      setSelectedIds(ids);
+      setShowOnlySelected(true);
+    } else {
+      setSelectedIds([]);
+      setShowOnlySelected(false);
+    }
+  };
+
+  const toggleSelectOne = (id) => {
+    setSelectedIds(s => {
+      let newS;
+      if (s.includes(id)) newS = s.filter(x => x !== id);
+      else newS = [...s, id];
+      // Nếu có bất kỳ phần tử được chọn thì bật chế độ chỉ hiển thị các mục đã chọn
+      setShowOnlySelected(newS.length > 0);
+      return newS;
+    });
+  };
+
+  const isAllSelected = paginatedContents.length > 0 && paginatedContents.every(i => selectedIds.includes(i.id));
   const defaultContentVisible = initialContentColumns.map(col => col.key);
   const [showContentColSetting, setShowContentColSetting] = useState(false);
   const contentTableRef = useRef(null);
   const contentColSettingRef = useRef(null);
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, item: null });
+  const contextMenuRef = useRef(null);
 
   // Drag state cho popup cài đặt
   const [dragColIdx, setDragColIdx] = useState(null);
@@ -328,6 +368,46 @@ const TransactionContents = () => {
     document.addEventListener('mouseup', onMouseUp);
   };
 
+  // Handle right-click on a table row to show custom context menu
+  const handleRowContextMenu = (item, e) => {
+    e.preventDefault();
+    const clickX = e.clientX;
+    const clickY = e.clientY;
+    // adjust to keep menu inside viewport
+    const menuWidth = 180;
+    const menuHeight = 88;
+    const viewportW = window.innerWidth;
+    const viewportH = window.innerHeight;
+    let left = clickX;
+    let top = clickY;
+    if (clickX + menuWidth > viewportW) left = viewportW - menuWidth - 8;
+    if (clickY + menuHeight > viewportH) top = viewportH - menuHeight - 8;
+    setContextMenu({ visible: true, x: left, y: top, item });
+  };
+
+  // Close context menu on outside click or Escape/scroll/resize
+  useEffect(() => {
+    const handleDocClick = (ev) => {
+      if (contextMenuRef.current && !contextMenuRef.current.contains(ev.target)) {
+        setContextMenu(c => c.visible ? { ...c, visible: false } : c);
+      }
+    };
+    const handleEsc = (ev) => {
+      if (ev.key === 'Escape') setContextMenu(c => c.visible ? { ...c, visible: false } : c);
+    };
+    const handleScroll = () => setContextMenu(c => c.visible ? { ...c, visible: false } : c);
+    document.addEventListener('mousedown', handleDocClick);
+    document.addEventListener('keydown', handleEsc);
+    window.addEventListener('scroll', handleScroll, true);
+    window.addEventListener('resize', handleScroll);
+    return () => {
+      document.removeEventListener('mousedown', handleDocClick);
+      document.removeEventListener('keydown', handleEsc);
+      window.removeEventListener('scroll', handleScroll, true);
+      window.removeEventListener('resize', handleScroll);
+    };
+  }, []);
+
   return (
     <div className="setup-page">
       <div className="page-header">
@@ -394,7 +474,7 @@ const TransactionContents = () => {
                   type="checkbox"
                   checked={contentVisibleCols.length === contentColumns.length}
                   onChange={e => {
-                    const newVisible = e.target.checked ? defaultContentVisible : [];
+                    const newVisible = e.target.checked ? defaultContentVisible : fixedKeys;
                     setContentVisibleCols(newVisible);
                     localStorage.setItem(LS_KEY_VISIBLE, JSON.stringify(newVisible));
                   }}
@@ -444,6 +524,19 @@ const TransactionContents = () => {
                   <span>{col.label}</span>
                 </div>
               ))}
+              {/** Fixed left columns (except actions) */}
+              {contentColumns.filter(col => col.fixed && col.key !== 'actions').length > 0 && (
+                <>
+                  <div style={{ fontSize: 13, color: '#888', margin: '6px 0 2px' }}>Cố định trái</div>
+                  {contentColumns.filter(col => col.fixed && col.key !== 'actions').map((col) => (
+                    <div key={col.key} style={{ display: 'flex', alignItems: 'center', opacity: 0.8, marginBottom: 4 }}>
+                      <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
+                      <input type="checkbox" checked disabled style={{ marginRight: 6 }} />
+                      <span>{col.label}</span>
+                    </div>
+                  ))}
+                </>
+              )}
               <div style={{ fontSize: 13, color: '#888', margin: '6px 0 2px' }}>Cố định phải</div>
               <div style={{ display: 'flex', alignItems: 'center', opacity: 0.7 }}>
                 <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
@@ -474,26 +567,40 @@ const TransactionContents = () => {
                           style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
                         />
                       )}
-                      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
-                        <span>{col.label}</span>
-                        {col.key !== 'actions' && (
-                          <span 
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setShowFilterPopup(showFilterPopup === col.key ? null : col.key);
-                            }}
-                            style={{ 
-                              cursor: 'pointer', 
-                              fontSize: '14px', 
-                              opacity: columnFilters[col.key] ? 1 : 0.5,
-                              color: columnFilters[col.key] ? '#1890ff' : 'inherit'
-                            }}
-                          >
-                            🔍
-                          </span>
-                        )}
-                      </div>
-                      {col.key !== 'actions' && renderFilterPopup(col.key, col.label)}
+                      {col.key === 'stt' ? (
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="checkbox"
+                            checked={isAllSelected}
+                            onChange={(e) => toggleSelectAll(e.target.checked)}
+                            style={{ marginRight: 6 }}
+                          />
+                          <span style={{ fontWeight: 600 }}>{col.label}</span>
+                        </div>
+                      ) : (
+                        <>
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+                            <span>{col.label}</span>
+                            {col.key !== 'actions' && (
+                              <span 
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  setShowFilterPopup(showFilterPopup === col.key ? null : col.key);
+                                }}
+                                style={{ 
+                                  cursor: 'pointer', 
+                                  fontSize: '14px', 
+                                  opacity: columnFilters[col.key] ? 1 : 0.5,
+                                  color: columnFilters[col.key] ? '#1890ff' : 'inherit'
+                                }}
+                              >
+                                🔍
+                              </span>
+                            )}
+                          </div>
+                            {col.key !== 'actions' && renderFilterPopup(col.key, col.label)}
+                        </>
+                      )}
                       {/* Mép phải */}
                       {idx < arr.length - 1 && contentVisibleCols.includes(arr[idx + 1].key) && (
                         <span
@@ -509,9 +616,27 @@ const TransactionContents = () => {
             </thead>
             <tbody>
               {paginatedContents.map((content) => (
-                <tr key={content.id}>
+                <tr
+                  key={content.id}
+                  onContextMenu={(e) => handleRowContextMenu(content, e)}
+                >
                   {contentColumns.map((col, idx) => {
                     if (!contentVisibleCols.includes(col.key)) return null;
+                    if (col.key === 'stt') {
+                      // Số thứ tự + checkbox
+                      const rowIndex = startIndex + paginatedContents.findIndex(p => p.id === content.id) + 1;
+                      return (
+                        <td key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(content.id)}
+                            onChange={() => toggleSelectOne(content.id)}
+                            style={{ marginRight: 6 }}
+                          />
+                          <span>{rowIndex}</span>
+                        </td>
+                      );
+                    }
                     if (col.key === 'type') {
                       return (
                         <td key={col.key}>
@@ -555,6 +680,34 @@ const TransactionContents = () => {
             </tbody>
           </table>
         </div>
+
+        {/* Context menu for right-click */}
+        {contextMenu.visible && (
+          <div
+            ref={contextMenuRef}
+            className="context-menu"
+            style={{ top: contextMenu.y, left: contextMenu.x, position: 'fixed', zIndex: 2000 }}
+          >
+            <div
+              className="context-menu-item"
+              onClick={() => {
+                if (contextMenu.item) handleEdit(contextMenu.item);
+                setContextMenu(c => ({ ...c, visible: false }));
+              }}
+            >
+              <span style={{ marginRight: 8 }}>✏️</span> Xem chi tiết
+            </div>
+            <div
+              className="context-menu-item"
+              onClick={async () => {
+                if (contextMenu.item) await handleDelete(contextMenu.item.id);
+                setContextMenu(c => ({ ...c, visible: false }));
+              }}
+            >
+              <span style={{ marginRight: 8 }}>🗑️</span> Xóa
+            </div>
+          </div>
+        )}
 
 
         {filteredContents.length === 0 && (

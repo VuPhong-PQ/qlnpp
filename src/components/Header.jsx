@@ -222,15 +222,7 @@ const Header = () => {
         ))}
       </nav>
 
-      <div className="header-actions">
-        <button 
-          className="search-icon-btn"
-          onClick={() => setShowSearchModal(true)}
-          title="Tìm kiếm"
-        >
-          🔍
-        </button>
-      </div>
+      {/* header-actions removed: using page-level search modal instead */}
 
       <div className="header-user">
         <div className="user-info">
