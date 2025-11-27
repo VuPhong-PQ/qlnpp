@@ -1748,12 +1748,10 @@ const Products = () => {
                     <thead>
                       <tr style={{ background: '#fafafa' }}>
                         <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>ĐVT</th>
-                        <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Giá nhập</th>
                         <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Giá bán lẻ</th>
                         <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Giá bán sỉ</th>
                         <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '100px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Số Kg</th>
                         <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '100px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Số khối</th>
-                        <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Tiền vận chuyển</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -1766,9 +1764,6 @@ const Products = () => {
                           </select>
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <input type="number" name="importPrice" value={formData.importPrice} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                           <input type="number" name="retailPrice" value={formData.retailPrice} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
@@ -1779,9 +1774,6 @@ const Products = () => {
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                           <input type="number" step="0.001" name="volume" value={formData.volume} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <input type="number" name="shippingFee" value={formData.shippingFee} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
                         </td>
                       </tr>
                       {/* ĐVT 1 */}
@@ -1800,25 +1792,16 @@ const Products = () => {
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                           <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Quy đổi 1</label>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giá bán lẻ 1</label>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <input type="number" name="importPrice1" value={formData.importPrice1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="number" name="retailPrice1" value={formData.retailPrice1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
                             <input type="number" name="retailDiscount1" value={formData.retailDiscount1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm lẻ" />
                           </div>
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                           <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán lẻ 1</label>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <input type="number" name="retailPrice1" value={formData.retailPrice1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                            <input type="number" style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#f5f5f5' }} placeholder="0" disabled />
-                          </div>
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán sỉ 1</label>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giá bán sỉ 1</label>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <input type="number" name="wholesalePrice1" value={formData.wholesalePrice1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
@@ -1837,12 +1820,6 @@ const Products = () => {
                           </div>
                           <input type="number" step="0.001" name="volume1" value={formData.volume1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
                         </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Tiền vận chuyển 1</label>
-                          </div>
-                          <input type="number" name="shippingFee1" value={formData.shippingFee1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                        </td>
                       </tr>
                       {/* ĐVT 2 */}
                       <tr style={{ background: 'white' }}>
@@ -1860,25 +1837,16 @@ const Products = () => {
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                           <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Quy đổi 2</label>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giá bán lẻ 2</label>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <input type="number" name="importPrice2" value={formData.importPrice2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                            <input type="number" name="retailPrice2" value={formData.retailPrice2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
                             <input type="number" name="retailDiscount2" value={formData.retailDiscount2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm lẻ" />
                           </div>
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                           <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán lẻ 2</label>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <input type="number" name="retailPrice2" value={formData.retailPrice2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                            <input type="number" style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#f5f5f5' }} placeholder="0" disabled />
-                          </div>
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán sỉ 2</label>
+                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giá bán sỉ 2</label>
                           </div>
                           <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
                             <input type="number" name="wholesalePrice2" value={formData.wholesalePrice2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
@@ -1896,132 +1864,6 @@ const Products = () => {
                             <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số khối 2</label>
                           </div>
                           <input type="number" step="0.001" name="volume2" value={formData.volume2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Tiền vận chuyển 2</label>
-                          </div>
-                          <input type="number" name="shippingFee2" value={formData.shippingFee2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                        </td>
-                      </tr>
-                      {/* ĐVT 3 */}
-                      <tr style={{ background: 'white' }}>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', minWidth: '35px' }}>ĐVT 3</label>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <select name="unit3" value={formData.unit3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
-                              <option value="">Chọn đơn vị tính 3</option>
-                              {units.map(unit => (<option key={unit.id} value={unit.code}>{unit.name}</option>))}
-                            </select>
-                            <input type="number" name="conversion3" value={formData.conversion3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Quy đổi 3" />
-                          </div>
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Quy đổi 3</label>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <input type="number" name="importPrice3" value={formData.importPrice3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                            <input type="number" name="retailDiscount3" value={formData.retailDiscount3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm lẻ" />
-                          </div>
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán lẻ 3</label>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <input type="number" name="retailPrice3" value={formData.retailPrice3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                            <input type="number" style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#f5f5f5' }} placeholder="0" disabled />
-                          </div>
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán sỉ 3</label>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <input type="number" name="wholesalePrice3" value={formData.wholesalePrice3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                            <input type="number" name="wholesaleDiscount3" value={formData.wholesaleDiscount3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm sỉ" />
-                          </div>
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số Kg 3</label>
-                          </div>
-                          <input type="number" step="0.01" name="weight3" value={formData.weight3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số khối 3</label>
-                          </div>
-                          <input type="number" step="0.001" name="volume3" value={formData.volume3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Tiền vận chuyển 3</label>
-                          </div>
-                          <input type="number" name="shippingFee3" value={formData.shippingFee3} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                        </td>
-                      </tr>
-                      {/* ĐVT 4 */}
-                      <tr style={{ background: 'white' }}>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', minWidth: '35px' }}>ĐVT 4</label>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <select name="unit4" value={formData.unit4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
-                              <option value="">Chọn đơn vị tính 4</option>
-                              {units.map(unit => (<option key={unit.id} value={unit.code}>{unit.name}</option>))}
-                            </select>
-                            <input type="number" name="conversion4" value={formData.conversion4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Quy đổi 4" />
-                          </div>
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Quy đổi 4</label>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <input type="number" name="importPrice4" value={formData.importPrice4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                            <input type="number" name="retailDiscount4" value={formData.retailDiscount4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm lẻ" />
-                          </div>
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán lẻ 4</label>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <input type="number" name="retailPrice4" value={formData.retailPrice4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                            <input type="number" style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#f5f5f5' }} placeholder="0" disabled />
-                          </div>
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Giảm bán sỉ 4</label>
-                          </div>
-                          <div style={{ display: 'flex', flexDirection: 'column', gap: '6px' }}>
-                            <input type="number" name="wholesalePrice4" value={formData.wholesalePrice4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                            <input type="number" name="wholesaleDiscount4" value={formData.wholesaleDiscount4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" title="Giảm sỉ" />
-                          </div>
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số Kg 4</label>
-                          </div>
-                          <input type="number" step="0.01" name="weight4" value={formData.weight4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số khối 4</label>
-                          </div>
-                          <input type="number" step="0.001" name="volume4" value={formData.volume4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
-                        </td>
-                        <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <div style={{ marginBottom: '6px' }}>
-                            <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Tiền vận chuyển 4</label>
-                          </div>
-                          <input type="number" name="shippingFee4" value={formData.shippingFee4} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
                         </td>
                       </tr>
                     </tbody>
