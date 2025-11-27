@@ -72,6 +72,14 @@ INSERT INTO CompanyInfos (Name, Address, Phone, Email, TaxCode, Website, Logo, R
  N'Giám đốc');
 GO
 
+-- Seed data cho Warehouses (Kho hàng)
+INSERT INTO Warehouses (Code, Name, Address, Manager, Phone, Note, Status) VALUES
+(N'KHO001', N'Kho tổng', N'123 Đường ABC, Quận 1, TP.HCM', N'Nguyễn Văn A', '0123456789', N'Kho chính lưu trữ hàng hóa', 'active'),
+(N'KHO002', N'Kho chi nhánh 1', N'456 Đường XYZ, Quận 2, TP.HCM', N'Trần Thị B', '0987654321', N'Kho chi nhánh khu vực phía Nam', 'active'),
+(N'KHO003', N'Kho chi nhánh 2', N'789 Đường DEF, Quận 3, TP.HCM', N'Lê Văn C', '0369852147', N'Kho chi nhánh khu vực phía Bắc', 'active'),
+(N'KHO004', N'Kho tạm thời', N'321 Đường GHI, Quận 4, TP.HCM', N'Phạm Thị D', '0147258369', N'Kho lưu trữ tạm thời', 'inactive');
+GO
+
 PRINT N'Đã thêm dữ liệu mẫu thành công!';
 PRINT N'- Units: 6 đơn vị tính';
 PRINT N'- ProductCategories: 5 loại hàng';

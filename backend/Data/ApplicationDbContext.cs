@@ -88,6 +88,44 @@ namespace QlnppApi.Data
             modelBuilder.Entity<BankLoan>()
                 .Property(b => b.PrincipalAmount)
                 .HasPrecision(18, 2);
+
+            // Vehicle decimal configurations
+            modelBuilder.Entity<Vehicle>()
+                .Property(v => v.LoadCapacity)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Vehicle>()
+                .Property(v => v.Volume)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Vehicle>()
+                .Property(v => v.PurchasePrice)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Vehicle>()
+                .Property(v => v.DepreciationValue)
+                .HasPrecision(18, 2);
+
+            // Missing Product decimal configurations
+            modelBuilder.Entity<Product>()
+                .Property(p => p.WholesalePrice2)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.WholesalePrice3)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.WholesalePrice4)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.WholesaleDiscount3)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.WholesaleDiscount4)
+                .HasPrecision(18, 2);
         }
     }
 }

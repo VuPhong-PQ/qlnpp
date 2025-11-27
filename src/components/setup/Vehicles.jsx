@@ -9,13 +9,19 @@ const Vehicles = () => {
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [loading, setLoading] = useState(false);
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, item: null });
   const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
 
   const [vehicles, setVehicles] = useState([]);
+  const vehicleImportRef = useRef(null);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+
+  // Selection state for STT checkboxes (moved up so it's available before use)
+  const [selectedIds, setSelectedIds] = useState([]);
+  const [showOnlySelected, setShowOnlySelected] = useState(false);
 
   // Load vehicles from API
   useEffect(() => {
@@ -100,6 +106,13 @@ const Vehicles = () => {
     setShowModal(true);
   };
 
+  const handleRowContextMenu = (e, item) => {
+    e.preventDefault();
+    setContextMenu({ visible: true, x: e.clientX, y: e.clientY, item });
+  };
+
+  const closeContextMenu = () => setContextMenu({ visible: false, x: 0, y: 0, item: null });
+
   const handleDelete = async (id) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa xe này?')) {
       try {
@@ -115,7 +128,45 @@ const Vehicles = () => {
     }
   };
 
-  const filteredVehicles = applyFilters(vehicles, searchTerm, ['code', 'licensePlate', 'name']);
+  const handleImport = () => {
+    if (vehicleImportRef.current) vehicleImportRef.current.click();
+  };
+
+  const handleExport = async () => {
+    try {
+      const res = await fetch(`${API_ENDPOINTS.vehicles}/export`, { method: 'GET' });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'vehicles.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert('Xuất Excel thất bại');
+    }
+  };
+
+  const toggleSelectAll = () => {
+    const currentBase = applyFilters(vehicles, searchTerm, ['code', 'licensePlate', 'name']);
+    if (selectedIds.length > 0 && selectedIds.length === currentBase.length) {
+      setSelectedIds([]);
+      setShowOnlySelected(false);
+    } else {
+      const ids = currentBase.map(v => v.id);
+      setSelectedIds(ids);
+      setShowOnlySelected(true);
+    }
+  };
+
+  const baseFilteredVehicles = applyFilters(vehicles, searchTerm, ['code', 'licensePlate', 'name']);
+  const filteredVehicles = showOnlySelected
+    ? baseFilteredVehicles.filter(v => selectedIds.includes(v.id))
+    : baseFilteredVehicles;
 
   // Pagination calculations
   const totalPages = Math.ceil(filteredVehicles.length / itemsPerPage);
@@ -135,9 +186,48 @@ const Vehicles = () => {
     }).format(amount);
   };
 
+  // Styles for status buttons in modal
+  const statusBtnActive = {
+    padding: '8px 14px',
+    borderRadius: 6,
+    border: 'none',
+    cursor: 'pointer',
+    background: '#4CAF50',
+    color: 'white',
+    fontWeight: 600
+  };
+  const statusBtnInactive = {
+    padding: '8px 14px',
+    borderRadius: 6,
+    border: '1px solid #ddd',
+    cursor: 'pointer',
+    background: '#fff',
+    color: '#333'
+  };
+
+  // Persist status change to backend with rollback on failure
+  const persistStatusChange = async (vehicleId, updatedFields, prevVehicles) => {
+    try {
+      // Build payload for PUT: need full vehicle object. Try to find current vehicle data.
+      const existing = vehicles.find(v => String(v.id) === String(vehicleId)) || editingItem || {};
+      const payload = { ...existing, ...updatedFields, id: existing.id ?? vehicleId };
+      await api.put(API_ENDPOINTS.vehicles, payload.id, payload);
+      // success: nothing else (UI already updated optimistically)
+    } catch (err) {
+      console.error('Persist status failed', err);
+      alert('Lưu trạng thái thất bại: ' + (err.message || '')); 
+      // rollback
+      if (prevVehicles) setVehicles(prevVehicles);
+      if (editingItem && editingItem.id === vehicleId) {
+        setEditingItem(prev => prev ? { ...prev, status: prev.status } : prev);
+      }
+    }
+  };
+
   // --- Kéo-thả, hiển thị, lưu cấu hình cột bảng xe ---
   const vehicleTableRef = useRef(null);
   const defaultVehicleColumns = [
+    { key: 'stt', label: 'Số TT', fixed: true },
     { key: 'code', label: 'Mã xe' },
     { key: 'licensePlate', label: 'Biển số' },
     { key: 'name', label: 'Tên xe' },
@@ -151,7 +241,7 @@ const Vehicles = () => {
     { key: 'status', label: 'Trạng thái' },
     { key: 'actions', label: 'Thao tác', fixed: true }
   ];
-  const defaultVehicleWidths = [100, 120, 200, 100, 100, 100, 130, 150, 150, 200, 110, 150];
+  const defaultVehicleWidths = [60, 100, 120, 200, 100, 100, 100, 130, 150, 150, 200, 110, 150];
   
   const [vehicleColumns, setVehicleColumns] = useState(() => {
     const saved = localStorage.getItem('vehicleColumns');
@@ -208,6 +298,7 @@ const Vehicles = () => {
   const vehicleColSettingRef = useRef(null);
   const [dragColIdx, setDragColIdx] = useState(null);
   const [dragOverIdx, setDragOverIdx] = useState(null);
+  // Selection state for STT checkboxes
 
   useEffect(() => {
     localStorage.setItem('vehicleColumns', JSON.stringify(vehicleColumns));
@@ -231,6 +322,15 @@ const Vehicles = () => {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showVehicleColSetting]);
+
+  // Close context menu on any click outside
+  React.useEffect(() => {
+    const onGlobalClick = (e) => {
+      if (contextMenu.visible) closeContextMenu();
+    };
+    document.addEventListener('click', onGlobalClick);
+    return () => document.removeEventListener('click', onGlobalClick);
+  }, [contextMenu.visible]);
 
   const handleVehicleMouseDown = (index, e, edge) => {
     e.preventDefault();
@@ -280,25 +380,57 @@ const Vehicles = () => {
                 setEditingItem(null);
               }}
             >
-              <span style={{ fontSize: '18px', marginRight: '5px' }}>📄</span>
+              <span style={{ fontSize: '18px', marginRight: '8px' }}>📄</span>
+              <span style={{ fontSize: '14px', fontWeight: 500 }}>Thêm</span>
             </button>
-            <button className="btn" style={{ background: '#4CAF50', color: 'white' }}>
-              <span style={{ fontSize: '18px' }}>📊</span>
+            <button className="btn" style={{ background: '#4CAF50', color: 'white' }} onClick={handleExport}>
+              <span style={{ fontSize: '18px', marginRight: '8px' }}>📤</span>
+              <span style={{ fontSize: '14px', fontWeight: 500 }}>Export</span>
             </button>
-            <button className="btn" style={{ background: '#9C27B0', color: 'white' }}>
-              <span style={{ fontSize: '18px' }}>🔄</span>
+            <button className="btn" style={{ background: '#E91E63', color: 'white' }} onClick={handleImport}>
+              <span style={{ fontSize: '18px', marginRight: '8px' }}>📥</span>
+              <span style={{ fontSize: '14px', fontWeight: 500 }}>Import</span>
             </button>
-            <button className="btn" style={{ background: '#E91E63', color: 'white' }}>
-              <span style={{ fontSize: '18px' }}>📥</span>
-            </button>
+            
             <button
               className="btn"
               style={{ background: '#9E9E9E', color: 'white' }}
               onClick={() => setShowVehicleColSetting(v => !v)}
             >
-              <span style={{ fontSize: '18px' }}>⚙️</span>
+              <span style={{ fontSize: '18px', marginRight: '8px' }}>⚙️</span>
+              <span style={{ fontSize: '14px', fontWeight: 500 }}>Cài đặt</span>
             </button>
           </div>
+
+          {/* Hidden file input for import */}
+          <input
+            ref={vehicleImportRef}
+            id="vehicle-import-input"
+            type="file"
+            accept=".xlsx,.xls"
+            style={{ display: 'none' }}
+            onChange={async (e) => {
+              const file = e.target.files && e.target.files[0];
+              if (!file) return;
+              const form = new FormData();
+              form.append('file', file);
+              try {
+                const res = await fetch(`${API_ENDPOINTS.vehicles}/import`, { method: 'POST', body: form });
+                if (!res.ok) {
+                  const txt = await res.text();
+                  throw new Error(txt || 'Import failed');
+                }
+                const json = await res.json();
+                alert(json.message || 'Import thành công');
+                await loadVehicles();
+              } catch (err) {
+                console.error('Vehicle import error', err);
+                alert('Import thất bại: ' + (err.message || ''));
+              } finally {
+                e.target.value = '';
+              }
+            }}
+          />
 
           {showVehicleColSetting && (
             <div
@@ -398,7 +530,18 @@ const Vehicles = () => {
                           style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
                         />
                       )}
-                      {col.label}
+                      {col.key === 'stt' ? (
+                        <span style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.length > 0 && baseFilteredVehicles.length > 0 && selectedIds.length === baseFilteredVehicles.length}
+                            onChange={toggleSelectAll}
+                          />
+                          <span style={{ fontWeight: 600 }}>{col.label}</span>
+                        </span>
+                      ) : (
+                        col.label
+                      )}
                       {col.key !== 'actions' && (
                         <span
                           onClick={() => setShowFilterPopup(col.key)}
@@ -421,21 +564,50 @@ const Vehicles = () => {
               </tr>
             </thead>
             <tbody>
-              {paginatedVehicles.map((vehicle) => (
-                <tr key={vehicle.id}>
+              {paginatedVehicles.map((vehicle, rowIndex) => (
+                <tr key={vehicle.id} onContextMenu={(e) => handleRowContextMenu(e, vehicle)}>
                   {vehicleColumns.map((col) => {
                     if (!vehicleVisibleCols.includes(col.key)) return null;
+                    if (col.key === 'stt') {
+                      return (
+                        <td key={col.key} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <input
+                            type="checkbox"
+                            checked={selectedIds.includes(vehicle.id)}
+                            onChange={(e) => {
+                              const checked = e.target.checked;
+                              if (checked) {
+                                setSelectedIds(ids => Array.from(new Set([...ids, vehicle.id])));
+                                setShowOnlySelected(true);
+                              } else {
+                                setSelectedIds(ids => {
+                                  const next = ids.filter(id => id !== vehicle.id);
+                                  if (next.length === 0) setShowOnlySelected(false);
+                                  return next;
+                                });
+                              }
+                            }}
+                          />
+                          <span style={{ color: '#666' }}>{startIndex + rowIndex + 1}</span>
+                        </td>
+                      );
+                    }
                     if (col.key === 'status') {
+                      const statusText = vehicle.status ? vehicle.status.toString().toLowerCase().trim() : '';
+                      const isInactive = statusText.includes('ngưng');
+                      const displayText = isInactive ? 'Ngưng hoạt động' : 'Hoạt động';
                       return (
                         <td key={col.key}>
                           <span style={{ 
-                            padding: '4px 8px',
-                            borderRadius: '4px',
-                            background: vehicle.status === 'Hoạt động' ? '#4CAF50' : '#f44336',
+                            padding: '6px 10px',
+                            borderRadius: '6px',
+                            background: !isInactive ? '#4CAF50' : '#f44336',
                             color: 'white',
-                            fontSize: '12px'
+                            fontSize: '13px',
+                            fontWeight: 600,
+                            display: 'inline-block'
                           }}>
-                            ⊙
+                            {displayText}
                           </span>
                         </td>
                       );
@@ -489,6 +661,53 @@ const Vehicles = () => {
         {filteredVehicles.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
             Không tìm thấy xe nào
+          </div>
+        )}
+
+        {/* Context menu for rows */}
+        {contextMenu.visible && (
+          <div
+            style={{
+              position: 'fixed',
+              top: contextMenu.y,
+              left: contextMenu.x,
+              background: '#fff',
+              border: '1px solid #eee',
+              borderRadius: 6,
+              boxShadow: '0 6px 18px rgba(0,0,0,0.12)',
+              zIndex: 2000,
+              minWidth: 160,
+              overflow: 'hidden'
+            }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div
+              onClick={() => {
+                // open edit modal
+                setEditingItem(contextMenu.item);
+                setFormData(contextMenu.item);
+                setShowModal(true);
+                closeContextMenu();
+              }}
+              style={{ padding: '10px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}
+            >
+              <span style={{ color: '#2c5aa0' }}>✏️</span>
+              <span>Xem chi tiết (Sửa)</span>
+            </div>
+            <div style={{ height: 1, background: '#f0f0f0' }} />
+            <div
+              onClick={() => {
+                // delete
+                if (contextMenu.item && contextMenu.item.id) {
+                  handleDelete(contextMenu.item.id);
+                }
+                closeContextMenu();
+              }}
+              style={{ padding: '10px 12px', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8, color: '#d32f2f' }}
+            >
+              <span>🗑️</span>
+              <span>Xóa</span>
+            </div>
           </div>
         )}
 
@@ -619,16 +838,52 @@ const Vehicles = () => {
                     rows="3"
                   />
                 </div>
-                <div style={{ display: 'flex', gap: '20px', marginTop: '12px' }}>
-                  <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-                    <input
-                      type="checkbox"
-                      name="status"
-                      checked={formData.status === 'Hoạt động'}
-                      onChange={(e) => setFormData({...formData, status: e.target.checked ? 'Hoạt động' : 'Ngưng hoạt động'})}
-                    />
-                    Ngưng hoạt động
-                  </label>
+                <div style={{ display: 'flex', gap: '12px', marginTop: '12px', alignItems: 'center' }}>
+                  <span style={{ fontSize: 14, color: '#444' }}>Trạng thái:</span>
+                  <div style={{ display: 'flex', gap: 8 }}>
+                    {/* helper to set status in formData and update UI optimistically when editing */}
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const newStatus = 'Hoạt động';
+                        // save previous snapshot for rollback
+                        const prev = [...vehicles];
+                        setFormData({ ...formData, status: newStatus });
+                        if (editingItem) {
+                          setVehicles(prevV => prevV.map(v => {
+                            const matchById = editingItem.id != null && String(v.id) === String(editingItem.id);
+                            const matchByCode = editingItem.code && v.code && String(v.code) === String(editingItem.code);
+                            return (matchById || matchByCode) ? { ...v, status: newStatus } : v;
+                          }));
+                          setEditingItem(prevE => prevE ? { ...prevE, status: newStatus } : prevE);
+                          await persistStatusChange(editingItem.id ?? editingItem.code, { status: newStatus }, prev);
+                        }
+                      }}
+                      style={formData.status === 'Hoạt động' ? statusBtnActive : statusBtnInactive}
+                    >
+                      Hoạt động
+                    </button>
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        const newStatus = 'Ngưng hoạt động';
+                        const prev = [...vehicles];
+                        setFormData({ ...formData, status: newStatus });
+                        if (editingItem) {
+                          setVehicles(prevV => prevV.map(v => {
+                            const matchById = editingItem.id != null && String(v.id) === String(editingItem.id);
+                            const matchByCode = editingItem.code && v.code && String(v.code) === String(editingItem.code);
+                            return (matchById || matchByCode) ? { ...v, status: newStatus } : v;
+                          }));
+                          setEditingItem(prevE => prevE ? { ...prevE, status: newStatus } : prevE);
+                          await persistStatusChange(editingItem.id ?? editingItem.code, { status: newStatus }, prev);
+                        }
+                      }}
+                      style={formData.status === 'Ngưng hoạt động' ? { ...statusBtnActive, background: '#f44336' } : statusBtnInactive}
+                    >
+                      Ngưng hoạt động
+                    </button>
+                  </div>
                 </div>
               </div>
 

@@ -1,6 +1,7 @@
 import React, { useState, useRef } from 'react';
 import './SetupPage.css';
 import useColumnFilter from '../../hooks/useColumnFilter.jsx';
+import { API_ENDPOINTS } from '../../config/api';
 
 const Warehouses = () => {
   const [showModal, setShowModal] = useState(false);
@@ -8,54 +9,15 @@ const Warehouses = () => {
   const [searchTerm, setSearchTerm] = useState('');
   const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
 
-  const [warehouses, setWarehouses] = useState([
-    {
-      id: 1,
-      code: 'KHO001',
-      name: 'Kho tổng',
-      phone: '0123456789',
-      managerName: 'Nguyễn Văn A',
-      address: '123 Đường ABC, Quận 1, TP.HCM',
-      note: 'Kho chính lưu trữ hàng hóa',
-      status: 'active'
-    },
-    {
-      id: 2,
-      code: 'KHO002',
-      name: 'Kho chi nhánh 1',
-      phone: '0987654321',
-      managerName: 'Trần Thị B',
-      address: '456 Đường XYZ, Quận 2, TP.HCM',
-      note: 'Kho chi nhánh khu vực phía Nam',
-      status: 'active'
-    },
-    {
-      id: 3,
-      code: 'KHO003',
-      name: 'Kho chi nhánh 2',
-      phone: '0369852147',
-      managerName: 'Lê Văn C',
-      address: '789 Đường DEF, Quận 3, TP.HCM',
-      note: 'Kho chi nhánh khu vực phía Bắc',
-      status: 'active'
-    },
-    {
-      id: 4,
-      code: 'KHO004',
-      name: 'Kho tạm thời',
-      phone: '0147258369',
-      managerName: 'Phạm Thị D',
-      address: '321 Đường GHI, Quận 4, TP.HCM',
-      note: 'Kho lưu trữ tạm thời',
-      status: 'inactive'
-    }
-  ]);
+  const [warehouses, setWarehouses] = useState([]);
+  const [loadingWarehouses, setLoadingWarehouses] = useState(false);
+  const importFileRef = useRef(null);
 
   const [formData, setFormData] = useState({
     code: '',
     name: '',
     phone: '',
-    managerName: '',
+    manager: '',
     address: '',
     note: '',
     status: 'active'
@@ -71,16 +33,42 @@ const Warehouses = () => {
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    if (editingItem) {
-      setWarehouses(warehouses.map(item => 
-        item.id === editingItem.id ? { ...formData, id: editingItem.id } : item
-      ));
-    } else {
-      setWarehouses([...warehouses, { ...formData, id: Date.now() }]);
-    }
-    setShowModal(false);
-    setEditingItem(null);
-    resetForm();
+    const payload = {
+      Code: formData.code,
+      Name: formData.name,
+      Address: formData.address,
+      Manager: formData.manager,
+      Phone: formData.phone,
+      Note: formData.note,
+      Status: formData.status
+    };
+
+    (async () => {
+      try {
+        if (editingItem && editingItem.id) {
+          const res = await fetch(`${API_ENDPOINTS.warehouses}/${editingItem.id}`, {
+            method: 'PUT',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ Id: editingItem.id, ...payload })
+          });
+          if (!res.ok) throw new Error('Update failed');
+        } else {
+          const res = await fetch(`${API_ENDPOINTS.warehouses}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(payload)
+          });
+          if (!res.ok) throw new Error('Create failed');
+        }
+        await loadWarehouses();
+        setShowModal(false);
+        setEditingItem(null);
+        resetForm();
+      } catch (err) {
+        console.error('Save warehouse error', err);
+        alert('Lưu kho thất bại');
+      }
+    })();
   };
 
   const resetForm = () => {
@@ -97,24 +85,106 @@ const Warehouses = () => {
 
   const handleEdit = (item) => {
     setEditingItem(item);
-    setFormData(item);
+    setFormData({
+      code: item.code || item.code || '',
+      name: item.name || '',
+      phone: item.phone || '',
+      manager: item.manager || '',
+      address: item.address || '',
+      note: item.note || '',
+      status: item.status || 'active'
+    });
     setShowModal(true);
   };
 
   const handleDelete = (id) => {
-    if (window.confirm('Bạn có chắc chắn muốn xóa kho này?')) {
-      setWarehouses(warehouses.filter(item => item.id !== id));
+    if (!window.confirm('Bạn có chắc chắn muốn xóa kho này?')) return;
+    (async () => {
+      try {
+        const res = await fetch(`${API_ENDPOINTS.warehouses}/${id}`, { method: 'DELETE' });
+        if (!res.ok) throw new Error('Delete failed');
+        await loadWarehouses();
+      } catch (err) {
+        console.error('Delete error', err);
+        alert('Xóa kho thất bại');
+      }
+    })();
+  };
+
+  const filteredWarehouses = applyFilters(warehouses, searchTerm, ['code', 'name', 'manager', 'address', 'phone']);
+
+  // Load warehouses from backend
+  const loadWarehouses = async () => {
+    try {
+      setLoadingWarehouses(true);
+      const res = await fetch(`${API_ENDPOINTS.warehouses}`);
+      if (!res.ok) throw new Error(`Load failed: ${res.status}`);
+      const data = await res.json();
+      setWarehouses(data);
+    } catch (err) {
+      console.error('Error loading warehouses', err);
+      // optional: show user notification
+    } finally {
+      setLoadingWarehouses(false);
     }
   };
 
-  const filteredWarehouses = applyFilters(warehouses, searchTerm, ['code', 'name', 'managerName', 'address', 'phone']);
+  React.useEffect(() => {
+    loadWarehouses();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-  const handleExport = () => {
-    alert('Chức năng export Excel đang được phát triển');
+  const handleExport = async () => {
+    try {
+      const res = await fetch(`${API_ENDPOINTS.warehouses}/export`, {
+        method: 'GET'
+      });
+      if (!res.ok) throw new Error('Export failed');
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'warehouses.xlsx';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error(err);
+      alert('Xuất Excel thất bại');
+    }
   };
 
   const handleImport = () => {
-    alert('Chức năng import Excel đang được phát triển');
+    // trigger hidden file input
+    if (importFileRef.current) importFileRef.current.click();
+  };
+
+  const onImportFileChange = async (e) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    const form = new FormData();
+    form.append('file', file);
+    try {
+      const res = await fetch(`${API_ENDPOINTS.warehouses}/import`, {
+        method: 'POST',
+        body: form
+      });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || 'Import failed');
+      }
+      const result = await res.json();
+      alert(result.message || 'Import thành công');
+      // reload data
+      await loadWarehouses();
+    } catch (err) {
+      console.error('Import error', err);
+      alert('Import thất bại: ' + (err.message || ''));
+    } finally {
+      // reset input so same file can be selected again
+      e.target.value = '';
+    }
   };
 
 
@@ -124,7 +194,7 @@ const Warehouses = () => {
     { key: 'code', label: 'Mã kho' },
     { key: 'name', label: 'Tên kho' },
     { key: 'phone', label: 'Số điện thoại' },
-    { key: 'managerName', label: 'Tên thủ kho' },
+    { key: 'manager', label: 'Tên thủ kho' },
     { key: 'address', label: 'Địa chỉ' },
     { key: 'note', label: 'Ghi chú' },
     { key: 'status', label: 'Tình trạng' },
@@ -253,6 +323,14 @@ const Warehouses = () => {
               <span role="img" aria-label="settings">⚙️</span>
             </button>
           </div>
+          {/* Hidden file input for import */}
+          <input
+            ref={importFileRef}
+            type="file"
+            accept=".xlsx,.xls"
+            style={{ display: 'none' }}
+            onChange={onImportFileChange}
+          />
 
           {/* Popup chọn cột hiển thị */}
           {showWarehouseColSetting && (
@@ -509,8 +587,8 @@ const Warehouses = () => {
                   <label>Tên thủ kho</label>
                   <input
                     type="text"
-                    name="managerName"
-                    value={formData.managerName}
+                    name="manager"
+                    value={formData.manager}
                     onChange={handleInputChange}
                     placeholder="Nhập tên người quản lý kho"
                   />

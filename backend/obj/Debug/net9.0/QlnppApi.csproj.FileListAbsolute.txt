@@ -153,3 +153,11 @@ D:\laptrinh\thiekepm\qlnpp1\backend\obj\Debug\net9.0\refint\QlnppApi.dll
 D:\laptrinh\thiekepm\qlnpp1\backend\obj\Debug\net9.0\QlnppApi.pdb
 D:\laptrinh\thiekepm\qlnpp1\backend\obj\Debug\net9.0\QlnppApi.genruntimeconfig.cache
 D:\laptrinh\thiekepm\qlnpp1\backend\obj\Debug\net9.0\ref\QlnppApi.dll
+D:\laptrinh\thiekepm\qlnpp1\backend\bin\Debug\net9.0\ClosedXML.dll
+D:\laptrinh\thiekepm\qlnpp1\backend\bin\Debug\net9.0\ClosedXML.Parser.dll
+D:\laptrinh\thiekepm\qlnpp1\backend\bin\Debug\net9.0\DocumentFormat.OpenXml.dll
+D:\laptrinh\thiekepm\qlnpp1\backend\bin\Debug\net9.0\DocumentFormat.OpenXml.Framework.dll
+D:\laptrinh\thiekepm\qlnpp1\backend\bin\Debug\net9.0\ExcelNumberFormat.dll
+D:\laptrinh\thiekepm\qlnpp1\backend\bin\Debug\net9.0\RBush.dll
+D:\laptrinh\thiekepm\qlnpp1\backend\bin\Debug\net9.0\SixLabors.Fonts.dll
+D:\laptrinh\thiekepm\qlnpp1\backend\bin\Debug\net9.0\System.IO.Packaging.dll
