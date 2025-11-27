@@ -4,6 +4,7 @@ import { API_ENDPOINTS, api } from '../../config/api';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
 import { useExcelImportExport } from '../../hooks/useExcelImportExport.jsx';
 import { ExcelButtons } from '../common/ExcelButtons.jsx';
+import { Pagination } from '../common/Pagination';
 
 const Units = () => {
   const [showModal, setShowModal] = useState(false);
@@ -12,6 +13,10 @@ const Units = () => {
   const [loading, setLoading] = useState(false);
   const [units, setUnits] = useState([]);
   const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Load data from API when component mounts
   useEffect(() => {
@@ -138,6 +143,12 @@ const Units = () => {
   };
 
   const filteredUnits = applyFilters(units, searchTerm, ['name', 'code', 'note']);
+  
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredUnits.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedUnits = filteredUnits.slice(startIndex, endIndex);
 
   const handleExport = () => {
     alert('Chức năng export Excel đang được phát triển');
@@ -430,7 +441,7 @@ const Units = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredUnits.map((unit) => (
+              {paginatedUnits.map((unit) => (
                 <tr key={unit.id}>
                   {unitColOrder.map((key, idx) => {
                     if (!unitVisibleCols.includes(key)) return null;
@@ -477,6 +488,18 @@ const Units = () => {
           <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
             Không tìm thấy đơn vị nào
           </div>
+        )}
+        
+        {filteredUnits.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            setItemsPerPage={setItemsPerPage}
+            totalItems={filteredUnits.length}
+            startIndex={startIndex}
+            endIndex={endIndex}
+          />
         )}
       </div>
 

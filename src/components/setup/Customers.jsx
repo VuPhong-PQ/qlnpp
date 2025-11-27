@@ -4,6 +4,7 @@ import { API_ENDPOINTS, api } from '../../config/api';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
 import OpenStreetMapModal from '../OpenStreetMapModal';
 import { exportToExcel, importFromExcel, validateImportData } from '../../utils/excelUtils';
+import { Pagination } from '../common/Pagination';
 
 const Customers = () => {
   const [showModal, setShowModal] = useState(false);
@@ -17,7 +18,7 @@ const Customers = () => {
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Google Maps state
   const [showMapModal, setShowMapModal] = useState(false);
@@ -756,44 +757,15 @@ const Customers = () => {
 
         {/* Pagination Controls */}
         {filteredCustomers.length > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '0 10px' }}>
-            <div style={{ color: '#666' }}>
-              Hiển thị {startIndex + 1} - {Math.min(endIndex, filteredCustomers.length)} / {filteredCustomers.length} khách hàng
-            </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button 
-                onClick={() => setCurrentPage(1)}
-                disabled={currentPage === 1}
-                style={{ padding: '6px 12px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1 }}
-              >
-                ««
-              </button>
-              <button 
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                style={{ padding: '6px 12px', cursor: currentPage === 1 ? 'not-allowed' : 'pointer', opacity: currentPage === 1 ? 0.5 : 1 }}
-              >
-                «
-              </button>
-              <span style={{ padding: '6px 12px' }}>
-                Trang {currentPage} / {totalPages}
-              </span>
-              <button 
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-                style={{ padding: '6px 12px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1 }}
-              >
-                »
-              </button>
-              <button 
-                onClick={() => setCurrentPage(totalPages)}
-                disabled={currentPage === totalPages}
-                style={{ padding: '6px 12px', cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', opacity: currentPage === totalPages ? 0.5 : 1 }}
-              >
-                »»
-              </button>
-            </div>
-          </div>
+          <Pagination
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            setItemsPerPage={setItemsPerPage}
+            totalItems={filteredCustomers.length}
+            startIndex={startIndex}
+            endIndex={endIndex}
+          />
         )}
       </div>
 

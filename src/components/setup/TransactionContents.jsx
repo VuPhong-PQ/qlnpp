@@ -4,6 +4,7 @@ import { API_ENDPOINTS, api } from '../../config/api';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
 import { useExcelImportExport } from '../../hooks/useExcelImportExport.jsx';
 import { ExcelButtons } from '../common/ExcelButtons.jsx';
+import { Pagination } from '../common/Pagination';
 
 const TransactionContents = () => {
   const [showModal, setShowModal] = useState(false);
@@ -12,6 +13,10 @@ const TransactionContents = () => {
   const [loading, setLoading] = useState(false);
   const [contents, setContents] = useState([]);
   const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     fetchTransactionContents();
@@ -148,6 +153,12 @@ const TransactionContents = () => {
   };
 
   const filteredContents = applyFilters(contents, searchTerm, ['name', 'code', 'type', 'note']);
+  
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredContents.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedContents = filteredContents.slice(startIndex, endIndex);
 
   const handleExport = () => {
     alert('Chức năng export Excel đang được phát triển');
@@ -497,7 +508,7 @@ const TransactionContents = () => {
               </tr>
             </thead>
             <tbody>
-              {filteredContents.map((content) => (
+              {paginatedContents.map((content) => (
                 <tr key={content.id}>
                   {contentColumns.map((col, idx) => {
                     if (!contentVisibleCols.includes(col.key)) return null;
@@ -550,6 +561,18 @@ const TransactionContents = () => {
           <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
             Không tìm thấy nội dung nào
           </div>
+        )}
+        
+        {filteredContents.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            setItemsPerPage={setItemsPerPage}
+            totalItems={filteredContents.length}
+            startIndex={startIndex}
+            endIndex={endIndex}
+          />
         )}
       </div>
 

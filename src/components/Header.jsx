@@ -1,10 +1,81 @@
-import React, { useState } from 'react';
-import { Link, useLocation } from 'react-router-dom';
+import React, { useState, useEffect } from 'react';
+import { Link, useLocation, useNavigate } from 'react-router-dom';
+import { removeVietnameseTones } from '../utils/searchUtils';
+import { API_ENDPOINTS, api } from '../config/api';
 import './Header.css';
 
 const Header = () => {
   const [activeDropdown, setActiveDropdown] = useState(null);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [allProducts, setAllProducts] = useState([]);
   const location = useLocation();
+  const navigate = useNavigate();
+
+  // Load all products khi component mount
+  useEffect(() => {
+    const fetchProducts = async () => {
+      try {
+        const data = await api.get(API_ENDPOINTS.products);
+        setAllProducts(data);
+      } catch (error) {
+        console.error('Error fetching products:', error);
+      }
+    };
+    fetchProducts();
+  }, []);
+
+  // Tìm kiếm khi searchTerm thay đổi
+  useEffect(() => {
+    if (!searchTerm.trim()) {
+      setSearchResults([]);
+      return;
+    }
+
+    const normalizedSearch = removeVietnameseTones(searchTerm.toLowerCase());
+    const filtered = allProducts.filter(product => {
+      const normalizedName = removeVietnameseTones(product.name?.toLowerCase() || '');
+      const normalizedCode = removeVietnameseTones(product.code?.toLowerCase() || '');
+      const normalizedBarcode = removeVietnameseTones(product.barcode?.toLowerCase() || '');
+      
+      return normalizedName.includes(normalizedSearch) || 
+             normalizedCode.includes(normalizedSearch) ||
+             normalizedBarcode.includes(normalizedSearch);
+    });
+
+    setSearchResults(filtered.slice(0, 50)); // Giới hạn 50 kết quả
+  }, [searchTerm, allProducts]);
+
+  const handleCheckboxChange = (productId) => {
+    setSelectedItems(prev => {
+      if (prev.includes(productId)) {
+        return prev.filter(id => id !== productId);
+      } else {
+        return [...prev, productId];
+      }
+    });
+  };
+
+  const handleSearch = () => {
+    if (selectedItems.length > 0) {
+      // Lưu danh sách ID đã chọn vào localStorage
+      localStorage.setItem('selectedProductIds', JSON.stringify(selectedItems));
+      // Chuyển đến trang Products
+      navigate('/setup/products');
+      // Đóng modal
+      setShowSearchModal(false);
+      setSearchTerm('');
+      setSelectedItems([]);
+    }
+  };
+
+  const handleCloseModal = () => {
+    setShowSearchModal(false);
+    setSearchTerm('');
+    setSelectedItems([]);
+  };
 
   const menuItems = [
     {
@@ -151,12 +222,79 @@ const Header = () => {
         ))}
       </nav>
 
+      <div className="header-actions">
+        <button 
+          className="search-icon-btn"
+          onClick={() => setShowSearchModal(true)}
+          title="Tìm kiếm"
+        >
+          🔍
+        </button>
+      </div>
+
       <div className="header-user">
         <div className="user-info">
           <span className="user-icon">👤</span>
           <span className="user-name">admin</span>
         </div>
       </div>
+
+      {/* Search Modal */}
+      {showSearchModal && (
+        <>
+          <div className="search-modal-overlay" onClick={handleCloseModal} />
+          <div className="global-search-modal">
+            <div className="search-modal-header">
+              <input
+                type="text"
+                className="search-modal-input"
+                placeholder="Tìm kiếm sản phẩm..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                autoFocus
+              />
+              <button className="search-modal-close" onClick={handleCloseModal}>×</button>
+            </div>
+            
+            <div className="search-modal-results">
+              {searchResults.length > 0 ? (
+                searchResults.map((product) => (
+                  <div key={product.id} className="search-result-item">
+                    <input 
+                      type="checkbox"
+                      checked={selectedItems.includes(product.id)}
+                      onChange={() => handleCheckboxChange(product.id)}
+                    />
+                    <div className="result-content">
+                      <div className="result-code">
+                        {product.barcode || product.code}
+                      </div>
+                      <div className="result-name">{product.name}</div>
+                    </div>
+                  </div>
+                ))
+              ) : searchTerm ? (
+                <div className="search-empty">Không tìm thấy sản phẩm</div>
+              ) : (
+                <div className="search-empty">Nhập từ khóa để tìm kiếm...</div>
+              )}
+            </div>
+
+            <div className="search-modal-footer">
+              <button className="btn-view-all" onClick={handleCloseModal}>
+                Xem tất cả
+              </button>
+              <button 
+                className="btn-search-primary"
+                onClick={handleSearch}
+                disabled={selectedItems.length === 0}
+              >
+                🔍 Tìm ({selectedItems.length})
+              </button>
+            </div>
+          </div>
+        </>
+      )}
     </header>
   );
 };

@@ -21,7 +21,8 @@ const Products = () => {
   
   // Phân trang
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [showPageSizeDropdown, setShowPageSizeDropdown] = useState(false);
   
   // Context menu (chuột phải)
   const [contextMenu, setContextMenu] = useState(null);
@@ -36,6 +37,30 @@ const Products = () => {
     fetchCategories();
     fetchUnits();
   }, []);
+
+  // Check for selected products from search modal
+  useEffect(() => {
+    const selectedIds = localStorage.getItem('selectedProductIds');
+    if (selectedIds) {
+      try {
+        const ids = JSON.parse(selectedIds);
+        setSelectedRows(ids);
+        // Clear localStorage after use
+        localStorage.removeItem('selectedProductIds');
+        // Scroll to first selected item
+        if (ids.length > 0) {
+          setTimeout(() => {
+            const firstSelected = document.querySelector(`tr[data-product-id="${ids[0]}"]`);
+            if (firstSelected) {
+              firstSelected.scrollIntoView({ behavior: 'smooth', block: 'center' });
+            }
+          }, 300);
+        }
+      } catch (error) {
+        console.error('Error parsing selected product IDs:', error);
+      }
+    }
+  }, [products]);
 
   const fetchProducts = async () => {
     try {
@@ -317,7 +342,13 @@ const Products = () => {
     }
   };
 
-  const filteredProducts = applyFilters(products, searchTerm, ['code', 'name', 'barcode', 'category', 'vatName', 'baseUnit']);
+  // Filter products - nếu có selectedRows từ search, chỉ hiển thị những sản phẩm đó
+  let filteredProducts = applyFilters(products, searchTerm, ['code', 'name', 'barcode', 'category', 'vatName', 'baseUnit']);
+  
+  // Nếu có products được chọn từ search modal, chỉ hiển thị những sản phẩm đó
+  if (selectedRows.length > 0) {
+    filteredProducts = filteredProducts.filter(product => selectedRows.includes(product.id));
+  }
   
   // Tính toán phân trang
   const totalPages = Math.ceil(filteredProducts.length / itemsPerPage);
@@ -394,7 +425,55 @@ const Products = () => {
   } = useExcelImportExport({
     data: products,
     loadData: fetchProducts,
-    apiPost: (data) => api.post(API_ENDPOINTS.products, data),
+    apiPost: async (data) => {
+      // Kiểm tra trùng lặp: kiểm tra mã hàng hóa
+      const existingProducts = await api.get(API_ENDPOINTS.products);
+      const isDuplicate = existingProducts.some(
+        product => product.code.toLowerCase().trim() === data.code.toLowerCase().trim()
+      );
+
+      if (isDuplicate) {
+        throw new Error(`Sản phẩm có mã "${data.code}" đã tồn tại, bỏ qua`);
+      }
+
+      // Kiểm tra và tạo category nếu chưa tồn tại
+      if (data.category) {
+        try {
+          // Lấy tất cả categories
+          const categoriesResponse = await api.get(API_ENDPOINTS.productCategories);
+          const existingCategory = categoriesResponse.find(
+            cat => cat.name.toLowerCase().trim() === data.category.toLowerCase().trim()
+          );
+
+          // Nếu chưa có category, tạo mới
+          if (!existingCategory) {
+            // Tạo mã loại tự động từ tên (VD: "Thực phẩm" -> "TP")
+            const categoryCode = data.category
+              .split(' ')
+              .map(word => word[0])
+              .join('')
+              .toUpperCase()
+              .substring(0, 10);
+
+            const newCategory = {
+              code: categoryCode,
+              name: data.category,
+              noGroupOrder: false,
+              note: 'Tự động tạo khi import sản phẩm',
+              status: 'active'
+            };
+
+            await api.post(API_ENDPOINTS.productCategories, newCategory);
+            console.log(`✓ Đã tạo loại hàng mới: ${data.category} (${categoryCode})`);
+          }
+        } catch (error) {
+          console.warn('Lỗi khi kiểm tra/tạo category:', error);
+        }
+      }
+
+      // Tạo product
+      return api.post(API_ENDPOINTS.products, data);
+    },
     columnMapping: {
       'Loại hàng': 'category',
       'Mã hàng hóa': 'code',
@@ -830,18 +909,48 @@ const Products = () => {
       <div className="page-header">
         <h1>Danh sách hàng hóa</h1>
         <p>Quản lý thông tin chi tiết sản phẩm và hàng hóa</p>
-        <div style={{ 
-          marginTop: '12px',
-          padding: '8px 16px',
-          background: '#e6f7ff',
-          border: '1px solid #91d5ff',
-          borderRadius: '4px',
-          display: 'inline-block',
-          fontSize: '14px',
-          color: '#0050b3',
-          fontWeight: 500
-        }}>
-          Tổng {products.length > 0 ? products.length.toLocaleString('vi-VN') : 0} sản phẩm
+        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginTop: '12px' }}>
+          <div style={{ 
+            padding: '8px 16px',
+            background: '#e6f7ff',
+            border: '1px solid #91d5ff',
+            borderRadius: '4px',
+            fontSize: '14px',
+            color: '#0050b3',
+            fontWeight: 500
+          }}>
+            Tổng {products.length > 0 ? products.length.toLocaleString('vi-VN') : 0} sản phẩm
+          </div>
+          {selectedRows.length > 0 && (
+            <>
+              <div style={{ 
+                padding: '8px 16px',
+                background: '#fff7e6',
+                border: '1px solid #ffd591',
+                borderRadius: '4px',
+                fontSize: '14px',
+                color: '#d46b08',
+                fontWeight: 500
+              }}>
+                Đang hiển thị {selectedRows.length} sản phẩm đã chọn
+              </div>
+              <button
+                onClick={() => setSelectedRows([])}
+                style={{
+                  padding: '6px 12px',
+                  background: '#ff4d4f',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer',
+                  fontSize: '13px',
+                  fontWeight: 500
+                }}
+              >
+                ✕ Xóa bộ lọc
+              </button>
+            </>
+          )}
         </div>
       </div>
 
@@ -1088,8 +1197,12 @@ const Products = () => {
               {paginatedProducts.map((product, index) => (
                 <tr 
                   key={product.id}
+                  data-product-id={product.id}
                   onContextMenu={(e) => handleContextMenu(e, product)}
-                  style={{ cursor: 'context-menu' }}
+                  style={{ 
+                    cursor: 'context-menu',
+                    background: selectedRows.includes(product.id) ? '#e6f7ff' : undefined
+                  }}
                 >
                   {productColOrder.map((key, idx) => {
                     if (!productVisibleCols.includes(key)) return null;
@@ -1162,7 +1275,7 @@ const Products = () => {
 
         {/* Phân trang */}
         {filteredProducts.length > 0 && (
-          <div style={{ 
+          <div style={{
             display: 'flex', 
             justifyContent: 'space-between', 
             alignItems: 'center', 
@@ -1171,64 +1284,195 @@ const Products = () => {
             marginTop: '8px'
           }}>
             <div style={{ color: '#6c757d', fontSize: '14px' }}>
-              Hiển thị {startIndex + 1}-{Math.min(endIndex, filteredProducts.length)} trong tổng số {filteredProducts.length} bản ghi
+              Dòng {startIndex + 1}-{Math.min(endIndex, filteredProducts.length)} trên tổng {filteredProducts.length} dòng
             </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button 
-                onClick={() => setCurrentPage(1)}
-                disabled={currentPage === 1}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid #ddd',
-                  background: currentPage === 1 ? '#f5f5f5' : '#fff',
-                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                  borderRadius: '4px'
-                }}
-              >
-                ⏮ Đầu
-              </button>
-              <button 
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid #ddd',
-                  background: currentPage === 1 ? '#f5f5f5' : '#fff',
-                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                  borderRadius: '4px'
-                }}
-              >
-                ◀ Trước
-              </button>
-              <span style={{ padding: '0 12px', color: '#333' }}>
-                Trang {currentPage} / {totalPages}
-              </span>
-              <button 
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid #ddd',
-                  background: currentPage === totalPages ? '#f5f5f5' : '#fff',
-                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                  borderRadius: '4px'
-                }}
-              >
-                Sau ▶
-              </button>
-              <button 
-                onClick={() => setCurrentPage(totalPages)}
-                disabled={currentPage === totalPages}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid #ddd',
-                  background: currentPage === totalPages ? '#f5f5f5' : '#fff',
-                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                  borderRadius: '4px'
-                }}
-              >
-                Cuối ⏭
-              </button>
+            <div style={{ display: 'flex', gap: '12px', alignItems: 'center' }}>
+              {/* Nút phân trang */}
+              <div style={{ display: 'flex', gap: '4px', alignItems: 'center' }}>
+                <button 
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  style={{
+                    padding: '6px 10px',
+                    border: '1px solid #ddd',
+                    background: currentPage === 1 ? '#f5f5f5' : '#fff',
+                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                    borderRadius: '4px',
+                    fontSize: '14px'
+                  }}
+                >
+                  ⏮
+                </button>
+                <button 
+                  onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
+                  disabled={currentPage === 1}
+                  style={{
+                    padding: '6px 10px',
+                    border: '1px solid #ddd',
+                    background: currentPage === 1 ? '#f5f5f5' : '#fff',
+                    cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
+                    borderRadius: '4px',
+                    fontSize: '14px'
+                  }}
+                >
+                  ◀
+                </button>
+                
+                {/* Hiển thị các số trang */}
+                {(() => {
+                  const pageNumbers = [];
+                  const maxVisible = 5;
+                  let startPage = Math.max(1, currentPage - Math.floor(maxVisible / 2));
+                  let endPage = Math.min(totalPages, startPage + maxVisible - 1);
+                  
+                  if (endPage - startPage < maxVisible - 1) {
+                    startPage = Math.max(1, endPage - maxVisible + 1);
+                  }
+                  
+                  for (let i = startPage; i <= endPage; i++) {
+                    pageNumbers.push(
+                      <button
+                        key={i}
+                        onClick={() => setCurrentPage(i)}
+                        style={{
+                          padding: '6px 12px',
+                          border: '1px solid #ddd',
+                          background: currentPage === i ? '#1890ff' : '#fff',
+                          color: currentPage === i ? '#fff' : '#333',
+                          cursor: 'pointer',
+                          borderRadius: '4px',
+                          fontSize: '14px',
+                          fontWeight: currentPage === i ? 'bold' : 'normal'
+                        }}
+                      >
+                        {i}
+                      </button>
+                    );
+                  }
+                  
+                  return (
+                    <>
+                      {startPage > 1 && <span style={{ padding: '0 4px' }}>...</span>}
+                      {pageNumbers}
+                      {endPage < totalPages && <span style={{ padding: '0 4px' }}>...</span>}
+                    </>
+                  );
+                })()}
+                
+                <button 
+                  onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
+                  disabled={currentPage === totalPages}
+                  style={{
+                    padding: '6px 10px',
+                    border: '1px solid #ddd',
+                    background: currentPage === totalPages ? '#f5f5f5' : '#fff',
+                    cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                    borderRadius: '4px',
+                    fontSize: '14px'
+                  }}
+                >
+                  ▶
+                </button>
+                <button 
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  style={{
+                    padding: '6px 10px',
+                    border: '1px solid #ddd',
+                    background: currentPage === totalPages ? '#f5f5f5' : '#fff',
+                    cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
+                    borderRadius: '4px',
+                    fontSize: '14px'
+                  }}
+                >
+                  ⏭
+                </button>
+              </div>
+              
+              {/* Dropdown chọn số dòng/trang */}
+              <div style={{ position: 'relative' }}>
+                <button
+                  onClick={() => setShowPageSizeDropdown(!showPageSizeDropdown)}
+                  style={{
+                    padding: '6px 12px',
+                    border: '1px solid #ddd',
+                    background: '#fff',
+                    cursor: 'pointer',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '8px'
+                  }}
+                >
+                  {itemsPerPage} / trang
+                  <span style={{ fontSize: '12px' }}>▼</span>
+                </button>
+                {showPageSizeDropdown && (
+                  <>
+                    <div
+                      style={{
+                        position: 'fixed',
+                        top: 0,
+                        left: 0,
+                        right: 0,
+                        bottom: 0,
+                        zIndex: 9999
+                      }}
+                      onClick={() => setShowPageSizeDropdown(false)}
+                    />
+                    <div
+                      style={{
+                        position: 'fixed',
+                        bottom: 'auto',
+                        top: 'auto',
+                        right: 'auto',
+                        left: 'auto',
+                        transform: 'translateY(-100%)',
+                        marginBottom: '40px',
+                        background: '#fff',
+                        border: '1px solid #ddd',
+                        borderRadius: '4px',
+                        boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+                        zIndex: 10000,
+                        minWidth: '120px'
+                      }}
+                      ref={(el) => {
+                        if (el) {
+                          const button = el.previousSibling?.previousSibling;
+                          if (button) {
+                            const rect = button.getBoundingClientRect();
+                            el.style.left = `${rect.right - 120}px`;
+                            el.style.top = `${rect.top}px`;
+                          }
+                        }
+                      }}
+                    >
+                      {[10, 20, 50, 100, 500, 1000].map(size => (
+                        <div
+                          key={size}
+                          onClick={() => {
+                            setItemsPerPage(size);
+                            setCurrentPage(1);
+                            setShowPageSizeDropdown(false);
+                          }}
+                          style={{
+                            padding: '8px 16px',
+                            cursor: 'pointer',
+                            background: itemsPerPage === size ? '#f0f0f0' : '#fff',
+                            fontSize: '14px',
+                            borderBottom: '1px solid #f0f0f0'
+                          }}
+                          onMouseEnter={(e) => e.target.style.background = '#f5f5f5'}
+                          onMouseLeave={(e) => e.target.style.background = itemsPerPage === size ? '#f0f0f0' : '#fff'}
+                        >
+                          {size} / trang
+                        </div>
+                      ))}
+                    </div>
+                  </>
+                )}
+              </div>
             </div>
           </div>
         )}

@@ -4,6 +4,7 @@ import './SetupPage.css';
 import useColumnFilter from '../../hooks/useColumnFilter.jsx';
 import { API_ENDPOINTS, api } from '../../config/api';
 import { useExcelImportExport } from '../../hooks/useExcelImportExport.jsx';
+import { Pagination } from '../common/Pagination';
 
 function Suppliers() {
 
@@ -19,6 +20,10 @@ function Suppliers() {
   const [contextMenu, setContextMenu] = useState(null);
   const [selectedSupplier, setSelectedSupplier] = useState(null);
   const contextMenuRef = useRef(null);
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   
   // Key lưu localStorage - đổi v2 để reset cấu hình cũ
   const SUPPLIER_COLS_KEY = 'supplier_table_cols_v2';
@@ -501,7 +506,18 @@ function Suppliers() {
   const handleSupplierMouseDown = () => {};
 
   // Apply column filters
-  const displayedSuppliers = applyFilters(suppliers, searchTerm, ['code', 'vatName', 'vatExportName', 'phone', 'email', 'taxCode', 'customerGroup', 'customerType', 'address', 'vatAddress', 'note']);
+  const filteredSuppliers = applyFilters(suppliers, searchTerm, ['code', 'vatName', 'vatExportName', 'phone', 'email', 'taxCode', 'customerGroup', 'customerType', 'address', 'vatAddress', 'note']);
+  
+  // Pagination calculation
+  const totalPages = Math.ceil(filteredSuppliers.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const displayedSuppliers = filteredSuppliers.slice(startIndex, endIndex);
+  
+  // Reset to page 1 when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, columnFilters]);
 
   return (
     <div className="setup-page">
@@ -761,6 +777,19 @@ function Suppliers() {
             </tbody>
           </table>
         </div>
+
+        {/* Pagination */}
+        {filteredSuppliers.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            setItemsPerPage={setItemsPerPage}
+            totalItems={filteredSuppliers.length}
+            startIndex={startIndex}
+            endIndex={endIndex}
+          />
+        )}
 
         {displayedSuppliers.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>

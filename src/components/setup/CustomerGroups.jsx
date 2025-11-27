@@ -3,6 +3,7 @@ import './SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
 import { exportToExcelWithHeader, importFromExcel } from '../../utils/excelUtils';
+import { Pagination } from '../common/Pagination';
 
 const CustomerGroups = () => {
   const [showModal, setShowModal] = useState(false);
@@ -12,6 +13,10 @@ const CustomerGroups = () => {
   const [customerGroups, setCustomerGroups] = useState([]);
   const [companyInfo, setCompanyInfo] = useState(null);
   const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
+  
+  // Pagination state
+  const [currentPage, setCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   useEffect(() => {
     fetchCustomerGroups();
@@ -213,6 +218,12 @@ const CustomerGroups = () => {
   };
 
   const filteredGroups = applyFilters(customerGroups, searchTerm, ['name', 'code', 'salesSchedule', 'note']);
+  
+  // Pagination calculations
+  const totalPages = Math.ceil(filteredGroups.length / itemsPerPage);
+  const startIndex = (currentPage - 1) * itemsPerPage;
+  const endIndex = startIndex + itemsPerPage;
+  const paginatedGroups = filteredGroups.slice(startIndex, endIndex);
 
   const handleExport = () => {
     // Logic export to Excel
@@ -520,7 +531,7 @@ const CustomerGroups = () => {
             </tr>
           </thead>
           <tbody>
-            {filteredGroups.map((group) => (
+            {paginatedGroups.map((group) => (
               <tr key={group.id}>
                 {groupColumns.map((col, idx) => {
                   if (!groupVisibleCols.includes(col.key)) return null;
@@ -564,6 +575,18 @@ const CustomerGroups = () => {
           <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
             Không tìm thấy nhóm khách hàng nào
           </div>
+        )}
+        
+        {filteredGroups.length > 0 && (
+          <Pagination
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            setItemsPerPage={setItemsPerPage}
+            totalItems={filteredGroups.length}
+            startIndex={startIndex}
+            endIndex={endIndex}
+          />
         )}
       </div>
 

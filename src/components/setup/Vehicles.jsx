@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
+import { Pagination } from '../common/Pagination';
 
 const Vehicles = () => {
   const [showModal, setShowModal] = useState(false);
@@ -14,7 +15,7 @@ const Vehicles = () => {
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
 
   // Load vehicles from API
   useEffect(() => {
@@ -492,74 +493,15 @@ const Vehicles = () => {
         )}
 
         {filteredVehicles.length > 0 && (
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: '20px', padding: '0 10px' }}>
-            <div style={{ color: '#666' }}>
-              Dòng {startIndex + 1}-{Math.min(endIndex, filteredVehicles.length)} trên tổng {filteredVehicles.length} dòng
-            </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button 
-                onClick={() => setCurrentPage(1)}
-                disabled={currentPage === 1}
-                style={{ 
-                  padding: '6px 12px', 
-                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer', 
-                  opacity: currentPage === 1 ? 0.5 : 1,
-                  border: '1px solid #ddd',
-                  background: 'white'
-                }}
-              >
-                ◀◀
-              </button>
-              <button 
-                onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
-                disabled={currentPage === 1}
-                style={{ 
-                  padding: '6px 12px', 
-                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer', 
-                  opacity: currentPage === 1 ? 0.5 : 1,
-                  border: '1px solid #ddd',
-                  background: 'white'
-                }}
-              >
-                ◀
-              </button>
-              <span style={{ padding: '6px 12px', border: '1px solid #ddd', background: '#f5f5f5' }}>
-                {currentPage}
-              </span>
-              <button 
-                onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
-                disabled={currentPage === totalPages}
-                style={{ 
-                  padding: '6px 12px', 
-                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', 
-                  opacity: currentPage === totalPages ? 0.5 : 1,
-                  border: '1px solid #ddd',
-                  background: 'white'
-                }}
-              >
-                ▶
-              </button>
-              <button 
-                onClick={() => setCurrentPage(totalPages)}
-                disabled={currentPage === totalPages}
-                style={{ 
-                  padding: '6px 12px', 
-                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer', 
-                  opacity: currentPage === totalPages ? 0.5 : 1,
-                  border: '1px solid #ddd',
-                  background: 'white'
-                }}
-              >
-                ▶▶
-              </button>
-              <select 
-                value={itemsPerPage}
-                style={{ padding: '6px', border: '1px solid #ddd' }}
-              >
-                <option value="10">10 / trang</option>
-              </select>
-            </div>
-          </div>
+          <Pagination
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            setItemsPerPage={setItemsPerPage}
+            totalItems={filteredVehicles.length}
+            startIndex={startIndex}
+            endIndex={endIndex}
+          />
         )}
       </div>
 

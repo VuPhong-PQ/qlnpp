@@ -4,6 +4,7 @@ import { API_ENDPOINTS, api } from '../../config/api';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
 import { useExcelImportExport } from '../../hooks/useExcelImportExport.jsx';
 import { ExcelButtons } from '../common/ExcelButtons.jsx';
+import { Pagination } from '../common/Pagination';
 
 const ProductCategories = () => {
   const [showModal, setShowModal] = useState(false);
@@ -15,7 +16,7 @@ const ProductCategories = () => {
   
   // Phân trang
   const [currentPage, setCurrentPage] = useState(1);
-  const itemsPerPage = 10;
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   
   // Context menu (chuột phải)
   const [contextMenu, setContextMenu] = useState(null);
@@ -565,75 +566,15 @@ const ProductCategories = () => {
 
         {/* Phân trang */}
         {filteredCategories.length > 0 && (
-          <div style={{ 
-            display: 'flex', 
-            justifyContent: 'space-between', 
-            alignItems: 'center', 
-            padding: '16px 0',
-            borderTop: '1px solid #e0e0e0',
-            marginTop: '8px'
-          }}>
-            <div style={{ color: '#6c757d', fontSize: '14px' }}>
-              Hiển thị {startIndex + 1}-{Math.min(endIndex, filteredCategories.length)} trong tổng số {filteredCategories.length} bản ghi
-            </div>
-            <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
-              <button 
-                onClick={() => setCurrentPage(1)}
-                disabled={currentPage === 1}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid #ddd',
-                  background: currentPage === 1 ? '#f5f5f5' : '#fff',
-                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                  borderRadius: '4px'
-                }}
-              >
-                ⏮ Đầu
-              </button>
-              <button 
-                onClick={() => setCurrentPage(p => Math.max(1, p - 1))}
-                disabled={currentPage === 1}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid #ddd',
-                  background: currentPage === 1 ? '#f5f5f5' : '#fff',
-                  cursor: currentPage === 1 ? 'not-allowed' : 'pointer',
-                  borderRadius: '4px'
-                }}
-              >
-                ◀ Trước
-              </button>
-              <span style={{ padding: '0 12px', color: '#333' }}>
-                Trang {currentPage} / {totalPages}
-              </span>
-              <button 
-                onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))}
-                disabled={currentPage === totalPages}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid #ddd',
-                  background: currentPage === totalPages ? '#f5f5f5' : '#fff',
-                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                  borderRadius: '4px'
-                }}
-              >
-                Sau ▶
-              </button>
-              <button 
-                onClick={() => setCurrentPage(totalPages)}
-                disabled={currentPage === totalPages}
-                style={{
-                  padding: '6px 12px',
-                  border: '1px solid #ddd',
-                  background: currentPage === totalPages ? '#f5f5f5' : '#fff',
-                  cursor: currentPage === totalPages ? 'not-allowed' : 'pointer',
-                  borderRadius: '4px'
-                }}
-              >
-                Cuối ⏭
-              </button>
-            </div>
-          </div>
+          <Pagination
+            currentPage={currentPage}
+            setCurrentPage={setCurrentPage}
+            itemsPerPage={itemsPerPage}
+            setItemsPerPage={setItemsPerPage}
+            totalItems={filteredCategories.length}
+            startIndex={startIndex}
+            endIndex={endIndex}
+          />
         )}
 
         {filteredCategories.length === 0 && (
