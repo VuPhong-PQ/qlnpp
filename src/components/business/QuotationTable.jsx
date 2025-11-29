@@ -416,16 +416,16 @@ const getInitialRightCols = () => {
     <div className="quotation-table-page" style={{background: '#f7f8fa', minHeight: '100vh', padding: 16, display: 'flex', gap: 16}}>
       {/* Left 30% panel */}
       <div className="left-panel" style={{borderRadius: 16, boxShadow: '0 2px 16px #e5e7eb', marginRight: 0, background: '#fff', padding: 0, width: '30%'}}>
-        <div className="panel-header" style={{fontSize: 22, fontWeight: 700, padding: '24px 24px 8px 24px', border: 'none'}}>
-          DANH SÁCH BÁO GIÁ
-        </div>
-        <div style={{padding: '0 24px 8px 24px'}}>
-          <div style={{margin: '8px 0 12px 0', fontSize: 16}}>Tổng {filteredQuotations.length}</div>
-          <div style={{display: 'flex', gap: 8, marginBottom: 12}}>
+        <div className="panel-header" style={{fontSize: 20, fontWeight: 700, padding: '20px 20px 8px 20px', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
+          <span>DANH SÁCH BÁO GIÁ</span>
+          <div className="panel-actions" style={{display: 'flex', gap: 8}}>
             <button style={{background: '#a259ec', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb'}}>C</button>
             <button style={{background: '#ff6f91', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb'}}>I</button>
             <button style={{background: '#888', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb'}} onClick={() => setShowLeftSettings(true)}><span className="anticon">⚙</span></button>
           </div>
+        </div>
+        <div style={{padding: '0 20px 8px 20px'}}>
+          <div style={{margin: '8px 0 12px 0', fontSize: 16}}>Tổng {filteredQuotations.length}</div>
           <div style={{overflowX: 'auto', borderRadius: 8, border: '1px solid #f0f0f0', background: '#fafbfc', width: '100%'}}>
             <table className="quotation-list-table" style={{minWidth: 480, width: 'max-content'}}>
               <thead>

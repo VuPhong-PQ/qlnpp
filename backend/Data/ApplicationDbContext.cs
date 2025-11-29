@@ -23,7 +23,9 @@ namespace QlnppApi.Data
         public DbSet<CompanyInfo> CompanyInfos { get; set; }
         public DbSet<BankLoan> BankLoans { get; set; }
         public DbSet<Vehicle> Vehicles { get; set; }
-
+        public DbSet<User> Users { get; set; }
+        public DbSet<UserPermission> UserPermissions { get; set; }
+        public DbSet<GroupPermission> GroupPermissions { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -126,6 +128,135 @@ namespace QlnppApi.Data
             modelBuilder.Entity<Product>()
                 .Property(p => p.WholesaleDiscount4)
                 .HasPrecision(18, 2);
+
+            // Thêm cấu hình HasPrecision cho các thuộc tính decimal còn thiếu
+            modelBuilder.Entity<Product>()
+                .Property(p => p.Conversion1)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.Conversion2)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.Conversion3)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.Conversion4)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.ImportPrice)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.ImportPrice1)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.ImportPrice2)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.ImportPrice3)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.ImportPrice4)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.RetailPrice2)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.RetailPrice3)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.RetailPrice4)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.RetailDiscount1)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.RetailDiscount2)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.RetailDiscount3)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.RetailDiscount4)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.WholesalePrice2)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.WholesalePrice3)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.WholesalePrice4)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.WholesaleDiscount1)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.WholesaleDiscount2)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.ShippingFee)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.ShippingFee1)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.ShippingFee2)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.ShippingFee3)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Product>()
+                .Property(p => p.ShippingFee4)
+                .HasPrecision(18, 2);
+
+            // User & Permissions
+            modelBuilder.Entity<User>(entity =>
+            {
+                entity.HasKey(u => u.Id);
+                entity.Property(u => u.Username).HasMaxLength(200);
+                entity.Property(u => u.Email).HasMaxLength(250);
+            });
+
+            modelBuilder.Entity<UserPermission>(entity =>
+            {
+                entity.HasKey(up => up.Id);
+                entity.HasOne(up => up.User)
+                      .WithMany(u => u.Permissions)
+                      .HasForeignKey(up => up.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                entity.Property(up => up.ResourceKey).HasMaxLength(200);
+            });
+
+            modelBuilder.Entity<GroupPermission>(entity =>
+            {
+                entity.HasKey(gp => gp.Id);
+                entity.Property(gp => gp.ResourceKey).IsRequired().HasMaxLength(200);
+            });
         }
     }
 }

@@ -15,6 +15,7 @@ export const API_ENDPOINTS = {
   // Main - Danh mục chính
   products: `${API_BASE_URL}/products`,
   customers: `${API_BASE_URL}/customers`,
+  users: `${API_BASE_URL}/users`,
   suppliers: `${API_BASE_URL}/suppliers`,
   warehouses: `${API_BASE_URL}/warehouses`,
   vehicles: `${API_BASE_URL}/vehicles`,

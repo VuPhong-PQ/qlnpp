@@ -1,5 +1,8 @@
 using Microsoft.EntityFrameworkCore;
 using QlnppApi.Data;
+using QlnppApi.Models;
+using System.Security.Cryptography;
+using System.Text;
 
 var builder = WebApplication.CreateBuilder(args);
 
@@ -62,7 +65,69 @@ app.MapGet("/weatherforecast", () =>
 })
 .WithName("GetWeatherForecast");
 
+// Seed default superadmin user
+using (var scope = app.Services.CreateScope())
+{
+    var services = scope.ServiceProvider;
+    var db = services.GetRequiredService<ApplicationDbContext>();
+    try
+    {
+        // Try apply migrations if possible; ignore warnings/errors about pending model changes
+        db.Database.Migrate();
+    }
+    catch (Exception migrateEx)
+    {
+        Console.WriteLine("Migration attempt failed (ignored): " + migrateEx.Message);
+    }
+
+    try
+    {
+        if (db.Database.CanConnect())
+        {
+            var exists = db.Users.Any(u => u.Username == "superadmin");
+            if (!exists)
+            {
+                var user = new User
+                {
+                    Username = "superadmin",
+                    PasswordHash = ComputeSha256Hash("vuphong"),
+                    Name = "Super Admin",
+                    Email = null,
+                    Phone = null,
+                    IsInactive = false
+                };
+                db.Users.Add(user);
+                db.SaveChanges();
+                Console.WriteLine("Seeded default superadmin user.");
+            }
+        }
+    }
+    catch (Exception ex)
+    {
+        // Log to console if seeding fails
+        Console.WriteLine("Error seeding default user: " + ex.Message);
+    }
+}
+
 app.Run();
+
+static string ComputeSha256Hash(string rawData)
+{
+    // Create a SHA256
+    using (var sha256Hash = SHA256.Create())
+    {
+        // ComputeHash - returns byte array
+        byte[] bytes = sha256Hash.ComputeHash(Encoding.UTF8.GetBytes(rawData));
+
+        // Convert byte array to a string
+        var builder = new StringBuilder();
+        for (int i = 0; i < bytes.Length; i++)
+        {
+            builder.Append(bytes[i].ToString("x2"));
+        }
+        return builder.ToString();
+    }
+}
 
 record WeatherForecast(DateOnly Date, int TemperatureC, string? Summary)
 {
