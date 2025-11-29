@@ -309,10 +309,15 @@ function QuotationTable() {
   const [[initLeftVisible, initLeftOrder]] = [getInitialQuotationCols()];
   const [leftVisibleCols, setLeftVisibleCols] = useState(initLeftVisible);
   const [leftColOrder, setLeftColOrder] = useState(initLeftOrder);
-  const [leftColWidths, setLeftColWidths] = useState([140, 180, 120, 120, 60]);
+  const [leftColWidths, setLeftColWidths] = useState([140, 180, 120]);
   const [showLeftSettings, setShowLeftSettings] = useState(false);
   const [showLeftSearch, setShowLeftSearch] = useState(false);
   const [leftSearch, setLeftSearch] = useState({ code: '', dateFrom: '', dateTo: '' });
+  // pagination for left panel
+  const [leftPage, setLeftPage] = useState(1);
+  const [leftPageSize, setLeftPageSize] = useState(10);
+  // context menu state for left rows
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, quotation: null });
 
 // --- CẤU HÌNH CỘT, DRAG, LƯU LOCALSTORAGE PANEL PHẢI ---
 const QUOTATION_RIGHT_COLS_KEY = 'quotation_detail_table_cols_v1';
@@ -369,6 +374,12 @@ const getInitialRightCols = () => {
   const filteredQuotations = quotations.filter(q =>
     (!leftSearch.code || q.code.toLowerCase().includes(leftSearch.code.toLowerCase()))
   );
+  // paging for left panel
+  const leftTotal = filteredQuotations.length;
+  const leftTotalPages = Math.max(1, Math.ceil(leftTotal / leftPageSize));
+  const leftStart = leftTotal === 0 ? 0 : (leftPage - 1) * leftPageSize + 1;
+  const leftEnd = Math.min(leftTotal, leftPage * leftPageSize);
+  const pagedLeftQuotations = filteredQuotations.slice((leftPage - 1) * leftPageSize, (leftPage - 1) * leftPageSize + leftPageSize);
 
   // Handlers for column resizing
   const handleLeftResize = (idx, w) => {
@@ -412,6 +423,17 @@ const getInitialRightCols = () => {
     ? quotationDetails.filter(d => d.quotationCode === selectedQuotation.code)
     : [];
 
+  // hide context menu when clicking elsewhere or pressing Escape
+  React.useEffect(() => {
+    const handleAnyClick = (e) => {
+      if (contextMenu.visible) setContextMenu({ visible: false, x: 0, y: 0, quotation: null });
+    };
+    const handleEsc = (e) => { if (e.key === 'Escape') setContextMenu({ visible: false, x: 0, y: 0, quotation: null }); };
+    document.addEventListener('mousedown', handleAnyClick);
+    document.addEventListener('keydown', handleEsc);
+    return () => { document.removeEventListener('mousedown', handleAnyClick); document.removeEventListener('keydown', handleEsc); };
+  }, [contextMenu.visible]);
+
   return (
     <div className="quotation-table-page" style={{background: '#f7f8fa', minHeight: '100vh', padding: 16, display: 'flex', gap: 16}}>
       {/* Left 30% panel */}
@@ -419,13 +441,42 @@ const getInitialRightCols = () => {
         <div className="panel-header" style={{fontSize: 20, fontWeight: 700, padding: '20px 20px 8px 20px', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
           <span>DANH SÁCH BÁO GIÁ</span>
           <div className="panel-actions" style={{display: 'flex', gap: 8}}>
-            <button style={{background: '#a259ec', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb'}}>C</button>
-            <button style={{background: '#ff6f91', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb'}}>I</button>
-            <button style={{background: '#888', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb'}} onClick={() => setShowLeftSettings(true)}><span className="anticon">⚙</span></button>
+            {/* two small shortcut buttons removed as requested; gear moved to the total row */}
           </div>
+          {/* Context menu for left list (right-click) */}
+          {contextMenu.visible && (
+            <div
+              onClick={e => e.stopPropagation()}
+              style={{position: 'fixed', left: contextMenu.x, top: contextMenu.y, background: '#fff', boxShadow: '0 6px 20px rgba(0,0,0,0.12)', borderRadius: 6, zIndex: 2000, minWidth: 160}}
+            >
+              <div style={{padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8}} onClick={(e) => { e.stopPropagation(); setSelectedQuotation(contextMenu.quotation); setContextMenu({ visible: false, x:0, y:0, quotation: null }); }}>
+                <span style={{color: '#4f8cff'}}>✏️</span>
+                <span>Xem chi tiết</span>
+              </div>
+              <div style={{height: 1, background: '#f0f0f0'}} />
+              <div style={{padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8}} onClick={(e) => {
+                e.stopPropagation();
+                const q = contextMenu.quotation;
+                if (!q) return;
+                if (window.confirm('Bạn có chắc muốn xóa báo giá ' + q.code + ' ?')) {
+                  setQuotations(prev => prev.filter(x => x.id !== q.id));
+                  if (selectedQuotation?.id === q.id) setSelectedQuotation(null);
+                }
+                setContextMenu({ visible: false, x:0, y:0, quotation: null });
+              }}>
+                <span style={{color: '#d9534f'}}>🗑️</span>
+                <span>Xóa</span>
+              </div>
+            </div>
+          )}
         </div>
         <div style={{padding: '0 20px 8px 20px'}}>
-          <div style={{margin: '8px 0 12px 0', fontSize: 16}}>Tổng {filteredQuotations.length}</div>
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '8px 0 12px 0'}}>
+            <div style={{fontSize: 16}}>Tổng {filteredQuotations.length}</div>
+            <div style={{display: 'flex', alignItems: 'center'}}>
+              <button style={{background: '#888', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb', marginLeft: 8}} onClick={() => setShowLeftSettings(true)} id="left-settings-gear-btn"><span className="anticon">⚙</span></button>
+            </div>
+          </div>
           <div style={{overflowX: 'auto', borderRadius: 8, border: '1px solid #f0f0f0', background: '#fafbfc', width: '100%'}}>
             <table className="quotation-list-table" style={{minWidth: 480, width: 'max-content'}}>
               <thead>
@@ -456,11 +507,16 @@ const getInitialRightCols = () => {
                 </tr>
               </thead>
               <tbody>
-                {filteredQuotations.map((q, idx) => (
+                {pagedLeftQuotations.map((q, idx) => (
                   <tr
                     key={q.id}
                     className={selectedQuotation?.id === q.id ? 'selected' : ''}
                     onClick={() => setSelectedQuotation(q)}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      // show context menu
+                      setContextMenu({ visible: true, x: e.clientX, y: e.clientY, quotation: q });
+                    }}
                   >
                     {leftColOrder.map((key, colIdx) => {
                       const col = defaultLeftColumns.find(c => c.key === key);
@@ -502,12 +558,18 @@ const getInitialRightCols = () => {
             </table>
           </div>
           <div style={{margin: '12px 0 0 0', display: 'flex', alignItems: 'center', gap: 8, fontSize: 15}}>
-            Dòng 1-{filteredQuotations.length} trên tổng {filteredQuotations.length} dòng
-            <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28, marginLeft: 8}}>{'<'}</button>
-            <span style={{fontWeight: 600}}>1</span>
-            <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}}>{'>'}</button>
-            <select style={{marginLeft: 8, borderRadius: 4, border: '1px solid #e5e7eb', padding: '2px 8px'}}>
-              <option>10 / trang</option>
+            <div>{`Dòng ${leftStart}-${leftEnd} trên tổng ${leftTotal} dòng`}</div>
+            <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28, marginLeft: 8}} onClick={() => setLeftPage(p => Math.max(1, p - 1))}>{'<'}</button>
+            <span style={{fontWeight: 600}}>{leftPage}</span>
+            <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setLeftPage(p => Math.min(leftTotalPages, p + 1))}>{'>'}</button>
+            <select value={leftPageSize} onChange={(e) => { setLeftPageSize(parseInt(e.target.value, 10)); setLeftPage(1); }} style={{marginLeft: 8, borderRadius: 4, border: '1px solid #e5e7eb', padding: '2px 8px'}}>
+              <option value={10}>10 / trang</option>
+              <option value={20}>20 / trang</option>
+              <option value={50}>50 / trang</option>
+              <option value={100}>100 / trang</option>
+              <option value={200}>200 / trang</option>
+              <option value={500}>500 / trang</option>
+              <option value={1000}>1000 / trang</option>
             </select>
           </div>
         </div>
@@ -550,54 +612,62 @@ const getInitialRightCols = () => {
       {/* Right 70% panel */}
       <div className="right-panel" style={{borderRadius: 16, boxShadow: '0 2px 16px #e5e7eb', background: '#fff', padding: 0, width: '70%'}}>
         <div className="panel-header" style={{fontSize: 22, fontWeight: 700, padding: '24px 24px 8px 24px', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
-          <span>THÔNG TIN BÁO GIÁ</span>
-          <button style={{background: '#1677ff', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 16, padding: '8px 20px', boxShadow: '0 2px 8px #e5e7eb'}}>+ Tạo mới</button>
+          <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
+            <span>THÔNG TIN BÁO GIÁ</span>
+            <button style={{background: '#1677ff', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, padding: '6px 12px', boxShadow: '0 2px 8px #e5e7eb'}}>+ Tạo mới</button>
+          </div>
+          <div />
         </div>
         <div style={{padding: '0 24px 24px 24px'}}>
           {selectedQuotation ? (
             <>
-              <div style={{display: 'flex', flexWrap: 'wrap', gap: 24, margin: '16px 0 8px 0'}}>
+              <div style={{display: 'flex', gap: 12, margin: '8px 0 6px 0'}}>
                 <div style={{flex: 1, minWidth: 220}}>
                   <div style={{fontWeight: 600, marginBottom: 4}}><span style={{color: '#ff6f91'}}>*</span> Số báo giá</div>
-                  <input style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 8, fontSize: 16, background: '#f7f8fa'}} value={selectedQuotation.code} readOnly />
+                  <input style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6, fontSize: 15, background: '#f7f8fa'}} value={selectedQuotation.code} readOnly />
                 </div>
                 <div style={{flex: 1, minWidth: 220}}>
-                  <div style={{fontWeight: 600, marginBottom: 4}}><span style={{color: '#ff6f91'}}>*</span> Ngày lập</div>
-                  <input style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 8, fontSize: 16, background: '#f7f8fa'}} value={new Date().toLocaleDateString('en-GB')} readOnly />
-                </div>
-                <div style={{flex: 1, minWidth: 220}}>
-                  <div style={{fontWeight: 600, marginBottom: 4}}><span style={{color: '#ff6f91'}}>*</span> Loại báo giá</div>
-                  <input style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 8, fontSize: 16, background: '#f7f8fa'}} value={selectedQuotation.quotationType} readOnly />
-                </div>
-                <div style={{flex: 2, minWidth: 220}}>
                   <div style={{fontWeight: 600, marginBottom: 4}}>Ghi chú</div>
-                  <textarea style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 8, fontSize: 16, background: '#f7f8fa', minHeight: 38}} value={selectedQuotation.note} readOnly />
+                  <textarea style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6, fontSize: 15, background: '#f7f8fa', height: 36, minHeight: 36, lineHeight: '18px', resize: 'none'}} value={selectedQuotation.note} readOnly />
                 </div>
               </div>
-              <div style={{display: 'flex', flexWrap: 'wrap', gap: 24, margin: '8px 0 16px 0'}}>
+
+              <div style={{display: 'flex', gap: 12, margin: '6px 0 8px 0'}}>
+                <div style={{flex: 1, minWidth: 220}}>
+                  <div style={{fontWeight: 600, marginBottom: 4}}><span style={{color: '#ff6f91'}}>*</span> Ngày lập</div>
+                  <input style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6, fontSize: 15, background: '#f7f8fa'}} value={new Date().toLocaleDateString('en-GB')} readOnly />
+                </div>
                 <div style={{flex: 1, minWidth: 220}}>
                   <div style={{fontWeight: 600, marginBottom: 4}}>Chọn hàng hóa báo giá <span style={{color: '#bbb', marginLeft: 4}} title="Chọn từng hàng hóa hoặc tất cả"><span className="anticon">?</span></span></div>
-                  <div style={{display: 'flex', gap: 16, alignItems: 'center'}}>
+                  <div style={{display: 'flex', gap: 12, alignItems: 'center'}}>
                     <label><input type="radio" name="hhbg" disabled /> Tất cả hàng hóa</label>
                     <label><input type="radio" name="hhbg" checked readOnly /> Chọn từng hàng hóa</label>
                   </div>
                 </div>
+              </div>
+
+              <div style={{display: 'flex', gap: 12, margin: '6px 0 8px 0'}}>
+                <div style={{flex: 1, minWidth: 220}}>
+                  <div style={{fontWeight: 600, marginBottom: 4}}><span style={{color: '#ff6f91'}}>*</span> Loại báo giá</div>
+                  <input style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6, fontSize: 15, background: '#f7f8fa'}} value={selectedQuotation.quotationType} readOnly />
+                </div>
                 <div style={{flex: 1, minWidth: 220}}>
                   <div style={{fontWeight: 600, marginBottom: 4}}>Người lập</div>
-                  <input style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 8, fontSize: 16, background: '#f7f8fa'}} value={selectedQuotation.employee} readOnly />
+                  <input style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6, fontSize: 15, background: '#f7f8fa'}} value={selectedQuotation.employee} readOnly />
                 </div>
               </div>
-              <div style={{margin: '8px 0 8px 0', fontWeight: 600, fontSize: 16}}>Tổng 0</div>
-              {/* Nút thao tác khác nếu cần, có thể bỏ hoặc chuyển sang phải */}
-              {/* Nút bánh răng đặt bên ngoài bảng, phía trên cột "Thao tác" */}
-              <div style={{display: 'flex', justifyContent: 'flex-end', margin: '0 0 4px 0', position: 'relative'}}>
-                <button
-                  style={{background: '#888', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb'}}
-                  onClick={() => setShowRightSettings(true)}
-                  id="right-settings-gear-btn"
-                >
-                  <span className="anticon">⚙</span>
-                </button>
+              <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '6px 0 6px 0'}}>
+                <div style={{fontWeight: 600, fontSize: 15}}>Tổng 0</div>
+                <div>
+                  <button
+                    style={{background: '#888', color: '#fff', border: 'none', borderRadius: 8, width: 36, height: 36, fontSize: 18, boxShadow: '0 2px 8px #e5e7eb'}}
+                    onClick={() => setShowRightSettings(true)}
+                    id="right-settings-gear-btn"
+                    title="Cài đặt cột"
+                  >
+                    <span className="anticon">⚙</span>
+                  </button>
+                </div>
               </div>
               {showRightSettings && (
                 <div className="settings-modal-overlay">
@@ -685,7 +755,7 @@ const getInitialRightCols = () => {
                   </tbody>
                 </table>
               </div>
-              <div style={{margin: '12px 0 0 0', display: 'flex', alignItems: 'center', gap: 8, fontSize: 15}}>
+              <div style={{margin: '12px 0 0 0', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, fontSize: 15}}>
                 <button style={{background: '#4f8cff', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 16, padding: '8px 20px', boxShadow: '0 2px 8px #e5e7eb'}}><span className="anticon">📁</span> Lưu lại</button>
                 <button style={{background: '#7d3cff', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 16, padding: '8px 20px', boxShadow: '0 2px 8px #e5e7eb'}}><span className="anticon">🖨</span> In A4</button>
                 <button style={{background: '#00c48c', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 16, padding: '8px 20px', boxShadow: '0 2px 8px #e5e7eb'}}><span className="anticon">📤</span> Xuất Excel</button>
