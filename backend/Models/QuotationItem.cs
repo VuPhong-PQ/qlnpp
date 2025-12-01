@@ -42,6 +42,9 @@ namespace QlnppApi.Models
         [Column(TypeName = "decimal(18,2)")]
         public decimal? Price1 { get; set; }
 
+        [Column(TypeName = "decimal(18,4)")]
+        public decimal? Conversion1 { get; set; }
+
         [MaxLength(1000)]
         public string? Note { get; set; }
     }

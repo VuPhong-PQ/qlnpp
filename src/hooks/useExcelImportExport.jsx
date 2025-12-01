@@ -27,6 +27,8 @@ export const useExcelImportExport = (config) => {
     transformDataForExport,
     transformDataForImport
   } = config;
+  // allowMissingFields: when true, do not block import if some required columns are missing; show warning and allow continue
+  const { allowMissingFields = false } = config;
 
   const fileInputRef = useRef(null);
 
@@ -64,11 +66,17 @@ export const useExcelImportExport = (config) => {
 
     importFromExcel(file, async (excelData) => {
       // Validate required fields
-      const validation = validateImportData(excelData, requiredFields);
+      const validation = validateImportData(excelData, requiredFields || []);
 
       if (!validation.isValid) {
-        alert('Lỗi dữ liệu:\n' + validation.errors.join('\n'));
-        return;
+        if (allowMissingFields) {
+          // warn user and ask to continue
+          const proceed = window.confirm('Cảnh báo khi nhập dữ liệu:\n' + validation.errors.join('\n') + '\n\nBạn có muốn tiếp tục nhập những cột còn lại không?');
+          if (!proceed) return;
+        } else {
+          alert('Lỗi dữ liệu:\n' + validation.errors.join('\n'));
+          return;
+        }
       }
 
       // Confirm import

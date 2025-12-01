@@ -448,14 +448,30 @@ const Products = () => {
     apiPost: async (data) => {
       // Kiểm tra trùng lặp: kiểm tra mã hàng hóa
       const existingProducts = await api.get(API_ENDPOINTS.products);
-      const isDuplicate = existingProducts.some(
-        product => product.code.toLowerCase().trim() === data.code.toLowerCase().trim()
+      const existing = existingProducts.find(
+        product => (product.code || '').toString().toLowerCase().trim() === (data.code || '').toString().toLowerCase().trim()
       );
 
-      if (isDuplicate) {
-        throw new Error(`Sản phẩm có mã "${data.code}" đã tồn tại, bỏ qua`);
+      // Nếu đã tồn tại, cập nhật các trường bổ sung thay vì ném lỗi
+      if (existing) {
+        try {
+          // Merge: giữ các trường hiện có, ghi đè bằng data nếu data có giá trị (không null/empty string)
+          const merged = { ...existing };
+          Object.keys(data).forEach(k => {
+            const v = data[k];
+            if (v !== undefined && v !== null && String(v).toString().trim() !== '') {
+              merged[k] = v;
+            }
+          });
+
+          await api.put(API_ENDPOINTS.products, existing.id, merged);
+          return true;
+        } catch (err) {
+          throw new Error(`Cập nhật sản phẩm ${data.code} thất bại: ${err.message}`);
+        }
       }
 
+      // Nếu chưa tồn tại, tạo mới
       // Kiểm tra và tạo category nếu chưa tồn tại
       if (data.category) {
         try {
@@ -684,7 +700,9 @@ const Products = () => {
       status: row['Trạng thái'] === 'Ngưng hoạt động' ? 'inactive' : 'active'
     }),
     onImportStart: () => setLoading(true),
-    onImportComplete: () => setLoading(false)
+    onImportComplete: () => setLoading(false),
+    // Allow importing even if some optional columns are missing in Excel
+    allowMissingFields: true
   });
 
   // Cột và độ rộng mặc định

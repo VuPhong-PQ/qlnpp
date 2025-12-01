@@ -13,6 +13,7 @@ const defaultRightColumns = [
   { key: 'itemName', title: 'Tên hàng' },
   { key: 'description', title: 'Mô tả' },
   { key: 'unit', title: 'Đvt' },
+  { key: 'Conversion1', title: 'Quy đổi' },
   { key: 'price', title: 'Đơn giá' },
   { key: 'unit1', title: 'Đvt 1' },
   { key: 'price1', title: 'Đơn giá 1' },
@@ -451,6 +452,8 @@ const getInitialRightCols = () => {
   const detailRows = selectedQuotation
     ? (selectedQuotation.items || selectedQuotation.Items || []).map(item => ({
         ...item,
+        // normalize Conversion1 for consistency (server uses Conversion1)
+        Conversion1: item.Conversion1 ?? item.conversion1 ?? item.conversion ?? 0,
         note: item.note || item.Note || ''
       }))
     : [];
@@ -575,19 +578,27 @@ const getInitialRightCols = () => {
   const addSelectedProductsToQuotation = () => {
     if (!selectedQuotation) return;
     const picked = productList.filter(p => selectedProductIds.includes(p.id));
-    const items = picked.map(p => ({
-      // Use lowercase/camelCase names returned by the Products API
-      itemType: p.category || 'Hàng hóa',
-      barcode: p.barcode || '',
-      itemCode: p.code || '',
-      itemName: p.name || p.nameVi || p.code || '',
-      description: p.description || p.note || '',
-      unit: p.defaultUnit || p.baseUnit || '',
-      price: p.retailPrice ?? 0,
-      unit1: p.unit1 || '',
-      price1: p.retailPrice1 ?? null,
-      note: p.note || ''
-    }));
+    console.log('Selected products for quotation:', picked);
+    const items = picked.map(p => {
+      console.log('Product fields:', Object.keys(p));
+      console.log('Conversion1 value:', p.Conversion1, 'conversion1:', p.conversion1);
+      return {
+        // Use lowercase/camelCase names returned by the Products API
+        itemType: p.Category || p.category || 'Hàng hóa',
+        barcode: p.Barcode || p.barcode || '',
+        itemCode: p.Code || p.code || '',
+        itemName: p.Name || p.VatName || p.name || p.nameVi || p.code || '',
+        description: p.Description || p.description || p.note || '',
+        unit: p.DefaultUnit || p.BaseUnit || p.defaultUnit || p.baseUnit || '',
+        // include conversion/quy đổi if available on product (use Conversion1 field from DB)
+        Conversion1: p.Conversion1 ?? p.conversion1 ?? p.conversion ?? 0,
+        price: p.RetailPrice ?? p.retailPrice ?? 0,
+        unit1: p.Unit1 || p.unit1 || '',
+        price1: p.RetailPrice1 ?? p.retailPrice1 ?? null,
+        note: p.note || ''
+      };
+    });
+    console.log('Created quotation items:', items);
     const existing = selectedQuotation.items || selectedQuotation.Items || [];
     const merged = [...existing, ...items];
     setSelectedQuotation(s => ({ ...(s || {}), items: merged }));
@@ -664,6 +675,8 @@ const getInitialRightCols = () => {
       itemName: it.itemName || it.ItemName || '',
       description: it.description || it.Description || '',
       unit: it.unit || it.Unit || '',
+      // Conversion1 (quy đổi) from backend QuotationItems model
+      Conversion1: it.Conversion1 ?? it.conversion1 ?? it.conversion ?? 0,
       price: it.price ?? it.Price ?? 0,
       unit1: it.unit1 || it.Unit1 || '',
       price1: it.price1 ?? it.Price1 ?? null,
@@ -676,7 +689,7 @@ const getInitialRightCols = () => {
     const css = `
       /* A4 portrait */
       @page { size: A4 portrait; margin: 18mm 12mm 12mm 12mm; }
-      body { font-family: Arial, 'Times New Roman', serif; font-size: 11px; color: #000; }
+      body { font-family: 'Times New Roman', Times, serif; font-size: 11px; color: #000; }
       .company { text-align: left; font-weight: 700; }
       .title { text-align: center; font-size: 18px; font-weight: 700; margin: 6px 0 6px 0; }
       .meta { margin-bottom: 8px; }
@@ -700,11 +713,13 @@ const getInitialRightCols = () => {
         <td>${it.itemCode}</td>
         <td>${it.itemName}</td>
         <td class="center">${it.unit}</td>
+        <td class="right">${it.conversion !== null && it.conversion !== undefined && it.conversion !== '' ? Number(it.conversion).toLocaleString('vi-VN') : ''}</td>
+        <td class="right">${formatCurrency(it.price)}</td>
+        <td class="center">${it.unit}</td>
+        <td class="right">${it.Conversion1 !== null && it.Conversion1 !== undefined && it.Conversion1 !== '' ? Number(it.Conversion1).toLocaleString('vi-VN') : ''}</td>
         <td class="right">${formatCurrency(it.price)}</td>
         <td class="center">${it.unit1}</td>
         <td class="right">${formatCurrency(it.price1)}</td>
-        <td>${it.description}</td>
-        <td>${it.note}</td>
       </tr>
     `).join('');
 
@@ -762,9 +777,10 @@ const getInitialRightCols = () => {
               <th style="width:110px">Mã hàng</th>
               <th class="col-name">Tên hàng</th>
               <th style="width:60px">ĐVT</th>
+              <th style="width:70px">Quy đổi</th>
               <th style="width:90px">Đơn giá theo ĐVT</th>
               <th style="width:60px">ĐVT1</th>
-              <th style="width:90px">Đơn giá ĐVT1</th>
+              <th style="width:90px">Đơn giá 1</th>
               <th class="col-desc">Mô tả</th>
               <th style="width:120px">Ghi chú</th>
             </tr>
@@ -853,18 +869,28 @@ const getInitialRightCols = () => {
       return '';
     };
 
-    const rows = items.map((it, idx) => ({
-      stt: idx + 1,
-      barcode: getItemField(it, 'barcode') || '',
-      itemCode: getItemField(it, 'itemCode') || '',
-      itemName: getItemField(it, 'itemName') || '',
-      unit: getItemField(it, 'unit') || '',
-      price: getItemField(it, 'price') ?? 0,
-      unit1: getItemField(it, 'unit1') || '',
-      price1: getItemField(it, 'price1') ?? null,
-      description: getItemField(it, 'description') || '',
-      note: quotation.note || quotation.Note || ''  // Use quotation-level note for all items
-    }));
+    const rows = items.map((it, idx) => {
+      console.log('Excel export - processing item:', {
+        itemCode: it.itemCode || it.ItemCode,
+        conversion1: it.conversion1,
+        Conversion1: it.Conversion1,
+        allFields: Object.keys(it)
+      });
+      return {
+        stt: idx + 1,
+        barcode: getItemField(it, 'barcode') || '',
+        itemCode: getItemField(it, 'itemCode') || '',
+        itemName: getItemField(it, 'itemName') || '',
+        unit: getItemField(it, 'unit') || '',
+        // include Conversion1 (quy đổi) using backend field name
+        Conversion1: it.Conversion1 ?? it.conversion1 ?? it.conversion ?? 0,
+        price: getItemField(it, 'price') ?? 0,
+        unit1: getItemField(it, 'unit1') || '',
+        price1: getItemField(it, 'price1') ?? null,
+        description: getItemField(it, 'description') || '',
+        note: quotation.note || quotation.Note || ''  // Use quotation-level note for all items
+      };
+    });
 
     try { console.log('exportQuotationExcel - rows JSON:', JSON.stringify(rows, null, 2)); } catch (e) {}
 
@@ -873,7 +899,7 @@ const getInitialRightCols = () => {
 
     // Build HTML table similar to sample: company header, title, metadata, then items table
     const html = `<!doctype html>
-      <html><head><meta charset="utf-8" /></head><body>
+      <html><head><meta charset="utf-8" /><style>body{font-family:'Times New Roman', Times, serif; font-size:12px;}</style></head><body>
       <table>
         <tr><td style="font-weight:700; font-size:14px;">${getField('companyName') || 'NPP THỈNH PHÚ QUỐC'}</td></tr>
         <tr><td>Địa chỉ: ${getField('address')}</td></tr>
@@ -896,24 +922,26 @@ const getInitialRightCols = () => {
             <th>ĐVT</th>
             <th>Đơn giá</th>
             <th>ĐVT1</th>
-            <th>Đơn giá ĐVT1</th>
+            <th>Đơn giá 1</th>
             <th>Mô tả</th>
             <th>Ghi chú</th>
+            <th>Quy đổi</th>
           </tr>
         </thead>
         <tbody>
           ${rows.map((r, idx) => `
             <tr>
               <td>${idx+1}</td>
-              <td>${escapeHtml(r.barcode)}</td>
+              <td style="mso-number-format:'@';">${escapeHtml(r.barcode)}</td>
               <td>${escapeHtml(r.itemCode)}</td>
               <td>${escapeHtml(r.itemName)}</td>
               <td>${escapeHtml(r.unit)}</td>
-              <td>${r.price !== null && r.price !== undefined ? Number(r.price).toLocaleString('vi-VN') : ''}</td>
+              <td style="mso-number-format:'#,##0.00';">${r.price !== null && r.price !== undefined ? r.price : ''}</td>
               <td>${escapeHtml(r.unit1)}</td>
-              <td>${r.price1 !== null && r.price1 !== undefined ? Number(r.price1).toLocaleString('vi-VN') : ''}</td>
+              <td style="mso-number-format:'#,##0.00';">${r.price1 !== null && r.price1 !== undefined ? r.price1 : ''}</td>
               <td>${escapeHtml(r.description)}</td>
               <td>${escapeHtml(r.note)}</td>
+              <td style="mso-number-format:'#,##0.00';">${r.Conversion1 !== null && r.Conversion1 !== undefined && r.Conversion1 !== '' && r.Conversion1 !== 0 ? r.Conversion1 : ''}</td>
             </tr>
           `).join('')}
         </tbody>
@@ -1144,7 +1172,7 @@ const getInitialRightCols = () => {
         )}
       </div>
       {/* Right 70% panel */}
-      <div className="right-panel" style={{borderRadius: 16, boxShadow: '0 2px 16px #e5e7eb', background: '#fff', padding: 0, width: '70%'}}>
+      <div className="right-panel" style={{borderRadius: 16, boxShadow: '0 2px 16px #e5e7eb', background: '#fff', padding: 0, width: '70%', overflowX: 'auto'}}>
         <div className="panel-header" style={{fontSize: 22, fontWeight: 700, padding: '24px 24px 8px 24px', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
           <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
             <span>THÔNG TIN BÁO GIÁ</span>
@@ -1255,8 +1283,8 @@ const getInitialRightCols = () => {
                   onClose={() => setShowProductPicker(false)}
                 />
               )}
-              <div className="table-scroll-x" style={{borderRadius: 8, border: '1px solid #f0f0f0', background: '#fafbfc'}}>
-                <table className="quotation-detail-table" style={{minWidth: 800}}>
+              <div className="table-scroll-x" style={{borderRadius: 8, border: '1px solid #f0f0f0', background: '#fafbfc', overflowX: 'auto', padding: 12}}>
+                <table className="quotation-detail-table" style={{minWidth: 900}}>
                   <thead>
                     <tr>
                       {rightColOrder.map((key, idx) => {
@@ -1329,8 +1357,8 @@ const getInitialRightCols = () => {
                               );
                             }
                             let value = row[key];
-                            // Format giá (show 0 as 0, but hide null/empty)
-                            if (key === 'price' || key === 'price1') {
+                            // Format numeric fields (Conversion1, price, price1)
+                            if (key === 'price' || key === 'price1' || key === 'Conversion1') {
                               if (value !== null && value !== undefined && value !== '') {
                                 value = Number(value).toLocaleString('vi-VN');
                               } else {
@@ -1497,20 +1525,36 @@ function ProductPickerModal({ visible, products, search, onSearchChange, selecte
   return (
     <div className="modal-overlay" style={{alignItems: 'flex-start', justifyContent: 'center'}}>
       <div ref={ref} style={{background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.13)', minWidth: 520, maxWidth: 860, marginTop: 60, padding: 0, zIndex: 1200, display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.18s'}}>
-        <div style={{padding: 16, display: 'flex', alignItems: 'center', gap: 12}}>
-          <div style={{fontWeight: 600, fontSize: 16}}>Chọn hàng hóa</div>
-          <div style={{flex: 1}}>
-            <div style={{display: 'flex', alignItems: 'center', border: '1px solid #e5e7eb', borderRadius: 6, padding: '4px 8px', background: '#fafbfc'}}>
-              <input
-                style={{flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, padding: '6px 0'}}
-                placeholder="Tìm kiếm theo mã, tên, mã vạch..."
-                value={search}
-                onChange={e => onSearchChange(e.target.value)}
-              />
-              <button style={{border: 'none', background: 'transparent', cursor: 'pointer', color: '#888'}} onClick={() => onSearchChange('')}>✖</button>
-            </div>
-          </div>
-        </div>
+                <div style={{padding: 16, display: 'flex', alignItems: 'center', gap: 12}}>
+                <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                  <input
+                    type="checkbox"
+                    checked={products && products.length > 0 && selectedIds && selectedIds.length === products.length}
+                    onChange={() => {
+                      const allSelected = products && products.length > 0 && selectedIds && selectedIds.length === products.length;
+                      if (allSelected) {
+                        // unselect all
+                        (selectedIds || []).slice().forEach(id => toggleSelect(id));
+                      } else {
+                        // select all
+                        (products || []).forEach(p => { if (!selectedIds.includes(p.id)) toggleSelect(p.id); });
+                      }
+                    }}
+                  />
+                  <div style={{fontWeight: 600, fontSize: 16}}>Chọn hàng hóa</div>
+                </div>
+                <div style={{flex: 1}}>
+                  <div style={{display: 'flex', alignItems: 'center', border: '1px solid #e5e7eb', borderRadius: 6, padding: '4px 8px', background: '#fafbfc'}}>
+                    <input
+                      style={{flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, padding: '6px 0'}}
+                      placeholder="Tìm kiếm theo mã, tên, mã vạch..."
+                      value={search}
+                      onChange={e => onSearchChange(e.target.value)}
+                    />
+                    <button style={{border: 'none', background: 'transparent', cursor: 'pointer', color: '#888'}} onClick={() => onSearchChange('')}>✖</button>
+                  </div>
+                </div>
+              </div>
         <div style={{padding: '0 16px 12px 16px', maxHeight: 360, overflowY: 'auto'}}>
           {(!products || products.length === 0) ? (
             <div style={{color: '#bbb', padding: 20, textAlign: 'center'}}>Không có kết quả</div>

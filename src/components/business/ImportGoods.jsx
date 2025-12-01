@@ -38,6 +38,29 @@ const ImportGoods = () => {
   const [importType, setImportType] = useState('');
   const [employee, setEmployee] = useState('');
 
+  // Column visibility & header filters for left table
+  const IMPORT_LEFT_COLS_KEY = 'import_goods_left_cols_v1';
+  const defaultLeftCols = ['checkbox','importNumber','createdDate','total','actions'];
+  const [leftVisibleCols, setLeftVisibleCols] = useState(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(IMPORT_LEFT_COLS_KEY));
+      if (Array.isArray(v)) return v;
+    } catch {}
+    return defaultLeftCols;
+  });
+  const [leftFilters, setLeftFilters] = useState({ importNumber: '', createdDate: '', total: '' });
+  // modal-based column filters (lists of selected values)
+  const [leftFilterLists, setLeftFilterLists] = useState({ importNumber: [], createdDate: [], total: [] });
+  const [activeHeaderModalColumn, setActiveHeaderModalColumn] = useState(null);
+  const [modalSearchTerm, setModalSearchTerm] = useState('');
+  const [modalSelections, setModalSelections] = useState([]);
+  const [modalAvailableItems, setModalAvailableItems] = useState([]);
+  const [leftPageSize, setLeftPageSize] = useState(() => {
+    try { const v = parseInt(localStorage.getItem('import_left_page_size')||'10',10); return isNaN(v)?10:v; } catch { return 10; }
+  });
+  const [leftPage, setLeftPage] = useState(1);
+  const [showLeftSettings, setShowLeftSettings] = useState(false);
+
   const [imports, setImports] = useState([
     {
       id: 1,
@@ -166,6 +189,30 @@ const ImportGoods = () => {
     return matchesSearch && matchesType && matchesEmployee && matchesCode && matchesDate;
   });
 
+  // apply header filters for left table (modal-driven list filters)
+  const filteredLeft = filteredImports.filter(i => {
+    const importMatch = leftFilterLists.importNumber && leftFilterLists.importNumber.length > 0
+      ? leftFilterLists.importNumber.includes(i.importNumber)
+      : true;
+    const dateMatch = leftFilterLists.createdDate && leftFilterLists.createdDate.length > 0
+      ? leftFilterLists.createdDate.includes(i.createdDate)
+      : true;
+    const totalValue = String((i.items||[]).reduce((s,it)=>s+(it.total||0),0));
+    const totalMatch = leftFilterLists.total && leftFilterLists.total.length > 0
+      ? leftFilterLists.total.includes(totalValue)
+      : true;
+    return importMatch && dateMatch && totalMatch;
+  });
+
+  React.useEffect(() => {
+    localStorage.setItem(IMPORT_LEFT_COLS_KEY, JSON.stringify(leftVisibleCols));
+  }, [leftVisibleCols]);
+
+  React.useEffect(() => {
+    localStorage.setItem('import_left_page_size', String(leftPageSize));
+    setLeftPage(1);
+  }, [leftPageSize]);
+
   const handleExport = () => {
     alert('Chức năng xuất Excel đang được phát triển');
   };
@@ -216,6 +263,19 @@ const ImportGoods = () => {
   // Modal tìm kiếm số phiếu
   const searchInputRef = useRef();
 
+  const openHeaderModal = (colKey) => {
+    setActiveHeaderModalColumn(colKey);
+    setModalSearchTerm('');
+    setModalSelections(leftFilterLists[colKey] ? [...leftFilterLists[colKey]] : []);
+    // prepare available values from current filteredImports
+    let items = [];
+    if (colKey === 'importNumber') items = Array.from(new Set(filteredImports.map(i => i.importNumber)));
+    else if (colKey === 'createdDate') items = Array.from(new Set(filteredImports.map(i => i.createdDate)));
+    else if (colKey === 'total') items = Array.from(new Set(filteredImports.map(i => String((i.items||[]).reduce((s,it)=>s+(it.total||0),0)))));
+    setModalAvailableItems(items);
+    setShowSearchModal(true);
+  };
+
   const columns = [
     {
       title: '',
@@ -224,7 +284,13 @@ const ImportGoods = () => {
       render: (_, record) => null,
     },
     {
-      title: <span>Số phiếu <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => setShowSearchModal(true)} /></span>,
+      title: (
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <span>Số phiếu</span>
+          <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('importNumber')} />
+          {leftFilterLists.importNumber && leftFilterLists.importNumber.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.importNumber.length})</span>}
+        </div>
+      ),
       dataIndex: 'importNumber',
       key: 'importNumber',
       render: (text, record) => (
@@ -233,18 +299,29 @@ const ImportGoods = () => {
       sorter: (a, b) => a.importNumber.localeCompare(b.importNumber),
     },
     {
-      title: 'Ngày nhập',
+      title: (
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <span>Ngày nhập</span>
+          <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('createdDate')} />
+          {leftFilterLists.createdDate && leftFilterLists.createdDate.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.createdDate.length})</span>}
+        </div>
+      ),
       dataIndex: 'createdDate',
       key: 'createdDate',
       render: (text) => text,
       sorter: (a, b) => a.createdDate.localeCompare(b.createdDate),
     },
     {
-      title: 'Tổng tiền',
+      title: (
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <span>Tổng tiền</span>
+          <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('total')} />
+          {leftFilterLists.total && leftFilterLists.total.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.total.length})</span>}
+        </div>
+      ),
       dataIndex: 'total',
       key: 'total',
       render: (_, record) => {
-        // Tính tổng tiền từ items
         const total = (record.items || []).reduce((sum, item) => sum + (item.total || 0), 0);
         return total.toLocaleString('vi-VN');
       },
@@ -294,21 +371,32 @@ const ImportGoods = () => {
           </select>
           <Button type="primary">Tìm kiếm</Button>
         </div>
-        <div className="search-panel-total">
-          <span>Tổng {filteredImports.length}</span>
+        <div className="search-panel-total" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <span>Tổng {filteredLeft.length}</span>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <button style={{background:'transparent',border:'none',cursor:'pointer'}} title="Cài đặt bảng" onClick={()=>setShowLeftSettings(true)}>⚙</button>
+          </div>
         </div>
         <div className="table-scroll-x" onContextMenu={handleTableContextMenu} style={{ position: 'relative' }}>
           <Table
             rowKey="id"
-            columns={columns}
-            dataSource={filteredImports}
+            columns={columns.filter(c => leftVisibleCols.includes(c.dataIndex || c.key || ''))}
+            dataSource={filteredLeft}
             rowSelection={{
               type: 'checkbox',
               ...rowSelection,
               columnTitle: '',
               columnWidth: 40,
             }}
-            pagination={false}
+            pagination={{
+              current: leftPage,
+              pageSize: leftPageSize,
+              total: filteredLeft.length,
+              showSizeChanger: true,
+              pageSizeOptions: ['10','20','50','100','200','500','1000'],
+              onShowSizeChange: (page, size) => { setLeftPageSize(size); },
+              onChange: (page, size) => { setLeftPage(page); setLeftPageSize(size); }
+            }}
             size="small"
             onRow={record => ({
               onClick: () => handleSelectImport(record)
@@ -327,36 +415,76 @@ const ImportGoods = () => {
             </Menu>
           )}
         </div>
-        {/* Modal tìm kiếm số phiếu */}
+        {/* Modal for column header filters (reused for different columns) */}
         <Modal
           open={showSearchModal}
           onCancel={()=>setShowSearchModal(false)}
           onOk={()=>setShowSearchModal(false)}
-          title="Tìm kiếm theo số phiếu"
+          title={activeHeaderModalColumn === 'importNumber' ? 'Tìm kiếm theo số phiếu' : activeHeaderModalColumn === 'createdDate' ? 'Lọc theo ngày nhập' : activeHeaderModalColumn === 'total' ? 'Lọc theo tổng tiền' : 'Tìm kiếm'}
           footer={null}
         >
           <Input
-            ref={searchInputRef}
-            placeholder="Nhập mã phiếu..."
-            value={searchCode}
-            onChange={e=>setSearchCode(e.target.value)}
+            placeholder={activeHeaderModalColumn === 'importNumber' ? 'Tìm kiếm theo mã' : activeHeaderModalColumn === 'createdDate' ? 'Tìm ngày (DD/MM/YYYY)' : 'Tìm...'}
+            value={modalSearchTerm}
+            onChange={e=>setModalSearchTerm(e.target.value)}
             allowClear
             style={{marginBottom:12}}
-            onPressEnter={()=>setShowSearchModal(false)}
+            onPressEnter={()=>{}}
           />
-          <div style={{maxHeight:180, overflowY:'auto'}}>
-            {imports.filter(i=>{
-              const normalized = removeVietnameseTones(i.importNumber.toLowerCase());
-              const normalizedSearch = removeVietnameseTones(searchCode.toLowerCase());
-              return normalized.includes(normalizedSearch);
-            }).map(i=>(
-              <div key={i.id} style={{padding:'4px 0', cursor:'pointer', color:'#1677ff'}} onClick={()=>{setSearchCode(i.importNumber); setShowSearchModal(false);}}>{i.importNumber}</div>
+          <div style={{maxHeight:240, overflowY:'auto', paddingRight:8}}>
+            {modalAvailableItems.filter(v => {
+              if (!modalSearchTerm) return true;
+              return removeVietnameseTones(String(v).toLowerCase()).includes(removeVietnameseTones(modalSearchTerm.toLowerCase()));
+            }).map(v => (
+              <div key={v} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0'}}>
+                <input type="checkbox" checked={modalSelections.includes(v)} onChange={() => {
+                  setModalSelections(prev => prev.includes(v) ? prev.filter(x=>x!==v) : [...prev, v]);
+                }} />
+                <div style={{flex:1, wordBreak:'break-word'}}>{v}</div>
+              </div>
             ))}
-            {imports.filter(i=>{
-              const normalized = removeVietnameseTones(i.importNumber.toLowerCase());
-              const normalizedSearch = removeVietnameseTones(searchCode.toLowerCase());
-              return normalized.includes(normalizedSearch);
-            }).length===0 && <div style={{color:'#bbb'}}>Không có số phiếu</div>}
+            {modalAvailableItems.filter(v => {
+              if (!modalSearchTerm) return true;
+              return removeVietnameseTones(String(v).toLowerCase()).includes(removeVietnameseTones(modalSearchTerm.toLowerCase()));
+            }).length === 0 && <div style={{color:'#bbb'}}>Không có dữ liệu</div>}
+          </div>
+          <div style={{display:'flex',justifyContent:'space-between',marginTop:12}}>
+            <div>
+              <button className="btn btn-link" onClick={()=>{ setModalSearchTerm(''); }}>Xem tất cả</button>
+              <button className="btn btn-link" onClick={()=>{ setModalSelections([]); }}>Bỏ chọn</button>
+            </div>
+            <div style={{display:'flex',gap:8}}>
+              <button className="btn btn-secondary" onClick={()=>{ setModalSelections([]); setLeftFilterLists(prev=>({ ...prev, [activeHeaderModalColumn]: [] })); setShowSearchModal(false); }}>Xóa bộ lọc</button>
+              <button className="btn btn-primary" onClick={()=>{
+                setLeftFilterLists(prev=>({ ...prev, [activeHeaderModalColumn]: modalSelections }));
+                setShowSearchModal(false);
+              }}>Tìm</button>
+            </div>
+          </div>
+        </Modal>
+        {/* Left table settings modal */}
+        <Modal
+          open={showLeftSettings}
+          onCancel={()=>setShowLeftSettings(false)}
+          title="Cài đặt hiển thị cột"
+          footer={null}
+        >
+          <div style={{display:'flex',flexDirection:'column',gap:8}}>
+            {defaultLeftCols.map(colKey=>{
+              const label = colKey==='checkbox'?'':(colKey==='importNumber'?'Số phiếu':colKey==='createdDate'?'Ngày nhập':colKey==='total'?'Tổng tiền':colKey==='actions'?'Thao tác':colKey);
+              return (
+                <label key={colKey} style={{display:'flex',alignItems:'center',gap:8}}>
+                  <input type="checkbox" checked={leftVisibleCols.includes(colKey)} onChange={()=>{
+                    setLeftVisibleCols(prev=> prev.includes(colKey)? prev.filter(k=>k!==colKey) : [...prev, colKey]);
+                  }} />
+                  <span>{label}</span>
+                </label>
+              );
+            })}
+            <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:12}}>
+              <button onClick={()=>{ setLeftVisibleCols(defaultLeftCols); }} className="btn btn-secondary">Làm lại</button>
+              <button onClick={()=>setShowLeftSettings(false)} className="btn btn-primary">Đóng</button>
+            </div>
           </div>
         </Modal>
       </div>
@@ -381,68 +509,47 @@ const ImportGoods = () => {
             </div>
 
             <div className="detail-content">
-              <div className="detail-form">
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Ngày lập</label>
-                    <input 
-                      type="text" 
-                      value={selectedImport.createdDate}
-                      readOnly
-                    />
+              <div className="detail-form" style={{display:'flex',flexDirection:'column',gap:12}}>
+                {/* Top row: Ngày lập, Nhân viên, Loại nhập, Tổng số kg, Tổng số khối (each 20%) */}
+                <div style={{display:'flex',gap:12}}>
+                  <div style={{flex:'0 0 20%'}}>
+                    <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Ngày lập</label>
+                    <input type="text" value={selectedImport.createdDate} readOnly style={{width:'100%'}} />
                   </div>
-                  <div className="form-group">
-                    <label>Nhân viên lập</label>
-                    <select>
+                  <div style={{flex:'0 0 20%'}}>
+                    <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Nhân viên lập</label>
+                    <select style={{width:'100%'}}>
                       <option value={selectedImport.employee}>{selectedImport.employee}</option>
                     </select>
                   </div>
-                </div>
-
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Loại nhập</label>
-                    <select>
+                  <div style={{flex:'0 0 20%'}}>
+                    <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Loại nhập</label>
+                    <select style={{width:'100%'}}>
                       <option value={selectedImport.importType}>{selectedImport.importType}</option>
                     </select>
                   </div>
-                  <div className="form-group">
-                    <label>Tổng số kg</label>
-                    <input 
-                      type="number" 
-                      value={selectedImport.totalWeight}
-                      readOnly
-                    />
+                  <div style={{flex:'0 0 20%'}}>
+                    <label style={{display:'block',fontSize:12,fontWeight:600}}>Tổng số kg</label>
+                    <input type="number" value={selectedImport.totalWeight} readOnly style={{width:'100%'}} />
                   </div>
-                  <div className="form-group">
-                    <label>Tổng số khối</label>
-                    <input 
-                      type="number" 
-                      value={selectedImport.totalVolume}
-                      readOnly
-                    />
+                  <div style={{flex:'0 0 20%'}}>
+                    <label style={{display:'block',fontSize:12,fontWeight:600}}>Tổng số khối</label>
+                    <input type="number" value={selectedImport.totalVolume} readOnly style={{width:'100%'}} />
                   </div>
                 </div>
 
-                <div className="form-row">
-                  <div className="form-group">
-                    <label>Số phiếu</label>
+                {/* Second row: Số phiếu (30%) and Ghi chú (70%) */}
+                <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
+                  <div style={{flex:'0 0 30%'}}>
+                    <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Số phiếu</label>
                     <div className="input-with-status">
-                      <input 
-                        type="text" 
-                        value={selectedImport.importNumber}
-                        readOnly 
-                      />
+                      <input type="text" value={selectedImport.importNumber} readOnly style={{width:'100%'}} />
                       <span className="status-icon">✓</span>
                     </div>
                   </div>
-                  <div className="form-group">
-                    <label>Ghi chú</label>
-                    <input 
-                      type="text" 
-                      value={selectedImport.note}
-                      readOnly
-                    />
+                  <div style={{flex:'1 1 70%'}}>
+                    <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú</label>
+                    <input type="text" value={selectedImport.note} readOnly style={{width:'100%'}} />
                   </div>
                 </div>
               </div>

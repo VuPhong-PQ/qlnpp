@@ -18,9 +18,19 @@ namespace QlnppApi.Controllers
 
         // GET: api/Products
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Product>>> GetProducts()
+        public async Task<ActionResult<IEnumerable<Product>>> GetProducts([FromQuery] string? search)
         {
-            return await _context.Products.ToListAsync();
+            var query = _context.Products.AsQueryable();
+            
+            if (!string.IsNullOrEmpty(search))
+            {
+                query = query.Where(p => p.Code.Contains(search) || 
+                                        p.Name.Contains(search) || 
+                                        p.VatName.Contains(search) ||
+                                        p.Barcode.Contains(search));
+            }
+            
+            return await query.ToListAsync();
         }
 
         // GET: api/Products/5
