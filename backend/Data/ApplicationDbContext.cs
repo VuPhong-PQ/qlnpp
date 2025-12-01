@@ -26,6 +26,8 @@ namespace QlnppApi.Data
         public DbSet<User> Users { get; set; }
         public DbSet<UserPermission> UserPermissions { get; set; }
         public DbSet<GroupPermission> GroupPermissions { get; set; }
+        public DbSet<Quotation> Quotations { get; set; }
+        public DbSet<QuotationItem> QuotationItems { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -256,6 +258,24 @@ namespace QlnppApi.Data
             {
                 entity.HasKey(gp => gp.Id);
                 entity.Property(gp => gp.ResourceKey).IsRequired().HasMaxLength(200);
+            });
+
+            modelBuilder.Entity<Quotation>(entity =>
+            {
+                entity.HasKey(q => q.Id);
+                entity.Property(q => q.Code).HasMaxLength(100).IsRequired();
+                entity.Property(q => q.QuotationType).HasMaxLength(200);
+                entity.Property(q => q.Note).HasMaxLength(1000);
+                entity.Property(q => q.Employee).HasMaxLength(250);
+                entity.Property(q => q.Total).HasPrecision(18, 2);
+            });
+
+            modelBuilder.Entity<QuotationItem>(entity =>
+            {
+                entity.HasKey(i => i.Id);
+                entity.HasOne(i => i.Quotation).WithMany(q => q.Items).HasForeignKey(i => i.QuotationId).OnDelete(DeleteBehavior.Cascade);
+                entity.Property(i => i.Price).HasPrecision(18, 2);
+                entity.Property(i => i.Price1).HasPrecision(18, 2);
             });
         }
     }

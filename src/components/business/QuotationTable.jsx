@@ -303,8 +303,8 @@ function ResizableTh({ children, width, onResize, isLast, ...props }) {
 }
 function QuotationTable() {
   // State for left panel (quotation list)
-  const [quotations, setQuotations] = useState(initialQuotations);
-  const [selectedQuotation, setSelectedQuotation] = useState(initialQuotations[0]);
+  const [quotations, setQuotations] = useState([]);
+  const [selectedQuotation, setSelectedQuotation] = useState(null);
   // Lấy cấu hình cột từ localStorage nếu có
   const [[initLeftVisible, initLeftOrder]] = [getInitialQuotationCols()];
   const [leftVisibleCols, setLeftVisibleCols] = useState(initLeftVisible);
@@ -337,6 +337,35 @@ const getInitialRightCols = () => {
   const [rightColOrder, setRightColOrder] = useState(initRightOrder);
   const [rightColWidths, setRightColWidths] = useState(defaultRightColumns.map(() => 120));
   const [showRightSettings, setShowRightSettings] = useState(false);
+  // Pagination for right detail table (inherit Products layout)
+  const [rightCurrentPage, setRightCurrentPage] = useState(1);
+  const [rightItemsPerPage, setRightItemsPerPage] = useState(10);
+  const [rightShowPageSizeDropdown, setRightShowPageSizeDropdown] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [showProductPicker, setShowProductPicker] = useState(false);
+  const [productList, setProductList] = useState([]);
+  const [productSearch, setProductSearch] = useState('');
+  const [selectedProductIds, setSelectedProductIds] = useState([]);
+
+  // Try to determine the currently logged-in user's display name from common places
+  const getCurrentUserName = () => {
+    try {
+      // global injected object (if app sets window.__USER__)
+      if (window && window.__USER__) return window.__USER__.name || window.__USER__.username || window.__USER__.displayName || '';
+    } catch {}
+    try {
+      const raw = localStorage.getItem('currentUser') || localStorage.getItem('user') || localStorage.getItem('loggedUser');
+      if (raw) {
+        const u = JSON.parse(raw);
+        return u?.name || u?.username || u?.displayName || u?.fullName || '';
+      }
+    } catch {}
+    try {
+      const name = localStorage.getItem('username') || localStorage.getItem('displayName') || localStorage.getItem('userName');
+      if (name) return name;
+    } catch {}
+    return '';
+  };
 
   // Lưu cấu hình cột vào localStorage
   const saveRightColConfig = (visibleCols, order) => {
@@ -420,8 +449,493 @@ const getInitialRightCols = () => {
   const resetRightCols = () => setRightVisibleCols(defaultRightColumns.map(c => c.key));
   // Lọc chi tiết theo báo giá đang chọn
   const detailRows = selectedQuotation
-    ? quotationDetails.filter(d => d.quotationCode === selectedQuotation.code)
+    ? (selectedQuotation.items || selectedQuotation.Items || []).map(item => ({
+        ...item,
+        note: item.note || item.Note || ''
+      }))
     : [];
+
+  // Right table pagination calculations (Products-like)
+  const rightTotal = detailRows.length;
+  const rightTotalPages = Math.max(1, Math.ceil(rightTotal / Math.max(1, rightItemsPerPage)));
+  const rightStart = rightTotal === 0 ? 0 : (rightCurrentPage - 1) * rightItemsPerPage + 1;
+  const rightEnd = Math.min(rightTotal, rightCurrentPage * rightItemsPerPage);
+  const paginatedDetailRows = detailRows.slice((rightCurrentPage - 1) * rightItemsPerPage, (rightCurrentPage - 1) * rightItemsPerPage + rightItemsPerPage);
+
+  // Reset right pagination when quotation changes or rows change
+  React.useEffect(() => {
+    setRightCurrentPage(1);
+  }, [selectedQuotation?.id, rightTotal]);
+
+  // Load quotations list from backend
+  const loadQuotations = async () => {
+    try {
+      const res = await fetch('/api/Quotations');
+      if (!res.ok) throw new Error('Failed to load quotations');
+      const data = await res.json();
+      setQuotations(data || []);
+      if (data && data.length > 0) {
+        // load details for first item
+        await loadQuotationDetails(data[0].id);
+      } else {
+        setSelectedQuotation(null);
+      }
+    } catch (err) {
+      console.error('Load quotations error', err);
+      // Fallback to local dummy data when backend is unavailable (dev convenience)
+      console.warn('Using local sample quotations as fallback');
+      setQuotations(initialQuotations);
+      if (initialQuotations && initialQuotations.length > 0) {
+        // load details for first sample quotation (if any)
+        try {
+          await loadQuotationDetails(initialQuotations[0].id);
+        } catch (e) {
+          // ignore
+        }
+      } else {
+        setSelectedQuotation(null);
+      }
+    }
+  };
+
+  const loadQuotationDetails = async (id) => {
+    try {
+      const res = await fetch(`/api/Quotations/${id}`);
+      if (!res.ok) throw new Error('Failed to load quotation details');
+      const data = await res.json();
+      // If the quotation doesn't have an employee set, default to current user name
+      const emp = getCurrentUserName();
+      if (data && !data.employee && emp) data.employee = emp;
+      setSelectedQuotation(data);
+    } catch (err) {
+      console.error('Load quotation details error', err);
+    }
+  };
+
+  React.useEffect(() => {
+    loadQuotations();
+  }, []);
+
+  // Create a new quotation with minimal data and open it
+  const createNewQuotation = async () => {
+    try {
+      const code = 'BG' + (new Date()).toISOString().replace(/[^0-9]/g, '').slice(-8);
+      const payload = {
+        code,
+        date: new Date().toISOString(),
+        quotationType: '',
+        note: '',
+        employee: getCurrentUserName() || '',
+        total: 0,
+        items: []
+      };
+      const res = await fetch('/api/Quotations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Failed to create quotation');
+      }
+      const created = await res.json();
+      // refresh list and open created, enter edit mode
+      await loadQuotations();
+      await loadQuotationDetails(created.id);
+      setIsEditing(true);
+    } catch (err) {
+      console.error('Create quotation error', err);
+      alert('Tạo báo giá mới thất bại: ' + (err.message || err));
+    }
+  };
+
+  const loadProducts = async (query = '') => {
+    try {
+      const url = '/api/Products' + (query ? `?search=${encodeURIComponent(query)}` : '');
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to load products');
+      const data = await res.json();
+      setProductList(data || []);
+    } catch (err) {
+      console.error('Load products error', err);
+      setProductList([]);
+    }
+  };
+
+  const openProductPicker = async () => {
+    await loadProducts('');
+    setSelectedProductIds([]);
+    setShowProductPicker(true);
+  };
+
+  const toggleSelectProduct = (id) => {
+    setSelectedProductIds(prev => prev.includes(id) ? prev.filter(x => x !== id) : [...prev, id]);
+  };
+
+  const addSelectedProductsToQuotation = () => {
+    if (!selectedQuotation) return;
+    const picked = productList.filter(p => selectedProductIds.includes(p.id));
+    const items = picked.map(p => ({
+      // Use lowercase/camelCase names returned by the Products API
+      itemType: p.category || 'Hàng hóa',
+      barcode: p.barcode || '',
+      itemCode: p.code || '',
+      itemName: p.name || p.nameVi || p.code || '',
+      description: p.description || p.note || '',
+      unit: p.defaultUnit || p.baseUnit || '',
+      price: p.retailPrice ?? 0,
+      unit1: p.unit1 || '',
+      price1: p.retailPrice1 ?? null,
+      note: p.note || ''
+    }));
+    const existing = selectedQuotation.items || selectedQuotation.Items || [];
+    const merged = [...existing, ...items];
+    setSelectedQuotation(s => ({ ...(s || {}), items: merged }));
+    setShowProductPicker(false);
+    setIsEditing(true);
+  };
+
+  const saveQuotation = async () => {
+    try {
+      if (!selectedQuotation || !selectedQuotation.id) throw new Error('No quotation selected');
+      const payload = { ...selectedQuotation };
+      console.log('Saving quotation payload:', payload);
+      // send PUT to update
+      const res = await fetch(`/api/Quotations/${selectedQuotation.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Save failed');
+      }
+      // refresh
+      await loadQuotations();
+      await loadQuotationDetails(selectedQuotation.id);
+      setIsEditing(false);
+      alert('Lưu báo giá thành công');
+    } catch (err) {
+      console.error('Save quotation error', err);
+      alert('Lưu báo giá thất bại: ' + (err.message || err));
+    }
+  };
+
+  // Update per-item note in selectedQuotation.items (keeps UI edits in state so export picks them up)
+  const handleItemNoteChange = (index, value) => {
+    setSelectedQuotation(s => {
+      if (!s) return s;
+      const items = Array.isArray(s.items) ? [...s.items] : Array.isArray(s.Items) ? [...s.Items] : [];
+      items[index] = { ...(items[index] || {}), note: value, Note: value };
+      return { ...s, items };
+    });
+  };
+
+  // Generate and print an A4-formatted quotation
+  const formatCurrency = (v) => {
+    if (v === null || v === undefined || v === '') return '';
+    return Number(v).toLocaleString('vi-VN');
+  };
+
+  // Helper to read company fields tolerant to camelCase/PascalCase
+  const getCompanyField = (c, prop) => {
+    if (!c) return '';
+    const camel = prop;
+    const pascal = prop.charAt(0).toUpperCase() + prop.slice(1);
+    return (c[camel] ?? c[pascal] ?? c[prop] ?? '');
+  };
+
+  // Escape HTML to avoid breaking Excel HTML table
+  const escapeHtml = (str) => {
+    if (str === null || str === undefined) return '';
+    return String(str)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+  };
+
+  const buildA4Html = (q, company) => {
+    const items = (q?.items || q?.Items || []).map((it, idx) => ({
+      stt: idx + 1,
+      barcode: it.barcode || it.Barcode || '',
+      itemCode: it.itemCode || it.ItemCode || '',
+      itemName: it.itemName || it.ItemName || '',
+      description: it.description || it.Description || '',
+      unit: it.unit || it.Unit || '',
+      price: it.price ?? it.Price ?? 0,
+      unit1: it.unit1 || it.Unit1 || '',
+      price1: it.price1 ?? it.Price1 ?? null,
+      // Prefer item-level note when present, otherwise use quotation-level note
+      note: (it.note || it.Note || q?.note || q?.Note || '')
+    }));
+
+    const total = items.reduce((s, it) => s + (Number(it.price) || 0), 0);
+
+    const css = `
+      /* A4 portrait */
+      @page { size: A4 portrait; margin: 18mm 12mm 12mm 12mm; }
+      body { font-family: Arial, 'Times New Roman', serif; font-size: 11px; color: #000; }
+      .company { text-align: left; font-weight: 700; }
+      .title { text-align: center; font-size: 18px; font-weight: 700; margin: 6px 0 6px 0; }
+      .meta { margin-bottom: 8px; }
+      .meta td { padding: 2px 6px; }
+      table.items { width: 100%; border-collapse: collapse; margin-top: 6px; table-layout: fixed; }
+      table.items th, table.items td { border: 1px solid #000; padding: 6px; vertical-align: top; word-wrap: break-word; box-sizing: border-box; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
+      table.items th { background: #f5f5f5; font-weight: 700; }
+      .right { text-align: right; }
+      .center { text-align: center; }
+      /* Column widths adjusted for portrait A4 */
+      .col-name { width: 220px; }
+      .col-desc { width: 120px; }
+      tr { page-break-inside: avoid; }
+    `;
+
+    // Reorder columns so 'description' is next to 'note' (at the end)
+    const rowsHtml = items.map(it => `
+      <tr>
+        <td class="center">${it.stt}</td>
+        <td>${it.barcode}</td>
+        <td>${it.itemCode}</td>
+        <td>${it.itemName}</td>
+        <td class="center">${it.unit}</td>
+        <td class="right">${formatCurrency(it.price)}</td>
+        <td class="center">${it.unit1}</td>
+        <td class="right">${formatCurrency(it.price1)}</td>
+        <td>${it.description}</td>
+        <td>${it.note}</td>
+      </tr>
+    `).join('');
+
+    
+
+    // Prepare company phone display: avoid doubling the "SĐT" label if it's already present in data
+    const rawPhone = (getCompanyField(company, 'phone') || getCompanyField(company, 'Phone') || '');
+    const phoneDisplay = /\bSĐT\b|\bSDT\b/i.test(rawPhone) ? rawPhone : (rawPhone ? ('SĐT: ' + rawPhone) : '');
+
+    const html = `
+      <!doctype html>
+      <html>
+      <head>
+        <meta charset="utf-8" />
+        <title></title>
+        <style>${css}</style>
+      </head>
+      <body>
+        <div class="company">
+          <table style="width:100%; border-collapse: collapse;">
+            <tr>
+              <td style="font-weight:700; font-size:14px;">${getCompanyField(company, 'companyName') || getCompanyField(company, 'CompanyName') || 'NPP THỈNH PHÚ QUỐC'}</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Địa chỉ: ${getCompanyField(company, 'address') || getCompanyField(company, 'Address') || ''}</td>
+              <td></td>
+            </tr>
+            <tr>
+              <td>Email: ${getCompanyField(company, 'email') || getCompanyField(company, 'Email') || ''}${phoneDisplay ? ('<br/>' + phoneDisplay) : ''}</td>
+              <td></td>
+            </tr>
+          </table>
+        </div>
+        <div class="title">BÁO GIÁ</div>
+        <table class="meta" width="100%">
+          <tr>
+            <td><strong>Số báo giá:</strong> ${q?.code || ''}</td>
+            <td style="text-align:right"><strong>Ngày lập:</strong> ${q?.date ? (new Date(q.date)).toLocaleDateString('vi-VN') : ''}</td>
+          </tr>
+          <tr>
+            <td><strong>Người lập:</strong> ${q?.employee || ''}</td>
+            <td style="text-align:right"><strong>Loại báo giá:</strong> ${q?.quotationType || ''}</td>
+          </tr>
+          <tr>
+            <td colspan="2"><strong>Ghi chú:</strong> ${q?.note || ''}</td>
+          </tr>
+        </table>
+
+        <table class="items">
+          <thead>
+            <tr>
+              <th style="width:40px">STT</th>
+              <th style="width:110px">Mã vạch</th>
+              <th style="width:110px">Mã hàng</th>
+              <th class="col-name">Tên hàng</th>
+              <th style="width:60px">ĐVT</th>
+              <th style="width:90px">Đơn giá theo ĐVT</th>
+              <th style="width:60px">ĐVT1</th>
+              <th style="width:90px">Đơn giá ĐVT1</th>
+              <th class="col-desc">Mô tả</th>
+              <th style="width:120px">Ghi chú</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+          <tfoot>
+            <tr>
+              <td colspan="6" style="font-weight:700">Tổng</td>
+              <td class="right" style="font-weight:700">${formatCurrency(total)}</td>
+              <td colspan="3"></td>
+            </tr>
+          </tfoot>
+        </table>
+      </body>
+      </html>
+    `;
+    return html;
+  };
+
+  const fetchCompanyInfo = async () => {
+    try {
+      const res = await fetch('/api/CompanyInfos');
+      if (!res.ok) return null;
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) return data[0];
+      return data || null;
+    } catch (err) {
+      console.error('Load company info error', err);
+      return null;
+    }
+  };
+
+  const printQuotationA4 = async () => {
+    if (!selectedQuotation) {
+      alert('Vui lòng chọn báo giá để in');
+      return;
+    }
+    const company = await fetchCompanyInfo();
+    console.log('Print debug - company and quotation employee:', { company, employee: selectedQuotation?.employee });
+    const html = buildA4Html(selectedQuotation, company);
+    const w = window.open('', '_blank');
+    if (!w) {
+      alert('Không thể mở cửa sổ in (bị chặn popup). Vui lòng cho phép popup.');
+      return;
+    }
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    // Try to avoid the browser showing "about:blank" in the print header by
+    // replacing the history entry of the new window (same-origin) and clearing title.
+    try {
+      if (w.history && typeof w.history.replaceState === 'function') {
+        w.history.replaceState(null, '', '/');
+      }
+      w.document.title = '';
+    } catch (err) {
+      // ignore if the browser prevents it
+      console.warn('Could not replace print window history/title', err);
+    }
+    // give browser a moment to render styles, then print
+    setTimeout(() => { w.focus(); w.print(); }, 500);
+  };
+
+  // Export quotation as Excel-compatible HTML (.xls)
+  const exportQuotationExcel = async (q) => {
+    const quotation = q || selectedQuotation;
+    if (!quotation) {
+      alert('Vui lòng chọn báo giá để xuất');
+      return;
+    }
+    const company = await fetchCompanyInfo();
+    const getField = (prop) => (getCompanyField(company, prop) || getCompanyField(company, prop.charAt(0).toUpperCase() + prop.slice(1)) || '');
+    // phone display for Excel export: avoid doubling 'SĐT' label if it's already included in the stored value
+    const rawPhone = getField('phone');
+    const phoneDisplay = /\bSĐT\b|\bSDT\b/i.test(rawPhone) ? rawPhone : (rawPhone ? ('SĐT: ' + rawPhone) : '');
+
+    const items = (quotation?.items || quotation?.Items || []);
+    const getItemField = (it, prop) => {
+      if (!it) return '';
+      const candidates = [prop, prop.charAt(0).toUpperCase() + prop.slice(1), prop.toLowerCase(), prop.toUpperCase(), 'notes', 'Notes', 'remark', 'Remark', 'ghiChu', 'ghi_chu', 'GhiChu'];
+      for (const k of candidates) {
+        if (it[k] !== undefined && it[k] !== null && String(it[k]).trim() !== '') return it[k];
+      }
+      return '';
+    };
+
+    const rows = items.map((it, idx) => ({
+      stt: idx + 1,
+      barcode: getItemField(it, 'barcode') || '',
+      itemCode: getItemField(it, 'itemCode') || '',
+      itemName: getItemField(it, 'itemName') || '',
+      unit: getItemField(it, 'unit') || '',
+      price: getItemField(it, 'price') ?? 0,
+      unit1: getItemField(it, 'unit1') || '',
+      price1: getItemField(it, 'price1') ?? null,
+      description: getItemField(it, 'description') || '',
+      note: quotation.note || quotation.Note || ''  // Use quotation-level note for all items
+    }));
+
+    try { console.log('exportQuotationExcel - rows JSON:', JSON.stringify(rows, null, 2)); } catch (e) {}
+
+    // Debug: log items and rows to help diagnose missing notes
+    try { console.log('exportQuotationExcel - quotation, items, rows:', { quotation, items, rows }); } catch (e) {}
+
+    // Build HTML table similar to sample: company header, title, metadata, then items table
+    const html = `<!doctype html>
+      <html><head><meta charset="utf-8" /></head><body>
+      <table>
+        <tr><td style="font-weight:700; font-size:14px;">${getField('companyName') || 'NPP THỈNH PHÚ QUỐC'}</td></tr>
+        <tr><td>Địa chỉ: ${getField('address')}</td></tr>
+        <tr><td>Email: ${getField('email')}${phoneDisplay ? ('  ' + phoneDisplay) : ''}</td></tr>
+      </table>
+      <h3 style="text-align:center;">CHI TIẾT PHIẾU BÁO GIÁ</h3>
+      <table>
+        <tr><td>Mã phiếu: ${escapeHtml(quotation.code || '')}</td><td>Ghi chú: ${escapeHtml(quotation.note || '')}</td></tr>
+        <tr><td>Ngày lập: ${quotation.date ? (new Date(quotation.date)).toLocaleDateString('vi-VN') : ''}</td><td>Loại báo giá: ${quotation.quotationType || ''}</td></tr>
+        <tr><td>Người lập: ${escapeHtml(quotation.employee || '')}</td><td></td></tr>
+      </table>
+      <br/>
+      <table border="1" style="border-collapse:collapse;">
+        <thead>
+          <tr>
+            <th>STT</th>
+            <th>Mã vạch</th>
+            <th>Mã hàng</th>
+            <th>Tên hàng</th>
+            <th>ĐVT</th>
+            <th>Đơn giá</th>
+            <th>ĐVT1</th>
+            <th>Đơn giá ĐVT1</th>
+            <th>Mô tả</th>
+            <th>Ghi chú</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${rows.map((r, idx) => `
+            <tr>
+              <td>${idx+1}</td>
+              <td>${escapeHtml(r.barcode)}</td>
+              <td>${escapeHtml(r.itemCode)}</td>
+              <td>${escapeHtml(r.itemName)}</td>
+              <td>${escapeHtml(r.unit)}</td>
+              <td>${r.price !== null && r.price !== undefined ? Number(r.price).toLocaleString('vi-VN') : ''}</td>
+              <td>${escapeHtml(r.unit1)}</td>
+              <td>${r.price1 !== null && r.price1 !== undefined ? Number(r.price1).toLocaleString('vi-VN') : ''}</td>
+              <td>${escapeHtml(r.description)}</td>
+              <td>${escapeHtml(r.note)}</td>
+            </tr>
+          `).join('')}
+        </tbody>
+      </table>
+      </body></html>`;
+
+    // Create blob and download as .xls
+    try {
+      const blob = new Blob(['\ufeff', html], { type: 'application/vnd.ms-excel;charset=utf-8' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `BaoGia_${q.code || 'export'}.xls`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export excel failed', err);
+      alert('Xuất Excel thất bại');
+    }
+  };
 
   // hide context menu when clicking elsewhere or pressing Escape
   React.useEffect(() => {
@@ -449,20 +963,29 @@ const getInitialRightCols = () => {
               onClick={e => e.stopPropagation()}
               style={{position: 'fixed', left: contextMenu.x, top: contextMenu.y, background: '#fff', boxShadow: '0 6px 20px rgba(0,0,0,0.12)', borderRadius: 6, zIndex: 2000, minWidth: 160}}
             >
-              <div style={{padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8}} onClick={(e) => { e.stopPropagation(); setSelectedQuotation(contextMenu.quotation); setContextMenu({ visible: false, x:0, y:0, quotation: null }); }}>
+                  <div style={{padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8}} onClick={async (e) => { e.stopPropagation(); if (contextMenu.quotation) await loadQuotationDetails(contextMenu.quotation.id); setContextMenu({ visible: false, x:0, y:0, quotation: null }); }}>
                 <span style={{color: '#4f8cff'}}>✏️</span>
                 <span>Xem chi tiết</span>
               </div>
               <div style={{height: 1, background: '#f0f0f0'}} />
-              <div style={{padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8}} onClick={(e) => {
-                e.stopPropagation();
-                const q = contextMenu.quotation;
-                if (!q) return;
-                if (window.confirm('Bạn có chắc muốn xóa báo giá ' + q.code + ' ?')) {
-                  setQuotations(prev => prev.filter(x => x.id !== q.id));
-                  if (selectedQuotation?.id === q.id) setSelectedQuotation(null);
-                }
-                setContextMenu({ visible: false, x:0, y:0, quotation: null });
+              <div style={{padding: 8, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8}} onClick={async (e) => {
+                  e.stopPropagation();
+                  const q = contextMenu.quotation;
+                  if (!q) return;
+                  if (!window.confirm('Bạn có chắc muốn xóa báo giá ' + q.code + ' ?')) {
+                    setContextMenu({ visible: false, x:0, y:0, quotation: null });
+                    return;
+                  }
+                  try {
+                    const res = await fetch(`/api/Quotations/${q.id}`, { method: 'DELETE' });
+                    if (!res.ok) throw new Error('Xóa thất bại');
+                    setQuotations(prev => prev.filter(x => x.id !== q.id));
+                    if (selectedQuotation?.id === q.id) setSelectedQuotation(null);
+                  } catch (err) {
+                    console.error('Delete quotation failed', err);
+                    alert('Xóa báo giá thất bại');
+                  }
+                  setContextMenu({ visible: false, x:0, y:0, quotation: null });
               }}>
                 <span style={{color: '#d9534f'}}>🗑️</span>
                 <span>Xóa</span>
@@ -511,7 +1034,7 @@ const getInitialRightCols = () => {
                   <tr
                     key={q.id}
                     className={selectedQuotation?.id === q.id ? 'selected' : ''}
-                    onClick={() => setSelectedQuotation(q)}
+                    onClick={() => loadQuotationDetails(q.id)}
                     onContextMenu={(e) => {
                       e.preventDefault();
                       // show context menu
@@ -525,12 +1048,23 @@ const getInitialRightCols = () => {
                       if (col.key === 'actions') {
                         value = (
                           <Space>
-                            <Button type="primary" icon={<EditOutlined />} size="small" onClick={e => { e.stopPropagation(); console.log('Sửa', q); }}>
+                            <Button type="primary" icon={<EditOutlined />} size="small" onClick={async (e) => { e.stopPropagation(); await loadQuotationDetails(q.id); setIsEditing(true); }}>
                               Sửa
                             </Button>
                             <Popconfirm
                               title="Bạn có chắc muốn xóa?"
-                              onConfirm={e => { e.stopPropagation(); console.log('Đã xóa', q); }}
+                              onConfirm={async (e) => {
+                                e.stopPropagation();
+                                try {
+                                  const res = await fetch(`/api/Quotations/${q.id}`, { method: 'DELETE' });
+                                  if (!res.ok) throw new Error('Xóa thất bại');
+                                  setQuotations(prev => prev.filter(x => x.id !== q.id));
+                                  if (selectedQuotation?.id === q.id) setSelectedQuotation(null);
+                                } catch (err) {
+                                  console.error('Delete quotation failed', err);
+                                  alert('Xóa thất bại');
+                                }
+                              }}
                               okText="Có"
                               cancelText="Không"
                               onCancel={e => e && e.stopPropagation()}
@@ -614,7 +1148,7 @@ const getInitialRightCols = () => {
         <div className="panel-header" style={{fontSize: 22, fontWeight: 700, padding: '24px 24px 8px 24px', border: 'none', display: 'flex', alignItems: 'center', justifyContent: 'space-between'}}>
           <div style={{display: 'flex', alignItems: 'center', gap: 12}}>
             <span>THÔNG TIN BÁO GIÁ</span>
-            <button style={{background: '#1677ff', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, padding: '6px 12px', boxShadow: '0 2px 8px #e5e7eb'}}>+ Tạo mới</button>
+            <button onClick={createNewQuotation} style={{background: '#1677ff', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 14, padding: '6px 12px', boxShadow: '0 2px 8px #e5e7eb'}}>+ Tạo mới</button>
           </div>
           <div />
         </div>
@@ -624,24 +1158,40 @@ const getInitialRightCols = () => {
               <div style={{display: 'flex', gap: 12, margin: '8px 0 6px 0'}}>
                 <div style={{flex: 1, minWidth: 220}}>
                   <div style={{fontWeight: 600, marginBottom: 4}}><span style={{color: '#ff6f91'}}>*</span> Số báo giá</div>
-                  <input style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6, fontSize: 15, background: '#f7f8fa'}} value={selectedQuotation.code} readOnly />
+                  <input
+                    style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6, fontSize: 15, background: '#fff'}}
+                    value={selectedQuotation.code || ''}
+                    onChange={e => setSelectedQuotation(s => ({ ...(s || {}), code: e.target.value }))}
+                    readOnly={!isEditing}
+                  />
                 </div>
                 <div style={{flex: 1, minWidth: 220}}>
                   <div style={{fontWeight: 600, marginBottom: 4}}>Ghi chú</div>
-                  <textarea style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6, fontSize: 15, background: '#f7f8fa', height: 36, minHeight: 36, lineHeight: '18px', resize: 'none'}} value={selectedQuotation.note} readOnly />
+                  <textarea
+                    style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6, fontSize: 15, background: '#fff', height: 36, minHeight: 36, lineHeight: '18px'}}
+                    value={selectedQuotation.note || ''}
+                    onChange={e => setSelectedQuotation(s => ({ ...(s || {}), note: e.target.value }))}
+                    readOnly={!isEditing}
+                  />
                 </div>
               </div>
 
               <div style={{display: 'flex', gap: 12, margin: '6px 0 8px 0'}}>
                 <div style={{flex: 1, minWidth: 220}}>
                   <div style={{fontWeight: 600, marginBottom: 4}}><span style={{color: '#ff6f91'}}>*</span> Ngày lập</div>
-                  <input style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6, fontSize: 15, background: '#f7f8fa'}} value={new Date().toLocaleDateString('en-GB')} readOnly />
+                  <input
+                    type="date"
+                    style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6, fontSize: 15, background: '#fff'}}
+                    value={selectedQuotation.date ? (selectedQuotation.date.split && selectedQuotation.date.split('T')[0]) : ''}
+                    onChange={e => setSelectedQuotation(s => ({ ...(s || {}), date: e.target.value ? new Date(e.target.value).toISOString() : null }))}
+                    readOnly={!isEditing}
+                  />
                 </div>
                 <div style={{flex: 1, minWidth: 220}}>
-                  <div style={{fontWeight: 600, marginBottom: 4}}>Chọn hàng hóa báo giá <span style={{color: '#bbb', marginLeft: 4}} title="Chọn từng hàng hóa hoặc tất cả"><span className="anticon">?</span></span></div>
+                  <div onDoubleClick={openProductPicker} style={{fontWeight: 600, marginBottom: 4, cursor: 'pointer'}} title="Nháy đúp để chọn hàng hóa">Chọn hàng hóa báo giá <span style={{color: '#bbb', marginLeft: 4}} title="Chọn từng hàng hóa hoặc tất cả"><span className="anticon">?</span></span></div>
                   <div style={{display: 'flex', gap: 12, alignItems: 'center'}}>
-                    <label><input type="radio" name="hhbg" disabled /> Tất cả hàng hóa</label>
-                    <label><input type="radio" name="hhbg" checked readOnly /> Chọn từng hàng hóa</label>
+                    <label><input type="radio" name="hhbg" disabled={!isEditing} /> Tất cả hàng hóa</label>
+                    <label><input type="radio" name="hhbg" disabled={!isEditing} defaultChecked /> Chọn từng hàng hóa</label>
                   </div>
                 </div>
               </div>
@@ -649,11 +1199,21 @@ const getInitialRightCols = () => {
               <div style={{display: 'flex', gap: 12, margin: '6px 0 8px 0'}}>
                 <div style={{flex: 1, minWidth: 220}}>
                   <div style={{fontWeight: 600, marginBottom: 4}}><span style={{color: '#ff6f91'}}>*</span> Loại báo giá</div>
-                  <input style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6, fontSize: 15, background: '#f7f8fa'}} value={selectedQuotation.quotationType} readOnly />
+                  <input
+                    style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6, fontSize: 15, background: '#fff'}}
+                    value={selectedQuotation.quotationType || ''}
+                    onChange={e => setSelectedQuotation(s => ({ ...(s || {}), quotationType: e.target.value }))}
+                    readOnly={!isEditing}
+                  />
                 </div>
                 <div style={{flex: 1, minWidth: 220}}>
                   <div style={{fontWeight: 600, marginBottom: 4}}>Người lập</div>
-                  <input style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6, fontSize: 15, background: '#f7f8fa'}} value={selectedQuotation.employee} readOnly />
+                  <input
+                    style={{width: '100%', border: '1px solid #e5e7eb', borderRadius: 6, padding: 6, fontSize: 15, background: '#fff'}}
+                    value={selectedQuotation.employee || ''}
+                    onChange={e => setSelectedQuotation(s => ({ ...(s || {}), employee: e.target.value }))}
+                    readOnly={!isEditing}
+                  />
                 </div>
               </div>
               <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', margin: '6px 0 6px 0'}}>
@@ -682,6 +1242,18 @@ const getInitialRightCols = () => {
                     onReset={resetRightDetailCols}
                   />
                 </div>
+              )}
+              {showProductPicker && (
+                <ProductPickerModal
+                  visible={showProductPicker}
+                  products={productList}
+                  search={productSearch}
+                  onSearchChange={(s) => { setProductSearch(s); loadProducts(s); }}
+                  selectedIds={selectedProductIds}
+                  toggleSelect={toggleSelectProduct}
+                  onAdd={addSelectedProductsToQuotation}
+                  onClose={() => setShowProductPicker(false)}
+                />
               )}
               <div className="table-scroll-x" style={{borderRadius: 8, border: '1px solid #f0f0f0', background: '#fafbfc'}}>
                 <table className="quotation-detail-table" style={{minWidth: 800}}>
@@ -714,7 +1286,7 @@ const getInitialRightCols = () => {
                         </td>
                       </tr>
                     ) : (
-                      detailRows.map((row, rowIdx) => (
+                      paginatedDetailRows.map((row, rowIdx) => (
                         <tr key={rowIdx}>
                           {rightColOrder.map((key, colIdx) => {
                             if (!rightVisibleCols.includes(key)) return null;
@@ -740,10 +1312,30 @@ const getInitialRightCols = () => {
                                 </td>
                               );
                             }
+                            // Special rendering for note column: editable when in edit mode
+                            if (key === 'note') {
+                              return (
+                                <td key={key} style={{ width: rightColWidths[colIdx], padding: 8 }}>
+                                  {isEditing ? (
+                                    <textarea
+                                      value={row.note || ''}
+                                      onChange={e => handleItemNoteChange((rightCurrentPage - 1) * rightItemsPerPage + rowIdx, e.target.value)}
+                                      style={{ width: '100%', minHeight: 36, borderRadius: 6, border: '1px solid #e5e7eb', padding: 6 }}
+                                    />
+                                  ) : (
+                                    row.note || ''
+                                  )}
+                                </td>
+                              );
+                            }
                             let value = row[key];
-                            // Format giá
-                            if ((key === 'price' || key === 'price1') && value) {
-                              value = Number(value).toLocaleString('vi-VN');
+                            // Format giá (show 0 as 0, but hide null/empty)
+                            if (key === 'price' || key === 'price1') {
+                              if (value !== null && value !== undefined && value !== '') {
+                                value = Number(value).toLocaleString('vi-VN');
+                              } else {
+                                value = '';
+                              }
                             }
                             return (
                               <td key={key} style={{ width: rightColWidths[colIdx], padding: 8 }}>{value || ''}</td>
@@ -755,10 +1347,26 @@ const getInitialRightCols = () => {
                   </tbody>
                 </table>
               </div>
+              <div style={{margin: '12px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 14}}>
+                <div>{`Dòng ${rightStart}-${rightEnd} trên tổng ${rightTotal} dòng`}</div>
+                <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                  <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.max(1, p - 1))}>{'<'}</button>
+                  <span style={{fontWeight: 600}}>{rightCurrentPage}</span>
+                  <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.min(rightTotalPages, p + 1))}>{'>'}</button>
+                  <select value={rightItemsPerPage} onChange={(e) => { setRightItemsPerPage(parseInt(e.target.value, 10)); setRightCurrentPage(1); }} style={{marginLeft: 8, borderRadius: 4, border: '1px solid #e5e7eb', padding: '2px 8px'}}>
+                    <option value={10}>10 / trang</option>
+                    <option value={20}>20 / trang</option>
+                    <option value={50}>50 / trang</option>
+                    <option value={100}>100 / trang</option>
+                    <option value={500}>500 / trang</option>
+                    <option value={1000}>1000 / trang</option>
+                  </select>
+                </div>
+              </div>
               <div style={{margin: '12px 0 0 0', display: 'flex', justifyContent: 'flex-end', alignItems: 'center', gap: 8, fontSize: 15}}>
-                <button style={{background: '#4f8cff', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 16, padding: '8px 20px', boxShadow: '0 2px 8px #e5e7eb'}}><span className="anticon">📁</span> Lưu lại</button>
-                <button style={{background: '#7d3cff', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 16, padding: '8px 20px', boxShadow: '0 2px 8px #e5e7eb'}}><span className="anticon">🖨</span> In A4</button>
-                <button style={{background: '#00c48c', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 16, padding: '8px 20px', boxShadow: '0 2px 8px #e5e7eb'}}><span className="anticon">📤</span> Xuất Excel</button>
+                <button onClick={saveQuotation} disabled={!isEditing} style={{background: '#4f8cff', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 16, padding: '8px 20px', boxShadow: '0 2px 8px #e5e7eb'}}><span className="anticon">📁</span> Lưu lại</button>
+                <button onClick={() => printQuotationA4()} style={{background: '#7d3cff', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 16, padding: '8px 20px', boxShadow: '0 2px 8px #e5e7eb'}}><span className="anticon">🖨</span> In A4</button>
+                <button onClick={() => exportQuotationExcel(selectedQuotation)} style={{background: '#00c48c', color: '#fff', border: 'none', borderRadius: 8, fontWeight: 600, fontSize: 16, padding: '8px 20px', boxShadow: '0 2px 8px #e5e7eb'}}><span className="anticon">📤</span> Xuất Excel</button>
               </div>
               {/* Đã chuyển popup settings vào trong table-scroll-x để popup xuất hiện bên phải nút bánh răng */}
             </>
@@ -869,6 +1477,78 @@ function DateRangeSearchModal({ value, onChange, onClose }) {
             style={{background: '#1677ff', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 15, padding: '6px 24px'}}
             onClick={() => onClose({ dateFrom, dateTo })}
           >Tìm</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+// Product picker modal used to search and select products
+function ProductPickerModal({ visible, products, search, onSearchChange, selectedIds, toggleSelect, onAdd, onClose }) {
+  const ref = React.useRef();
+  React.useEffect(() => {
+    const handleClick = (e) => {
+      if (ref.current && !ref.current.contains(e.target)) onClose();
+    };
+    document.addEventListener('mousedown', handleClick);
+    return () => document.removeEventListener('mousedown', handleClick);
+  }, [onClose]);
+
+  if (!visible) return null;
+  return (
+    <div className="modal-overlay" style={{alignItems: 'flex-start', justifyContent: 'center'}}>
+      <div ref={ref} style={{background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.13)', minWidth: 520, maxWidth: 860, marginTop: 60, padding: 0, zIndex: 1200, display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.18s'}}>
+        <div style={{padding: 16, display: 'flex', alignItems: 'center', gap: 12}}>
+          <div style={{fontWeight: 600, fontSize: 16}}>Chọn hàng hóa</div>
+          <div style={{flex: 1}}>
+            <div style={{display: 'flex', alignItems: 'center', border: '1px solid #e5e7eb', borderRadius: 6, padding: '4px 8px', background: '#fafbfc'}}>
+              <input
+                style={{flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, padding: '6px 0'}}
+                placeholder="Tìm kiếm theo mã, tên, mã vạch..."
+                value={search}
+                onChange={e => onSearchChange(e.target.value)}
+              />
+              <button style={{border: 'none', background: 'transparent', cursor: 'pointer', color: '#888'}} onClick={() => onSearchChange('')}>✖</button>
+            </div>
+          </div>
+        </div>
+        <div style={{padding: '0 16px 12px 16px', maxHeight: 360, overflowY: 'auto'}}>
+          {(!products || products.length === 0) ? (
+            <div style={{color: '#bbb', padding: 20, textAlign: 'center'}}>Không có kết quả</div>
+          ) : (
+            (() => {
+              // normalize string: remove diacritics and lowercase
+              const normalize = (s) => {
+                if (!s && s !== 0) return '';
+                try {
+                  return String(s).normalize('NFD').replace(/\u0300|\u0301|\u0303|\u0309|\u0323|\u02C6|\u0306|\u031B|\u0302|\u0304|\u0306|\u030C|\u0307|\u0308|\u030A/g, '').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+                } catch (e) {
+                  return String(s).toLowerCase();
+                }
+              };
+              const q = normalize(search || '');
+              const filtered = products.filter(p => {
+                const hay = `${p.name || p.nameVi || ''} ${p.code || ''} ${p.barcode || ''}`;
+                return normalize(hay).includes(q);
+              });
+              return filtered.map(p => (
+                <div key={p.id} style={{display: 'flex', alignItems: 'center', gap: 12, padding: '8px 4px', borderBottom: '1px solid #f3f4f6'}}>
+                  <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => toggleSelect(p.id)} />
+                  <div style={{flex: 1}}>
+                    <div style={{fontWeight: 600}}>{p.name || p.nameVi || p.code}</div>
+                    <div style={{color: '#666', fontSize: 13}}>{p.code ? `${p.code} • ${p.barcode || ''}` : (p.barcode || '')}</div>
+                  </div>
+                  <div style={{width: 120, textAlign: 'right', fontWeight: 600}}>{p.retailPrice ? Number(p.retailPrice).toLocaleString('vi-VN') : ''}</div>
+                </div>
+              ));
+            })()
+          )}
+        </div>
+        <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderTop: '1px solid #f0f0f0'}}>
+          <div style={{color: '#666', fontSize: 13}}>{selectedIds.length} đã chọn</div>
+          <div>
+            <button style={{background: '#f5f7fa', border: 'none', borderRadius: 6, color: '#888', fontWeight: 500, fontSize: 14, padding: '6px 12px', marginRight: 8}} onClick={() => onClose()}>Hủy</button>
+            <button style={{background: '#1677ff', color: '#fff', border: 'none', borderRadius: 6, fontWeight: 600, fontSize: 14, padding: '8px 14px'}} onClick={() => onAdd()}>Thêm vào báo giá</button>
+          </div>
         </div>
       </div>
     </div>
