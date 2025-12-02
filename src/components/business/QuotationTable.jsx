@@ -357,6 +357,8 @@ const getInitialRightCols = () => {
   const [productList, setProductList] = useState([]);
   const [productSearch, setProductSearch] = useState('');
   const [selectedProductIds, setSelectedProductIds] = useState([]);
+  // Detection: should naive ISO strings be treated as UTC?
+  const [treatNaiveIsoAsUtc, setTreatNaiveIsoAsUtc] = useState(null);
   // Drag state for reordering right-panel columns by dragging headers
   const [rightDragIndex, setRightDragIndex] = useState(null);
   const [rightDragOverIndex, setRightDragOverIndex] = useState(null);
@@ -379,6 +381,57 @@ const getInitialRightCols = () => {
       if (name) return name;
     } catch {}
     return '';
+  };
+
+  // Format quotation date for display in left list
+  const formatQuotationDate = (raw) => {
+    if (!raw && raw !== 0) return '';
+    try {
+      const timeZone = 'Asia/Ho_Chi_Minh'; // Vietnam timezone (UTC+7)
+      // If not a string, assume it's a timestamp or Date-compatible and convert
+      if (typeof raw !== 'string') {
+        const d = new Date(raw);
+        if (isNaN(d)) return String(raw);
+        return d.toLocaleString('vi-VN', { hour12: false, timeZone });
+      }
+
+      // If string contains timezone info (Z or +hh:mm), let Date parse it
+      const tzRegex = /[Zz]|[+-]\d{2}:?\d{2}/;
+      const naiveIsoRegex = /^\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
+      if (tzRegex.test(raw)) {
+        const d = new Date(raw);
+        if (!isNaN(d)) return d.toLocaleString('vi-VN', { hour12: false, timeZone });
+      }
+
+      // For naive ISO strings (no timezone), decide how to interpret based on detected flag.
+      const m = raw.match(/^(\d{4})-(\d{2})-(\d{2})[T ](\d{2}):(\d{2}):(\d{2})(?:\.(\d+))?/);
+      if (m) {
+        const year = parseInt(m[1], 10);
+        const month = parseInt(m[2], 10);
+        const day = parseInt(m[3], 10);
+        const hour = parseInt(m[4], 10);
+        const minute = parseInt(m[5], 10);
+        const second = parseInt(m[6], 10);
+        // Default behavior: treat naive ISO as UTC unless detector says otherwise.
+        const treatAsUtc = (treatNaiveIsoAsUtc === null) ? true : Boolean(treatNaiveIsoAsUtc);
+        if (treatAsUtc) {
+          // Interpret fields as UTC and then display in VN timezone
+          const utcMs = Date.UTC(year, month - 1, day, hour, minute, second);
+          const d = new Date(utcMs);
+          return d.toLocaleString('vi-VN', { hour12: false, timeZone });
+        } else {
+          // Interpret fields as VN local time (UTC+7): convert to UTC by subtracting 7 hours
+          const utcMs = Date.UTC(year, month - 1, day, hour - 7, minute, second);
+          const d = new Date(utcMs);
+          return d.toLocaleString('vi-VN', { hour12: false, timeZone });
+        }
+      }
+
+      // Fallback: return raw string
+      return raw;
+    } catch (err) {
+      return String(raw);
+    }
   };
 
   // Lưu cấu hình cột vào localStorage
@@ -549,6 +602,28 @@ const getInitialRightCols = () => {
       const res = await fetch('/api/Quotations');
       if (!res.ok) throw new Error('Failed to load quotations');
       const data = await res.json();
+      // Detect whether API returns naive ISO datetimes (no timezone) and
+      // if so, assume they are UTC (so we display in VN timezone correctly).
+      try {
+        if (Array.isArray(data) && data.length > 0) {
+          const naiveIsoRegex = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?$/;
+          const tzRegex = /[Zz]|[+-]\d{2}:?\d{2}/;
+          let foundNaive = false;
+          let foundTz = false;
+          for (const q of data) {
+            const d = q?.date;
+            if (typeof d === 'string') {
+              if (naiveIsoRegex.test(d)) foundNaive = true;
+              if (tzRegex.test(d)) foundTz = true;
+            }
+          }
+          if (foundNaive && !foundTz) setTreatNaiveIsoAsUtc(true);
+          else if (foundTz && !foundNaive) setTreatNaiveIsoAsUtc(false);
+          else setTreatNaiveIsoAsUtc(true); // default to interpreting naive as UTC
+        }
+      } catch (e) {
+        setTreatNaiveIsoAsUtc(true);
+      }
       setQuotations(data || []);
       if (data && data.length > 0) {
         // load details for first item
@@ -561,6 +636,8 @@ const getInitialRightCols = () => {
       // Fallback to local dummy data when backend is unavailable (dev convenience)
       console.warn('Using local sample quotations as fallback');
       setQuotations(initialQuotations);
+      // fallback: our sample uses naive ISO strings, assume they are UTC
+      setTreatNaiveIsoAsUtc(true);
       if (initialQuotations && initialQuotations.length > 0) {
         // load details for first sample quotation (if any)
         try {
@@ -1177,7 +1254,7 @@ const getInitialRightCols = () => {
                           </Space>
                         );
                       } else if (col.key === 'date') {
-                        value = q.date ? (new Date(q.date).toLocaleString('vi-VN', { hour12: false })) : '';
+                        value = formatQuotationDate(q.date);
                       } else if (col.key === 'code') {
                         value = q.code || '';
                       } else {
