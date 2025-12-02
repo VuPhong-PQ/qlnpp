@@ -437,13 +437,16 @@ const Products = () => {
   };
 
   // Excel Import/Export
+  const exportData = (selectedRows && selectedRows.length > 0)
+    ? products.filter(p => selectedRows.includes(p.id))
+    : filteredProducts;
   const {
     handleExportExcel,
     handleImportExcel,
     handleFileChange,
     fileInputRef
   } = useExcelImportExport({
-    data: products,
+    data: exportData,
     loadData: fetchProducts,
     apiPost: async (data) => {
       // Kiểm tra trùng lặp: kiểm tra mã hàng hóa
@@ -1209,7 +1212,7 @@ const Products = () => {
                           </span>
                         )}
                       </div>
-                      {col.key !== 'actions' && col.key !== 'select' && renderFilterPopup(col.key, col.label)}
+                      {col.key !== 'actions' && col.key !== 'select' && renderFilterPopup(col.key, col.label, false, products)}
                       {/* Mép phải để resize */}
                       <span
                         className="col-resizer right"

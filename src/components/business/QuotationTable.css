@@ -398,6 +398,127 @@
   border-bottom: 1px solid #f0f0f0;
   font-weight: 600;
 }
+
+/* Product picker table styles */
+.product-picker-modal {
+  max-height: 80vh;
+  display: flex;
+  flex-direction: column;
+}
+.product-picker-modal {
+  position: relative;
+}
+.product-picker-table th, .product-picker-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: top;
+}
+.product-picker-table thead tr:first-child th {
+  background: #fafbfc;
+  font-weight: 700;
+}
+.product-picker-table .filters-row input.picker-filter-input {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #e9eef6;
+  border-radius: 6px;
+  background: #fff;
+  font-size: 14px;
+}
+.product-picker-table tbody tr.selected-row {
+  background: #e8f6ff;
+}
+.product-picker-table tbody tr:hover {
+  background: #f5fbff;
+}
+
+.picker-header-icon {
+  margin-left: 6px;
+  color: #8b95a6;
+  font-size: 14px;
+  vertical-align: middle;
+  cursor: pointer;
+}
+
+/* Popup opened when clicking magnifier icon in picker header */
+.picker-filter-popup {
+  pointer-events: auto;
+}
+.picker-filter-popup-box {
+  background: #fff;
+  border: 1px solid #e6eef9;
+  border-radius: 8px;
+  padding: 10px;
+  min-width: 240px;
+  box-shadow: 0 8px 24px rgba(0,0,0,0.12);
+}
+.picker-filter-input {
+  width: 220px;
+  padding: 8px 10px;
+  border: 1px solid #e9eef6;
+  border-radius: 6px;
+  font-size: 14px;
+}
+.picker-filter-btn {
+  background: #1677ff;
+  color: #fff;
+  border: none;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.picker-filter-suggestion:hover { background: #f1f8ff; }
+.picker-filter-clear, .picker-filter-close {
+  background: #f5f7fa;
+  border: 1px solid #e9eef6;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+/* New list style for picker filter popup (matches provided design) */
+.picker-filter-list {
+  min-width: 220px;
+}
+.picker-filter-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+.picker-filter-item {
+  border-radius: 6px;
+}
+.picker-filter-item:hover { background: #fbfdff; }
+.picker-filter-viewall {
+  background: transparent;
+  border: none;
+  color: #1677ff;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 8px;
+}
+.picker-filter-apply {
+  background: #1677ff;
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+/* scrollbar for suggestions */
+.picker-filter-list::-webkit-scrollbar { width: 8px; }
+.picker-filter-list::-webkit-scrollbar-track { background: transparent; }
+.picker-filter-list::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 999px; }
+
+/* Make filters-row inputs visually distinct on small screens */
+@media (max-width: 700px) {
+  .product-picker-table .filters-row input.picker-filter-input {
+    padding: 6px 6px;
+    font-size: 13px;
+  }
+}
 .modal-body {
   padding: 16px;
   display: flex;

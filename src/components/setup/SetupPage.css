@@ -270,6 +270,41 @@
   white-space: nowrap;
 }
 
+/* Column filter popup list (used by renderFilterPopup when data provided) */
+.column-filter-popup-list {
+  min-width: 220px;
+}
+.column-filter-item input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+}
+.column-filter-item:hover { background: #fbfdff; }
+.column-filter-viewall {
+  background: transparent;
+  border: none;
+  color: #1677ff;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 8px;
+}
+.column-filter-clear {
+  background: #f5f7fa;
+  border: 1px solid #e9eef6;
+  padding: 6px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.column-filter-apply {
+  background: #1677ff;
+  color: #fff;
+  border: none;
+  padding: 8px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-weight: 600;
+}
+
+
 /* header-filter-input removed: using modal popup for search */
 
 .data-table td {

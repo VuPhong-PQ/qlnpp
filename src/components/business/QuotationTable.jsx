@@ -706,20 +706,20 @@ const getInitialRightCols = () => {
     `;
 
     // Reorder columns so 'description' is next to 'note' (at the end)
+    // Build rows matching table header columns exactly to avoid layout jumps when printing
     const rowsHtml = items.map(it => `
       <tr>
         <td class="center">${it.stt}</td>
-        <td>${it.barcode}</td>
-        <td>${it.itemCode}</td>
-        <td>${it.itemName}</td>
-        <td class="center">${it.unit}</td>
-        <td class="right">${it.conversion !== null && it.conversion !== undefined && it.conversion !== '' ? Number(it.conversion).toLocaleString('vi-VN') : ''}</td>
-        <td class="right">${formatCurrency(it.price)}</td>
-        <td class="center">${it.unit}</td>
+        <td style="mso-number-format:'@';">${escapeHtml(it.barcode)}</td>
+        <td>${escapeHtml(it.itemCode)}</td>
+        <td>${escapeHtml(it.itemName)}</td>
+        <td class="center">${escapeHtml(it.unit)}</td>
         <td class="right">${it.Conversion1 !== null && it.Conversion1 !== undefined && it.Conversion1 !== '' ? Number(it.Conversion1).toLocaleString('vi-VN') : ''}</td>
         <td class="right">${formatCurrency(it.price)}</td>
-        <td class="center">${it.unit1}</td>
-        <td class="right">${formatCurrency(it.price1)}</td>
+        <td class="center">${escapeHtml(it.unit1)}</td>
+        <td class="right">${it.price1 !== null && it.price1 !== undefined ? Number(it.price1).toLocaleString('vi-VN') : ''}</td>
+        <td>${escapeHtml(it.description)}</td>
+        <td>${escapeHtml(it.note)}</td>
       </tr>
     `).join('');
 
@@ -792,7 +792,7 @@ const getInitialRightCols = () => {
             <tr>
               <td colspan="6" style="font-weight:700">Tổng</td>
               <td class="right" style="font-weight:700">${formatCurrency(total)}</td>
-              <td colspan="3"></td>
+              <td colspan="4"></td>
             </tr>
           </tfoot>
         </table>
@@ -1520,73 +1520,184 @@ function ProductPickerModal({ visible, products, search, onSearchChange, selecte
     document.addEventListener('mousedown', handleClick);
     return () => document.removeEventListener('mousedown', handleClick);
   }, [onClose]);
+  const [headerFilters, setHeaderFilters] = React.useState({ code: '', name: '', barcode: '', type: '' });
+  const [filterPopup, setFilterPopup] = React.useState({ col: null, left: 0, top: 0, value: '' });
+  const [showAllFilterItems, setShowAllFilterItems] = React.useState(false);
 
   if (!visible) return null;
+
+  // normalize string: remove diacritics and lowercase
+  const normalize = (s) => {
+    if (!s && s !== 0) return '';
+    try {
+      return String(s).normalize('NFD').replace(/\u0300|\u0301|\u0303|\u0309|\u0323|\u02C6|\u0306|\u031B|\u0302|\u0304|\u0306|\u030C|\u0307|\u0308|\u030A/g, '').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+    } catch (e) {
+      return String(s).toLowerCase();
+    }
+  };
+
+  const filteredProducts = (products || []).filter(p => {
+    const typeVal = (p.category || p.Category || p.itemType || p.ItemType || p.type || p.Type || '');
+    const codeMatch = headerFilters.code ? normalize(p.code || p.Code || '').includes(normalize(headerFilters.code)) : true;
+    const nameMatch = headerFilters.name ? normalize((p.name || p.nameVi || p.Name || '').toString()).includes(normalize(headerFilters.name)) : true;
+    const barcodeMatch = headerFilters.barcode ? normalize(p.barcode || p.Barcode || '').includes(normalize(headerFilters.barcode)) : true;
+    const typeMatch = headerFilters.type ? normalize(typeVal).includes(normalize(headerFilters.type)) : true;
+    // also keep global search (top search box) for convenience
+    const globalQ = normalize(search || '');
+    const hay = `${p.name || p.nameVi || p.Name || ''} ${p.code || p.Code || ''} ${p.barcode || p.Barcode || ''}`;
+    const globalMatch = globalQ ? normalize(hay).includes(globalQ) : true;
+    return typeMatch && codeMatch && nameMatch && barcodeMatch && globalMatch;
+  });
+
+  const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every(p => selectedIds.includes(p.id));
+
+  const openFilterPopup = (col, e) => {
+    try {
+      const rect = e.currentTarget.getBoundingClientRect();
+      const modalRect = ref.current ? ref.current.getBoundingClientRect() : { left: 0, top: 0 };
+      const scrollLeft = ref.current ? ref.current.scrollLeft || 0 : 0;
+      const scrollTop = ref.current ? ref.current.scrollTop || 0 : 0;
+      const left = rect.left - modalRect.left + scrollLeft;
+      const top = rect.bottom - modalRect.top + scrollTop + 6;
+      setShowAllFilterItems(false);
+      setFilterPopup({ col, left, top, value: headerFilters[col] || '' });
+    } catch (err) {
+      setFilterPopup({ col, left: 20, top: 40, value: headerFilters[col] || '' });
+    }
+  };
+
+  const closeFilterPopup = () => setFilterPopup({ col: null, left: 0, top: 0, value: '' });
+
+  const applyFilterFromPopup = () => {
+    if (!filterPopup.col) return;
+    setHeaderFilters(f => ({ ...f, [filterPopup.col]: filterPopup.value }));
+    closeFilterPopup();
+  };
+
+  const clearFilterFromPopup = () => {
+    if (!filterPopup.col) return;
+    setHeaderFilters(f => ({ ...f, [filterPopup.col]: '' }));
+    closeFilterPopup();
+  };
+
   return (
     <div className="modal-overlay" style={{alignItems: 'flex-start', justifyContent: 'center'}}>
-      <div ref={ref} style={{background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.13)', minWidth: 520, maxWidth: 860, marginTop: 60, padding: 0, zIndex: 1200, display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.18s'}}>
-                <div style={{padding: 16, display: 'flex', alignItems: 'center', gap: 12}}>
-                <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
-                  <input
-                    type="checkbox"
-                    checked={products && products.length > 0 && selectedIds && selectedIds.length === products.length}
-                    onChange={() => {
-                      const allSelected = products && products.length > 0 && selectedIds && selectedIds.length === products.length;
-                      if (allSelected) {
-                        // unselect all
-                        (selectedIds || []).slice().forEach(id => toggleSelect(id));
-                      } else {
-                        // select all
-                        (products || []).forEach(p => { if (!selectedIds.includes(p.id)) toggleSelect(p.id); });
-                      }
-                    }}
-                  />
-                  <div style={{fontWeight: 600, fontSize: 16}}>Chọn hàng hóa</div>
-                </div>
-                <div style={{flex: 1}}>
-                  <div style={{display: 'flex', alignItems: 'center', border: '1px solid #e5e7eb', borderRadius: 6, padding: '4px 8px', background: '#fafbfc'}}>
-                    <input
-                      style={{flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, padding: '6px 0'}}
-                      placeholder="Tìm kiếm theo mã, tên, mã vạch..."
-                      value={search}
-                      onChange={e => onSearchChange(e.target.value)}
-                    />
-                    <button style={{border: 'none', background: 'transparent', cursor: 'pointer', color: '#888'}} onClick={() => onSearchChange('')}>✖</button>
-                  </div>
-                </div>
-              </div>
-        <div style={{padding: '0 16px 12px 16px', maxHeight: 360, overflowY: 'auto'}}>
-          {(!products || products.length === 0) ? (
-            <div style={{color: '#bbb', padding: 20, textAlign: 'center'}}>Không có kết quả</div>
-          ) : (
-            (() => {
-              // normalize string: remove diacritics and lowercase
-              const normalize = (s) => {
-                if (!s && s !== 0) return '';
-                try {
-                  return String(s).normalize('NFD').replace(/\u0300|\u0301|\u0303|\u0309|\u0323|\u02C6|\u0306|\u031B|\u0302|\u0304|\u0306|\u030C|\u0307|\u0308|\u030A/g, '').replace(/[\u0300-\u036f]/g, '').toLowerCase();
-                } catch (e) {
-                  return String(s).toLowerCase();
+      <div ref={ref} className="product-picker-modal" style={{background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.13)', minWidth: 520, maxWidth: 1100, marginTop: 60, padding: 0, zIndex: 1200, display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.18s'}}>
+        <div style={{padding: 12, display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid #f0f0f0'}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+            <input
+              type="checkbox"
+              checked={allFilteredSelected}
+              onChange={() => {
+                if (allFilteredSelected) {
+                  // unselect all filtered
+                  filteredProducts.forEach(p => { if (selectedIds.includes(p.id)) toggleSelect(p.id); });
+                } else {
+                  // select all filtered
+                  filteredProducts.forEach(p => { if (!selectedIds.includes(p.id)) toggleSelect(p.id); });
                 }
-              };
-              const q = normalize(search || '');
-              const filtered = products.filter(p => {
-                const hay = `${p.name || p.nameVi || ''} ${p.code || ''} ${p.barcode || ''}`;
-                return normalize(hay).includes(q);
-              });
-              return filtered.map(p => (
-                <div key={p.id} style={{display: 'flex', alignItems: 'center', gap: 12, padding: '8px 4px', borderBottom: '1px solid #f3f4f6'}}>
-                  <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={() => toggleSelect(p.id)} />
-                  <div style={{flex: 1}}>
-                    <div style={{fontWeight: 600}}>{p.name || p.nameVi || p.code}</div>
-                    <div style={{color: '#666', fontSize: 13}}>{p.code ? `${p.code} • ${p.barcode || ''}` : (p.barcode || '')}</div>
-                  </div>
-                  <div style={{width: 120, textAlign: 'right', fontWeight: 600}}>{p.retailPrice ? Number(p.retailPrice).toLocaleString('vi-VN') : ''}</div>
-                </div>
-              ));
-            })()
-          )}
+              }}
+            />
+            <div style={{fontWeight: 700, fontSize: 16}}>Chọn hàng hóa</div>
+          </div>
+          <div style={{flex: 1}}>
+            <div style={{display: 'flex', alignItems: 'center', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 8px', background: '#fafbfc'}}>
+              <input
+                style={{flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, padding: '6px 0'}}
+                placeholder="Tìm kiếm (mã, tên, mã vạch)..."
+                value={search}
+                onChange={e => onSearchChange(e.target.value)}
+              />
+              <button style={{border: 'none', background: 'transparent', cursor: 'pointer', color: '#888'}} onClick={() => onSearchChange('')}>✖</button>
+            </div>
+          </div>
         </div>
+
+        <div style={{padding: '8px 12px', overflowX: 'auto'}}>
+          <table className="product-picker-table" style={{width: '100%', borderCollapse: 'collapse', minWidth: 760}}>
+            <thead>
+                <tr>
+                  <th style={{width: 48, textAlign: 'center'}}></th>
+                  <th style={{width: 140}}>Loại hàng <span className="picker-header-icon" onClick={(e) => { e.stopPropagation(); openFilterPopup('type', e); }}>🔍</span></th>
+                  <th style={{width: 140}}>Mã vạch <span className="picker-header-icon" onClick={(e) => { e.stopPropagation(); openFilterPopup('barcode', e); }}>🔍</span></th>
+                  <th style={{width: 140}}>Mã hàng <span className="picker-header-icon" onClick={(e) => { e.stopPropagation(); openFilterPopup('code', e); }}>🔍</span></th>
+                  <th style={{minWidth: 260}}>Tên hàng <span className="picker-header-icon" onClick={(e) => { e.stopPropagation(); openFilterPopup('name', e); }}>🔍</span></th>
+                  <th style={{width: 100}}>ĐVT</th>
+                  <th style={{width: 120, textAlign: 'right'}}>Đơn giá</th>
+                </tr>
+                {/* Filters are handled by popup opened when clicking the magnifier icon */}
+            </thead>
+            <tbody style={{maxHeight: 360, overflowY: 'auto'}}>
+              {filteredProducts.length === 0 ? (
+                <tr><td colSpan={6} style={{textAlign: 'center', padding: 28, color: '#bbb'}}>Không có kết quả</td></tr>
+              ) : (
+                filteredProducts.map(p => (
+                  <tr key={p.id} className={selectedIds.includes(p.id) ? 'selected-row' : ''} style={{cursor: 'pointer'}} onClick={() => toggleSelect(p.id)}>
+                    <td style={{textAlign: 'center', padding: 8}}>
+                      <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={(e) => { e.stopPropagation(); toggleSelect(p.id); }} />
+                    </td>
+                    <td style={{padding: 8, verticalAlign: 'top'}}>{p.code || p.Code || ''}</td>
+                    <td style={{padding: 8, verticalAlign: 'top'}}>{p.barcode || p.Barcode || ''}</td>
+                    <td style={{padding: 8, verticalAlign: 'top'}}>
+                      <div style={{fontWeight: 600}}>{p.name || p.nameVi || p.Name || ''}</div>
+                      <div style={{color: '#666', fontSize: 13}}>{p.code ? `${p.code || p.Code} • ${p.barcode || p.Barcode || ''}` : (p.barcode || '')}</div>
+                    </td>
+                    <td style={{padding: 8, verticalAlign: 'top'}}>{p.defaultUnit || p.DefaultUnit || p.unit || ''}</td>
+                    <td style={{padding: 8, verticalAlign: 'top', textAlign: 'right', fontWeight: 600}}>{(p.retailPrice || p.RetailPrice) ? Number(p.retailPrice || p.RetailPrice).toLocaleString('vi-VN') : ''}</td>
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {filterPopup.col && (
+          <div className="picker-filter-popup" style={{position: 'absolute', left: filterPopup.left, top: filterPopup.top, zIndex: 1301}} onClick={e => e.stopPropagation()}>
+            <div className="picker-filter-popup-box">
+              <div style={{display: 'flex', gap: 8, alignItems: 'center'}}>
+                <input className="picker-filter-input" autoFocus placeholder={`Tìm ${filterPopup.col}`} value={filterPopup.value} onChange={e => setFilterPopup(p => ({...p, value: e.target.value}))} />
+                <button className="picker-filter-btn" onClick={applyFilterFromPopup}>Áp dụng</button>
+              </div>
+              <div style={{marginTop: 8}}>
+                {(() => {
+                  const col = filterPopup.col;
+                  const valGetter = (p) => {
+                    if (col === 'type') return (p.category || p.Category || p.itemType || p.ItemType || p.type || p.Type || '');
+                    if (col === 'barcode') return (p.barcode || p.Barcode || '');
+                    if (col === 'code') return (p.code || p.Code || '');
+                    if (col === 'name') return (p.name || p.nameVi || p.Name || '');
+                    return '';
+                  };
+                  const allUnique = Array.from(new Set((products || []).map(valGetter).filter(x => x && String(x).trim() !== '') ));
+                  const q = normalize(filterPopup.value || '');
+                  const filtered = q ? allUnique.filter(u => normalize(u).includes(q)) : allUnique;
+                  const unique = showAllFilterItems ? filtered : filtered.slice(0, 40);
+                  if (unique.length === 0) return <div style={{color: '#999', padding: 8}}>Không có gợi ý</div>;
+                  return (
+                    <>
+                      <div className="picker-filter-list" style={{maxHeight: 180, overflowY: 'auto', paddingRight: 6}}>
+                        {unique.map(u => (
+                          <label key={u} className="picker-filter-item" style={{display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px', cursor: 'pointer'}} onClick={() => setFilterPopup(p => ({...p, value: (p.value === u ? '' : u)}))}>
+                            <input type="checkbox" readOnly checked={filterPopup.value === u} />
+                            <span style={{fontSize: 14}}>{u}</span>
+                          </label>
+                        ))}
+                      </div>
+                      <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, marginTop: 8}}>
+                        <button className="picker-filter-viewall" onClick={() => setShowAllFilterItems(s => !s)}>{showAllFilterItems ? 'Thu gọn' : 'Xem tất cả'}</button>
+                        <div style={{display: 'flex', gap: 8}}>
+                          <button className="picker-filter-clear" onClick={clearFilterFromPopup}>Xóa</button>
+                          <button className="picker-filter-apply" onClick={applyFilterFromPopup}>Tìm</button>
+                        </div>
+                      </div>
+                    </>
+                  );
+                })()}
+              </div>
+            </div>
+          </div>
+        )}
+
         <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderTop: '1px solid #f0f0f0'}}>
           <div style={{color: '#666', fontSize: 13}}>{selectedIds.length} đã chọn</div>
           <div>
