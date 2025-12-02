@@ -148,9 +148,13 @@
   overflow-y: auto;
 }
 
+/* Make the right panel content visible so the inner table container handles scrolling
+   This ensures position:sticky on the table header works relative to the table scroll area */
 .right-panel > div:last-child {
   flex: 1;
-  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden; /* contain inner scrolling area */
   padding: 0 24px 24px 24px;
 }
 
@@ -206,6 +210,46 @@
   text-align: left;
   user-select: none;
 }
+/* make header draggable cursor, but keep resize cursor on handle */
+.quotation-detail-table th .th-inner { cursor: grab; }
+.quotation-detail-table th .th-inner:active { cursor: grabbing; }
+.quotation-detail-table th .resize-handle { cursor: col-resize; }
+
+/* Make quotation detail table header sticky and allow the table area to scroll */
+.right-panel .table-scroll-x {
+  flex: 1 1 auto;
+  overflow: auto; /* vertical and horizontal scrolling */
+  max-height: none; /* container controls height */
+  width: 100%;
+}
+.quotation-detail-table thead th {
+  position: sticky;
+  top: 0; /* sticks to top of .table-scroll-x container */
+  z-index: 12; /* increase so header stays above floating controls */
+  background: #f5f7fa; /* keep visual header color */
+  box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+}
+
+/* Ensure table can scroll horizontally when wider than container */
+.right-panel .table-scroll-x {
+  overflow-x: auto;
+}
+
+/* Force the quotation detail table to be wider than its container so a horizontal scrollbar appears
+   Adjust the min-width value as needed for your column set */
+.quotation-detail-table {
+  min-width: 1200px;
+}
+
+.quotation-detail-table th, .quotation-detail-table td {
+  white-space: nowrap;
+}
+
+/* Ensure footer blocks after the scroll area don't shrink and stay visible */
+.right-panel > div:last-child > .table-scroll-x + div,
+.right-panel > div:last-child > .table-scroll-x + div + div {
+  flex: 0 0 auto;
+}
 .quotation-list-table td, .quotation-detail-table td {
   padding: 8px 8px 8px 8px;
   border-bottom: 1px solid #f0f0f0;
@@ -224,23 +268,27 @@
   justify-content: space-between;
 }
 .resize-handle {
-  width: 6px;
+  width: 10px;
   height: 100%;
   cursor: col-resize;
   position: absolute;
   right: 0;
   top: 0;
-  z-index: 2;
+  z-index: 6; /* above header contents to ensure it receives pointer events */
   background: transparent;
+  touch-action: none; /* prevent touch scrolling while resizing on touch devices */
 }
 .settings-modal-overlay, .modal-overlay {
-  position: fixed;
+  position: fixed !important;
   top: 0; left: 0; right: 0; bottom: 0;
-  background: rgba(0,0,0,0.18);
-  z-index: 1000;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0,0,0,0.32);
+  z-index: 2147483000 !important; /* very high to beat any local z-index */
   display: flex;
-  align-items: flex-start;
-  justify-content: flex-start;
+  align-items: center; /* center vertically */
+  justify-content: center; /* center horizontally */
+  pointer-events: auto;
 }
 /* Popup cài đặt cột giống Ant Design */
 .column-settings-modal.column-settings-popup {
@@ -397,6 +445,56 @@
   padding: 12px 16px;
   border-bottom: 1px solid #f0f0f0;
   font-weight: 600;
+}
+
+/* Product picker: make table body scrollable and header sticky */
+.product-picker-modal {
+  position: fixed !important;
+  max-width: 98vw;
+  width: 98vw;
+  height: 92vh;
+  top: 8vh; /* moved down slightly so header isn't hidden */
+  left: 1vw;
+  margin: 0 !important;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 10px;
+  z-index: 2147483001 !important;
+}
+.product-picker-table-container {
+  padding: 8px 12px;
+  overflow-y: auto;
+  position: relative;
+  flex: 1 1 auto;
+}
+
+/* Force left panel to sit below modal when overlays present */
+.left-panel {
+  z-index: 1 !important;
+}
+.product-picker-table {
+  width: 100%;
+  border-collapse: collapse;
+}
+.product-picker-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 3;
+  background: #f5f7fa; /* match table header color */
+  padding: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.product-picker-table tbody tr td {
+  padding: 8px;
+  vertical-align: top;
+  border-bottom: 1px solid #f0f0f0;
+}
+
+/* ensure the first header cell with checkbox aligns left and stays clickable */
+.product-picker-table thead th:first-child {
+  text-align: left;
+  padding-left: 10px;
 }
 
 /* Product picker table styles */

@@ -454,3 +454,30 @@
 }
 
 /* End Order Management Styles */
+
+/* Sticky header + horizontal scroll for orders table */
+.order-management-page .table-container {
+  overflow: auto; /* allow both vertical and horizontal scrolling */
+  max-height: calc(100vh - 360px); /* leave space for header, filters and pagination */
+}
+
+.order-management-page .orders-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  background: #f8f9fa; /* ensure header background covers content when sticky */
+}
+
+.order-management-page .orders-table {
+  border-collapse: separate;
+}
+
+/* ensure long tables can scroll horizontally */
+.order-management-page .table-container::-webkit-scrollbar {
+  height: 10px;
+  width: 10px;
+}
+.order-management-page .table-container::-webkit-scrollbar-thumb {
+  background: #d6d6d6;
+  border-radius: 6px;
+}

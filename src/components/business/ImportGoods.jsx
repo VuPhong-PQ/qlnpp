@@ -354,22 +354,30 @@ const ImportGoods = () => {
           <h2>TÌM KIẾM</h2>
         </div>
         <div className="search-panel-controls">
-          <div className="search-panel-date-row">
-            <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} />
-            <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} />
+          <div className="search-controls-grid">
+            <div className="search-left">
+              <div className="search-panel-date-row">
+                <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} />
+                <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} />
+              </div>
+              <div className="search-panel-select-row">
+                <select value={importType} onChange={e=>setImportType(e.target.value)}>
+                  <option value="">loại nhập</option>
+                  <option value="nhập thường">Nhập thường</option>
+                  <option value="nhập khẩn cấp">Nhập khẩn cấp</option>
+                  <option value="nhập trả hàng">Nhập trả hàng</option>
+                </select>
+                <select value={employee} onChange={e=>setEmployee(e.target.value)}>
+                  <option value="">nhân viên lập</option>
+                  <option value="admin 66">admin 66</option>
+                  <option value="user 01">user 01</option>
+                </select>
+              </div>
+            </div>
+            <div className="search-panel-button">
+              <Button type="primary" style={{height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>Tìm kiếm</Button>
+            </div>
           </div>
-          <select value={importType} onChange={e=>setImportType(e.target.value)}>
-            <option value="">loại nhập</option>
-            <option value="nhập thường">Nhập thường</option>
-            <option value="nhập khẩn cấp">Nhập khẩn cấp</option>
-            <option value="nhập trả hàng">Nhập trả hàng</option>
-          </select>
-          <select value={employee} onChange={e=>setEmployee(e.target.value)}>
-            <option value="">nhân viên lập</option>
-            <option value="admin 66">admin 66</option>
-            <option value="user 01">user 01</option>
-          </select>
-          <Button type="primary">Tìm kiếm</Button>
         </div>
         <div className="search-panel-total" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span>Tổng {filteredLeft.length}</span>

@@ -13,11 +13,11 @@ const defaultRightColumns = [
   { key: 'itemName', title: 'Tên hàng' },
   { key: 'description', title: 'Mô tả' },
   { key: 'unit', title: 'Đvt' },
-  { key: 'Conversion1', title: 'Quy đổi' },
   { key: 'price', title: 'Đơn giá' },
   { key: 'unit1', title: 'Đvt 1' },
   { key: 'price1', title: 'Đơn giá 1' },
   { key: 'note', title: 'Ghi chú' },
+  { key: 'Conversion1', title: 'Quy đổi' },
   { key: 'actions', title: 'Thao tác' },
 ];
 
@@ -290,15 +290,25 @@ function ResizableTh({ children, width, onResize, isLast, ...props }) {
       ref={thRef}
       style={{
         width,
-        position: 'relative',
         borderRight: isLast ? undefined : '1px solid #e0e0e0',
         backgroundClip: 'padding-box',
         boxSizing: 'border-box',
       }}
+      draggable={props.draggable}
+      onDragStart={props.onHeaderDragStart}
+      onDragOver={props.onHeaderDragOver}
+      onDrop={props.onHeaderDrop}
+      onDragEnd={props.onHeaderDragEnd}
       {...props}
     >
-      <div className="th-content">{children}</div>
-      <div className="resize-handle" onMouseDown={handleMouseDown} />
+      <div className="th-inner" style={{ position: 'relative', height: '100%' }}>
+        <div className="th-content" draggable={false}>{children}</div>
+        <div
+          className="resize-handle"
+          onMouseDown={(e) => { e.stopPropagation(); e.preventDefault(); handleMouseDown(e); }}
+          onDragStart={(e) => { e.preventDefault(); }}
+        />
+      </div>
     </th>
   );
 }
@@ -347,6 +357,9 @@ const getInitialRightCols = () => {
   const [productList, setProductList] = useState([]);
   const [productSearch, setProductSearch] = useState('');
   const [selectedProductIds, setSelectedProductIds] = useState([]);
+  // Drag state for reordering right-panel columns by dragging headers
+  const [rightDragIndex, setRightDragIndex] = useState(null);
+  const [rightDragOverIndex, setRightDragOverIndex] = useState(null);
 
   // Try to determine the currently logged-in user's display name from common places
   const getCurrentUserName = () => {
@@ -376,6 +389,27 @@ const getInitialRightCols = () => {
   React.useEffect(() => {
     saveRightColConfig(rightVisibleCols, rightColOrder);
   }, [rightVisibleCols, rightColOrder]);
+
+  // Ensure the 'Conversion1' (Quy đổi) column is present and positioned next to 'note'
+  // This helps users who have no saved config or older config where the column was missing.
+  React.useEffect(() => {
+    const key = 'Conversion1';
+    let needsOrder = !rightColOrder.includes(key);
+    let needsVisible = !rightVisibleCols.includes(key);
+    if (!needsOrder && !needsVisible) return;
+    if (needsOrder) {
+      const idx = rightColOrder.indexOf('note');
+      const newOrder = [...rightColOrder];
+      if (idx >= 0) newOrder.splice(idx + 1, 0, key); else newOrder.push(key);
+      setRightColOrder(newOrder);
+    }
+    if (needsVisible) {
+      setRightVisibleCols(prev => {
+        if (prev.includes(key)) return prev;
+        return [...prev, key];
+      });
+    }
+  }, []); // run once on mount
   // Đóng popup khi click ra ngoài và tự động lưu
   const rightSettingsRef = useRef(null);
   React.useEffect(() => {
@@ -417,6 +451,45 @@ const getInitialRightCols = () => {
   };
   const handleRightResize = (idx, w) => {
     setRightColWidths(widths => widths.map((v, i) => (i === idx ? w : v)));
+  };
+
+  // Header drag handlers for right panel (reorder columns)
+  const handleRightHeaderDragStart = (e, idx) => {
+    // avoid starting drag when resizing (resize uses mousedown on handle)
+    setRightDragIndex(idx);
+    try { e.dataTransfer.effectAllowed = 'move'; } catch (err) {}
+  };
+  const handleRightHeaderDragOver = (e, idx) => {
+    e.preventDefault();
+    setRightDragOverIndex(idx);
+  };
+  const handleRightHeaderDrop = (e, idx) => {
+    e.preventDefault();
+    if (rightDragIndex === null || rightDragIndex === idx) {
+      setRightDragIndex(null);
+      setRightDragOverIndex(null);
+      return;
+    }
+    const newOrder = [...rightColOrder];
+    // move element at rightDragIndex to position idx
+    const [moved] = newOrder.splice(rightDragIndex, 1);
+    newOrder.splice(idx, 0, moved);
+    setRightColOrder(newOrder);
+    // also move corresponding width entry so column width follows the column key
+    try {
+      const w = [...rightColWidths];
+      const [movedW] = w.splice(rightDragIndex, 1);
+      w.splice(idx, 0, movedW);
+      setRightColWidths(w);
+    } catch (err) {
+      // ignore if widths mismatch
+    }
+    setRightDragIndex(null);
+    setRightDragOverIndex(null);
+  };
+  const handleRightHeaderDragEnd = () => {
+    setRightDragIndex(null);
+    setRightDragOverIndex(null);
   };
 
   // Lưu cấu hình cột vào localStorage
@@ -1296,8 +1369,13 @@ const getInitialRightCols = () => {
                           <ResizableTh
                             key={col.key}
                             width={rightColWidths[idx]}
-                            onResize={w => handleRightResize(idx, w)}
-                            isLast={isLast}
+                              onResize={w => handleRightResize(idx, w)}
+                              isLast={isLast}
+                              draggable={true}
+                              onHeaderDragStart={(e) => handleRightHeaderDragStart(e, idx)}
+                              onHeaderDragOver={(e) => handleRightHeaderDragOver(e, idx)}
+                              onHeaderDrop={(e) => handleRightHeaderDrop(e, idx)}
+                              onHeaderDragEnd={handleRightHeaderDragEnd}
                           >
                             {col.title}
                           </ResizableTh>
@@ -1523,6 +1601,9 @@ function ProductPickerModal({ visible, products, search, onSearchChange, selecte
   const [headerFilters, setHeaderFilters] = React.useState({ code: '', name: '', barcode: '', type: '' });
   const [filterPopup, setFilterPopup] = React.useState({ col: null, left: 0, top: 0, value: '' });
   const [showAllFilterItems, setShowAllFilterItems] = React.useState(false);
+  const [pageSize, setPageSize] = React.useState(10);
+  const pageOptions = [10,20,50,100,200,500,1000,5000];
+  const [currentPage, setCurrentPage] = React.useState(1);
 
   if (!visible) return null;
 
@@ -1550,6 +1631,13 @@ function ProductPickerModal({ visible, products, search, onSearchChange, selecte
   });
 
   const allFilteredSelected = filteredProducts.length > 0 && filteredProducts.every(p => selectedIds.includes(p.id));
+
+  // pagination for filtered products
+  const totalPages = Math.max(1, Math.ceil(filteredProducts.length / Math.max(1, pageSize)));
+  React.useEffect(() => {
+    if (currentPage > totalPages) setCurrentPage(1);
+  }, [filteredProducts.length, pageSize, totalPages]);
+  const pagedProducts = filteredProducts.slice((currentPage - 1) * pageSize, (currentPage - 1) * pageSize + pageSize);
 
   const openFilterPopup = (col, e) => {
     try {
@@ -1582,42 +1670,45 @@ function ProductPickerModal({ visible, products, search, onSearchChange, selecte
 
   return (
     <div className="modal-overlay" style={{alignItems: 'flex-start', justifyContent: 'center'}}>
-      <div ref={ref} className="product-picker-modal" style={{background: '#fff', borderRadius: 12, boxShadow: '0 8px 32px rgba(0,0,0,0.13)', minWidth: 520, maxWidth: 1100, marginTop: 60, padding: 0, zIndex: 1200, display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.18s'}}>
+      <div ref={ref} className="product-picker-modal" style={{background: '#fff', borderRadius: 10, boxShadow: '0 8px 32px rgba(0,0,0,0.13)', minWidth: '96vw', maxWidth: '96vw', width: '96vw', marginTop: 12, padding: 0, zIndex: 1200, display: 'flex', flexDirection: 'column', animation: 'fadeIn 0.18s', height: '88vh'}}>
         <div style={{padding: 12, display: 'flex', alignItems: 'center', gap: 12, borderBottom: '1px solid #f0f0f0'}}>
-          <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
-            <input
-              type="checkbox"
-              checked={allFilteredSelected}
-              onChange={() => {
-                if (allFilteredSelected) {
-                  // unselect all filtered
-                  filteredProducts.forEach(p => { if (selectedIds.includes(p.id)) toggleSelect(p.id); });
-                } else {
-                  // select all filtered
-                  filteredProducts.forEach(p => { if (!selectedIds.includes(p.id)) toggleSelect(p.id); });
-                }
-              }}
-            />
-            <div style={{fontWeight: 700, fontSize: 16}}>Chọn hàng hóa</div>
-          </div>
-          <div style={{flex: 1}}>
-            <div style={{display: 'flex', alignItems: 'center', border: '1px solid #e5e7eb', borderRadius: 6, padding: '6px 8px', background: '#fafbfc'}}>
-              <input
-                style={{flex: 1, border: 'none', outline: 'none', background: 'transparent', fontSize: 14, padding: '6px 0'}}
-                placeholder="Tìm kiếm (mã, tên, mã vạch)..."
-                value={search}
-                onChange={e => onSearchChange(e.target.value)}
-              />
-              <button style={{border: 'none', background: 'transparent', cursor: 'pointer', color: '#888'}} onClick={() => onSearchChange('')}>✖</button>
+          <div style={{fontWeight: 700, fontSize: 16}}>Chọn hàng hóa</div>
+          <div style={{flex: 1}} />
+        </div>
+
+        <div style={{padding: '8px 12px'}}>
+          <div style={{display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8}}>
+            <div style={{fontSize: 13, color: '#666'}}>{filteredProducts.length === 0 ? '0 kết quả' : `Hiển thị ${(filteredProducts.length>0? ((currentPage-1)*pageSize+1):0)}-${Math.min(filteredProducts.length, currentPage*pageSize)} trên ${filteredProducts.length}`}</div>
+            <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+              <select value={pageSize} onChange={e => { setPageSize(parseInt(e.target.value, 10)); setCurrentPage(1); }} style={{borderRadius: 6, border: '1px solid #e5e7eb', padding: '6px 8px'}}>
+                {pageOptions.map(opt => <option key={opt} value={opt}>{opt} / trang</option>)}
+              </select>
+              <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setCurrentPage(p => Math.max(1, p - 1))} disabled={currentPage <= 1}>{'<'}</button>
+              <span style={{fontWeight: 600}}>{currentPage}/{totalPages}</span>
+              <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setCurrentPage(p => Math.min(totalPages, p + 1))} disabled={currentPage >= totalPages}>{'>'}</button>
             </div>
           </div>
         </div>
 
-        <div style={{padding: '8px 12px', overflowX: 'auto'}}>
+        <div className="product-picker-table-container">
           <table className="product-picker-table" style={{width: '100%', borderCollapse: 'collapse', minWidth: 760}}>
             <thead>
                 <tr>
-                  <th style={{width: 48, textAlign: 'center'}}></th>
+                  <th style={{width: 48, textAlign: 'left', paddingLeft: 10}}>
+                    <input
+                      type="checkbox"
+                      checked={allFilteredSelected}
+                      onChange={(e) => {
+                        if (allFilteredSelected) {
+                          // unselect all filtered
+                          filteredProducts.forEach(p => { if (selectedIds.includes(p.id)) toggleSelect(p.id); });
+                        } else {
+                          // select all filtered
+                          filteredProducts.forEach(p => { if (!selectedIds.includes(p.id)) toggleSelect(p.id); });
+                        }
+                      }}
+                    />
+                  </th>
                   <th style={{width: 140}}>Loại hàng <span className="picker-header-icon" onClick={(e) => { e.stopPropagation(); openFilterPopup('type', e); }}>🔍</span></th>
                   <th style={{width: 140}}>Mã vạch <span className="picker-header-icon" onClick={(e) => { e.stopPropagation(); openFilterPopup('barcode', e); }}>🔍</span></th>
                   <th style={{width: 140}}>Mã hàng <span className="picker-header-icon" onClick={(e) => { e.stopPropagation(); openFilterPopup('code', e); }}>🔍</span></th>
@@ -1627,20 +1718,21 @@ function ProductPickerModal({ visible, products, search, onSearchChange, selecte
                 </tr>
                 {/* Filters are handled by popup opened when clicking the magnifier icon */}
             </thead>
-            <tbody style={{maxHeight: 360, overflowY: 'auto'}}>
+            <tbody>
               {filteredProducts.length === 0 ? (
-                <tr><td colSpan={6} style={{textAlign: 'center', padding: 28, color: '#bbb'}}>Không có kết quả</td></tr>
+                <tr><td colSpan={7} style={{textAlign: 'center', padding: 28, color: '#bbb'}}>Không có kết quả</td></tr>
               ) : (
-                filteredProducts.map(p => (
+                pagedProducts.map(p => (
                   <tr key={p.id} className={selectedIds.includes(p.id) ? 'selected-row' : ''} style={{cursor: 'pointer'}} onClick={() => toggleSelect(p.id)}>
                     <td style={{textAlign: 'center', padding: 8}}>
                       <input type="checkbox" checked={selectedIds.includes(p.id)} onChange={(e) => { e.stopPropagation(); toggleSelect(p.id); }} />
                     </td>
-                    <td style={{padding: 8, verticalAlign: 'top'}}>{p.code || p.Code || ''}</td>
+                    <td style={{padding: 8, verticalAlign: 'top'}}>{(p.category || p.Category || p.itemType || p.ItemType || p.type || p.Type) || ''}</td>
                     <td style={{padding: 8, verticalAlign: 'top'}}>{p.barcode || p.Barcode || ''}</td>
+                    <td style={{padding: 8, verticalAlign: 'top'}}>{p.code || p.Code || ''}</td>
                     <td style={{padding: 8, verticalAlign: 'top'}}>
                       <div style={{fontWeight: 600}}>{p.name || p.nameVi || p.Name || ''}</div>
-                      <div style={{color: '#666', fontSize: 13}}>{p.code ? `${p.code || p.Code} • ${p.barcode || p.Barcode || ''}` : (p.barcode || '')}</div>
+                      <div style={{color: '#666', fontSize: 13}}>{(p.code || p.Code ? `${p.code || p.Code}` : '')}{(p.barcode || p.Barcode) ? ` • ${p.barcode || p.Barcode}` : ''}</div>
                     </td>
                     <td style={{padding: 8, verticalAlign: 'top'}}>{p.defaultUnit || p.DefaultUnit || p.unit || ''}</td>
                     <td style={{padding: 8, verticalAlign: 'top', textAlign: 'right', fontWeight: 600}}>{(p.retailPrice || p.RetailPrice) ? Number(p.retailPrice || p.RetailPrice).toLocaleString('vi-VN') : ''}</td>
