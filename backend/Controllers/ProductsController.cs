@@ -51,6 +51,19 @@ namespace QlnppApi.Controllers
         [HttpPost]
         public async Task<ActionResult<Product>> PostProduct(Product product)
         {
+            // Compute derived fields: retail prices for other units based on conversion
+            try
+            {
+                product.RetailPrice1 = product.RetailPrice * product.Conversion1;
+                product.RetailPrice2 = product.RetailPrice * product.Conversion2;
+                product.RetailPrice3 = product.RetailPrice * product.Conversion3;
+                product.RetailPrice4 = product.RetailPrice * product.Conversion4;
+            }
+            catch
+            {
+                // ignore calculation errors and let defaults (0) remain
+            }
+
             _context.Products.Add(product);
             await _context.SaveChangesAsync();
 
@@ -64,6 +77,19 @@ namespace QlnppApi.Controllers
             if (id != product.Id)
             {
                 return BadRequest();
+            }
+
+            // Compute derived fields before saving
+            try
+            {
+                product.RetailPrice1 = product.RetailPrice * product.Conversion1;
+                product.RetailPrice2 = product.RetailPrice * product.Conversion2;
+                product.RetailPrice3 = product.RetailPrice * product.Conversion3;
+                product.RetailPrice4 = product.RetailPrice * product.Conversion4;
+            }
+            catch
+            {
+                // ignore
             }
 
             _context.Entry(product).State = EntityState.Modified;

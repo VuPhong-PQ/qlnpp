@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import './SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
@@ -157,6 +157,49 @@ const Products = () => {
     status: 'active'
   });
 
+  // Validation: map required fields to user-facing labels
+  const requiredFieldMap = {
+    category: 'Loại hàng',
+    code: 'Mã hàng',
+    name: 'Tên hàng',
+    baseUnit: 'ĐVT Gốc',
+    defaultUnit: 'ĐVT mặc định'
+  };
+
+  const validateRequiredForm = () => {
+    const missing = [];
+    Object.keys(requiredFieldMap).forEach(key => {
+      const val = formData[key];
+      if (val === undefined || val === null || String(val).toString().trim() === '') missing.push(requiredFieldMap[key]);
+    });
+    if (missing.length > 0) {
+      alert('Vui lòng nhập/chọn các trường bắt buộc: ' + missing.join(', '));
+      return false;
+    }
+    return true;
+  };
+
+  // Refs and state to match defaultUnit width to unit2 select
+  const unit2Ref = useRef(null);
+  const defaultUnitContainerRef = useRef(null);
+  const [defaultUnitWidth, setDefaultUnitWidth] = useState(null);
+
+  useLayoutEffect(() => {
+    const measure = () => {
+      try {
+        if (unit2Ref.current) {
+          const w = Math.round(unit2Ref.current.getBoundingClientRect().width);
+          setDefaultUnitWidth(w);
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [formData.unit2, formData.unit1, formData.baseUnit, products]);
+
   // Xử lý thêm loại hàng
   const handleCategoryInputChange = (e) => {
     const { name, value } = e.target;
@@ -206,10 +249,76 @@ const Products = () => {
 
   const handleInputChange = (e) => {
     const { name, value, type } = e.target;
-    setFormData({
-      ...formData,
-      [name]: type === 'number' ? parseFloat(value) || 0 : value
-    });
+    // update value and recalc any dependent fields (conversion -> retailPriceN)
+    const parsed = type === 'number' ? parseFloat(value) || 0 : value;
+    const newForm = { ...formData, [name]: parsed };
+
+    // If a conversion field changed, recalc corresponding retailPrice and weights
+    if (name === 'conversion1') {
+      // conversion1 affects retailPrice1 and weight1
+      newForm.retailPrice1 = (newForm.retailPrice || 0) * (parsed || 0);
+      newForm.weight1 = (newForm.weight || 0) * (parsed || 0);
+      newForm.volume1 = (newForm.volume || 0) * (parsed || 0);
+    } else if (name === 'conversion2') {
+      // conversion2 affects retailPrice2 and weight2
+      newForm.retailPrice2 = (newForm.retailPrice || 0) * (parsed || 0);
+      newForm.weight2 = (newForm.weight || 0) * (parsed || 0);
+      newForm.volume2 = (newForm.volume || 0) * (parsed || 0);
+    }
+
+    // Weight fields reverse/forward calculation
+    if (name === 'weight') {
+      // forward: base weight -> derived weights
+      newForm.weight1 = (newForm.weight || 0) * (newForm.conversion1 || 0);
+      newForm.weight2 = (newForm.weight || 0) * (newForm.conversion2 || 0);
+      // forward: base volume -> derived volumes
+      newForm.volume1 = (newForm.volume || 0) * (newForm.conversion1 || 0);
+      newForm.volume2 = (newForm.volume || 0) * (newForm.conversion2 || 0);
+    } else if (name === 'weight1') {
+      // reverse: weight1 -> base weight using conversion1
+      const c1 = newForm.conversion1 || 0;
+      if (c1 !== 0) {
+        newForm.weight = (newForm.weight1 || 0) / c1;
+        // update other derived weight based on new base weight
+        newForm.weight2 = (newForm.weight || 0) * (newForm.conversion2 || 0);
+        // update derived volumes based on new base weight (keep volumes consistent)
+        newForm.volume1 = (newForm.volume || 0) * (newForm.conversion1 || 0);
+        newForm.volume2 = (newForm.volume || 0) * (newForm.conversion2 || 0);
+      }
+    } else if (name === 'weight2') {
+      // reverse: weight2 -> base weight using conversion2
+      const c2 = newForm.conversion2 || 0;
+      if (c2 !== 0) {
+        newForm.weight = (newForm.weight2 || 0) / c2;
+        newForm.weight1 = (newForm.weight || 0) * (newForm.conversion1 || 0);
+        // update derived volumes based on new base weight
+        newForm.volume1 = (newForm.volume || 0) * (newForm.conversion1 || 0);
+        newForm.volume2 = (newForm.volume || 0) * (newForm.conversion2 || 0);
+      }
+    }
+
+    // Volume fields reverse/forward calculation
+    if (name === 'volume') {
+      // forward: base volume -> derived volumes
+      newForm.volume1 = (newForm.volume || 0) * (newForm.conversion1 || 0);
+      newForm.volume2 = (newForm.volume || 0) * (newForm.conversion2 || 0);
+    } else if (name === 'volume1') {
+      // reverse: volume1 -> base volume using conversion1
+      const cv1 = newForm.conversion1 || 0;
+      if (cv1 !== 0) {
+        newForm.volume = (newForm.volume1 || 0) / cv1;
+        // update other derived volumes based on new base volume
+        newForm.volume2 = (newForm.volume || 0) * (newForm.conversion2 || 0);
+      }
+    } else if (name === 'volume2') {
+      const cv2 = newForm.conversion2 || 0;
+      if (cv2 !== 0) {
+        newForm.volume = (newForm.volume2 || 0) / cv2;
+        newForm.volume1 = (newForm.volume || 0) * (newForm.conversion1 || 0);
+      }
+    }
+
+    setFormData(newForm);
   };
 
   // Helpers to format price inputs with comma separators (display only)
@@ -229,11 +338,104 @@ const Products = () => {
   const handlePriceInputChange = (e) => {
     const { name, value } = e.target;
     const numeric = parseNumberFromString(value);
-    setFormData({ ...formData, [name]: numeric });
+    
+    // Always update the specific field first
+    const newForm = { ...formData, [name]: numeric };
+    
+    // If the main retailPrice changes, recalc dependent retailPrice1..4
+    if (name === 'retailPrice') {
+      newForm.retailPrice1 = (numeric || 0) * (newForm.conversion1 || 0);
+      newForm.retailPrice2 = (numeric || 0) * (newForm.conversion2 || 0);
+    }
+    // Reverse calculation: if retailPrice1 changes, calculate retailPrice
+    else if (name === 'retailPrice1') {
+      const conv1 = newForm.conversion1 || 0;
+      if (conv1 !== 0) {
+        newForm.retailPrice = numeric / conv1;
+        // Also update other derived price based on new retailPrice
+        newForm.retailPrice2 = newForm.retailPrice * (newForm.conversion2 || 0);
+      }
+    }
+    // Reverse calculation: if retailPrice2 changes, calculate retailPrice
+    else if (name === 'retailPrice2') {
+      const conv2 = newForm.conversion2 || 0;
+      if (conv2 !== 0) {
+        newForm.retailPrice = numeric / conv2;
+        // Update other derived price
+        newForm.retailPrice1 = newForm.retailPrice * (newForm.conversion1 || 0);
+      }
+    }
+    
+    setFormData(newForm);
   };
+
+  // Ensure derived retailPriceN are always in sync when retailPrice or conversions change
+  useEffect(() => {
+    const rp = Number(formData.retailPrice) || 0;
+    const c1 = Number(formData.conversion1) || 0;
+    const c2 = Number(formData.conversion2) || 0;
+
+    const expected1 = rp * c1; // conversion1 affects retailPrice1
+    const expected2 = rp * c2; // conversion2 affects retailPrice2
+
+    const cur1 = Number(formData.retailPrice1) || 0;
+    const cur2 = Number(formData.retailPrice2) || 0;
+
+    if (cur1 !== expected1 || cur2 !== expected2) {
+      setFormData(prev => ({
+        ...prev,
+        retailPrice1: expected1,
+        retailPrice2: expected2
+      }));
+    }
+  }, [formData.retailPrice, formData.conversion1, formData.conversion2]);
+
+  // Ensure derived weightN are always in sync when weight or conversions change
+  useEffect(() => {
+    const w = Number(formData.weight) || 0;
+    const c1 = Number(formData.conversion1) || 0;
+    const c2 = Number(formData.conversion2) || 0;
+
+    const expectedW1 = w * c1;
+    const expectedW2 = w * c2;
+
+    const curW1 = Number(formData.weight1) || 0;
+    const curW2 = Number(formData.weight2) || 0;
+
+    if (curW1 !== expectedW1 || curW2 !== expectedW2) {
+      setFormData(prev => ({
+        ...prev,
+        weight1: expectedW1,
+        weight2: expectedW2
+      }));
+    }
+  }, [formData.weight, formData.conversion1, formData.conversion2]);
+
+  // Ensure derived volumeN are always in sync when volume or conversions change
+  useEffect(() => {
+    const v = Number(formData.volume) || 0;
+    const c1 = Number(formData.conversion1) || 0;
+    const c2 = Number(formData.conversion2) || 0;
+
+    const expectedV1 = v * c1;
+    const expectedV2 = v * c2;
+
+    const curV1 = Number(formData.volume1) || 0;
+    const curV2 = Number(formData.volume2) || 0;
+
+    if (curV1 !== expectedV1 || curV2 !== expectedV2) {
+      setFormData(prev => ({
+        ...prev,
+        volume1: expectedV1,
+        volume2: expectedV2
+      }));
+    }
+  }, [formData.volume, formData.conversion1, formData.conversion2]);
 
   const handleSubmit = async (e) => {
     e.preventDefault();
+    // Validate required fields
+    if (!validateRequiredForm()) return;
     try {
       setLoading(true);
       if (editingItem) {
@@ -264,6 +466,8 @@ const Products = () => {
       // Tạo bản sao mới không có ID
       const copyData = { ...formData };
       delete copyData.id;
+      // Validate required fields before saving a copy
+      if (!validateRequiredForm()) return;
       await api.post(API_ENDPOINTS.products, copyData);
       alert('Sao chép sản phẩm thành công!');
       await fetchProducts();
@@ -1718,7 +1922,9 @@ const Products = () => {
                   <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: '13px', tableLayout: 'fixed' }}>
                     <thead>
                       <tr style={{ background: '#fafafa' }}>
-                        <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>ĐVT Gốc</th>
+                        <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>
+                          ĐVT Gốc <span style={{ color: 'red' }}>*</span>
+                        </th>
                         <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Quy đổi</th>
                         <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '140px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Giá bán lẻ</th>
                         <th style={{ padding: '10px 8px', borderBottom: '2px solid #e0e0e0', textAlign: 'left', width: '100px', fontSize: '13px', fontWeight: '600', color: '#333' }}>Số Kg</th>
@@ -1729,13 +1935,13 @@ const Products = () => {
                       {/* ĐVT gốc */}
                       <tr style={{ background: 'white' }}>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <select name="baseUnit" value={formData.baseUnit} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
+                          <select name="baseUnit" value={formData.baseUnit} onChange={handleInputChange} required style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                             <option value="">Chọn ĐVT</option>
                             {units.map(unit => (<option key={unit.id} value={unit.code}>{unit.name}</option>))}
                           </select>
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <input type="number" name="baseConversion" value={formData.baseConversion || 1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="1" />
+                          {/* Cột trống - không có quy đổi cho ĐVT gốc */}
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                           <input type="text" name="retailPrice" value={formatNumberWithCommas(formData.retailPrice)} onChange={handlePriceInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
@@ -1789,7 +1995,7 @@ const Products = () => {
                           <div style={{ marginBottom: '6px' }}>
                             <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>ĐVT 2</label>
                           </div>
-                          <select name="unit2" value={formData.unit2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
+                          <select ref={unit2Ref} name="unit2" value={formData.unit2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                             <option value="">Chọn đơn vị tính 2</option>
                             {units.map(unit => (<option key={unit.id} value={unit.code}>{unit.name}</option>))}
                           </select>
@@ -1824,35 +2030,33 @@ const Products = () => {
                 </div>
               </div>
 
-              {/* ĐVT mặc định, Tồn tối thiểu, Chiết khấu */}
-              <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr 1fr', gap: '16px', marginBottom: '12px' }}>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>ĐVT mặc định</label>
-                  <select name="defaultUnit" value={formData.defaultUnit} onChange={handleInputChange} style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
-                    <option value="">Chọn ĐVT</option>
-                    {units.map(unit => (<option key={unit.id} value={unit.code}>{unit.name}</option>))}
-                  </select>
+              {/* ĐVT mặc định và Ghi chú (Ghi chú thay chỗ Tồn tối thiểu/Chiết khấu) */}
+              {/* ĐVT mặc định và Ghi chú - note sẽ mở rộng ngang bằng phần còn lại của modal */}
+              <div style={{ display: 'grid', gridTemplateColumns: '156px 1fr', gap: '0px', marginBottom: '12px', alignItems: 'start' }}>
+                <div style={{ padding: '8px', boxSizing: 'border-box' }}>
+                  <div style={{ padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px', backgroundColor: '#fafafa' }}>
+                    <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>ĐVT mặc định <span style={{ color: 'red' }}>*</span></label>
+                    <select name="defaultUnit" value={formData.defaultUnit} onChange={handleInputChange} required style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
+                      <option value="">Chọn ĐVT</option>
+                      {formData.baseUnit && (
+                        <option value={formData.baseUnit}>ĐVT Gốc ({units.find(u => u.code === formData.baseUnit)?.name || formData.baseUnit})</option>
+                      )}
+                      {formData.unit1 && (
+                        <option value={formData.unit1}>ĐVT 1 ({units.find(u => u.code === formData.unit1)?.name || formData.unit1})</option>
+                      )}
+                      {formData.unit2 && (
+                        <option value={formData.unit2}>ĐVT 2 ({units.find(u => u.code === formData.unit2)?.name || formData.unit2})</option>
+                      )}
+                    </select>
+                  </div>
                 </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Tồn tối thiểu</label>
-                  <input type="number" name="minStock" value={formData.minStock} onChange={handleInputChange} placeholder="0" style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} />
-                </div>
-                <div>
-                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Chiết khấu</label>
-                  <input type="number" step="0.1" name="discount" value={formData.discount} onChange={handleInputChange} placeholder="0" style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} />
+                <div style={{ padding: '8px' }}>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Ghi chú</label>
+                  <textarea name="note" value={formData.note} onChange={handleInputChange} rows="2" placeholder="Ghi chú" style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', resize: 'vertical' }} />
                 </div>
               </div>
 
-              {/* Ghi chú và Khuyến mãi */}
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Ghi chú</label>
-                <textarea name="note" value={formData.note} onChange={handleInputChange} rows="2" placeholder="Ghi chú" style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', resize: 'vertical' }} />
-              </div>
-
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Khuyến mãi</label>
-                <textarea name="promotion" value={formData.promotion} onChange={handleInputChange} rows="2" placeholder="Khuyến mãi" style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', resize: 'vertical' }} />
-              </div>
+              {/* Khuyến mãi removed per request */}
 
               {/* Hình ảnh hàng hóa */}
               <div style={{ marginBottom: '12px' }}>
