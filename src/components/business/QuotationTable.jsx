@@ -267,7 +267,7 @@ function ColumnSettings({ columns, visibleColumns, colOrder, setVisibleColumns, 
   );
 }
 // Resizable table header cell
-function ResizableTh({ children, width, onResize, isLast, ...props }) {
+function ResizableTh({ children, width, onResize, isLast, draggable, onHeaderDragStart, onHeaderDragOver, onHeaderDrop, onHeaderDragEnd, ...rest }) {
   const thRef = useRef();
   const startX = useRef();
   const startWidth = useRef();
@@ -294,12 +294,12 @@ function ResizableTh({ children, width, onResize, isLast, ...props }) {
         backgroundClip: 'padding-box',
         boxSizing: 'border-box',
       }}
-      draggable={props.draggable}
-      onDragStart={props.onHeaderDragStart}
-      onDragOver={props.onHeaderDragOver}
-      onDrop={props.onHeaderDrop}
-      onDragEnd={props.onHeaderDragEnd}
-      {...props}
+      draggable={draggable}
+      onDragStart={onHeaderDragStart}
+      onDragOver={onHeaderDragOver}
+      onDrop={onHeaderDrop}
+      onDragEnd={onHeaderDragEnd}
+      {...rest}
     >
       <div className="th-inner" style={{ position: 'relative', height: '100%' }}>
         <div className="th-content" draggable={false}>{children}</div>

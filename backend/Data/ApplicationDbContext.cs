@@ -28,6 +28,8 @@ namespace QlnppApi.Data
         public DbSet<GroupPermission> GroupPermissions { get; set; }
         public DbSet<Quotation> Quotations { get; set; }
         public DbSet<QuotationItem> QuotationItems { get; set; }
+        public DbSet<Import> Imports { get; set; }
+        public DbSet<ImportItem> ImportItems { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -234,6 +236,29 @@ namespace QlnppApi.Data
 
             modelBuilder.Entity<Product>()
                 .Property(p => p.ShippingFee4)
+                .HasPrecision(18, 2);
+
+            // Import / ImportItem configuration
+            // ImportItem numeric properties have Column attributes, but configure precision explicitly
+            modelBuilder.Entity<ImportItem>()
+                .Property(i => i.UnitPrice)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<ImportItem>()
+                .Property(i => i.Total)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<ImportItem>()
+                .Property(i => i.Weight)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<ImportItem>()
+                .Property(i => i.Volume)
+                .HasPrecision(18, 2);
+
+            // Import header precision
+            modelBuilder.Entity<Import>()
+                .Property(i => i.Total)
                 .HasPrecision(18, 2);
 
             // User & Permissions

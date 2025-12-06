@@ -344,6 +344,7 @@ const Products = () => {
     setEditingItem(item);
     setFormData(item);
     setShowModal(true);
+    setShowProductColSetting(false); // Đóng popup cài đặt cột khi mở modal
   };
 
   const handleDelete = async (id) => {
@@ -1011,6 +1012,7 @@ const Products = () => {
                 resetForm();
                 setShowModal(true);
                 setEditingItem(null);
+                setShowProductColSetting(false); // Đóng popup cài đặt cột khi mở modal
               }}
             >
               + Thêm sản phẩm
@@ -1547,6 +1549,7 @@ const Products = () => {
               setShowModal(true);
               setEditingItem(null);
               setContextMenu(null);
+              setShowProductColSetting(false); // Đóng popup cài đặt cột khi mở modal
             }}
             style={{
               padding: '8px 16px',
@@ -1597,85 +1600,10 @@ const Products = () => {
         </div>
       )}
 
-      {/* Modal Thêm Loại Hàng */}
-      {showCategoryModal && (
-        <div className="modal-overlay" style={{ zIndex: 1100 }}>
-          <div className="modal-content" style={{ maxWidth: '500px', width: '90%', zIndex: 1101 }}>
-            <div className="modal-header">
-              <h3>THÔNG TIN LOẠI HÀNG</h3>
-              <button className="close-btn" onClick={() => setShowCategoryModal(false)}>×</button>
-            </div>
-
-            <form onSubmit={handleAddCategory} style={{ padding: '0 8px' }}>
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Mã loại <span style={{ color: 'red' }}>*</span></label>
-                <input
-                  type="text"
-                  name="code"
-                  value={categoryForm.code}
-                  onChange={handleCategoryInputChange}
-                  placeholder="Nhập mã loại"
-                  required
-                  style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Tên loại <span style={{ color: 'red' }}>*</span></label>
-                <input
-                  type="text"
-                  name="name"
-                  value={categoryForm.name}
-                  onChange={handleCategoryInputChange}
-                  placeholder="Nhập tên loại"
-                  required
-                  style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
-                />
-              </div>
-
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
-                  <input 
-                    type="checkbox" 
-                    name="noGroupOrder"
-                    checked={categoryForm.noGroupOrder}
-                    onChange={(e) => setCategoryForm({...categoryForm, noGroupOrder: e.target.checked})}
-                    style={{ width: '16px', height: '16px' }} 
-                  />
-                  <span>Không cập đơn hàng</span>
-                </label>
-              </div>
-
-              <div style={{ marginBottom: '12px' }}>
-                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Ghi chú</label>
-                <textarea
-                  name="note"
-                  value={categoryForm.note}
-                  onChange={handleCategoryInputChange}
-                  rows="3"
-                  placeholder="Ghi chú"
-                  style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', resize: 'vertical' }}
-                />
-              </div>
-
-              {/* Buttons */}
-              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '16px', borderTop: '1px solid #e8e8e8' }}>
-                <button type="submit" disabled={loading} style={{ padding: '8px 20px', fontSize: '13px', fontWeight: '500', background: '#1890ff', color: 'white', border: 'none', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
-                  💾 Lưu lại
-                </button>
-                <button type="button" onClick={() => setShowCategoryModal(false)} style={{ padding: '8px 20px', fontSize: '13px', fontWeight: '500', background: '#ff4d4f', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
-                  ❌ Đóng
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
-
       {/* Modal */}
       {showModal && (
-        <div className="modal-overlay">
-          <div className="modal-content" style={{ maxWidth: '1400px', width: '95%', maxHeight: '90vh', overflow: 'auto' }}>
+        <div className="modal-overlay" style={{ zIndex: 50000 }}>
+          <div className="modal-content" style={{ maxWidth: '1400px', width: '95%', maxHeight: '90vh', overflow: 'auto', zIndex: 50001 }}>
             <div className="modal-header">
               <h3>THÔNG TIN HÀNG HÓA</h3>
               <button className="close-btn" onClick={() => setShowModal(false)}>×</button>
@@ -1973,6 +1901,81 @@ const Products = () => {
                   </button>
                 )}
                 <button type="button" onClick={() => setShowModal(false)} style={{ padding: '8px 20px', fontSize: '13px', fontWeight: '500', background: '#ff4d4f', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
+                  ❌ Đóng
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal Thêm Loại Hàng */}
+      {showCategoryModal && (
+        <div className="modal-overlay" style={{ zIndex: 99999 }}>
+          <div className="modal-content" style={{ maxWidth: '500px', width: '90%', zIndex: 100000 }}>
+            <div className="modal-header">
+              <h3>THÔNG TIN LOẠI HÀNG</h3>
+              <button className="close-btn" onClick={() => setShowCategoryModal(false)}>×</button>
+            </div>
+
+            <form onSubmit={handleAddCategory} style={{ padding: '0 8px' }}>
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Mã loại <span style={{ color: 'red' }}>*</span></label>
+                <input
+                  type="text"
+                  name="code"
+                  value={categoryForm.code}
+                  onChange={handleCategoryInputChange}
+                  placeholder="Nhập mã loại"
+                  required
+                  style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Tên loại <span style={{ color: 'red' }}>*</span></label>
+                <input
+                  type="text"
+                  name="name"
+                  value={categoryForm.name}
+                  onChange={handleCategoryInputChange}
+                  placeholder="Nhập tên loại"
+                  required
+                  style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                />
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'flex', alignItems: 'center', gap: '8px', fontSize: '13px', cursor: 'pointer' }}>
+                  <input 
+                    type="checkbox" 
+                    name="noGroupOrder"
+                    checked={categoryForm.noGroupOrder}
+                    onChange={(e) => setCategoryForm({...categoryForm, noGroupOrder: e.target.checked})}
+                    style={{ width: '16px', height: '16px' }} 
+                  />
+                  <span>Không cập đơn hàng</span>
+                </label>
+              </div>
+
+              <div style={{ marginBottom: '12px' }}>
+                <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Ghi chú</label>
+                <textarea
+                  name="note"
+                  value={categoryForm.note}
+                  onChange={handleCategoryInputChange}
+                  rows="3"
+                  placeholder="Ghi chú"
+                  style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', resize: 'vertical' }}
+                />
+              </div>
+
+              {/* Buttons */}
+              <div style={{ display: 'flex', gap: '8px', justifyContent: 'flex-end', paddingTop: '16px', borderTop: '1px solid #e8e8e8' }}>
+                <button type="submit" disabled={loading} style={{ padding: '8px 20px', fontSize: '13px', fontWeight: '500', background: '#1890ff', color: 'white', border: 'none', borderRadius: '4px', cursor: loading ? 'not-allowed' : 'pointer', opacity: loading ? 0.6 : 1 }}>
+                  💾 Lưu lại
+                </button>
+                <button type="button" onClick={() => setShowCategoryModal(false)} style={{ padding: '8px 20px', fontSize: '13px', fontWeight: '500', background: '#ff4d4f', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}>
                   ❌ Đóng
                 </button>
               </div>

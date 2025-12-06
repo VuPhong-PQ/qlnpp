@@ -2,13 +2,41 @@ import React, { useState, useRef } from 'react';
 import { Menu } from 'antd';
 import './BusinessPage.css';
 import './ImportGoods.css';
-import { Table, Button, Space, Popconfirm, Input, Modal } from 'antd';
+import { Table, Button, Space, Popconfirm, Input, Modal, Popover, DatePicker } from 'antd';
+import ProductModal from '../common/ProductModal';
 import { SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import { removeVietnameseTones } from '../../utils/searchUtils';
 
 const ImportGoods = () => {
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, record: null });
+  const [isEditing, setIsEditing] = useState(false);
+  const [treatNaiveIsoAsUtc, setTreatNaiveIsoAsUtc] = useState(true);
+  // Item modal state
+  const [showItemModal, setShowItemModal] = useState(false);
+  const [editingItemIndex, setEditingItemIndex] = useState(null);
+  const [itemForm, setItemForm] = useState({
+    category: '',
+    barcode: '',
+    productCode: '',
+    productName: '',
+    productNameVat: '',
+    description: '',
+    hsdMonths: 0,
+    defaultUnit: '',
+    priceImport: 0,
+    priceRetail: 0,
+    priceWholesale: 0,
+    // unit variants
+    unit1Name: '', unit1Conversion: 0, unit1Price: 0, unit1Discount: 0,
+    unit2Name: '', unit2Conversion: 0, unit2Price: 0, unit2Discount: 0,
+    unit3Name: '', unit3Conversion: 0, unit3Price: 0, unit3Discount: 0,
+    unit4Name: '', unit4Conversion: 0, unit4Price: 0, unit4Discount: 0,
+    weight: 0,
+    volume: 0,
+    warehouse: '',
+    note: ''
+  });
 
   // Xử lý chuột phải trên bảng
   const handleTableContextMenu = (event) => {
@@ -31,6 +59,8 @@ const ImportGoods = () => {
   const [showModal, setShowModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [selectedImport, setSelectedImport] = useState(null);
+  const [showDatePickerModal, setShowDatePickerModal] = useState(false);
+  const [dateDraft, setDateDraft] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchCode, setSearchCode] = useState('');
   const [dateFrom, setDateFrom] = useState('2025-08-01');
@@ -58,112 +88,348 @@ const ImportGoods = () => {
   const [leftPageSize, setLeftPageSize] = useState(() => {
     try { const v = parseInt(localStorage.getItem('import_left_page_size')||'10',10); return isNaN(v)?10:v; } catch { return 10; }
   });
+
+  // Core data state
+  const [imports, setImports] = useState([]);
+  const [items, setItems] = useState([]);
+  const [formData, setFormData] = useState({ importNumber: '', createdDate: new Date().toISOString().split('T')[0], employee: '', importType: '', totalWeight: 0, totalVolume: 0, note: '' });
   const [leftPage, setLeftPage] = useState(1);
   const [showLeftSettings, setShowLeftSettings] = useState(false);
+  const [showRightSettings, setShowRightSettings] = useState(false);
 
-  const [imports, setImports] = useState([
-    {
-      id: 1,
-      importNumber: 'PN250802-000401',
-      createdDate: '02/08/2025',
-      employee: 'admin 66',
-      importType: 'nhập thường',
-      totalWeight: 0,
-      totalVolume: 0,
-      note: 'Nhập hàng từ NCC A',
-      items: [
-        {
-          id: 1,
-          barcode: '8936049123456',
-          productCode: 'SP001',
-          productName: 'Coca Cola 330ml',
-          productType: 'Nước giải khát',
-          unit: 'Thùng',
-          manufactureDate: '01/08/2025',
-          expiryMonths: 12,
-          expiryDate: '01/08/2026',
-          description: 'Coca Cola lon 330ml',
-          specification: '24 lon/thùng',
-          conversion: 24,
-          quantity: 10,
-          unitPrice: 240000,
-          transportFee: 5000,
-          transportTotal: 50000,
-          weight: 100,
-          volume: 2,
-          warehouse: 'Kho chính',
-          total: 2450000
-        }
-      ]
-    },
-    {
-      id: 2,
-      importNumber: 'PN250801-000046',
-      createdDate: '01/08/2025',
-      employee: 'admin 66',
-      importType: 'nhập thường',
-      totalWeight: 0,
-      totalVolume: 0,
-      note: 'Nhập hàng từ NCC B',
-      items: []
-    }
-  ]);
-
-  const [formData, setFormData] = useState({
-    importNumber: '',
-    createdDate: new Date().toISOString().split('T')[0],
-    employee: 'admin 66',
-    importType: '',
-    totalWeight: 0,
-    totalVolume: 0,
-    note: ''
+  // Right-side columns & filters (for items table header filters)
+  const RIGHT_COLS_KEY = 'import_goods_right_cols_v1';
+  const defaultRightCols = ['barcode','productCode','productName','description','specification','conversion','quantity','unitPrice','total','weight','volume','warehouse','actions'];
+  const [rightVisibleCols, setRightVisibleCols] = useState(() => {
+    try {
+      const v = JSON.parse(localStorage.getItem(RIGHT_COLS_KEY));
+      if (Array.isArray(v)) return v;
+    } catch {}
+    return defaultRightCols;
   });
 
-  const [items, setItems] = useState([
-    {
-      id: 1,
-      barcode: '',
-      productCode: '',
-      productName: '',
-      productType: '',
-      unit: '',
-      manufactureDate: '',
-      expiryMonths: '',
-      expiryDate: '',
-      description: '',
-      specification: '',
-      conversion: '',
-      quantity: '',
-      unitPrice: '',
-      transportFee: '',
-      transportTotal: '',
-      weight: '',
-      volume: '',
-      warehouse: '',
-      total: 0
-    }
-  ]);
+  const [rightFilters, setRightFilters] = useState({});
+  const [rightFilterPopup, setRightFilterPopup] = useState({ column: null, term: '' });
+  const [rightCurrentPage, setRightCurrentPage] = useState(1);
+  const [rightItemsPerPage, setRightItemsPerPage] = useState(10);
 
-  // Set selected import on component mount
+  const renderHeaderFilterTH = (colKey, label, placeholder) => {
+    return (
+      <th key={colKey}>
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <span>{label}</span>
+          <Popover
+            content={(
+              <div style={{minWidth:240}}>
+                <Input
+                  placeholder={placeholder}
+                  value={rightFilterPopup.column === colKey ? rightFilterPopup.term : (rightFilters[colKey] || '')}
+                  onChange={e => setRightFilterPopup(p => ({ ...p, term: e.target.value }))}
+                  onPressEnter={() => {
+                    setRightFilters(prev => ({ ...prev, [colKey]: rightFilterPopup.term }));
+                    setRightFilterPopup({ column: null, term: '' });
+                  }}
+                />
+                <div style={{display:'flex',justifyContent:'space-between',marginTop:8}}>
+                  <button className="btn btn-link" onClick={() => { setRightFilterPopup({ column: colKey, term: '' }); setRightFilters(prev => ({ ...prev, [colKey]: '' })); }}>Xem tất cả</button>
+                  <div>
+                    <button className="btn btn-secondary" onClick={() => { setRightFilterPopup({ column: null, term: '' }); }}>Đóng</button>
+                    <button className="btn btn-primary" onClick={() => { setRightFilters(prev => ({ ...prev, [colKey]: rightFilterPopup.term })); setRightFilterPopup({ column: null, term: '' }); }} style={{marginLeft:8}}>Tìm</button>
+                  </div>
+                </div>
+              </div>
+            )}
+            title={null}
+            trigger="click"
+            visible={rightFilterPopup.column===colKey}
+            onVisibleChange={vis => { if (!vis) setRightFilterPopup({column:null, term:''}); }}
+            placement="bottomRight"
+          >
+            <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={(e)=>{ e.stopPropagation(); setRightFilterPopup({column:colKey, term: rightFilters[colKey]||''}); }} />
+          </Popover>
+        </div>
+      </th>
+    );
+  };
+
+  // Load imports from backend on mount
+  React.useEffect(() => {
+    loadImports();
+  }, []);
+
   React.useEffect(() => {
     if (imports.length > 0 && !selectedImport) {
       setSelectedImport(imports[0]);
     }
   }, [imports, selectedImport]);
 
+  // reset right table paging when selected import changes
+  React.useEffect(() => {
+    setRightCurrentPage(1);
+  }, [selectedImport]);
+
+  React.useEffect(() => {
+    try { localStorage.setItem(RIGHT_COLS_KEY, JSON.stringify(rightVisibleCols)); } catch {}
+  }, [rightVisibleCols]);
+
+  const rightPageSizeOptions = [10,20,50,100,200,500,1000,5000];
+  const itemsData = selectedImport?.items || [];
+
+  // apply per-column filters before pagination (ignore Vietnamese diacritics)
+  const filteredRightItems = itemsData.filter(item => {
+    return Object.entries(rightFilters).every(([k, v]) => {
+      if (!v) return true;
+      const raw = item[k];
+      const s = raw === null || raw === undefined ? '' : String(raw);
+      const sv = removeVietnameseTones(s.toLowerCase());
+      const vv = removeVietnameseTones(String(v).toLowerCase());
+      return sv.includes(vv);
+    });
+  });
+
+  const rightTotal = filteredRightItems.length;
+  const rightTotalPages = Math.max(1, Math.ceil(rightTotal / Math.max(1, rightItemsPerPage)));
+  const rightStart = rightTotal === 0 ? 0 : (rightCurrentPage - 1) * rightItemsPerPage + 1;
+  const rightEnd = Math.min(rightTotal, rightCurrentPage * rightItemsPerPage);
+  const paginatedItems = filteredRightItems.slice((rightCurrentPage - 1) * rightItemsPerPage, (rightCurrentPage - 1) * rightItemsPerPage + rightItemsPerPage);
+
+  React.useEffect(() => {
+    setRightCurrentPage(p => Math.min(p, rightTotalPages));
+  }, [rightItemsPerPage, selectedImport, rightTotalPages]);
+
   const handleSelectImport = (importItem) => {
-    setSelectedImport(importItem);
+    if (!importItem) return;
+    if (importItem.id) loadImportDetails(importItem.id);
+    else setSelectedImport(importItem);
   };
 
-  const handleDelete = (id, e) => {
+  const handleDelete = async (id, e) => {
     e.stopPropagation();
-    if (window.confirm('Bạn có chắc chắn muốn xóa phiếu nhập này?')) {
-      const newImports = imports.filter(item => item.id !== id);
-      setImports(newImports);
+    if (!window.confirm('Bạn có chắc chắn muốn xóa phiếu nhập này?')) return;
+    try {
+      const res = await fetch(`/api/Imports/${id}`, { method: 'DELETE' });
+      if (!res.ok) throw new Error('Xóa thất bại');
+      // reload list
+      await loadImports();
       if (selectedImport && selectedImport.id === id) {
-        setSelectedImport(newImports.length > 0 ? newImports[0] : null);
+        setSelectedImport(imports.length > 0 ? imports[0] : null);
       }
+    } catch (err) {
+      console.error('Delete import error', err);
+      alert('Xóa phiếu nhập thất bại');
     }
+  };
+
+  // Load imports list from backend
+  const loadImports = async () => {
+    try {
+      const res = await fetch('/api/Imports');
+      if (!res.ok) throw new Error('Failed to load imports');
+      const data = await res.json();
+      setImports(data || []);
+      if (data && data.length > 0) {
+        await loadImportDetails(data[0].id);
+      } else {
+        setSelectedImport(null);
+      }
+    } catch (err) {
+      console.error('Load imports error', err);
+      // fallback to existing sample data
+      console.warn('Using local sample imports as fallback');
+      // keep current `imports` state as fallback
+    }
+  };
+
+  const loadImportDetails = async (id) => {
+    try {
+      const res = await fetch(`/api/Imports/${id}`);
+      if (!res.ok) throw new Error('Failed to load import details');
+      const data = await res.json();
+      // normalize to frontend shape
+      const detail = {
+        ...data,
+        items: (data.items || data.Items || []).map(it => ({ ...it }))
+      };
+      // if employee missing, keep current formData.employee
+      setSelectedImport(detail);
+      setFormData({
+        importNumber: detail.importNumber || detail.ImportNumber || generateImportNumber(),
+        createdDate: detail.date ? dayjs(detail.date).format('YYYY-MM-DD') : (detail.createdDate || new Date().toISOString().split('T')[0]),
+        employee: detail.employee || detail.Employee || formData.employee,
+        importType: detail.importType || detail.ImportType || '',
+        totalWeight: detail.totalWeight || 0,
+        totalVolume: detail.totalVolume || 0,
+        note: detail.note || detail.Note || ''
+      });
+      setItems(detail.items || []);
+      setIsEditing(false);
+    } catch (err) {
+      console.error('Load import details error', err);
+      alert('Không thể tải chi tiết phiếu nhập');
+    }
+  };
+
+  const createNewImport = async () => {
+    try {
+      const payload = {
+        importNumber: generateImportNumber(),
+        date: new Date().toISOString(),
+        note: '',
+        employee: formData.employee || '',
+        total: 0,
+        items: []
+      };
+      const res = await fetch('/api/Imports', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload)
+      });
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(text || 'Failed to create import');
+      }
+      const created = await res.json();
+      await loadImports();
+      await loadImportDetails(created.id);
+      setIsEditing(true);
+    } catch (err) {
+      console.error('Create import error', err);
+      alert('Tạo phiếu nhập mới thất bại');
+    }
+  };
+
+  const saveImport = async () => {
+    try {
+      const payload = {
+        importNumber: formData.importNumber,
+        date: formData.createdDate ? new Date(formData.createdDate).toISOString() : new Date().toISOString(),
+        note: formData.note,
+        employee: formData.employee,
+        total: (items || []).reduce((s, it) => s + (Number(it.total) || 0), 0),
+        items: (items || []).map(it => ({
+          barcode: it.barcode,
+          productCode: it.productCode,
+          productName: it.productName,
+          description: it.description,
+          specification: it.specification,
+          conversion: it.conversion,
+          quantity: it.quantity,
+          unitPrice: it.unitPrice,
+          total: it.total,
+          weight: it.weight,
+          volume: it.volume,
+          warehouse: it.warehouse,
+          note: it.note
+        }))
+      };
+      if (selectedImport && selectedImport.id) {
+        const res = await fetch(`/api/Imports/${selectedImport.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ id: selectedImport.id, ...payload })
+        });
+        if (!res.ok) throw new Error('Save failed');
+      } else {
+        const res = await fetch('/api/Imports', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) throw new Error('Create failed');
+      }
+      await loadImports();
+      if (selectedImport && selectedImport.id) await loadImportDetails(selectedImport.id);
+      setIsEditing(false);
+      alert('Lưu phiếu nhập thành công');
+    } catch (err) {
+      console.error('Save import error', err);
+      alert('Lưu phiếu nhập thất bại');
+    }
+  };
+
+  // Item modal helpers
+  const closeItemModal = () => setShowItemModal(false);
+
+  const saveItemFromModal = () => {
+    // basic validation: productName required
+    if (!itemForm.productName) {
+      alert('Vui lòng nhập Tên hàng');
+      return;
+    }
+    if (editingItemIndex !== null && editingItemIndex >= 0) {
+      const copy = [...items];
+      copy[editingItemIndex] = { ...copy[editingItemIndex], ...itemForm };
+      setItems(copy);
+    } else {
+      const newItem = { id: Date.now(), ...itemForm };
+      setItems(prev => [...prev, newItem]);
+    }
+    setIsEditing(true);
+    setShowItemModal(false);
+  };
+
+  const saveItemAndCopy = () => {
+    // Save current item but keep modal open with same values so user can tweak copy
+    if (!itemForm.productName) {
+      alert('Vui lòng nhập Tên hàng');
+      return;
+    }
+    if (editingItemIndex !== null && editingItemIndex >= 0) {
+      const copy = [...items];
+      copy[editingItemIndex] = { ...copy[editingItemIndex], ...itemForm };
+      setItems(copy);
+    } else {
+      const newItem = { id: Date.now(), ...itemForm };
+      setItems(prev => [...prev, newItem]);
+    }
+    setIsEditing(true);
+    // keep modal open, but clear editing index so next save creates new item
+    setEditingItemIndex(null);
+  };
+
+  // wrappers to accept data from ProductModal
+  const handleSaveItemFromModal = (data) => {
+    if (!data.productName) {
+      alert('Vui lòng nhập Tên hàng');
+      return;
+    }
+    if (editingItemIndex !== null && editingItemIndex >= 0) {
+      const copy = [...items];
+      copy[editingItemIndex] = { ...copy[editingItemIndex], ...data };
+      setItems(copy);
+    } else {
+      const newItem = { id: Date.now(), ...data };
+      setItems(prev => [...prev, newItem]);
+    }
+    setIsEditing(true);
+    setShowItemModal(false);
+  };
+
+  const handleSaveItemAndCopy = (data) => {
+    if (!data.productName) {
+      alert('Vui lòng nhập Tên hàng');
+      return;
+    }
+    if (editingItemIndex !== null && editingItemIndex >= 0) {
+      const copy = [...items];
+      copy[editingItemIndex] = { ...copy[editingItemIndex], ...data };
+      setItems(copy);
+    } else {
+      const newItem = { id: Date.now(), ...data };
+      setItems(prev => [...prev, newItem]);
+    }
+    setIsEditing(true);
+    // keep modal open for copy
+    setEditingItemIndex(null);
+    setShowItemModal(true);
+  };
+
+  const editItem = (idx) => {
+    const it = items[idx];
+    if (!it) return;
+    setItemForm({ ...it });
+    setEditingItemIndex(idx);
+    setShowItemModal(true);
   };
 
   const filteredImports = imports.filter(importItem => {
@@ -181,10 +447,26 @@ const ImportGoods = () => {
     // Lọc theo khoảng ngày nhập (so sánh yyyy-mm-dd)
     let matchesDate = true;
     if (dateFrom && dateTo) {
-      // importItem.createdDate dạng DD/MM/YYYY
-      const [d, m, y] = importItem.createdDate.split('/');
-      const importDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-      matchesDate = importDate >= dateFrom && importDate <= dateTo;
+      // importItem may provide createdDate (DD/MM/YYYY) or date (ISO). Handle both safely.
+      let importDate = null;
+      if (importItem.createdDate && typeof importItem.createdDate === 'string' && importItem.createdDate.includes('/')) {
+        const parts = importItem.createdDate.split('/');
+        if (parts.length === 3) {
+          const [d, m, y] = parts;
+          importDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
+        }
+      } else if (importItem.date) {
+        try {
+          importDate = dayjs(importItem.date).format('YYYY-MM-DD');
+        } catch (e) {
+          importDate = null;
+        }
+      }
+      if (!importDate) {
+        matchesDate = false;
+      } else {
+        matchesDate = importDate >= dateFrom && importDate <= dateTo;
+      }
     }
     return matchesSearch && matchesType && matchesEmployee && matchesCode && matchesDate;
   });
@@ -226,7 +508,18 @@ const ImportGoods = () => {
   };
 
   const handleAddItem = () => {
-    alert('Chức năng thêm hàng hóa đang được phát triển');
+    // open item modal for creating a new item
+    setItemForm({
+      category: '', barcode: '', productCode: '', productName: '', productNameVat: '', description: '', hsdMonths: 0,
+      defaultUnit: '', priceImport: 0, priceRetail: 0, priceWholesale: 0,
+      unit1Name: '', unit1Conversion: 0, unit1Price: 0, unit1Discount: 0,
+      unit2Name: '', unit2Conversion: 0, unit2Price: 0, unit2Discount: 0,
+      unit3Name: '', unit3Conversion: 0, unit3Price: 0, unit3Discount: 0,
+      unit4Name: '', unit4Conversion: 0, unit4Price: 0, unit4Discount: 0,
+      weight: 0, volume: 0, warehouse: '', note: ''
+    });
+    setEditingItemIndex(null);
+    setShowItemModal(true);
   };
 
   const handleViewHistory = () => {
@@ -382,6 +675,7 @@ const ImportGoods = () => {
         <div className="search-panel-total" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span>Tổng {filteredLeft.length}</span>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <button style={{background:'#1677ff',color:'#fff',border:'none',borderRadius:6,padding:'6px 10px',cursor:'pointer'}} onClick={createNewImport}>+ Tạo mới</button>
             <button style={{background:'transparent',border:'none',cursor:'pointer'}} title="Cài đặt bảng" onClick={()=>setShowLeftSettings(true)}>⚙</button>
           </div>
         </div>
@@ -521,8 +815,11 @@ const ImportGoods = () => {
                 {/* Top row: Ngày lập, Nhân viên, Loại nhập, Tổng số kg, Tổng số khối (each 20%) */}
                 <div style={{display:'flex',gap:12}}>
                   <div style={{flex:'0 0 20%'}}>
-                    <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Ngày lập</label>
-                    <input type="text" value={selectedImport.createdDate} readOnly style={{width:'100%'}} />
+                      <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Ngày lập</label>
+                      <input type="text" value={selectedImport?.createdDate ? dayjs(selectedImport.createdDate).format('DD/MM/YYYY') : ''} readOnly style={{width:'100%',cursor:'pointer'}} onClick={()=>{
+                        setDateDraft(selectedImport?.createdDate ? dayjs(selectedImport.createdDate) : dayjs());
+                        setShowDatePickerModal(true);
+                      }} />
                   </div>
                   <div style={{flex:'0 0 20%'}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Nhân viên lập</label>
@@ -546,6 +843,110 @@ const ImportGoods = () => {
                   </div>
                 </div>
 
+                {/* Date picker modal for Ngày lập */}
+                <Modal
+                  open={showDatePickerModal}
+                  onCancel={() => setShowDatePickerModal(false)}
+                  title={null}
+                  width={280}
+                  footer={null}
+                  bodyStyle={{padding:0}}
+                >
+                  <div style={{padding:16}}>
+                    <div style={{marginBottom:16}}>
+                      <select 
+                        value={dateDraft ? dateDraft.format('MMMM YYYY') : dayjs().format('MMMM YYYY')}
+                        onChange={(e) => {
+                          const [month, year] = e.target.value.split(' ');
+                          const newDate = dayjs().month(dayjs().month(month)).year(parseInt(year));
+                          setDateDraft(newDate);
+                        }}
+                        style={{width:'60%',border:'none',background:'transparent',fontWeight:'bold'}}
+                      >
+                        {Array.from({length:12}, (_, i) => {
+                          const date = dayjs().month(i);
+                          return (
+                            <option key={i} value={date.format('MMMM YYYY')}>
+                              {date.format('MMMM YYYY')}
+                            </option>
+                          );
+                        })}
+                      </select>
+                      <div style={{float:'right'}}>
+                        <button style={{border:'none',background:'transparent',cursor:'pointer',fontSize:18}} onClick={() => {
+                          const prev = (dateDraft || dayjs()).subtract(1, 'month');
+                          setDateDraft(prev);
+                        }}>‹</button>
+                        <button style={{border:'none',background:'transparent',cursor:'pointer',fontSize:18}} onClick={() => {
+                          const next = (dateDraft || dayjs()).add(1, 'month');
+                          setDateDraft(next);
+                        }}>›</button>
+                      </div>
+                    </div>
+                    
+                    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,textAlign:'center',fontSize:12}}>
+                      {['Su','Mo','Tu','We','Th','Fr','Sa'].map(day => (
+                        <div key={day} style={{padding:4,color:'#999',fontWeight:'bold'}}>{day}</div>
+                      ))}
+                      
+                      {Array.from({length:42}, (_, i) => {
+                        const startOfMonth = (dateDraft || dayjs()).startOf('month');
+                        const startOfWeek = startOfMonth.startOf('week');
+                        const date = startOfWeek.add(i, 'day');
+                        const isCurrentMonth = date.month() === (dateDraft || dayjs()).month();
+                        const isToday = date.isSame(dayjs(), 'day');
+                        const isSelected = dateDraft && date.isSame(dateDraft, 'day');
+                        
+                        return (
+                          <div
+                            key={i}
+                            onClick={() => setDateDraft(date)}
+                            style={{
+                              padding:'6px 4px',
+                              cursor:'pointer',
+                              color: isCurrentMonth ? '#000' : '#ccc',
+                              background: isSelected ? '#1890ff' : isToday ? '#e6f7ff' : 'transparent',
+                              color: isSelected ? '#fff' : isCurrentMonth ? '#000' : '#ccc',
+                              borderRadius:2,
+                              fontSize:13
+                            }}
+                          >
+                            {date.date()}
+                          </div>
+                        );
+                      })}
+                    </div>
+                    
+                    <div style={{display:'flex',justifyContent:'space-between',marginTop:16,borderTop:'1px solid #f0f0f0',paddingTop:12}}>
+                      <button 
+                        style={{background:'transparent',border:'none',color:'#1890ff',cursor:'pointer'}} 
+                        onClick={()=>{setDateDraft(null); setShowDatePickerModal(false);}}>
+                        Clear
+                      </button>
+                      <button 
+                        style={{background:'transparent',border:'none',color:'#1890ff',cursor:'pointer'}} 
+                        onClick={()=>{setDateDraft(dayjs());}}>
+                        Today
+                      </button>
+                    </div>
+                    
+                    {dateDraft && (
+                      <div style={{textAlign:'center',marginTop:8}}>
+                        <button 
+                          className="btn btn-primary" 
+                          style={{width:'100%'}}
+                          onClick={()=>{
+                            const iso = dateDraft.format('YYYY-MM-DD');
+                            setSelectedImport(si => ({ ...si, createdDate: iso }));
+                            setShowDatePickerModal(false);
+                          }}>
+                          OK
+                        </button>
+                      </div>
+                    )}
+                  </div>
+                </Modal>
+
                 {/* Second row: Số phiếu (30%) and Ghi chú (70%) */}
                 <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
                   <div style={{flex:'0 0 30%'}}>
@@ -565,59 +966,81 @@ const ImportGoods = () => {
               <div className="items-section">
                 <div className="items-header">
                   <span>Tổng {selectedImport.items?.length || 0}</span>
-                  <span className="summary-text">Không động</span>
                   <div className="items-actions">
-                    <button className="icon-btn create-btn" onClick={handleAddItem}>
+                    <button className="icon-btn create-btn" onClick={handleAddItem} title="Thêm hàng">
                       <span>+</span>
                     </button>
-                    <button className="icon-btn print-btn" onClick={handlePrint}>
-                      <span>🖨</span>
-                    </button>
-                    <button className="icon-btn import-btn" onClick={handleImport}>
-                      <span>📥</span>
-                    </button>
-                    <button className="icon-btn settings-btn">
+                    <button className="icon-btn settings-btn" onClick={()=>setShowRightSettings(true)} title="Cài đặt hiển thị cột">
                       <span>⚙</span>
                     </button>
                   </div>
                 </div>
 
                 <div className="items-table-container">
-                  <table className="items-table">
+                  <div style={{margin: '12px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 14}}>
+                    <div>{`Dòng ${rightStart}-${rightEnd} trên tổng ${rightTotal} dòng`}</div>
+                    <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                      <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.max(1, p - 1))}>{'<'}</button>
+                      <span style={{fontWeight: 600}}>{rightCurrentPage}</span>
+                      <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.min(rightTotalPages, p + 1))}>{'>'}</button>
+                      <select value={rightItemsPerPage} onChange={(e) => { setRightItemsPerPage(parseInt(e.target.value, 10)); setRightCurrentPage(1); }} style={{marginLeft: 8, borderRadius: 4, border: '1px solid #e5e7eb', padding: '2px 8px'}}>
+                        <option value={10}>10 / trang</option>
+                        <option value={20}>20 / trang</option>
+                        <option value={50}>50 / trang</option>
+                        <option value={100}>100 / trang</option>
+                        <option value={200}>200 / trang</option>
+                        <option value={500}>500 / trang</option>
+                        <option value={1000}>1000 / trang</option>
+                        <option value={5000}>5000 / trang</option>
+                      </select>
+                    </div>
+                  </div>
+
+                  <table className="items-table" style={{minWidth:1300}}>
                     <thead>
                       <tr>
-                        <th>Mã vạch</th>
-                        <th>Mã hàng</th>
-                        <th>Hàng hóa</th>
-                        <th>Loại hàng</th>
-                        <th>Đơn vị tính</th>
-                        <th>Ngày sản xuất</th>
-                        <th>Hạn sử dụng</th>
-                        <th>Thao tác</th>
+                        {renderHeaderFilterTH('barcode','Mã vạch','nhập mã vạch')}
+                        {renderHeaderFilterTH('productCode','Mã hàng','nhập mã hàng')}
+                        {renderHeaderFilterTH('productName','Hàng hóa','nhập tên hàng')}
+                        {renderHeaderFilterTH('description','Mô tả','nhập mô tả')}
+                        {renderHeaderFilterTH('specification','Quy cách','nhập quy cách')}
+                        {renderHeaderFilterTH('conversion','Quy đổi','nhập quy đổi')}
+                        {renderHeaderFilterTH('quantity','Số lượng','nhập số lượng')}
+                        {renderHeaderFilterTH('unitPrice','Đơn giá','nhập đơn giá')}
+                        {renderHeaderFilterTH('total','Thành tiền','nhập thành tiền')}
+                        {renderHeaderFilterTH('weight','Số kg','nhập số kg')}
+                        {renderHeaderFilterTH('volume','Số khối','nhập số khối')}
+                        {renderHeaderFilterTH('warehouse','Kho hàng','nhập kho hàng')}
+                        {rightVisibleCols.includes('actions') && <th>Thao tác</th>}
                       </tr>
                     </thead>
                     <tbody>
-                      {selectedImport.items?.length > 0 ? (
-                        selectedImport.items.map((item) => (
+                      {paginatedItems?.length > 0 ? (
+                        paginatedItems.map((item) => (
                           <tr key={item.id}>
-                            <td>{item.barcode}</td>
-                            <td>{item.productCode}</td>
-                            <td>{item.productName}</td>
-                            <td>{item.productType}</td>
-                            <td>{item.unit}</td>
-                            <td>{item.manufactureDate}</td>
-                            <td>{item.expiryDate}</td>
-                            <td>
+                            {rightVisibleCols.includes('barcode') && <td>{item.barcode}</td>}
+                            {rightVisibleCols.includes('productCode') && <td>{item.productCode}</td>}
+                            {rightVisibleCols.includes('productName') && <td style={{maxWidth:220,overflow:'hidden',textOverflow:'ellipsis'}} title={item.productName}>{item.productName}</td>}
+                            {rightVisibleCols.includes('description') && <td style={{maxWidth:240,overflow:'hidden',textOverflow:'ellipsis'}} title={item.description}>{item.description}</td>}
+                            {rightVisibleCols.includes('specification') && <td>{item.specification}</td>}
+                            {rightVisibleCols.includes('conversion') && <td>{item.conversion}</td>}
+                            {rightVisibleCols.includes('quantity') && <td>{item.quantity}</td>}
+                            {rightVisibleCols.includes('unitPrice') && <td>{(item.unitPrice||0).toLocaleString('vi-VN')}</td>}
+                            {rightVisibleCols.includes('total') && <td>{(item.total||0).toLocaleString('vi-VN')}</td>}
+                            {rightVisibleCols.includes('weight') && <td>{item.weight}</td>}
+                            {rightVisibleCols.includes('volume') && <td>{item.volume}</td>}
+                            {rightVisibleCols.includes('warehouse') && <td>{item.warehouse}</td>}
+                            {rightVisibleCols.includes('actions') && <td>
                               <div className="action-up-down">
-                                <button>▲</button>
+                                <button onClick={() => editItem((paginatedItems.indexOf(item) + (rightCurrentPage-1)*rightItemsPerPage))}>Sửa</button>
                                 <button>▼</button>
                               </div>
-                            </td>
+                            </td>}
                           </tr>
                         ))
                       ) : (
                         <tr>
-                          <td colSpan="8" className="no-data">
+                          <td colSpan={rightVisibleCols.length || 1} className="no-data">
                             <div className="empty-state">
                               <div className="empty-icon">📋</div>
                               <div>Trống</div>
@@ -631,14 +1054,48 @@ const ImportGoods = () => {
 
                 <div className="table-summary">
                   <span>Tổng tiền: <strong>0</strong></span>
-                  <span>Không động</span>
                 </div>
               </div>
 
+              {/* Right-side column settings modal */}
+              <Modal
+                open={showRightSettings}
+                onCancel={()=>setShowRightSettings(false)}
+                title="Cài đặt cột bảng hàng hóa"
+                footer={null}
+              >
+                <div style={{display:'flex',flexDirection:'column',gap:8}}>
+                  {defaultRightCols.map(colKey=>{
+                    const label = colKey==='barcode'?'Mã vạch':colKey==='productCode'?'Mã hàng':colKey==='productName'?'Hàng hóa':colKey==='description'?'Mô tả':colKey==='specification'?'Quy cách':colKey==='conversion'?'Quy đổi':colKey==='quantity'?'Số lượng':colKey==='unitPrice'?'Đơn giá':colKey==='total'?'Thành tiền':colKey==='weight'?'Số kg':colKey==='volume'?'Số khối':colKey==='warehouse'?'Kho hàng':colKey==='actions'?'Thao tác':colKey;
+                    return (
+                      <label key={colKey} style={{display:'flex',alignItems:'center',gap:8}}>
+                        <input type="checkbox" checked={rightVisibleCols.includes(colKey)} onChange={()=>{
+                          setRightVisibleCols(prev=> prev.includes(colKey)? prev.filter(k=>k!==colKey) : [...prev, colKey]);
+                        }} />
+                        <span>{label}</span>
+                      </label>
+                    );
+                  })}
+                  <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:12}}>
+                    <button className="btn btn-secondary" onClick={()=>setRightVisibleCols(defaultRightCols)}>Làm lại</button>
+                    <button className="btn btn-primary" onClick={()=>setShowRightSettings(false)}>Đóng</button>
+                  </div>
+                </div>
+              </Modal>
+
+              {/* Item add/edit modal uses shared ProductModal component */}
+              <ProductModal
+                open={showItemModal}
+                onClose={closeItemModal}
+                initialData={itemForm}
+                onSave={handleSaveItemFromModal}
+                onSaveCopy={handleSaveItemAndCopy}
+              />
+
               <div className="detail-actions">
-                <button className="btn btn-info" onClick={() => alert('Lưu lại')}>
-                  📁 Lưu lại
-                </button>
+                  <button className="btn btn-info" onClick={saveImport} disabled={!isEditing}>
+                    📁 Lưu lại
+                  </button>
                 <button className="btn btn-purple" onClick={handlePrint}>
                   🖨 In A4
                 </button>

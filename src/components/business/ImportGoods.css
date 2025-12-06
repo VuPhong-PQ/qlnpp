@@ -34,6 +34,9 @@
   flex-direction: column;
 }
 
+/* Ensure we can absolutely position child elements (action buttons) */
+.import-detail-panel { position: relative; }
+
 .panel-header {
   display: flex;
   align-items: center;
@@ -54,7 +57,7 @@
   overflow-x: auto;
 }
 .items-table {
-  min-width: 900px;
+  min-width: 1300px;
   width: 100%;
   border-collapse: collapse;
 }
@@ -63,6 +66,27 @@
   border-bottom: 1px solid #eee;
   white-space: nowrap;
 }
+
+/* small filter input inside table header */
+.items-table thead .col-filter {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #e6eef7;
+  border-radius: 6px;
+  font-size: 13px;
+  box-sizing: border-box;
+}
+.items-table thead th { vertical-align: bottom; }
+
+/* Popover content inside modal: constrain width and ensure wrapping */
+.ant-popover {
+  max-width: 340px !important;
+}
+.ant-popover-inner-content {
+  padding: 12px !important;
+  box-sizing: border-box;
+}
+.ant-popover .btn { white-space: nowrap; }
 
 /* Popup cài đặt cột */
 .settings-modal-overlay {
@@ -161,6 +185,29 @@ button[title="Cài đặt cột"] {
   justify-content: center;
 }
 
+/* Icon buttons in items header */
+.items-actions .icon-btn {
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+}
+.items-actions .icon-btn.create-btn {
+  background: #2db7f5;
+  color: #fff;
+  font-weight: 600;
+}
+.items-actions .icon-btn.settings-btn {
+  background: #2f6fd6;
+  color: #fff;
+}
+.items-actions .icon-btn:hover { opacity: 0.95; }
+
 /* Các style input, select, button panel trái */
 .search-controls-grid {
   display: grid;
@@ -225,3 +272,35 @@ button[title="Cài đặt cột"] {
   background: #e5e7eb;
   border-radius: 4px;
 }
+
+/* Item modal layout */
+.item-modal-grid { display: flex; flex-direction: column; gap: 12px; }
+.item-modal-grid .form-row { display: flex; gap: 12px; align-items: center; }
+.item-modal-grid .form-row.full { flex-direction: column; align-items: stretch; }
+.item-modal-grid label { min-width: 100px; font-weight: 600; font-size: 13px; }
+.item-modal-grid input, .item-modal-grid select { flex: 1; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 6px; }
+.units-section { display: flex; gap: 12px; }
+.unit-col { display:flex; flex-direction:column; gap:6px; background:#fafafa; padding:8px; border-radius:6px; flex:1; }
+.unit-title { font-weight:700; margin-bottom:4px; }
+.unit-col input { padding:6px 8px; }
+
+/* Product modal grid */
+.product-modal .product-grid { display:flex; flex-direction:column; gap:12px; }
+.product-modal .row { display:flex; gap:12px; }
+.product-modal .col-3 { flex: 0 0 25%; }
+.product-modal .col-4 { flex: 0 0 33%; }
+.product-modal .col-5 { flex: 0 0 42%; }
+.product-modal .col-8 { flex: 0 0 66%; }
+.product-modal .col-9 { flex: 0 0 75%; }
+.product-modal .col-2 { flex: 0 0 16%; }
+.product-modal .col-1 { flex: 0 0 8%; }
+.product-modal input, .product-modal select, .product-modal textarea { width:100%; padding:8px; border:1px solid #e5e7eb; border-radius:6px; box-sizing:border-box; }
+.unit-table { border-top:1px solid #f0f0f0; padding-top:8px; display:flex; flex-direction:column; gap:6px; }
+.unit-row { display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr; gap:8px; align-items:center; }
+.unit-row.header { font-weight:700; color:#666; }
+.bottom-cols { display:flex; gap:12px; }
+.product-modal .btn { padding:6px 10px; border:none; cursor:pointer; }
+.product-modal .btn-primary { background:#1677ff;color:#fff;border-radius:6px;padding:6px 12px; }
+/* label and required styling to match Products page */
+.product-modal .field-label { display:block; font-weight:700; font-size:13px; margin-bottom:6px; }
+.product-modal .field-label.required::after { content: ' *'; color: #d00; }
