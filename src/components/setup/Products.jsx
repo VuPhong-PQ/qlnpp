@@ -30,6 +30,9 @@ const Products = () => {
   
   // Checkbox chọn nhiều
   const [selectedRows, setSelectedRows] = useState([]);
+  // Safer delete-all modal state
+  const [showDeleteAllModal, setShowDeleteAllModal] = useState(false);
+  const [deleteAllConfirmChecked, setDeleteAllConfirmChecked] = useState(false);
 
   // Load data from API
   useEffect(() => {
@@ -335,6 +338,51 @@ const Products = () => {
     return isNaN(parsed) ? 0 : parsed;
   };
 
+  const formatFixed4 = (num) => {
+    if (num === null || num === undefined || num === '') return '0.0000';
+    const n = Number(num) || 0;
+    return n.toFixed(4);
+  };
+
+  // Allow free typing for volume inputs; format to 4 decimals on blur
+  const handleVolumeInputChange = (e) => {
+    const { name, value } = e.target;
+    // store raw input in temporary field to avoid formatting while typing
+    setFormData(prev => ({ ...prev, [name + 'Input']: value }));
+  };
+
+  const handleVolumeInputBlur = (e) => {
+    const { name, value } = e.target;
+    const numeric = parseNumberFromString(value);
+
+    const newForm = { ...formData, [name]: numeric };
+
+    // Mirror volume forward/reverse logic from handleInputChange
+    if (name === 'volume') {
+      newForm.volume1 = (newForm.volume || 0) * (newForm.conversion1 || 0);
+      newForm.volume2 = (newForm.volume || 0) * (newForm.conversion2 || 0);
+    } else if (name === 'volume1') {
+      const cv1 = newForm.conversion1 || 0;
+      if (cv1 !== 0) {
+        newForm.volume = (newForm.volume1 || 0) / cv1;
+        newForm.volume2 = (newForm.volume || 0) * (newForm.conversion2 || 0);
+      }
+    } else if (name === 'volume2') {
+      const cv2 = newForm.conversion2 || 0;
+      if (cv2 !== 0) {
+        newForm.volume = (newForm.volume2 || 0) / cv2;
+        newForm.volume1 = (newForm.volume || 0) * (newForm.conversion1 || 0);
+      }
+    }
+
+    // remove temp input fields
+    delete newForm.volumeInput;
+    delete newForm.volume1Input;
+    delete newForm.volume2Input;
+
+    setFormData(newForm);
+  };
+
   const handlePriceInputChange = (e) => {
     const { name, value } = e.target;
     const numeric = parseNumberFromString(value);
@@ -438,13 +486,47 @@ const Products = () => {
     if (!validateRequiredForm()) return;
     try {
       setLoading(true);
-      if (editingItem) {
-        const dataToUpdate = { ...formData, id: editingItem.id };
-        await api.put(API_ENDPOINTS.products, editingItem.id, dataToUpdate);
-        alert('Cập nhật sản phẩm thành công!');
-      } else {
-        await api.post(API_ENDPOINTS.products, formData);
-        alert('Thêm sản phẩm thành công!');
+      // Check duplicates for code and barcode
+      try {
+        const existing = await api.get(API_ENDPOINTS.products);
+        const code = (formData.code || '').toString().toLowerCase().trim();
+        const barcode = (formData.barcode || '').toString().toLowerCase().trim();
+
+        if (editingItem) {
+          // When editing, ensure no other product (different id) has the same code/barcode
+          const dupCode = existing.some(p => p.id !== editingItem.id && (p.code || '').toString().toLowerCase().trim() === code && code !== '');
+          const dupBarcode = existing.some(p => p.id !== editingItem.id && (p.barcode || '').toString().toLowerCase().trim() === barcode && barcode !== '');
+          if (dupCode || dupBarcode) {
+            const parts = [];
+            if (dupCode) parts.push('Mã hàng');
+            if (dupBarcode) parts.push('Mã vạch');
+            alert('Không thể cập nhật — trường sau đã trùng với sản phẩm khác: ' + parts.join(' và ') + '. Vui lòng sửa trước khi lưu.');
+            setLoading(false);
+            return;
+          }
+          const dataToUpdate = { ...formData, id: editingItem.id };
+          await api.put(API_ENDPOINTS.products, editingItem.id, dataToUpdate);
+          alert('Cập nhật sản phẩm thành công!');
+        } else {
+          // When creating new, do not allow duplicates
+          const dupCode = existing.some(p => (p.code || '').toString().toLowerCase().trim() === code && code !== '');
+          const dupBarcode = existing.some(p => (p.barcode || '').toString().toLowerCase().trim() === barcode && barcode !== '');
+          if (dupCode || dupBarcode) {
+            const parts = [];
+            if (dupCode) parts.push('Mã hàng');
+            if (dupBarcode) parts.push('Mã vạch');
+            alert('Không thể thêm mới — trường sau đã trùng: ' + parts.join(' và ') + '. Vui lòng sửa trước khi lưu.');
+            setLoading(false);
+            return;
+          }
+          await api.post(API_ENDPOINTS.products, formData);
+          alert('Thêm sản phẩm thành công!');
+        }
+      } catch (err) {
+        console.warn('Lỗi khi kiểm tra trùng trước khi lưu:', err);
+        alert('Có lỗi khi kiểm tra trùng. Vui lòng thử lại.');
+        setLoading(false);
+        return;
       }
       await fetchProducts();
       setShowModal(false);
@@ -468,6 +550,27 @@ const Products = () => {
       delete copyData.id;
       // Validate required fields before saving a copy
       if (!validateRequiredForm()) return;
+
+      // Check duplicates: mã hàng và mã vạch
+      try {
+        const existing = await api.get(API_ENDPOINTS.products);
+        const code = (copyData.code || '').toString().toLowerCase().trim();
+        const barcode = (copyData.barcode || '').toString().toLowerCase().trim();
+        const dupCode = existing.some(p => (p.code || '').toString().toLowerCase().trim() === code && code !== '');
+        const dupBarcode = existing.some(p => (p.barcode || '').toString().toLowerCase().trim() === barcode && barcode !== '');
+        if (dupCode || dupBarcode) {
+          const parts = [];
+          if (dupCode) parts.push('Mã hàng');
+          if (dupBarcode) parts.push('Mã vạch');
+          alert('Không thể lưu Copy — trường sau đã trùng: ' + parts.join(' và ') + '.\nVui lòng sửa khác trước khi lưu.');
+          return;
+        }
+      } catch (err) {
+        console.warn('Lỗi khi kiểm tra trùng trước khi lưu copy:', err);
+        alert('Có lỗi khi kiểm tra dữ liệu trùng. Vui lòng thử lại.');
+        return;
+      }
+
       await api.post(API_ENDPOINTS.products, copyData);
       alert('Sao chép sản phẩm thành công!');
       await fetchProducts();
@@ -566,6 +669,46 @@ const Products = () => {
       } finally {
         setLoading(false);
       }
+    }
+  };
+
+  // Open safer confirmation modal for deleting all products
+  const handleDeleteAll = () => {
+    setDeleteAllConfirmChecked(false);
+    setShowDeleteAllModal(true);
+  };
+
+  // Perform the actual delete-all operation (called after user confirms via checkbox)
+  const performDeleteAll = async () => {
+    try {
+      // close modal immediately to avoid accidental double-clicks
+      setShowDeleteAllModal(false);
+      setLoading(true);
+
+      const all = await api.get(API_ENDPOINTS.products);
+      if (!all || all.length === 0) {
+        alert('Không có sản phẩm nào để xóa.');
+        return;
+      }
+
+      // delete sequentially to avoid overloading server; show simple progress
+      let deleted = 0;
+      for (const p of all) {
+        try {
+          await api.delete(API_ENDPOINTS.products, p.id);
+          deleted += 1;
+        } catch (err) {
+          console.warn(`Lỗi khi xóa sản phẩm id=${p.id}`, err);
+        }
+      }
+
+      alert(`Đã xóa ${deleted} / ${all.length} sản phẩm.`);
+      await fetchProducts();
+    } catch (err) {
+      console.error('Error deleting all products:', err);
+      alert('Có lỗi xảy ra khi xóa. Vui lòng thử lại.');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -1231,6 +1374,14 @@ const Products = () => {
               disabled={loading}
             />
             <button
+              className="btn btn-danger"
+              onClick={handleDeleteAll}
+              style={{ marginLeft: 8, background: '#ff4d4f', border: 'none', color: '#fff', padding: '8px 12px', borderRadius: 4, cursor: 'pointer' }}
+              title="Xóa toàn bộ sản phẩm"
+            >
+              🗑️ Xóa toàn bộ
+            </button>
+            <button
               className="btn btn-settings"
               style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}
               title="Cài đặt cột hiển thị"
@@ -1806,6 +1957,34 @@ const Products = () => {
         </div>
       )}
 
+      {/* Safer confirm modal for Delete All */}
+      {showDeleteAllModal && (
+        <div className="modal-overlay" style={{ zIndex: 110000 }}>
+          <div className="modal-content" style={{ maxWidth: '560px', width: '92%', zIndex: 110001 }}>
+            <div className="modal-header">
+              <h3>XÁC NHẬN XÓA TOÀN BỘ</h3>
+              <button className="close-btn" onClick={() => setShowDeleteAllModal(false)}>×</button>
+            </div>
+
+            <div style={{ padding: '12px' }}>
+              <p style={{ marginBottom: 12 }}>Hành động này sẽ <strong>xóa toàn bộ</strong> sản phẩm khỏi hệ thống và <strong>không thể hoàn tác</strong>. Vui lòng xác nhận bạn hiểu rõ trước khi tiếp tục.</p>
+
+              <label style={{ display: 'flex', alignItems: 'center', gap: 10, marginBottom: 16, cursor: 'pointer' }}>
+                <input type="checkbox" checked={deleteAllConfirmChecked} onChange={(e) => setDeleteAllConfirmChecked(e.target.checked)} style={{ width: 18, height: 18 }} />
+                <span>Tôi hiểu và đồng ý xóa toàn bộ sản phẩm</span>
+              </label>
+
+              <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8 }}>
+                <button type="button" onClick={() => { setShowDeleteAllModal(false); setDeleteAllConfirmChecked(false); }} style={{ padding: '8px 16px', background: '#f0f0f0', border: '1px solid #d9d9d9', borderRadius: 4, cursor: 'pointer' }}>Hủy</button>
+                <button type="button" onClick={performDeleteAll} disabled={!deleteAllConfirmChecked || loading} style={{ padding: '8px 16px', background: deleteAllConfirmChecked ? '#ff4d4f' : '#ffb3b3', color: '#fff', border: 'none', borderRadius: 4, cursor: deleteAllConfirmChecked ? 'pointer' : 'not-allowed' }}>
+                  ❗ Xóa toàn bộ
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Modal */}
       {showModal && (
         <div className="modal-overlay" style={{ zIndex: 50000 }}>
@@ -1950,7 +2129,7 @@ const Products = () => {
                           <input type="number" step="0.01" name="weight" value={formData.weight} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <input type="number" step="0.001" name="volume" value={formData.volume} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                          <input type="text" name="volume" value={formData.volumeInput !== undefined ? formData.volumeInput : formatFixed4(formData.volume)} onChange={handleVolumeInputChange} onBlur={handleVolumeInputBlur} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0.0000" />
                         </td>
                       </tr>
                       {/* ĐVT 1 */}
@@ -1986,7 +2165,7 @@ const Products = () => {
                           <div style={{ marginBottom: '6px' }}>
                             <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số khối 1</label>
                           </div>
-                          <input type="number" step="0.001" name="volume1" value={formData.volume1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                          <input type="text" name="volume1" value={formData.volume1Input !== undefined ? formData.volume1Input : formatFixed4(formData.volume1)} onChange={handleVolumeInputChange} onBlur={handleVolumeInputBlur} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0.0000" />
                         </td>
                       </tr>
                       {/* ĐVT 2 */}
@@ -2022,7 +2201,7 @@ const Products = () => {
                           <div style={{ marginBottom: '6px' }}>
                             <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số khối 2</label>
                           </div>
-                          <input type="number" step="0.001" name="volume2" value={formData.volume2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                          <input type="text" name="volume2" value={formData.volume2Input !== undefined ? formData.volume2Input : formatFixed4(formData.volume2)} onChange={handleVolumeInputChange} onBlur={handleVolumeInputBlur} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0.0000" />
                         </td>
                       </tr>
                     </tbody>
