@@ -345,6 +345,59 @@ const Products = () => {
     return n.toFixed(4);
   };
 
+  // Generic formatter for fixed decimals
+  const formatNumberPrecision = (num, decimals = 2) => {
+    if (num === null || num === undefined || num === '') return (0).toFixed(decimals);
+    const n = Number(num) || 0;
+    return n.toFixed(decimals);
+  };
+
+  // Allow free typing for weight inputs; format to 2 decimals on blur
+  const handleWeightInputChange = (e) => {
+    const { name, value } = e.target;
+    // store raw input to avoid formatting while typing
+    setFormData(prev => ({ ...prev, [name + 'Input']: value }));
+  };
+
+  const handleWeightInputBlur = (e) => {
+    const { name, value } = e.target;
+    const numeric = parseNumberFromString(value);
+
+    const newForm = { ...formData, [name]: numeric };
+
+    // Mirror weight forward/reverse logic from handleInputChange
+    if (name === 'weight') {
+      newForm.weight1 = (newForm.weight || 0) * (newForm.conversion1 || 0);
+      newForm.weight2 = (newForm.weight || 0) * (newForm.conversion2 || 0);
+      // keep volumes consistent
+      newForm.volume1 = (newForm.volume || 0) * (newForm.conversion1 || 0);
+      newForm.volume2 = (newForm.volume || 0) * (newForm.conversion2 || 0);
+    } else if (name === 'weight1') {
+      const c1 = newForm.conversion1 || 0;
+      if (c1 !== 0) {
+        newForm.weight = (newForm.weight1 || 0) / c1;
+        newForm.weight2 = (newForm.weight || 0) * (newForm.conversion2 || 0);
+        newForm.volume1 = (newForm.volume || 0) * (newForm.conversion1 || 0);
+        newForm.volume2 = (newForm.volume || 0) * (newForm.conversion2 || 0);
+      }
+    } else if (name === 'weight2') {
+      const c2 = newForm.conversion2 || 0;
+      if (c2 !== 0) {
+        newForm.weight = (newForm.weight2 || 0) / c2;
+        newForm.weight1 = (newForm.weight || 0) * (newForm.conversion1 || 0);
+        newForm.volume1 = (newForm.volume || 0) * (newForm.conversion1 || 0);
+        newForm.volume2 = (newForm.volume || 0) * (newForm.conversion2 || 0);
+      }
+    }
+
+    // remove temp input fields
+    delete newForm.weightInput;
+    delete newForm.weight1Input;
+    delete newForm.weight2Input;
+
+    setFormData(newForm);
+  };
+
   // Allow free typing for volume inputs; format to 4 decimals on blur
   const handleVolumeInputChange = (e) => {
     const { name, value } = e.target;
@@ -655,15 +708,33 @@ const Products = () => {
     console.log('Original item:', item);
     console.log('item.category:', item.category);
     console.log('item.baseUnit:', item.baseUnit);
+    console.log('item.unit2 VALUE:', `"${item.unit2}"`);
+    console.log('item.unit2 type:', typeof item.unit2);
+    console.log('item.unit2 === undefined:', item.unit2 === undefined);
+    console.log('item.unit2 === null:', item.unit2 === null);
     console.log('item.defaultUnit:', item.defaultUnit);
     console.log('Available categories:', categories);
     console.log('Available units:', units);
+    console.log('Units with "Lốc":', units.filter(u => u.name.includes('Lốc') || u.name.includes('lốc')));
+    
+    // Check if unit2 value exists in units list
+    if (item.unit2) {
+      const matchingUnit = units.find(u => u.name === item.unit2);
+      console.log(`Unit2 "${item.unit2}" exists in units list:`, !!matchingUnit);
+      if (matchingUnit) {
+        console.log('Matching unit:', matchingUnit);
+      }
+    }
+    
     console.log('==========================');
     
     setEditingItem(item);
     
     // Use exact original data without any modifications
-    setFormData({...item});
+    const formDataCopy = {...item};
+    console.log('Setting formData.unit2 to:', `"${formDataCopy.unit2}"`);
+    
+    setFormData(formDataCopy);
     setShowModal(true);
     setShowProductColSetting(false); // Đóng popup cài đặt cột khi mở modal
   };
@@ -809,44 +880,84 @@ const Products = () => {
     fileInputRef
   } = useExcelImportExport({
     data: exportData,
-    loadData: fetchProducts,
+    loadData: async () => {
+      await fetchProducts();
+      await fetchCategories();
+      await fetchUnits();
+    },
     apiPost: async (data) => {
-      // Kiểm tra trùng lặp: kiểm tra mã hàng hóa
-      const existingProducts = await api.get(API_ENDPOINTS.products);
-      const existing = existingProducts.find(
-        product => (product.code || '').toString().toLowerCase().trim() === (data.code || '').toString().toLowerCase().trim()
-      );
+      console.log('=== IMPORT DEBUG START ===');
+      console.log('Raw import data:', data);
+      console.log('Data keys:', Object.keys(data));
+      console.log('unit2 from Excel:', data.unit2);
+      console.log('============================');
+      
+      // AUTO-CREATE MISSING UNITS AND CATEGORIES FIRST (before any product operations)
+      
+      // Auto-create missing units
+      const unitFields = ['baseUnit', 'unit1', 'unit2', 'unit3', 'unit4', 'defaultUnit'];
+      console.log('Processing unit fields:', unitFields);
+      
+      for (const field of unitFields) {
+        if (data[field]) {
+          console.log(`Processing ${field}: "${data[field]}"`);
+          try {
+            const unitsResponse = await api.get(API_ENDPOINTS.units);
+            const unitName = String(data[field]).trim();
+            const existingUnit = unitsResponse.find(
+              unit => unit.name.toLowerCase().trim() === unitName.toLowerCase()
+            );
 
-      // Nếu đã tồn tại, cập nhật các trường bổ sung thay vì ném lỗi
-      if (existing) {
-        try {
-          // Merge: giữ các trường hiện có, ghi đè bằng data nếu data có giá trị (không null/empty string)
-          const merged = { ...existing };
-          Object.keys(data).forEach(k => {
-            const v = data[k];
-            if (v !== undefined && v !== null && String(v).toString().trim() !== '') {
-              merged[k] = v;
+            if (!existingUnit) {
+              // Tạo mã ĐVT tự động từ tên (VD: "Thùng" -> "THUNG", "Lốc" -> "LOC")
+              const unitCode = unitName
+                .replace(/[^a-zA-ZÀ-ỹ0-9]/g, '')
+                .toUpperCase()
+                .substring(0, 10);
+
+              const newUnit = {
+                code: unitCode,
+                name: unitName, // Giữ nguyên case từ Excel
+                note: 'Tự động tạo khi import sản phẩm',
+                status: 'active'
+              };
+
+              console.log(`🔍 Creating new unit:`, newUnit);
+              console.log(`🔍 Input unitName: "${unitName}"`);
+              console.log(`🔍 Generated unitCode: "${unitCode}"`);
+              
+              const createdUnit = await api.post(API_ENDPOINTS.units, newUnit);
+              console.log(`✓ API Response - Created unit:`, createdUnit);
+              console.log(`✓ API returned unit name: "${createdUnit.name}"`);
+              console.log(`✓ API returned unit code: "${createdUnit.code}"`);
+              
+              // CRITICAL FIX: Refresh units list sau khi tạo mới
+              await fetchUnits();
+              console.log('✓ Refreshed units list after creating new unit');
+              
+              // CRITICAL: Always use the exact name, not code
+              const finalUnitName = createdUnit.name || unitName;
+              data[field] = finalUnitName;
+              console.log(`✓ Final ${field} value set to: "${finalUnitName}"`);
+            } else {
+              // Use existing unit's exact name to ensure consistency
+              data[field] = existingUnit.name;
+              console.log(`Using existing ${field}: "${data[field]}"`);
             }
-          });
-
-          await api.put(API_ENDPOINTS.products, existing.id, merged);
-          return true;
-        } catch (err) {
-          throw new Error(`Cập nhật sản phẩm ${data.code} thất bại: ${err.message}`);
+          } catch (error) {
+            console.warn(`Lỗi khi kiểm tra/tạo unit '${data[field]}':`, error);
+          }
         }
       }
 
-      // Nếu chưa tồn tại, tạo mới
-      // Kiểm tra và tạo category nếu chưa tồn tại
+      // Auto-create missing category
       if (data.category) {
         try {
-          // Lấy tất cả categories
           const categoriesResponse = await api.get(API_ENDPOINTS.productCategories);
           const existingCategory = categoriesResponse.find(
             cat => cat.name.toLowerCase().trim() === data.category.toLowerCase().trim()
           );
 
-          // Nếu chưa có category, tạo mới
           if (!existingCategory) {
             // Tạo mã loại tự động từ tên (VD: "Thực phẩm" -> "TP")
             const categoryCode = data.category
@@ -866,14 +977,73 @@ const Products = () => {
 
             await api.post(API_ENDPOINTS.productCategories, newCategory);
             console.log(`✓ Đã tạo loại hàng mới: ${data.category} (${categoryCode})`);
+            
+            // CRITICAL FIX: Refresh categories list sau khi tạo mới
+            await fetchCategories();
           }
         } catch (error) {
           console.warn('Lỗi khi kiểm tra/tạo category:', error);
         }
       }
+      
+      // NOW CHECK FOR EXISTING PRODUCTS
+      const existingProducts = await api.get(API_ENDPOINTS.products);
+      const existingByCode = existingProducts.find(
+        product => (product.code || '').toString().toLowerCase().trim() === (data.code || '').toString().toLowerCase().trim()
+      );
+      const existingByBarcode = data.barcode ? existingProducts.find(
+        product => (product.barcode || '').toString().toLowerCase().trim() === (data.barcode || '').toString().toLowerCase().trim()
+      ) : null;
 
-      // Tạo product
-      return api.post(API_ENDPOINTS.products, data);
+      // Tìm sản phẩm tồn tại (ưu tiên theo mã hàng)
+      const existing = existingByCode || existingByBarcode;
+
+      if (existing) {
+        // Cảnh báo về việc ghi đè
+        const conflictFields = [];
+        if (existingByCode) conflictFields.push('Mã hàng');
+        if (existingByBarcode && existingByCode?.id !== existingByBarcode?.id) {
+          conflictFields.push('Mã vạch');
+        }
+        
+        console.log(`⚠️  Cập nhật sản phẩm tồn tại (${conflictFields.join(', ')}): ${data.code || data.name}`);
+        
+        try {
+          // Merge: giữ các trường hiện có, ghi đè bằng data nếu data có giá trị (không null/empty string)
+          const merged = { ...existing };
+          Object.keys(data).forEach(k => {
+            const v = data[k];
+            if (v !== undefined && v !== null && String(v).toString().trim() !== '') {
+              merged[k] = v;
+            }
+          });
+
+          console.log('Merged data for update:', merged);
+          console.log(`Merged unit2 value: "${merged.unit2}"`);
+          console.log('About to PUT to API:', JSON.stringify(merged, null, 2));
+          
+          const updatedProduct = await api.put(API_ENDPOINTS.products, existing.id, merged);
+          console.log('Updated product from API response:', updatedProduct);
+          console.log('API returned unit2:', updatedProduct.unit2);
+          
+          return { action: 'updated', product: updatedProduct };
+        } catch (err) {
+          throw new Error(`Cập nhật sản phẩm ${data.code} thất bại: ${err.message}`);
+        }
+      }
+
+      // Tạo sản phẩm mới với data đã được chuẩn hóa
+      console.log(`Final data before creating product:`, data);
+      console.log(`Final unit2 value: "${data.unit2}"`);
+      console.log('About to POST to API:', JSON.stringify(data, null, 2));
+      
+      const newProduct = await api.post(API_ENDPOINTS.products, data);
+      console.log(`✓ Đã tạo sản phẩm mới: ${data.code || data.name}`);
+      console.log('Created product from API response:', newProduct);
+      console.log('API returned unit2:', newProduct.unit2);
+      console.log('=== IMPORT DEBUG END ===');
+      
+      return { action: 'created', product: newProduct };
     },
     columnMapping: {
       'Loại hàng': 'category',
@@ -2103,7 +2273,7 @@ const Products = () => {
                           <input type="text" name="retailPrice" value={formatNumberWithCommas(formData.retailPrice)} onChange={handlePriceInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <input type="number" step="0.01" name="weight" value={formData.weight} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                          <input type="text" name="weight" value={formData.weightInput !== undefined ? formData.weightInput : formatNumberPrecision(formData.weight, 2)} onChange={handleWeightInputChange} onBlur={handleWeightInputBlur} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0.00" />
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                           <input type="text" name="volume" value={formData.volumeInput !== undefined ? formData.volumeInput : formatFixed4(formData.volume)} onChange={handleVolumeInputChange} onBlur={handleVolumeInputBlur} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0.0000" />
@@ -2136,7 +2306,7 @@ const Products = () => {
                           <div style={{ marginBottom: '6px' }}>
                             <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số Kg 1</label>
                           </div>
-                          <input type="number" step="0.01" name="weight1" value={formData.weight1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                          <input type="text" name="weight1" value={formData.weight1Input !== undefined ? formData.weight1Input : formatNumberPrecision(formData.weight1, 2)} onChange={handleWeightInputChange} onBlur={handleWeightInputBlur} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0.00" />
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                           <div style={{ marginBottom: '6px' }}>
@@ -2153,7 +2323,7 @@ const Products = () => {
                           </div>
                           <select ref={unit2Ref} name="unit2" value={formData.unit2 || ''} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                             <option value="">Chọn đơn vị tính 2</option>
-                            {units.map(unit => (<option key={unit.id} value={unit.code}>{unit.name}</option>))}
+                            {units.map(unit => (<option key={unit.id} value={unit.name}>{unit.name}</option>))}
                           </select>
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
@@ -2172,7 +2342,7 @@ const Products = () => {
                           <div style={{ marginBottom: '6px' }}>
                             <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>Số Kg 2</label>
                           </div>
-                          <input type="number" step="0.01" name="weight2" value={formData.weight2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0" />
+                          <input type="text" name="weight2" value={formData.weight2Input !== undefined ? formData.weight2Input : formatNumberPrecision(formData.weight2, 2)} onChange={handleWeightInputChange} onBlur={handleWeightInputBlur} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }} placeholder="0.00" />
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
                           <div style={{ marginBottom: '6px' }}>

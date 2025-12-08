@@ -89,9 +89,13 @@ export const useExcelImportExport = (config) => {
 
         let successCount = 0;
         let errorCount = 0;
+        let createdCount = 0;
+        let updatedCount = 0;
         const errors = [];
+        const warnings = [];
 
-        for (const row of excelData) {
+        for (let i = 0; i < excelData.length; i++) {
+          const row = excelData[i];
           try {
             // Transform data for import
             let importData;
@@ -105,20 +109,41 @@ export const useExcelImportExport = (config) => {
               });
             }
 
-            await apiPost(importData);
+            const result = await apiPost(importData);
             successCount++;
+            
+            // Track create vs update
+            if (result && typeof result === 'object' && result.action) {
+              if (result.action === 'created') {
+                createdCount++;
+              } else if (result.action === 'updated') {
+                updatedCount++;
+                const identifier = row[requiredFields[0]] || `Dòng ${i + 2}`;
+                warnings.push(`${identifier}: Đã cập nhật sản phẩm tồn tại`);
+              }
+            } else {
+              createdCount++; // default fallback
+            }
           } catch (error) {
             errorCount++;
-            const identifier = row[requiredFields[0]] || `Dòng ${excelData.indexOf(row) + 2}`;
+            const identifier = row[requiredFields[0]] || `Dòng ${i + 2}`;
             errors.push(`${identifier}: ${error.message}`);
           }
         }
 
         if (loadData) await loadData();
         
-        let message = `Import hoàn tất!\nThành công: ${successCount}\nLỗi: ${errorCount}`;
+        let message = `Import hoàn tất!\n✓ Thành công: ${successCount} (${createdCount} mới, ${updatedCount} cập nhật)\n✗ Lỗi: ${errorCount}`;
+        
+        if (warnings.length > 0 && warnings.length <= 3) {
+          message += '\n\n⚠️ Cảnh báo ghi đè:\n' + warnings.slice(0, 3).join('\n');
+          if (warnings.length > 3) {
+            message += `\n... và ${warnings.length - 3} cảnh báo khác.`;
+          }
+        }
+        
         if (errors.length > 0 && errors.length <= 5) {
-          message += '\n\nChi tiết lỗi:\n' + errors.join('\n');
+          message += '\n\n❌ Chi tiết lỗi:\n' + errors.join('\n');
         } else if (errors.length > 5) {
           message += '\n\nCó nhiều lỗi. Xem console để biết chi tiết.';
           console.error('Import errors:', errors);
@@ -126,7 +151,7 @@ export const useExcelImportExport = (config) => {
         
         alert(message);
 
-        if (onImportComplete) onImportComplete(successCount, errorCount);
+        if (onImportComplete) onImportComplete(successCount, errorCount, createdCount, updatedCount);
       } catch (error) {
         console.error('Error importing data:', error);
         alert('Lỗi khi nhập dữ liệu: ' + error.message);
