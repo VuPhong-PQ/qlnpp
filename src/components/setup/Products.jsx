@@ -90,6 +90,7 @@ const Products = () => {
   const fetchUnits = async () => {
     try {
       const data = await api.get(API_ENDPOINTS.units);
+      console.log('Loaded units:', data);
       setUnits(data);
     } catch (error) {
       console.error('Error fetching units:', error);
@@ -650,8 +651,19 @@ const Products = () => {
   };
 
   const handleEdit = (item) => {
+    console.log('=== EDITING ITEM DEBUG ===');
+    console.log('Original item:', item);
+    console.log('item.category:', item.category);
+    console.log('item.baseUnit:', item.baseUnit);
+    console.log('item.defaultUnit:', item.defaultUnit);
+    console.log('Available categories:', categories);
+    console.log('Available units:', units);
+    console.log('==========================');
+    
     setEditingItem(item);
-    setFormData(item);
+    
+    // Use exact original data without any modifications
+    setFormData({...item});
     setShowModal(true);
     setShowProductColSetting(false); // Đóng popup cài đặt cột khi mở modal
   };
@@ -1073,55 +1085,20 @@ const Products = () => {
     { key: 'baseUnit', label: 'ĐVT' },
     { key: 'unit1', label: 'ĐVT1' },
     { key: 'unit2', label: 'ĐVT2' },
-    { key: 'unit3', label: 'ĐVT3' },
-    { key: 'unit4', label: 'ĐVT4' },
     { key: 'defaultUnit', label: 'ĐVT mặc định' },
     { key: 'conversion1', label: 'Quy đổi 1' },
     { key: 'conversion2', label: 'Quy đổi 2' },
-    { key: 'conversion3', label: 'Quy đổi 3' },
-    { key: 'conversion4', label: 'Quy đổi 4' },
-    { key: 'importPrice', label: 'Giá nhập' },
-    { key: 'importPrice1', label: 'Giá nhập1' },
-    { key: 'importPrice2', label: 'Giá nhập2' },
-    { key: 'importPrice3', label: 'Giá nhập3' },
-    { key: 'importPrice4', label: 'Giá nhập4' },
     { key: 'retailPrice', label: 'Giá bán lẻ' },
     { key: 'retailPrice1', label: 'Giá bán lẻ1' },
     { key: 'retailPrice2', label: 'Giá bán lẻ2' },
-    { key: 'retailPrice3', label: 'Giá bán lẻ3' },
-    { key: 'retailPrice4', label: 'Giá bán lẻ4' },
-    { key: 'retailDiscount1', label: 'Giảm bán lẻ 1' },
-    { key: 'retailDiscount2', label: 'Giảm bán lẻ 2' },
-    { key: 'retailDiscount3', label: 'Giảm bán lẻ 3' },
-    { key: 'retailDiscount4', label: 'Giảm bán lẻ 4' },
-    { key: 'wholesalePrice', label: 'Giá bán sỉ' },
-    { key: 'wholesalePrice1', label: 'Giá bán sỉ1' },
-    { key: 'wholesalePrice2', label: 'Giá bán sỉ2' },
-    { key: 'wholesalePrice3', label: 'Giá bán sỉ3' },
-    { key: 'wholesalePrice4', label: 'Giá bán sỉ4' },
-    { key: 'wholesaleDiscount1', label: 'Giảm bán sỉ 1' },
-    { key: 'wholesaleDiscount2', label: 'Giảm bán sỉ 2' },
-    { key: 'wholesaleDiscount3', label: 'Giảm bán sỉ 3' },
-    { key: 'wholesaleDiscount4', label: 'Giảm bán sỉ 4' },
     { key: 'weight', label: 'Số Kg' },
     { key: 'weight1', label: 'Số Kg1' },
     { key: 'weight2', label: 'Số Kg2' },
-    { key: 'weight3', label: 'Số Kg3' },
-    { key: 'weight4', label: 'Số Kg4' },
     { key: 'volume', label: 'Số khối' },
     { key: 'volume1', label: 'Số khối1' },
     { key: 'volume2', label: 'Số khối2' },
-    { key: 'volume3', label: 'Số khối3' },
-    { key: 'volume4', label: 'Số khối4' },
-    { key: 'shippingFee', label: 'Phí vận chuyển' },
-    { key: 'shippingFee1', label: 'Phí vận chuyển1' },
-    { key: 'shippingFee2', label: 'Phí vận chuyển2' },
-    { key: 'shippingFee3', label: 'Phí vận chuyển3' },
-    { key: 'shippingFee4', label: 'Phí vận chuyển4' },
     { key: 'minStock', label: 'Tồn tối thiểu' },
-    { key: 'discount', label: 'Chiết khấu' },
     { key: 'note', label: 'Ghi chú' },
-    { key: 'promotion', label: 'Khuyến mãi' },
     { key: 'status', label: 'Trạng thái' },
     { key: 'actions', label: 'Thao tác', fixed: true }
   ];
@@ -2009,7 +1986,7 @@ const Products = () => {
                     >
                       <option value="">Chọn loại hàng</option>
                       {categories.map(cat => (
-                        <option key={cat.id} value={cat.code}>{cat.name}</option>
+                        <option key={cat.id} value={cat.name}>{cat.name}</option>
                       ))}
                     </select>
                     <button type="button" onClick={() => setShowCategoryModal(true)} style={{ width: '32px', padding: '0', background: '#1890ff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer', fontSize: '16px' }}>+</button>
@@ -2114,9 +2091,9 @@ const Products = () => {
                       {/* ĐVT gốc */}
                       <tr style={{ background: 'white' }}>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
-                          <select name="baseUnit" value={formData.baseUnit} onChange={handleInputChange} required style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
+                          <select name="baseUnit" value={formData.baseUnit || ''} onChange={handleInputChange} required style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                             <option value="">Chọn ĐVT</option>
-                            {units.map(unit => (<option key={unit.id} value={unit.code}>{unit.name}</option>))}
+                            {units.map(unit => (<option key={unit.id} value={unit.name}>{unit.name}</option>))}
                           </select>
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
@@ -2138,9 +2115,9 @@ const Products = () => {
                           <div style={{ marginBottom: '6px' }}>
                             <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>ĐVT 1</label>
                           </div>
-                          <select name="unit1" value={formData.unit1} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
+                          <select name="unit1" value={formData.unit1 || ''} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                             <option value="">Chọn đơn vị tính 1</option>
-                            {units.map(unit => (<option key={unit.id} value={unit.code}>{unit.name}</option>))}
+                            {units.map(unit => (<option key={unit.id} value={unit.name}>{unit.name}</option>))}
                           </select>
                         </td>
                         <td style={{ padding: '8px', borderBottom: '1px solid #f0f0f0' }}>
@@ -2174,7 +2151,7 @@ const Products = () => {
                           <div style={{ marginBottom: '6px' }}>
                             <label style={{ fontSize: '12px', fontWeight: '500', color: '#666', display: 'block', marginBottom: '4px' }}>ĐVT 2</label>
                           </div>
-                          <select ref={unit2Ref} name="unit2" value={formData.unit2} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
+                          <select ref={unit2Ref} name="unit2" value={formData.unit2 || ''} onChange={handleInputChange} style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                             <option value="">Chọn đơn vị tính 2</option>
                             {units.map(unit => (<option key={unit.id} value={unit.code}>{unit.name}</option>))}
                           </select>
@@ -2215,16 +2192,16 @@ const Products = () => {
                 <div style={{ padding: '8px', boxSizing: 'border-box' }}>
                   <div style={{ padding: '8px', border: '1px solid #d9d9d9', borderRadius: '4px', backgroundColor: '#fafafa' }}>
                     <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>ĐVT mặc định <span style={{ color: 'red' }}>*</span></label>
-                    <select name="defaultUnit" value={formData.defaultUnit} onChange={handleInputChange} required style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
+                    <select name="defaultUnit" value={formData.defaultUnit || ''} onChange={handleInputChange} required style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                       <option value="">Chọn ĐVT</option>
                       {formData.baseUnit && (
-                        <option value={formData.baseUnit}>ĐVT Gốc ({units.find(u => u.code === formData.baseUnit)?.name || formData.baseUnit})</option>
+                        <option value={formData.baseUnit}>ĐVT Gốc ({formData.baseUnit})</option>
                       )}
                       {formData.unit1 && (
-                        <option value={formData.unit1}>ĐVT 1 ({units.find(u => u.code === formData.unit1)?.name || formData.unit1})</option>
+                        <option value={formData.unit1}>ĐVT 1 ({formData.unit1})</option>
                       )}
                       {formData.unit2 && (
-                        <option value={formData.unit2}>ĐVT 2 ({units.find(u => u.code === formData.unit2)?.name || formData.unit2})</option>
+                        <option value={formData.unit2}>ĐVT 2 ({formData.unit2})</option>
                       )}
                     </select>
                   </div>
