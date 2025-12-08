@@ -105,6 +105,8 @@ const Products = () => {
     vatName: '',
     description: '',
     shelfLife: 0,
+    vatPercent: 0,
+    vatText: '',
     baseUnit: '',
     unit1: '',
     unit2: '',
@@ -646,6 +648,8 @@ const Products = () => {
       vatName: '',
       description: '',
       shelfLife: 0,
+      vatPercent: 0,
+      vatText: '',
       baseUnit: '',
       unit1: '',
       unit2: '',
@@ -1184,6 +1188,8 @@ const Products = () => {
       'Mã vạch': 'barcode',
       'Tên hàng hóa': 'name',
       'Tên hàng hóa VAT': 'vatName',
+      'VAT %': 'vatPercent',
+      'VAT Text': 'vatText',
       'Mô tả': 'description',
       'Hạn sử dụng theo tháng': 'shelfLife',
       'ĐVT': 'baseUnit',
@@ -1249,8 +1255,11 @@ const Products = () => {
       'Mã vạch': item.barcode || '',
       'Tên hàng hóa': item.name || '',
       'Tên hàng hóa VAT': item.vatName || '',
-      'Mô tả': item.description || '',
-      'Hạn sử dụng theo tháng': item.shelfLife || 0,
+            'Mô tả': item.description || '',
+          'Hạn sử dụng theo tháng': item.shelfLife || 0,
+          'VAT %': item.vatPercent || 0,
+          'VAT Text': item.vatText || '',
+      'VAT Text': item.vatText || '',
       'ĐVT': item.baseUnit || '',
       'ĐVT1': item.unit1 || '',
       'ĐVT2': item.unit2 || '',
@@ -1313,6 +1322,8 @@ const Products = () => {
       vatName: row['Tên hàng hóa VAT'] || '',
       description: row['Mô tả'] || '',
       shelfLife: parseFloat(row['Hạn sử dụng theo tháng']) || 0,
+      vatPercent: parseFloat(row['VAT %']) || 0,
+      vatText: row['VAT Text'] || '',
       baseUnit: row['ĐVT'] || '',
       unit1: row['ĐVT1'] || '',
       unit2: row['ĐVT2'] || '',
@@ -1375,14 +1386,13 @@ const Products = () => {
 
   // Cột và độ rộng mặc định
   // --- CẤU HÌNH CỘT, DRAG, LƯU LOCALSTORAGE ---
-  const PRODUCT_COLS_KEY = 'products_table_cols_v3'; // v3 để đảm bảo cột STT ở đầu
+  const PRODUCT_COLS_KEY = 'products_table_cols_v6'; // v6 để thêm cột Ghi chú VAT
   const productColumns = [
     { key: 'select', label: 'STT', fixed: true },
     { key: 'category', label: 'Loại hàng' },
     { key: 'code', label: 'Mã hàng hóa' },
     { key: 'barcode', label: 'Mã vạch' },
     { key: 'name', label: 'Tên hàng hóa' },
-    { key: 'vatName', label: 'Tên hàng hóa VAT' },
     { key: 'description', label: 'Mô tả' },
     { key: 'shelfLife', label: 'HSD (tháng)' },
     { key: 'baseUnit', label: 'ĐVT' },
@@ -1390,6 +1400,8 @@ const Products = () => {
     { key: 'unit2', label: 'ĐVT2' },
     { key: 'defaultUnit', label: 'ĐVT mặc định' },
     { key: 'conversion1', label: 'Quy đổi 1' },
+    { key: 'vatPercent', label: 'VAT %' },
+    { key: 'vatText', label: 'Ghi chú VAT' },
     { key: 'conversion2', label: 'Quy đổi 2' },
     { key: 'retailPrice', label: 'Giá bán lẻ' },
     { key: 'retailPrice1', label: 'Giá bán lẻ1' },
@@ -1400,9 +1412,9 @@ const Products = () => {
     { key: 'volume', label: 'Số khối' },
     { key: 'volume1', label: 'Số khối1' },
     { key: 'volume2', label: 'Số khối2' },
-    { key: 'minStock', label: 'Tồn tối thiểu' },
     { key: 'note', label: 'Ghi chú' },
     { key: 'status', label: 'Trạng thái' },
+    { key: 'vatName', label: 'Tên hàng hóa VAT' },
     { key: 'actions', label: 'Thao tác', fixed: true }
   ];
   const defaultProductOrder = productColumns.map(col => col.key);
@@ -1414,13 +1426,30 @@ const Products = () => {
     try {
       const saved = JSON.parse(localStorage.getItem(PRODUCT_COLS_KEY));
       if (saved && Array.isArray(saved.visibleCols) && Array.isArray(saved.order)) {
-        // Đảm bảo các cột fixed luôn ở đúng vị trí (select đầu, actions cuối)
+        // Merge saved order with default order so newly added columns (eg. vatPercent)
+        // are inserted if missing while preserving user's preferences.
+        // Fixed columns (select/actions) are kept at the ends.
         const fixedCols = productColumns.filter(col => col.fixed).map(col => col.key);
-        const nonFixedCols = saved.order.filter(key => !productColumns.find(col => col.key === key)?.fixed);
-        const correctedOrder = ['select', ...nonFixedCols.filter(k => k !== 'select' && k !== 'actions'), 'actions'];
-        return [saved.visibleCols, correctedOrder];
+
+        // Filter saved order to only known columns
+        const savedOrderFiltered = saved.order.filter(k => productColumns.find(c => c.key === k));
+
+        // Build merged non-fixed order: start from saved, then append any missing default non-fixed keys
+        const defaultNonFixed = defaultProductOrder.filter(k => !productColumns.find(col => col.key === k)?.fixed);
+        const mergedNonFixed = savedOrderFiltered.filter(k => !productColumns.find(col => col.key === k)?.fixed);
+        defaultNonFixed.forEach(k => { if (!mergedNonFixed.includes(k)) mergedNonFixed.push(k); });
+
+        const correctedOrder = ['select', ...mergedNonFixed.filter(k => k !== 'select' && k !== 'actions'), 'actions'];
+
+        // Merge visible cols: keep saved visible if valid, otherwise default to all
+        const savedVisibleFiltered = (saved.visibleCols || []).filter(k => productColumns.find(c => c.key === k));
+        const mergedVisible = Array.from(new Set([...savedVisibleFiltered, ...defaultProductVisible]));
+
+        return [mergedVisible, correctedOrder];
       }
-    } catch {}
+    } catch (err) {
+      console.warn('Error reading product cols from localStorage', err);
+    }
     return [defaultProductVisible, defaultProductOrder];
   };
   const [[initProductVisible, initProductOrder]] = [getInitialProductCols()];
@@ -1922,6 +1951,17 @@ const Products = () => {
                         </td>
                       );
                     }
+
+                    // Cột VAT % (hiển thị số nguyên)
+                    if (col.key === 'vatPercent') {
+                      const v = product[col.key] === undefined || product[col.key] === null ? 0 : Number(product[col.key]);
+                      return <td key={col.key}>{formatNumberPrecision(v, 0)} %</td>;
+                    }
+
+                    // Cột Ghi chú VAT
+                    if (col.key === 'vatText') {
+                      return <td key={col.key}>{product.vatText || ''}</td>;
+                    }
                     
                     // Cột thao tác
                     if (col.key === 'actions') {
@@ -2347,15 +2387,15 @@ const Products = () => {
                 </div>
               </div>
 
-              {/* Mô tả và HSD trên cùng một hàng (tỷ lệ 90% / 10%) */}
-              <div style={{ display: 'grid', gridTemplateColumns: '9fr 1fr', gap: '16px', marginBottom: '12px', alignItems: 'start' }}>
+              {/* Mô tả, HSD và VAT% trên cùng một hàng (tỷ lệ 7fr / 1fr / 1fr / 1fr) */}
+              <div style={{ display: 'grid', gridTemplateColumns: '7fr 1fr 1fr 1fr', gap: '16px', marginBottom: '12px', alignItems: 'start' }}>
                 <div>
                   <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>Mô tả</label>
                   <textarea
                     name="description"
                     value={formData.description}
                     onChange={handleInputChange}
-                    rows="2"
+                    rows="1"
                     placeholder="Mô tả"
                     style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px', resize: 'vertical' }}
                   />
@@ -2369,6 +2409,29 @@ const Products = () => {
                     value={formData.shelfLife}
                     onChange={handleInputChange}
                     placeholder="0"
+                    style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>VAT %</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    name="vatPercent"
+                    value={formData.vatPercent}
+                    onChange={handleInputChange}
+                    placeholder="0"
+                    style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
+                  />
+                </div>
+                <div>
+                  <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>VAT (Ghi chú)</label>
+                  <input
+                    type="text"
+                    name="vatText"
+                    value={formData.vatText}
+                    onChange={handleInputChange}
+                    placeholder="Miễn thuế, ưu đãi..."
                     style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
                   />
                 </div>
