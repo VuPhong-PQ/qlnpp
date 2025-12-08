@@ -2497,7 +2497,15 @@ const Products = () => {
                     <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>ĐVT mặc định <span style={{ color: 'red' }}>*</span></label>
                     <select name="defaultUnit" value={formData.defaultUnit || ''} onChange={handleInputChange} required style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                       <option value="">Chọn ĐVT</option>
-                      {units.map(unit => (<option key={unit.id} value={unit.name}>{unit.name}</option>))}
+                      {formData.baseUnit && (
+                        <option value={formData.baseUnit}>ĐVT Gốc ({formData.baseUnit})</option>
+                      )}
+                      {formData.unit1 && (
+                        <option value={formData.unit1}>ĐVT 1 ({formData.unit1})</option>
+                      )}
+                      {formData.unit2 && (
+                        <option value={formData.unit2}>ĐVT 2 ({formData.unit2})</option>
+                      )}
                     </select>
                   </div>
                 </div>
