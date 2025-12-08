@@ -885,7 +885,13 @@ const Products = () => {
       await fetchCategories();
       await fetchUnits();
     },
-    apiPost: async (data) => {
+    apiPost: async (data, globalChoices = {}) => {
+      const { 
+        globalOverwriteChoice, 
+        globalIdenticalChoice,
+        setGlobalOverwriteChoice,
+        setGlobalIdenticalChoice
+      } = globalChoices;
       console.log('=== IMPORT DEBUG START ===');
       console.log('Raw import data:', data);
       console.log('Data keys:', Object.keys(data));
@@ -986,7 +992,7 @@ const Products = () => {
         }
       }
       
-      // NOW CHECK FOR EXISTING PRODUCTS
+      // NOW CHECK FOR EXISTING PRODUCTS WITH ADVANCED VALIDATION
       const existingProducts = await api.get(API_ENDPOINTS.products);
       const existingByCode = existingProducts.find(
         product => (product.code || '').toString().toLowerCase().trim() === (data.code || '').toString().toLowerCase().trim()
@@ -999,32 +1005,161 @@ const Products = () => {
       const existing = existingByCode || existingByBarcode;
 
       if (existing) {
-        // Cảnh báo về việc ghi đè
         const conflictFields = [];
         if (existingByCode) conflictFields.push('Mã hàng');
         if (existingByBarcode && existingByCode?.id !== existingByBarcode?.id) {
           conflictFields.push('Mã vạch');
         }
         
-        console.log(`⚠️  Cập nhật sản phẩm tồn tại (${conflictFields.join(', ')}): ${data.code || data.name}`);
+        // So sánh tất cả các trường để xác định loại conflict
+        const importantFields = ['category', 'name', 'vatName', 'description', 'baseUnit', 'unit1', 'unit2', 'defaultUnit', 'retailPrice'];
+        let identicalCount = 0;
+        let differentFields = [];
+        
+        importantFields.forEach(field => {
+          const existingValue = String(existing[field] || '').trim();
+          const newValue = String(data[field] || '').trim();
+          
+          if (existingValue === newValue) {
+            identicalCount++;
+          } else if (newValue !== '') { // Chỉ tính khác biệt nếu giá trị mới không rỗng
+            differentFields.push(field);
+          }
+        });
+        
+        const totalFieldsToCompare = importantFields.filter(field => String(data[field] || '').trim() !== '').length;
+        const isCompletelyIdentical = identicalCount === totalFieldsToCompare && differentFields.length === 0;
+        
+        console.log(`🔍 Conflict Analysis for ${data.code}:`);
+        console.log(`- Identical fields: ${identicalCount}/${totalFieldsToCompare}`);
+        console.log(`- Different fields: [${differentFields.join(', ')}]`);
+        console.log(`- Is completely identical: ${isCompletelyIdentical}`);
+        
+        if (isCompletelyIdentical) {
+          // CASE 2: Hoàn toàn trùng khớp - hỏi bỏ qua hay ghi đè
+          let userChoice;
+          
+          if (globalIdenticalChoice) {
+            userChoice = globalIdenticalChoice === 'overwrite';
+            console.log(`🔄 Sử dụng lựa chọn toàn cục (identical): ${globalIdenticalChoice}`);
+          } else {
+            // Tạo custom dialog với 4 options
+            const dialogResult = await new Promise((resolve) => {
+              const modal = document.createElement('div');
+              modal.innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+                  <div style="background: white; padding: 24px; border-radius: 8px; max-width: 500px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                    <h3 style="margin: 0 0 16px 0; color: #333;">Sản phẩm trùng lặp hoàn toàn</h3>
+                    <p style="margin: 0 0 20px 0; color: #666; line-height: 1.4;">
+                      Sản phẩm "<strong>${data.name || data.code}</strong>" đã có sẵn trong hệ thống với thông tin giống hệt.
+                    </p>
+                    <div style="display: grid; gap: 8px;">
+                      <button id="overwrite-once" style="padding: 10px; background: #1890ff; color: white; border: none; border-radius: 4px; cursor: pointer;">Ghi đè sản phẩm này</button>
+                      <button id="overwrite-all" style="padding: 10px; background: #52c41a; color: white; border: none; border-radius: 4px; cursor: pointer;">Ghi đè tất cả tương tự</button>
+                      <button id="skip-once" style="padding: 10px; background: #faad14; color: white; border: none; border-radius: 4px; cursor: pointer;">Bỏ qua sản phẩm này</button>
+                      <button id="skip-all" style="padding: 10px; background: #ff4d4f; color: white; border: none; border-radius: 4px; cursor: pointer;">Hủy</button>
+
+                    </div>
+                  </div>
+                </div>
+              `;
+              document.body.appendChild(modal);
+              
+              modal.querySelector('#overwrite-once').onclick = () => { document.body.removeChild(modal); resolve('overwrite-once'); };
+              modal.querySelector('#overwrite-all').onclick = () => { document.body.removeChild(modal); resolve('overwrite-all'); };
+              modal.querySelector('#skip-once').onclick = () => { document.body.removeChild(modal); resolve('skip-once'); };
+              modal.querySelector('#skip-all').onclick = () => { document.body.removeChild(modal); resolve('skip-all'); };
+            });
+            
+            if (dialogResult === 'overwrite-all') {
+              setGlobalIdenticalChoice && setGlobalIdenticalChoice('overwrite');
+              userChoice = true;
+            } else if (dialogResult === 'skip-all') {
+              setGlobalIdenticalChoice && setGlobalIdenticalChoice('skip');
+              userChoice = false;
+            } else {
+              userChoice = dialogResult === 'overwrite-once';
+            }
+          }
+          
+          if (!userChoice) {
+            console.log(`⏭️ Bỏ qua sản phẩm trùng lặp: ${data.code}`);
+            return { action: 'skipped', product: existing, reason: 'Người dùng chọn bỏ qua sản phẩm trùng lặp' };
+          }
+        } else {
+          // CASE 1: Trùng một số trường nhưng khác các trường khác
+          let userChoice;
+          
+          if (globalOverwriteChoice) {
+            userChoice = globalOverwriteChoice === 'overwrite';
+            console.log(`🔄 Sử dụng lựa chọn toàn cục (overwrite): ${globalOverwriteChoice}`);
+          } else {
+            const conflictInfo = conflictFields.length > 0 ? `trùng ${conflictFields.join(', ')}` : 'có thông tin tương tự';
+            
+            // Tạo custom dialog với 4 options
+            const dialogResult = await new Promise((resolve) => {
+              const modal = document.createElement('div');
+              modal.innerHTML = `
+                <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 10000; display: flex; align-items: center; justify-content: center;">
+                  <div style="background: white; padding: 24px; border-radius: 8px; max-width: 500px; box-shadow: 0 4px 12px rgba(0,0,0,0.3);">
+                    <h3 style="margin: 0 0 16px 0; color: #333;">Sản phẩm có thông tin trùng lặp</h3>
+                    <p style="margin: 0 0 12px 0; color: #666; line-height: 1.4;">
+                      Sản phẩm "<strong>${data.name || data.code}</strong>" ${conflictInfo} nhưng khác nhau về các trường khác:
+                    </p>
+                    <p style="margin: 0 0 20px 0; color: #d46b08; font-size: 14px;">
+                      <strong>Các trường khác biệt:</strong> ${differentFields.length > 0 ? differentFields.join(', ') : 'Một số trường khác'}
+                    </p>
+                    <div style="display: grid; gap: 8px;">
+                      <button id="overwrite-once" style="padding: 10px; background: #1890ff; color: white; border: none; border-radius: 4px; cursor: pointer;">Ghi đè sản phẩm này</button>
+                      <button id="overwrite-all" style="padding: 10px; background: #52c41a; color: white; border: none; border-radius: 4px; cursor: pointer;">Ghi đè tất cả tương tự</button>
+                      <button id="skip-once" style="padding: 10px; background: #faad14; color: white; border: none; border-radius: 4px; cursor: pointer;">Bỏ qua sản phẩm này</button>
+                      <button id="skip-all" style="padding: 10px; background: #ff4d4f; color: white; border: none; border-radius: 4px; cursor: pointer;">Hủy</button>
+                    </div>
+                  </div>
+                </div>
+              `;
+              document.body.appendChild(modal);
+              
+              modal.querySelector('#overwrite-once').onclick = () => { document.body.removeChild(modal); resolve('overwrite-once'); };
+              modal.querySelector('#overwrite-all').onclick = () => { document.body.removeChild(modal); resolve('overwrite-all'); };
+              modal.querySelector('#skip-once').onclick = () => { document.body.removeChild(modal); resolve('skip-once'); };
+              modal.querySelector('#skip-all').onclick = () => { document.body.removeChild(modal); resolve('skip-all'); };
+            });
+            
+            if (dialogResult === 'overwrite-all') {
+              setGlobalOverwriteChoice && setGlobalOverwriteChoice('overwrite');
+              userChoice = true;
+            } else if (dialogResult === 'skip-all') {
+              setGlobalOverwriteChoice && setGlobalOverwriteChoice('skip');
+              userChoice = false;
+            } else {
+              userChoice = dialogResult === 'overwrite-once';
+            }
+          }
+          
+          if (!userChoice) {
+            console.log(`⏭️ Bỏ qua ghi đè sản phẩm: ${data.code}`);
+            return { action: 'skipped', product: existing, reason: 'Người dùng từ chối ghi đè sản phẩm có conflict' };
+          }
+        }
+        
+        // Thực hiện update nếu user đồng ý
+        console.log(`⚠️ Cập nhật sản phẩm tồn tại (${conflictFields.join(', ')}): ${data.code || data.name}`);
         
         try {
-          // Merge: giữ các trường hiện có, ghi đè bằng data nếu data có giá trị (không null/empty string)
+          // Merge: giữ các trường hiện có, ghi đè bằng data nếu data có giá trị
           const merged = { ...existing };
           Object.keys(data).forEach(k => {
             const v = data[k];
-            if (v !== undefined && v !== null && String(v).toString().trim() !== '') {
+            if (v !== undefined && v !== null && String(v).trim() !== '') {
               merged[k] = v;
             }
           });
 
-          console.log('Merged data for update:', merged);
-          console.log(`Merged unit2 value: "${merged.unit2}"`);
           console.log('About to PUT to API:', JSON.stringify(merged, null, 2));
           
           const updatedProduct = await api.put(API_ENDPOINTS.products, existing.id, merged);
           console.log('Updated product from API response:', updatedProduct);
-          console.log('API returned unit2:', updatedProduct.unit2);
           
           return { action: 'updated', product: updatedProduct };
         } catch (err) {
@@ -1032,15 +1167,13 @@ const Products = () => {
         }
       }
 
-      // Tạo sản phẩm mới với data đã được chuẩn hóa
-      console.log(`Final data before creating product:`, data);
-      console.log(`Final unit2 value: "${data.unit2}"`);
+      // CASE 3: Sản phẩm hoàn toàn mới - tạo mới bình thường
+      console.log(`✨ Tạo sản phẩm mới: ${data.code || data.name}`);
       console.log('About to POST to API:', JSON.stringify(data, null, 2));
       
       const newProduct = await api.post(API_ENDPOINTS.products, data);
-      console.log(`✓ Đã tạo sản phẩm mới: ${data.code || data.name}`);
+      console.log(`✅ Đã tạo sản phẩm mới thành công: ${data.code || data.name}`);
       console.log('Created product from API response:', newProduct);
-      console.log('API returned unit2:', newProduct.unit2);
       console.log('=== IMPORT DEBUG END ===');
       
       return { action: 'created', product: newProduct };
@@ -2364,15 +2497,7 @@ const Products = () => {
                     <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>ĐVT mặc định <span style={{ color: 'red' }}>*</span></label>
                     <select name="defaultUnit" value={formData.defaultUnit || ''} onChange={handleInputChange} required style={{ width: '100%', padding: '7px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}>
                       <option value="">Chọn ĐVT</option>
-                      {formData.baseUnit && (
-                        <option value={formData.baseUnit}>ĐVT Gốc ({formData.baseUnit})</option>
-                      )}
-                      {formData.unit1 && (
-                        <option value={formData.unit1}>ĐVT 1 ({formData.unit1})</option>
-                      )}
-                      {formData.unit2 && (
-                        <option value={formData.unit2}>ĐVT 2 ({formData.unit2})</option>
-                      )}
+                      {units.map(unit => (<option key={unit.id} value={unit.name}>{unit.name}</option>))}
                     </select>
                   </div>
                 </div>

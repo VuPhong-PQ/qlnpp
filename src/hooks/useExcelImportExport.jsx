@@ -91,8 +91,14 @@ export const useExcelImportExport = (config) => {
         let errorCount = 0;
         let createdCount = 0;
         let updatedCount = 0;
+        let skippedCount = 0;
         const errors = [];
         const warnings = [];
+        const skipped = [];
+
+        // Global choice variables for "Apply to All" functionality
+        let globalOverwriteChoice = null; // null, 'overwrite', 'skip'
+        let globalIdenticalChoice = null; // null, 'overwrite', 'skip'
 
         for (let i = 0; i < excelData.length; i++) {
           const row = excelData[i];
@@ -109,19 +115,30 @@ export const useExcelImportExport = (config) => {
               });
             }
 
-            const result = await apiPost(importData);
-            successCount++;
+            const result = await apiPost(importData, {
+              globalOverwriteChoice,
+              globalIdenticalChoice,
+              setGlobalOverwriteChoice: (choice) => { globalOverwriteChoice = choice; },
+              setGlobalIdenticalChoice: (choice) => { globalIdenticalChoice = choice; }
+            });
             
-            // Track create vs update
+            // Track different actions
             if (result && typeof result === 'object' && result.action) {
               if (result.action === 'created') {
+                successCount++;
                 createdCount++;
               } else if (result.action === 'updated') {
+                successCount++;
                 updatedCount++;
                 const identifier = row[requiredFields[0]] || `Dòng ${i + 2}`;
                 warnings.push(`${identifier}: Đã cập nhật sản phẩm tồn tại`);
+              } else if (result.action === 'skipped') {
+                skippedCount++;
+                const identifier = row[requiredFields[0]] || `Dòng ${i + 2}`;
+                skipped.push(`${identifier}: ${result.reason || 'Bỏ qua'}`);
               }
             } else {
+              successCount++;
               createdCount++; // default fallback
             }
           } catch (error) {
@@ -133,7 +150,14 @@ export const useExcelImportExport = (config) => {
 
         if (loadData) await loadData();
         
-        let message = `Import hoàn tất!\n✓ Thành công: ${successCount} (${createdCount} mới, ${updatedCount} cập nhật)\n✗ Lỗi: ${errorCount}`;
+        let message = `Import hoàn tất!\n✅ Thành công: ${successCount} (${createdCount} mới, ${updatedCount} cập nhật)\n⏭️ Bỏ qua: ${skippedCount}\n❌ Lỗi: ${errorCount}`;
+        
+        if (skipped.length > 0 && skipped.length <= 3) {
+          message += '\n\n⏭️ Đã bỏ qua:\n' + skipped.slice(0, 3).join('\n');
+          if (skipped.length > 3) {
+            message += `\n... và ${skipped.length - 3} mục khác.`;
+          }
+        }
         
         if (warnings.length > 0 && warnings.length <= 3) {
           message += '\n\n⚠️ Cảnh báo ghi đè:\n' + warnings.slice(0, 3).join('\n');
@@ -151,7 +175,7 @@ export const useExcelImportExport = (config) => {
         
         alert(message);
 
-        if (onImportComplete) onImportComplete(successCount, errorCount, createdCount, updatedCount);
+        if (onImportComplete) onImportComplete(successCount, errorCount, createdCount, updatedCount, skippedCount);
       } catch (error) {
         console.error('Error importing data:', error);
         alert('Lỗi khi nhập dữ liệu: ' + error.message);
