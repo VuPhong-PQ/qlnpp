@@ -867,10 +867,10 @@ const Products = () => {
   };
 
   const formatCurrency = (amount) => {
-    return new Intl.NumberFormat('vi-VN', {
-      style: 'currency',
-      currency: 'VND'
-    }).format(amount);
+    // Return number formatted with thousand separators but without currency symbol
+    if (amount === null || amount === undefined || amount === '') return '';
+    const n = Number(amount) || 0;
+    return new Intl.NumberFormat('vi-VN').format(n);
   };
 
   // Excel Import/Export
@@ -1961,6 +1961,18 @@ const Products = () => {
                     // Cột Ghi chú VAT
                     if (col.key === 'vatText') {
                       return <td key={col.key}>{product.vatText || ''}</td>;
+                    }
+                    
+                    // Cột Số Kg - hiển thị 2 chữ số thập phân
+                    if (col.key.toLowerCase().includes('weight')) {
+                      const w = product[col.key] === undefined || product[col.key] === null ? 0 : Number(product[col.key]);
+                      return <td key={col.key}>{formatNumberPrecision(w, 2)}</td>;
+                    }
+
+                    // Cột Số khối - hiển thị 4 chữ số thập phân
+                    if (col.key.toLowerCase().includes('volume')) {
+                      const vol = product[col.key] === undefined || product[col.key] === null ? 0 : Number(product[col.key]);
+                      return <td key={col.key}>{formatFixed4(vol)}</td>;
                     }
                     
                     // Cột thao tác
