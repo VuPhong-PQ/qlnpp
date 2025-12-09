@@ -141,10 +141,11 @@ const Header = () => {
       ]
     },
     {
-      id: 'permissions',
-      title: 'Phân quyền',
-      icon: '🔐',
+      id: 'admin',
+      title: 'Admin',
+      icon: '🛠️',
       items: [
+        { name: 'Quản lý dữ liệu', path: '/admin/manage-data' },
         { name: 'Quản lý vai trò', path: '/permissions/roles' },
         { name: 'Phân quyền người dùng', path: '/permissions/users' }
       ]

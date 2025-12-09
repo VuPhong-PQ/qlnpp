@@ -12,6 +12,7 @@ const defaultRightColumns = [
   { key: 'itemCode', title: 'Mã hàng' },
   { key: 'itemName', title: 'Tên hàng' },
   { key: 'description', title: 'Mô tả' },
+  { key: 'vat', title: 'Vat %' },
   { key: 'unit', title: 'Đvt' },
   { key: 'price', title: 'Đơn giá' },
   { key: 'unit1', title: 'Đvt 1' },
@@ -331,11 +332,42 @@ function QuotationTable() {
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, quotation: null });
 
 // --- CẤU HÌNH CỘT, DRAG, LƯU LOCALSTORAGE PANEL PHẢI ---
-const QUOTATION_RIGHT_COLS_KEY = 'quotation_detail_table_cols_v1';
+const QUOTATION_RIGHT_COLS_KEY = 'quotation_detail_table_cols_v2'; // Updated version to include VAT
 const getInitialRightCols = () => {
   try {
     const saved = JSON.parse(localStorage.getItem(QUOTATION_RIGHT_COLS_KEY));
     if (saved && Array.isArray(saved.visibleCols) && Array.isArray(saved.order)) {
+      // Ensure new columns (like 'vat') are included
+      const defaultKeys = defaultRightColumns.map(c => c.key);
+      const missingKeys = defaultKeys.filter(key => !saved.visibleCols.includes(key));
+      
+      if (missingKeys.length > 0) {
+        // Add missing columns to the saved config
+        const updatedVisibleCols = [...saved.visibleCols];
+        const updatedOrder = [...saved.order];
+        
+        missingKeys.forEach(key => {
+          if (!updatedVisibleCols.includes(key)) {
+            updatedVisibleCols.push(key);
+          }
+          if (!updatedOrder.includes(key)) {
+            // Insert 'vat' after 'description' if it exists, otherwise append
+            if (key === 'vat') {
+              const descIndex = updatedOrder.indexOf('description');
+              if (descIndex !== -1) {
+                updatedOrder.splice(descIndex + 1, 0, key);
+              } else {
+                updatedOrder.push(key);
+              }
+            } else {
+              updatedOrder.push(key);
+            }
+          }
+        });
+        
+        return [updatedVisibleCols, updatedOrder];
+      }
+      
       return [saved.visibleCols, saved.order];
     }
   } catch {}
@@ -580,7 +612,8 @@ const getInitialRightCols = () => {
         ...item,
         // normalize Conversion1 for consistency (server uses Conversion1)
         Conversion1: item.Conversion1 ?? item.conversion1 ?? item.conversion ?? 0,
-        note: item.note || item.Note || ''
+        note: item.note || item.Note || '',
+        vat: item.vat ?? item.Vat ?? 10 // Default VAT 10% if not provided
       }))
     : [];
 
@@ -745,7 +778,8 @@ const getInitialRightCols = () => {
         price: p.RetailPrice ?? p.retailPrice ?? 0,
         unit1: p.Unit1 || p.unit1 || '',
         price1: p.RetailPrice1 ?? p.retailPrice1 ?? null,
-        note: p.note || ''
+        note: p.note || '',
+        vat: 10 // Default VAT 10% for new items
       };
     });
     console.log('Created quotation items:', items);
@@ -792,10 +826,31 @@ const getInitialRightCols = () => {
     });
   };
 
+  // Update per-item VAT in selectedQuotation.items
+  const handleItemVatChange = (index, value) => {
+    setSelectedQuotation(s => {
+      if (!s) return s;
+      const items = Array.isArray(s.items) ? [...s.items] : Array.isArray(s.Items) ? [...s.Items] : [];
+      const numValue = parseFloat(value) || 0;
+      items[index] = { ...(items[index] || {}), vat: numValue, Vat: numValue };
+      return { ...s, items };
+    });
+  };
+
   // Generate and print an A4-formatted quotation
   const formatCurrency = (v) => {
     if (v === null || v === undefined || v === '') return '';
     return Number(v).toLocaleString('vi-VN');
+  };
+
+  // Format VAT display: show integer without .0 when whole, otherwise show one decimal if needed
+  const formatVat = (v) => {
+    if (v === null || v === undefined || v === '') return '';
+    const num = Number(v);
+    if (Number.isNaN(num)) return '';
+    const rounded = Math.round(num * 10) / 10; // one decimal precision
+    const s = (rounded % 1 === 0) ? String(Math.round(rounded)) : String(rounded).replace(/\.0+$/, '');
+    return `${s} %`;
   };
 
   // Helper to read company fields tolerant to camelCase/PascalCase
@@ -869,6 +924,7 @@ const getInitialRightCols = () => {
         <td class="center">${escapeHtml(it.unit1)}</td>
         <td class="right">${it.price1 !== null && it.price1 !== undefined ? Number(it.price1).toLocaleString('vi-VN') : ''}</td>
         <td>${escapeHtml(it.description)}</td>
+        <td class="center">${it.vat || it.vat === 0 ? formatVat(it.vat) : ''}</td>
         <td>${escapeHtml(it.note)}</td>
       </tr>
     `).join('');
@@ -932,6 +988,7 @@ const getInitialRightCols = () => {
               <th style="width:60px">ĐVT1</th>
               <th style="width:90px">Đơn giá 1</th>
               <th class="col-desc">Mô tả</th>
+              <th style="width:60px">VAT %</th>
               <th style="width:120px">Ghi chú</th>
             </tr>
           </thead>
@@ -942,7 +999,7 @@ const getInitialRightCols = () => {
             <tr>
               <td colspan="6" style="font-weight:700">Tổng</td>
               <td class="right" style="font-weight:700">${formatCurrency(total)}</td>
-              <td colspan="4"></td>
+              <td colspan="5"></td>
             </tr>
           </tfoot>
         </table>
@@ -1074,6 +1131,7 @@ const getInitialRightCols = () => {
             <th>ĐVT1</th>
             <th>Đơn giá 1</th>
             <th>Mô tả</th>
+            <th>VAT %</th>
             <th>Ghi chú</th>
             <th>Quy đổi</th>
           </tr>
@@ -1090,6 +1148,7 @@ const getInitialRightCols = () => {
               <td>${escapeHtml(r.unit1)}</td>
               <td style="mso-number-format:'#,##0.00';">${r.price1 !== null && r.price1 !== undefined ? r.price1 : ''}</td>
               <td>${escapeHtml(r.description)}</td>
+              <td>${r.vat || r.vat === 0 ? formatVat(r.vat) : ''}</td>
               <td>${escapeHtml(r.note)}</td>
               <td style="mso-number-format:'#,##0.00';">${r.Conversion1 !== null && r.Conversion1 !== undefined && r.Conversion1 !== '' && r.Conversion1 !== 0 ? r.Conversion1 : ''}</td>
             </tr>
@@ -1507,6 +1566,26 @@ const getInitialRightCols = () => {
                                     />
                                   ) : (
                                     row.note || ''
+                                  )}
+                                </td>
+                              );
+                            }
+                            // Special rendering for vat column: editable when in edit mode
+                            if (key === 'vat') {
+                              return (
+                                <td key={key} style={{ width: rightColWidths[colIdx], padding: 8 }}>
+                                  {isEditing ? (
+                                    <input
+                                      type="number"
+                                      value={row.vat || ''}
+                                      onChange={e => handleItemVatChange((rightCurrentPage - 1) * rightItemsPerPage + rowIdx, e.target.value)}
+                                      style={{ width: '100%', borderRadius: 6, border: '1px solid #e5e7eb', padding: 6 }}
+                                      min="0"
+                                      max="100"
+                                      step="0.1"
+                                    />
+                                    ) : (
+                                    (row.vat || row.vat === 0) ? formatVat(row.vat) : ''
                                   )}
                                 </td>
                               );

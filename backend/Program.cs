@@ -10,6 +10,11 @@ var builder = WebApplication.CreateBuilder(args);
 // Learn more about configuring OpenAPI at https://aka.ms/aspnet/openapi
 builder.Services.AddOpenApi();
 
+// Backup settings and background service
+builder.Services.Configure<QlnppApi.Models.BackupSettings>(builder.Configuration.GetSection("BackupSettings"));
+builder.Services.AddSingleton<QlnppApi.Services.BackupService>();
+builder.Services.AddHostedService(sp => sp.GetRequiredService<QlnppApi.Services.BackupService>());
+
 // Add DbContext
 builder.Services.AddDbContext<ApplicationDbContext>(options =>
     options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")));

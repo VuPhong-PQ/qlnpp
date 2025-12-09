@@ -14,6 +14,7 @@ import TransactionContents from './components/setup/TransactionContents';
 import Warehouses from './components/setup/Warehouses';
 import Vehicles from './components/setup/Vehicles';
 import Users from './components/permissions/Users';
+import AdminPage from './components/Admin/AdminPage';
 import QuotationTable from './components/business/QuotationTable';
 import ImportGoods from './components/business/ImportGoods';
 import WarehouseTransfer from './components/business/WarehouseTransfer';
@@ -60,6 +61,7 @@ function App() {
             <Route path="/business/accounting/receipt-voucher" element={<ReceiptVoucher />} />
             <Route path="/business/accounting/expense-voucher" element={<ExpenseVoucher />} />
             <Route path="/business/cost-calculation" element={<CostCalculation />} />
+            <Route path="/admin/manage-data" element={<AdminPage />} />
           </Routes>
         </main>
       </div>
