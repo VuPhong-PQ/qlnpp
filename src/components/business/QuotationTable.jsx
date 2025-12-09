@@ -613,7 +613,7 @@ const getInitialRightCols = () => {
         // normalize Conversion1 for consistency (server uses Conversion1)
         Conversion1: item.Conversion1 ?? item.conversion1 ?? item.conversion ?? 0,
         note: item.note || item.Note || '',
-        vat: item.vat ?? item.Vat ?? 10 // Default VAT 10% if not provided
+        vat: item.vat ?? item.Vat ?? item.vatPercent ?? item.VatPercent ?? 10 // Default VAT 10% if not provided
       }))
     : [];
 
@@ -692,6 +692,21 @@ const getInitialRightCols = () => {
       // If the quotation doesn't have an employee set, default to current user name
       const emp = getCurrentUserName();
       if (data && !data.employee && emp) data.employee = emp;
+      
+      // Ensure all items have VAT field with default value
+      if (data && data.items) {
+        data.items = data.items.map(item => ({
+          ...item,
+          vat: item.vat ?? item.Vat ?? item.vatPercent ?? item.VatPercent ?? 10
+        }));
+      }
+      if (data && data.Items) {
+        data.Items = data.Items.map(item => ({
+          ...item,
+          vat: item.vat ?? item.Vat ?? item.vatPercent ?? item.VatPercent ?? 10
+        }));
+      }
+      
       setSelectedQuotation(data);
     } catch (err) {
       console.error('Load quotation details error', err);
@@ -701,6 +716,13 @@ const getInitialRightCols = () => {
   React.useEffect(() => {
     loadQuotations();
   }, []);
+
+  // Ensure VAT is set for all items when selectedQuotation changes
+  React.useEffect(() => {
+    if (selectedQuotation) {
+      ensureVatInItems();
+    }
+  }, [selectedQuotation?.id]);
 
   // Create a new quotation with minimal data and open it
   const createNewQuotation = async () => {
@@ -837,6 +859,22 @@ const getInitialRightCols = () => {
     });
   };
 
+  // Ensure all items have VAT field
+  const ensureVatInItems = () => {
+    if (!selectedQuotation) return;
+    
+    setSelectedQuotation(s => {
+      if (!s) return s;
+      const items = Array.isArray(s.items) ? [...s.items] : Array.isArray(s.Items) ? [...s.Items] : [];
+      const updatedItems = items.map(item => ({
+        ...item,
+        vat: item.vat ?? item.Vat ?? item.vatPercent ?? item.VatPercent ?? 10
+      }));
+      
+      return { ...s, items: updatedItems };
+    });
+  };
+
   // Generate and print an A4-formatted quotation
   const formatCurrency = (v) => {
     if (v === null || v === undefined || v === '') return '';
@@ -885,6 +923,7 @@ const getInitialRightCols = () => {
       price: it.price ?? it.Price ?? 0,
       unit1: it.unit1 || it.Unit1 || '',
       price1: it.price1 ?? it.Price1 ?? null,
+      vat: it.vat ?? it.Vat ?? 10,
       // Prefer item-level note when present, otherwise use quotation-level note
       note: (it.note || it.Note || q?.note || q?.Note || '')
     }));
@@ -916,7 +955,7 @@ const getInitialRightCols = () => {
       <tr>
         <td class="center">${it.stt}</td>
         <td style="mso-number-format:'@';">${escapeHtml(it.barcode)}</td>
-        <td>${escapeHtml(it.itemCode)}</td>
+        <td style="mso-number-format:'@';">${escapeHtml(it.itemCode)}</td>
         <td>${escapeHtml(it.itemName)}</td>
         <td class="center">${escapeHtml(it.unit)}</td>
         <td class="right">${it.Conversion1 !== null && it.Conversion1 !== undefined && it.Conversion1 !== '' ? Number(it.Conversion1).toLocaleString('vi-VN') : ''}</td>
@@ -954,10 +993,6 @@ const getInitialRightCols = () => {
               <td>Địa chỉ: ${getCompanyField(company, 'address') || getCompanyField(company, 'Address') || ''}</td>
               <td></td>
             </tr>
-            <tr>
-              <td>Email: ${getCompanyField(company, 'email') || getCompanyField(company, 'Email') || ''}${phoneDisplay ? ('<br/>' + phoneDisplay) : ''}</td>
-              <td></td>
-            </tr>
           </table>
         </div>
         <div class="title">BÁO GIÁ</div>
@@ -968,7 +1003,7 @@ const getInitialRightCols = () => {
           </tr>
           <tr>
             <td><strong>Người lập:</strong> ${q?.employee || ''}</td>
-            <td style="text-align:right"><strong>Loại báo giá:</strong> ${q?.quotationType || ''}</td>
+            <td></td>
           </tr>
           <tr>
             <td colspan="2"><strong>Ghi chú:</strong> ${q?.note || ''}</td>
@@ -1094,6 +1129,7 @@ const getInitialRightCols = () => {
         price: getItemField(it, 'price') ?? 0,
         unit1: getItemField(it, 'unit1') || '',
         price1: getItemField(it, 'price1') ?? null,
+        vat: getItemField(it, 'vat') ?? it.vat ?? it.Vat ?? 10,
         description: getItemField(it, 'description') || '',
         note: quotation.note || quotation.Note || ''  // Use quotation-level note for all items
       };
@@ -1110,12 +1146,11 @@ const getInitialRightCols = () => {
       <table>
         <tr><td style="font-weight:700; font-size:14px;">${getField('companyName') || 'NPP THỈNH PHÚ QUỐC'}</td></tr>
         <tr><td>Địa chỉ: ${getField('address')}</td></tr>
-        <tr><td>Email: ${getField('email')}${phoneDisplay ? ('  ' + phoneDisplay) : ''}</td></tr>
       </table>
       <h3 style="text-align:center;">CHI TIẾT PHIẾU BÁO GIÁ</h3>
       <table>
         <tr><td>Mã phiếu: ${escapeHtml(quotation.code || '')}</td><td>Ghi chú: ${escapeHtml(quotation.note || '')}</td></tr>
-        <tr><td>Ngày lập: ${quotation.date ? (new Date(quotation.date)).toLocaleDateString('vi-VN') : ''}</td><td>Loại báo giá: ${quotation.quotationType || ''}</td></tr>
+        <tr><td>Ngày lập: ${quotation.date ? (new Date(quotation.date)).toLocaleDateString('vi-VN') : ''}</td><td></td></tr>
         <tr><td>Người lập: ${escapeHtml(quotation.employee || '')}</td><td></td></tr>
       </table>
       <br/>
@@ -1141,7 +1176,7 @@ const getInitialRightCols = () => {
             <tr>
               <td>${idx+1}</td>
               <td style="mso-number-format:'@';">${escapeHtml(r.barcode)}</td>
-              <td>${escapeHtml(r.itemCode)}</td>
+              <td style="mso-number-format:'@';">${escapeHtml(r.itemCode)}</td>
               <td>${escapeHtml(r.itemName)}</td>
               <td>${escapeHtml(r.unit)}</td>
               <td style="mso-number-format:'#,##0.00';">${r.price !== null && r.price !== undefined ? r.price : ''}</td>
