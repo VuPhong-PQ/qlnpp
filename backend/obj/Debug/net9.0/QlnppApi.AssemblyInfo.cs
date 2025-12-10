@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("QlnppApi")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e69fb6bd657ca8c85d85361f349a35f380b3cc85")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e857fa52d66eae2fbb54412354b435c5f9c879e4")]
 [assembly: System.Reflection.AssemblyProductAttribute("QlnppApi")]
 [assembly: System.Reflection.AssemblyTitleAttribute("QlnppApi")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

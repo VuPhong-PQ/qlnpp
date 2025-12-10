@@ -807,6 +807,8 @@ const getInitialRightCols = () => {
     console.log('Created quotation items:', items);
     const existing = selectedQuotation.items || selectedQuotation.Items || [];
     const merged = [...existing, ...items];
+    // Do not aggregate product notes into quotation-level note.
+    // Keep per-item notes only; preserve existing quotation.note
     setSelectedQuotation(s => ({ ...(s || {}), items: merged }));
     setShowProductPicker(false);
     setIsEditing(true);
@@ -924,8 +926,8 @@ const getInitialRightCols = () => {
       unit1: it.unit1 || it.Unit1 || '',
       price1: it.price1 ?? it.Price1 ?? null,
       vat: it.vat ?? it.Vat ?? 10,
-      // Prefer item-level note when present, otherwise use quotation-level note
-      note: (it.note || it.Note || q?.note || q?.Note || '')
+      // Prefer item-level note when present (no fallback to quotation-level note)
+      note: (it.note || it.Note || '')
     }));
 
     const total = items.reduce((s, it) => s + (Number(it.price) || 0), 0);
@@ -1024,7 +1026,7 @@ const getInitialRightCols = () => {
               <th style="width:90px">Đơn giá 1</th>
               <th class="col-desc">Mô tả</th>
               <th style="width:60px">VAT %</th>
-              <th style="width:120px">Ghi chú</th>
+              <th style="width:120px">Ghi chú sản phẩm</th>
             </tr>
           </thead>
           <tbody>
@@ -1131,7 +1133,7 @@ const getInitialRightCols = () => {
         price1: getItemField(it, 'price1') ?? null,
         vat: getItemField(it, 'vat') ?? it.vat ?? it.Vat ?? 10,
         description: getItemField(it, 'description') || '',
-        note: quotation.note || quotation.Note || ''  // Use quotation-level note for all items
+        note: getItemField(it, 'note') || it.note || it.Note || ''  // Use per-item note
       };
     });
 
@@ -1167,7 +1169,7 @@ const getInitialRightCols = () => {
             <th>Đơn giá 1</th>
             <th>Mô tả</th>
             <th>VAT %</th>
-            <th>Ghi chú</th>
+            <th>Ghi chú sản phẩm</th>
             <th>Quy đổi</th>
           </tr>
         </thead>
@@ -1829,6 +1831,7 @@ function ProductPickerModal({ visible, products, search, onSearchChange, selecte
     if (currentPage > totalPages) setCurrentPage(1);
   }, [filteredProducts.length, pageSize, totalPages]);
   const pagedProducts = filteredProducts.slice((currentPage - 1) * pageSize, (currentPage - 1) * pageSize + pageSize);
+  const allPageSelected = pagedProducts.length > 0 && pagedProducts.every(p => selectedIds.includes(p.id));
 
   const openFilterPopup = (col, e) => {
     try {
@@ -1888,14 +1891,14 @@ function ProductPickerModal({ visible, products, search, onSearchChange, selecte
                   <th style={{width: 48, textAlign: 'left', paddingLeft: 10}}>
                     <input
                       type="checkbox"
-                      checked={allFilteredSelected}
+                      checked={allPageSelected}
                       onChange={(e) => {
-                        if (allFilteredSelected) {
-                          // unselect all filtered
-                          filteredProducts.forEach(p => { if (selectedIds.includes(p.id)) toggleSelect(p.id); });
+                        if (allPageSelected) {
+                          // unselect only items on current page
+                          pagedProducts.forEach(p => { if (selectedIds.includes(p.id)) toggleSelect(p.id); });
                         } else {
-                          // select all filtered
-                          filteredProducts.forEach(p => { if (!selectedIds.includes(p.id)) toggleSelect(p.id); });
+                          // select only items on current page (keep existing selections on other pages)
+                          pagedProducts.forEach(p => { if (!selectedIds.includes(p.id)) toggleSelect(p.id); });
                         }
                       }}
                     />
