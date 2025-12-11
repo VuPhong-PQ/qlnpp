@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
+import dayjs from 'dayjs';
 import './BusinessPage.css';
+import { Pagination } from '../common/Pagination';
 import { removeVietnameseTones } from '../../utils/searchUtils';
 
 const WarehouseTransfer = () => {
@@ -77,6 +79,17 @@ const WarehouseTransfer = () => {
     setSelectedTransfer(transfer);
   };
 
+  const handleDateChange = (isoDate) => {
+    // isoDate is yyyy-mm-dd from input[type=date]
+    const formatted = dayjs(isoDate).format('DD/MM/YYYY');
+    setSelectedTransfer(prev => {
+      if (!prev) return prev;
+      const updated = { ...prev, transferDate: formatted };
+      setTransfers(list => list.map(t => t.id === updated.id ? updated : t));
+      return updated;
+    });
+  };
+
   const handleDelete = (id, e) => {
     e.stopPropagation();
     if (window.confirm('Bạn có chắc chắn muốn xóa phiếu chuyển kho này?')) {
@@ -152,6 +165,10 @@ const WarehouseTransfer = () => {
     return selectedTransfer.items.reduce((total, item) => total + item.totalPrice, 0);
   };
 
+  // Pagination state for items table
+  const [itemsCurrentPage, setItemsCurrentPage] = useState(1);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+
   return (
     <div className="transfer-page">
       {/* Search Panel */}
@@ -160,28 +177,35 @@ const WarehouseTransfer = () => {
           <h2>TÌM KIẾM</h2>
         </div>
         
-        <div className="search-content">
-          <div className="search-section">
-            <div className="date-range-section">
+        <div className="search-content" style={{padding:'4px 6px 12px 4px'}}>
+          <div className="search-section" style={{display:'flex',gap:12,alignItems:'flex-start',marginTop:-6,marginLeft:0}}>
+            <div style={{flex:'0 0 40%',paddingLeft:0}}>
               <input
                 type="date"
                 className="date-input"
                 value={searchFromDate}
                 onChange={(e) => setSearchFromDate(e.target.value)}
                 placeholder="Từ ngày"
+                style={{width:'100%',height:40,boxSizing:'border-box',marginLeft:0}}
               />
+            </div>
+
+            <div style={{flex:'0 0 40%',paddingLeft:0}}>
               <input
                 type="date"
                 className="date-input"
                 value={searchToDate}
                 onChange={(e) => setSearchToDate(e.target.value)}
                 placeholder="Đến ngày"
+                style={{width:'100%',height:40,boxSizing:'border-box',marginLeft:0}}
               />
             </div>
-            
-            <button className="btn btn-primary search-btn">
-              <i className="fas fa-search"></i> Tìm kiếm
-            </button>
+
+            <div style={{flex:'0 0 20%', display:'flex', alignItems:'flex-start',paddingLeft:0}}>
+              <button className="btn btn-primary search-btn" style={{width:'100%',height:40,display:'flex',alignItems:'center',justifyContent:'center',padding:'0 12px',boxSizing:'border-box',marginTop:0}}>
+                <i className="fas fa-search"></i> Tìm kiếm
+              </button>
+            </div>
           </div>
 
           <div className="search-stats">
@@ -217,6 +241,7 @@ const WarehouseTransfer = () => {
                     title="Sửa"
                   >
                     <i className="fas fa-edit"></i>
+                    <span className="btn-label">Sửa</span>
                   </button>
                   <button 
                     className="btn-icon btn-delete"
@@ -224,6 +249,7 @@ const WarehouseTransfer = () => {
                     title="Xóa"
                   >
                     <i className="fas fa-trash"></i>
+                    <span className="btn-label">Xóa</span>
                   </button>
                 </div>
               </div>
@@ -258,28 +284,54 @@ const WarehouseTransfer = () => {
             <button className="btn btn-primary" onClick={openModal}>
               <i className="fas fa-plus"></i> Tạo mới
             </button>
-            <button className="btn btn-success import-btn">
-              <i className="fas fa-plus-circle"></i> Thêm hàng hóa
+            {/* Wider Add button with label 'Thêm' */}
+            <button className="btn import-btn" style={{minWidth:120, marginLeft:8}} onClick={handleAddItem}>
+              Thêm
             </button>
-            <button className="btn btn-info">
+            <button className="btn btn-info" style={{marginLeft:8}}>
               <i className="fas fa-history"></i> Xem lịch sử chuyển kho
+            </button>
+            {/* Small settings gear on header */}
+            <button className="icon-btn settings-small" title="Cài đặt" style={{marginLeft:8}}>
+              <i className="fas fa-cog"></i>
             </button>
           </div>
         </div>
 
         {selectedTransfer ? (
-          <div className="detail-content">
+          <div className="detail-content" style={{position: 'relative'}}>
             <div className="detail-form">
-              <div className="form-row">
-                <div className="form-group">
+              {/* Row 1: Ngày lập 25% | Kho nguồn 50% | Loại xuất 25% */}
+              <div className="form-row" style={{display:'flex',gap:12}}>
+                <div className="form-group" style={{flex:'0 0 25%'}}>
                   <label>Ngày lập <span className="required">*</span></label>
                   <input 
                     type="date" 
                     value={selectedTransfer.transferDate.split('/').reverse().join('-')}
-                    readOnly
+                    onChange={(e) => handleDateChange(e.target.value)}
                   />
                 </div>
-                <div className="form-group">
+                <div className="form-group" style={{flex:'0 0 50%'}}>
+                  <label>Kho nguồn <span className="required">*</span></label>
+                  <select value={selectedTransfer.sourceWarehouse}>
+                    <option>Kho chính</option>
+                    <option>Kho phụ</option>
+                    <option>Kho thành phẩm</option>
+                  </select>
+                </div>
+                <div className="form-group" style={{flex:'0 0 25%'}}>
+                  <label>Loại xuất <span className="required">*</span></label>
+                  <select value={selectedTransfer.exportType}>
+                    <option>Chuyển kho nội bộ</option>
+                    <option>Xuất bán</option>
+                    <option>Xuất hủy</option>
+                  </select>
+                </div>
+              </div>
+
+              {/* Row 2: Số phiếu 25% | Kho đích 50% | Loại nhập 25% */}
+              <div className="form-row" style={{display:'flex',gap:12,marginTop:8}}>
+                <div className="form-group" style={{flex:'0 0 25%'}}>
                   <label>Số phiếu <span className="required">*</span></label>
                   <div className="input-with-status">
                     <input 
@@ -290,18 +342,7 @@ const WarehouseTransfer = () => {
                     <span className="status-icon">✓</span>
                   </div>
                 </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Kho nguồn <span className="required">*</span></label>
-                  <select value={selectedTransfer.sourceWarehouse}>
-                    <option>Kho chính</option>
-                    <option>Kho phụ</option>
-                    <option>Kho thành phẩm</option>
-                  </select>
-                </div>
-                <div className="form-group">
+                <div className="form-group" style={{flex:'0 0 50%'}}>
                   <label>Kho đích <span className="required">*</span></label>
                   <select value={selectedTransfer.targetWarehouse}>
                     <option>Kho chính</option>
@@ -309,18 +350,7 @@ const WarehouseTransfer = () => {
                     <option>Kho thành phẩm</option>
                   </select>
                 </div>
-              </div>
-
-              <div className="form-row">
-                <div className="form-group">
-                  <label>Loại xuất <span className="required">*</span></label>
-                  <select value={selectedTransfer.exportType}>
-                    <option>Chuyển kho nội bộ</option>
-                    <option>Xuất bán</option>
-                    <option>Xuất hủy</option>
-                  </select>
-                </div>
-                <div className="form-group">
+                <div className="form-group" style={{flex:'0 0 25%'}}>
                   <label>Loại nhập <span className="required">*</span></label>
                   <select value={selectedTransfer.importType}>
                     <option>Nhập từ kho khác</option>
@@ -330,8 +360,9 @@ const WarehouseTransfer = () => {
                 </div>
               </div>
 
-              <div className="form-row">
-                <div className="form-group">
+              {/* Row 3: Nhân viên 25% | Ghi chú 75% */}
+              <div className="form-row" style={{display:'flex',gap:12,marginTop:8}}>
+                <div className="form-group" style={{flex:'0 0 25%'}}>
                   <label>Nhân viên</label>
                   <select value={selectedTransfer.employee}>
                     <option>admin 66</option>
@@ -339,7 +370,7 @@ const WarehouseTransfer = () => {
                     <option>Nhân viên B</option>
                   </select>
                 </div>
-                <div className="form-group">
+                <div className="form-group" style={{flex:'0 0 75%'}}>
                   <label>Ghi chú</label>
                   <input 
                     type="text" 
@@ -357,16 +388,7 @@ const WarehouseTransfer = () => {
                   <button className="icon-btn create-btn" onClick={handleAddItem} title="Thêm">
                     <i className="fas fa-plus"></i>
                   </button>
-                  <button className="icon-btn import-btn" onClick={handleImportExcel} title="Import Excel">
-                    <i className="fas fa-file-import"></i>
-                  </button>
-                  <button className="icon-btn export-btn" onClick={handleExportExcel} title="Export Excel">
-                    <i className="fas fa-file-export"></i>
-                  </button>
-                  <button className="icon-btn print-btn" onClick={handlePrint} title="In A4">
-                    <i className="fas fa-print"></i>
-                  </button>
-                  <button className="icon-btn settings-btn" title="Cài đặt">
+                  <button className="icon-btn settings-btn settings-small" title="Cài đặt">
                     <i className="fas fa-cog"></i>
                   </button>
                 </div>
@@ -391,37 +413,44 @@ const WarehouseTransfer = () => {
                   </thead>
                   <tbody>
                     {selectedTransfer.items && selectedTransfer.items.length > 0 ? (
-                      selectedTransfer.items.map(item => (
-                        <tr key={item.id}>
-                          <td>{item.barcode}</td>
-                          <td>{item.productCode}</td>
-                          <td>{item.productName}</td>
-                          <td>{item.unit}</td>
-                          <td>{item.description}</td>
-                          <td>{item.specification}</td>
-                          <td>{item.conversion}</td>
-                          <td>{item.quantity}</td>
-                          <td>{item.unitPrice.toLocaleString('vi-VN')}</td>
-                          <td>{item.totalPrice.toLocaleString('vi-VN')}</td>
-                          <td>
-                            <div className="action-buttons">
-                              <button 
-                                className="btn btn-small btn-secondary"
-                                onClick={() => handleEditItem(item.id)}
-                              >
-                                <i className="fas fa-edit"></i>
-                              </button>
-                              <button 
-                                className="btn btn-small btn-danger"
-                                onClick={() => handleDeleteItem(item.id)}
-                              >
-                                <i className="fas fa-trash"></i>
-                              </button>
-                            </div>
-                          </td>
-                        </tr>
-                      ))
-                    ) : (
+                        (() => {
+                          const items = selectedTransfer.items || [];
+                          const totalItems = items.length;
+                          const startIndex = (itemsCurrentPage - 1) * itemsPerPage;
+                          const endIndex = startIndex + itemsPerPage;
+                          const paginated = items.slice(startIndex, endIndex);
+                          return paginated.map(item => (
+                            <tr key={item.id}>
+                              <td>{item.barcode}</td>
+                              <td>{item.productCode}</td>
+                              <td>{item.productName}</td>
+                              <td>{item.unit}</td>
+                              <td>{item.description}</td>
+                              <td>{item.specification}</td>
+                              <td>{item.conversion}</td>
+                              <td>{item.quantity}</td>
+                              <td>{item.unitPrice.toLocaleString('vi-VN')}</td>
+                              <td>{item.totalPrice.toLocaleString('vi-VN')}</td>
+                              <td>
+                                <div className="action-buttons">
+                                  <button 
+                                    className="btn btn-small btn-secondary"
+                                    onClick={() => handleEditItem(item.id)}
+                                  >
+                                    <i className="fas fa-edit"></i>
+                                  </button>
+                                  <button 
+                                    className="btn btn-small btn-danger"
+                                    onClick={() => handleDeleteItem(item.id)}
+                                  >
+                                    <i className="fas fa-trash"></i>
+                                  </button>
+                                </div>
+                              </td>
+                            </tr>
+                          ));
+                        })()
+                      ) : (
                       <tr>
                         <td colSpan="11" className="no-data">
                           <div className="empty-state">
@@ -441,8 +470,21 @@ const WarehouseTransfer = () => {
                 </div>
                 <div>Không đồng</div>
               </div>
+              {/* Pagination - reuse common Pagination component (Products-like) */}
+              <div style={{marginTop:12}}>
+                <Pagination
+                  currentPage={itemsCurrentPage}
+                  setCurrentPage={(p) => { setItemsCurrentPage(p); }}
+                  itemsPerPage={itemsPerPage}
+                  setItemsPerPage={(s) => { setItemsPerPage(s); setItemsCurrentPage(1); }}
+                  totalItems={(selectedTransfer?.items || []).length}
+                  startIndex={Math.max(0, (itemsCurrentPage - 1) * itemsPerPage)}
+                  endIndex={Math.min((selectedTransfer?.items || []).length, (itemsCurrentPage) * itemsPerPage)}
+                />
+              </div>
 
-              <div className="detail-actions">
+              {/* bottom-right action buttons (moved here) */}
+              <div style={{position: 'absolute', right: 16, bottom: 16, display: 'flex', gap: 8}}>
                 <button className="btn btn-primary">
                   <i className="fas fa-save"></i> Lưu lại
                 </button>

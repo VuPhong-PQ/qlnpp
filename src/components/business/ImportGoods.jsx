@@ -35,7 +35,10 @@ const ImportGoods = () => {
     weight: 0,
     volume: 0,
     warehouse: '',
-    note: ''
+    note: '',
+    transportCost: 0,
+    totalTransport: 0,
+    noteDate: null
   });
 
   // Xử lý chuột phải trên bảng
@@ -70,7 +73,7 @@ const ImportGoods = () => {
 
   // Column visibility & header filters for left table
   const IMPORT_LEFT_COLS_KEY = 'import_goods_left_cols_v1';
-  const defaultLeftCols = ['checkbox','importNumber','createdDate','total','actions'];
+  const defaultLeftCols = ['checkbox','importNumber','createdDate','total','note','actions'];
   const [leftVisibleCols, setLeftVisibleCols] = useState(() => {
     try {
       const v = JSON.parse(localStorage.getItem(IMPORT_LEFT_COLS_KEY));
@@ -78,9 +81,9 @@ const ImportGoods = () => {
     } catch {}
     return defaultLeftCols;
   });
-  const [leftFilters, setLeftFilters] = useState({ importNumber: '', createdDate: '', total: '' });
+  const [leftFilters, setLeftFilters] = useState({ importNumber: '', createdDate: '', note: '', total: '' });
   // modal-based column filters (lists of selected values)
-  const [leftFilterLists, setLeftFilterLists] = useState({ importNumber: [], createdDate: [], total: [] });
+  const [leftFilterLists, setLeftFilterLists] = useState({ importNumber: [], createdDate: [], note: [], total: [] });
   const [activeHeaderModalColumn, setActiveHeaderModalColumn] = useState(null);
   const [modalSearchTerm, setModalSearchTerm] = useState('');
   const [modalSelections, setModalSelections] = useState([]);
@@ -99,7 +102,7 @@ const ImportGoods = () => {
 
   // Right-side columns & filters (for items table header filters)
   const RIGHT_COLS_KEY = 'import_goods_right_cols_v1';
-  const defaultRightCols = ['barcode','productCode','productName','description','specification','conversion','quantity','unitPrice','total','weight','volume','warehouse','actions'];
+  const defaultRightCols = ['barcode','productCode','productName','description','conversion','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','actions'];
   const [rightVisibleCols, setRightVisibleCols] = useState(() => {
     try {
       const v = JSON.parse(localStorage.getItem(RIGHT_COLS_KEY));
@@ -311,11 +314,13 @@ const ImportGoods = () => {
           productCode: it.productCode,
           productName: it.productName,
           description: it.description,
-          specification: it.specification,
           conversion: it.conversion,
           quantity: it.quantity,
           unitPrice: it.unitPrice,
+          transportCost: it.transportCost || 0,
+          noteDate: it.noteDate || null,
           total: it.total,
+          totalTransport: it.totalTransport || 0,
           weight: it.weight,
           volume: it.volume,
           warehouse: it.warehouse,
@@ -516,7 +521,7 @@ const ImportGoods = () => {
       unit2Name: '', unit2Conversion: 0, unit2Price: 0, unit2Discount: 0,
       unit3Name: '', unit3Conversion: 0, unit3Price: 0, unit3Discount: 0,
       unit4Name: '', unit4Conversion: 0, unit4Price: 0, unit4Discount: 0,
-      weight: 0, volume: 0, warehouse: '', note: ''
+      weight: 0, volume: 0, warehouse: '', note: '', transportCost: 0, totalTransport: 0, noteDate: null
     });
     setEditingItemIndex(null);
     setShowItemModal(true);
@@ -564,6 +569,7 @@ const ImportGoods = () => {
     let items = [];
     if (colKey === 'importNumber') items = Array.from(new Set(filteredImports.map(i => i.importNumber)));
     else if (colKey === 'createdDate') items = Array.from(new Set(filteredImports.map(i => i.createdDate)));
+    else if (colKey === 'note') items = Array.from(new Set(filteredImports.map(i => i.note || '')));
     else if (colKey === 'total') items = Array.from(new Set(filteredImports.map(i => String((i.items||[]).reduce((s,it)=>s+(it.total||0),0)))));
     setModalAvailableItems(items);
     setShowSearchModal(true);
@@ -625,6 +631,21 @@ const ImportGoods = () => {
       }
     },
     {
+      title: (
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <span>Ghi chú PN</span>
+          <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('note')} />
+          {leftFilterLists.note && leftFilterLists.note.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.note.length})</span>}
+        </div>
+      ),
+      dataIndex: 'note',
+      key: 'note',
+      render: (text) => (
+        <span style={{maxWidth:220,overflow:'hidden',textOverflow:'ellipsis'}} title={text}>{text}</span>
+      ),
+      sorter: (a, b) => (a.note || '').localeCompare(b.note || ''),
+    },
+    {
       title: 'Thao tác',
       key: 'actions',
       width: 100,
@@ -675,7 +696,6 @@ const ImportGoods = () => {
         <div className="search-panel-total" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span>Tổng {filteredLeft.length}</span>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <button style={{background:'#1677ff',color:'#fff',border:'none',borderRadius:6,padding:'6px 10px',cursor:'pointer'}} onClick={createNewImport}>+ Tạo mới</button>
             <button style={{background:'transparent',border:'none',cursor:'pointer'}} title="Cài đặt bảng" onClick={()=>setShowLeftSettings(true)}>⚙</button>
           </div>
         </div>
@@ -773,7 +793,7 @@ const ImportGoods = () => {
         >
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {defaultLeftCols.map(colKey=>{
-              const label = colKey==='checkbox'?'':(colKey==='importNumber'?'Số phiếu':colKey==='createdDate'?'Ngày nhập':colKey==='total'?'Tổng tiền':colKey==='actions'?'Thao tác':colKey);
+              const label = colKey==='checkbox'?'':(colKey==='importNumber'?'Số phiếu':colKey==='createdDate'?'Ngày nhập':colKey==='note'?'Ghi chú PN':colKey==='total'?'Tổng tiền':colKey==='actions'?'Thao tác':colKey);
               return (
                 <label key={colKey} style={{display:'flex',alignItems:'center',gap:8}}>
                   <input type="checkbox" checked={leftVisibleCols.includes(colKey)} onChange={()=>{
@@ -816,10 +836,17 @@ const ImportGoods = () => {
                 <div style={{display:'flex',gap:12}}>
                   <div style={{flex:'0 0 20%'}}>
                       <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Ngày lập</label>
-                      <input type="text" value={selectedImport?.createdDate ? dayjs(selectedImport.createdDate).format('DD/MM/YYYY') : ''} readOnly style={{width:'100%',cursor:'pointer'}} onClick={()=>{
-                        setDateDraft(selectedImport?.createdDate ? dayjs(selectedImport.createdDate) : dayjs());
-                        setShowDatePickerModal(true);
-                      }} />
+                      <input
+                        type="date"
+                        value={formData.createdDate || (selectedImport?.createdDate ? dayjs(selectedImport.createdDate).format('YYYY-MM-DD') : '')}
+                        onChange={(e) => {
+                          const v = e.target.value;
+                          setFormData(fd => ({ ...fd, createdDate: v }));
+                          setSelectedImport(si => si ? ({ ...si, createdDate: v }) : si);
+                          setIsEditing(true);
+                        }}
+                        style={{width:'100%'}}
+                      />
                   </div>
                   <div style={{flex:'0 0 20%'}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Nhân viên lập</label>
@@ -937,7 +964,9 @@ const ImportGoods = () => {
                           style={{width:'100%'}}
                           onClick={()=>{
                             const iso = dateDraft.format('YYYY-MM-DD');
-                            setSelectedImport(si => ({ ...si, createdDate: iso }));
+                            setSelectedImport(si => si ? ({ ...si, createdDate: iso }) : si);
+                            setFormData(fd => ({ ...fd, createdDate: iso }));
+                            setIsEditing(true);
                             setShowDatePickerModal(false);
                           }}>
                           OK
@@ -957,8 +986,18 @@ const ImportGoods = () => {
                     </div>
                   </div>
                   <div style={{flex:'1 1 70%'}}>
-                    <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú</label>
-                    <input type="text" value={selectedImport.note} readOnly style={{width:'100%'}} />
+                    <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú PN</label>
+                    <input
+                      type="text"
+                      value={formData.note !== undefined ? formData.note : (selectedImport.note || '')}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setFormData(fd => ({ ...fd, note: v }));
+                        setSelectedImport(si => si ? ({ ...si, note: v }) : si);
+                        setIsEditing(true);
+                      }}
+                      style={{width:'100%'}}
+                    />
                   </div>
                 </div>
               </div>
@@ -1003,11 +1042,13 @@ const ImportGoods = () => {
                         {renderHeaderFilterTH('productCode','Mã hàng','nhập mã hàng')}
                         {renderHeaderFilterTH('productName','Hàng hóa','nhập tên hàng')}
                         {renderHeaderFilterTH('description','Mô tả','nhập mô tả')}
-                        {renderHeaderFilterTH('specification','Quy cách','nhập quy cách')}
                         {renderHeaderFilterTH('conversion','Quy đổi','nhập quy đổi')}
                         {renderHeaderFilterTH('quantity','Số lượng','nhập số lượng')}
                         {renderHeaderFilterTH('unitPrice','Đơn giá','nhập đơn giá')}
+                        {renderHeaderFilterTH('transportCost','Tiền vận chuyển','nhập tiền vận chuyển')}
+                        {renderHeaderFilterTH('noteDate','Ghi chú (date)','nhập ghi chú (date)')}
                         {renderHeaderFilterTH('total','Thành tiền','nhập thành tiền')}
+                        {renderHeaderFilterTH('totalTransport','Thành tiền vận chuyển','nhập thành tiền vận chuyển')}
                         {renderHeaderFilterTH('weight','Số kg','nhập số kg')}
                         {renderHeaderFilterTH('volume','Số khối','nhập số khối')}
                         {renderHeaderFilterTH('warehouse','Kho hàng','nhập kho hàng')}
@@ -1022,11 +1063,13 @@ const ImportGoods = () => {
                             {rightVisibleCols.includes('productCode') && <td>{item.productCode}</td>}
                             {rightVisibleCols.includes('productName') && <td style={{maxWidth:220,overflow:'hidden',textOverflow:'ellipsis'}} title={item.productName}>{item.productName}</td>}
                             {rightVisibleCols.includes('description') && <td style={{maxWidth:240,overflow:'hidden',textOverflow:'ellipsis'}} title={item.description}>{item.description}</td>}
-                            {rightVisibleCols.includes('specification') && <td>{item.specification}</td>}
                             {rightVisibleCols.includes('conversion') && <td>{item.conversion}</td>}
                             {rightVisibleCols.includes('quantity') && <td>{item.quantity}</td>}
                             {rightVisibleCols.includes('unitPrice') && <td>{(item.unitPrice||0).toLocaleString('vi-VN')}</td>}
+                            {rightVisibleCols.includes('transportCost') && <td>{(item.transportCost||0).toLocaleString('vi-VN')}</td>}
+                            {rightVisibleCols.includes('noteDate') && <td>{item.noteDate ? dayjs(item.noteDate).format('DD/MM/YYYY') : ''}</td>}
                             {rightVisibleCols.includes('total') && <td>{(item.total||0).toLocaleString('vi-VN')}</td>}
+                            {rightVisibleCols.includes('totalTransport') && <td>{(item.totalTransport||0).toLocaleString('vi-VN')}</td>}
                             {rightVisibleCols.includes('weight') && <td>{item.weight}</td>}
                             {rightVisibleCols.includes('volume') && <td>{item.volume}</td>}
                             {rightVisibleCols.includes('warehouse') && <td>{item.warehouse}</td>}
@@ -1066,7 +1109,7 @@ const ImportGoods = () => {
               >
                 <div style={{display:'flex',flexDirection:'column',gap:8}}>
                   {defaultRightCols.map(colKey=>{
-                    const label = colKey==='barcode'?'Mã vạch':colKey==='productCode'?'Mã hàng':colKey==='productName'?'Hàng hóa':colKey==='description'?'Mô tả':colKey==='specification'?'Quy cách':colKey==='conversion'?'Quy đổi':colKey==='quantity'?'Số lượng':colKey==='unitPrice'?'Đơn giá':colKey==='total'?'Thành tiền':colKey==='weight'?'Số kg':colKey==='volume'?'Số khối':colKey==='warehouse'?'Kho hàng':colKey==='actions'?'Thao tác':colKey;
+                    const label = colKey==='barcode'?'Mã vạch':colKey==='productCode'?'Mã hàng':colKey==='productName'?'Hàng hóa':colKey==='description'?'Mô tả':colKey==='conversion'?'Quy đổi':colKey==='quantity'?'Số lượng':colKey==='unitPrice'?'Đơn giá':colKey==='transportCost'?'Tiền vận chuyển':colKey==='noteDate'?'Ghi chú (date)':colKey==='total'?'Thành tiền':colKey==='totalTransport'?'Thành tiền vận chuyển':colKey==='weight'?'Số kg':colKey==='volume'?'Số khối':colKey==='warehouse'?'Kho hàng':colKey==='actions'?'Thao tác':colKey;
                     return (
                       <label key={colKey} style={{display:'flex',alignItems:'center',gap:8}}>
                         <input type="checkbox" checked={rightVisibleCols.includes(colKey)} onChange={()=>{

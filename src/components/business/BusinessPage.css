@@ -282,6 +282,51 @@
   margin-bottom: 15px;
 }
 
+/* Compact variant for transfer detail to save vertical space */
+.transfer-detail-panel .detail-content .detail-form .form-row {
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.transfer-detail-panel .detail-content .form-group label {
+  margin-bottom: 4px;
+  font-size: 13px;
+}
+
+.transfer-detail-panel .detail-content .form-group input,
+.transfer-detail-panel .detail-content .form-group select,
+.transfer-detail-panel .detail-content .form-group textarea {
+  padding: 6px 10px;
+  font-size: 13px;
+}
+
+/* Make header action buttons smaller (approx 75% size) */
+.transfer-detail-panel .detail-header .header-actions .btn {
+  padding: 8px 14px;
+  font-size: 13px;
+}
+
+/* Slightly smaller icon buttons in items header */
+.transfer-detail-panel .items-header .items-actions .icon-btn {
+  width: 28px;
+  height: 28px;
+}
+
+/* Overrides for transfer detail: remove separator and tighten items area */
+.transfer-detail-panel .items-section {
+  border-top: none;
+  padding-top: 8px;
+}
+
+.transfer-detail-panel .items-table-container {
+  max-height: 220px;
+  overflow: auto;
+}
+
+.transfer-detail-panel .table-summary {
+  margin-top: 8px;
+}
+
 .form-group {
   flex: 1;
 }
@@ -1114,6 +1159,93 @@
 
 .btn-delete:hover {
   background-color: #f8d7da;
+}
+
+/* Transfer page: right-side header small icon buttons (Add / Settings) */
+.transfer-detail-panel .items-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 8px;
+}
+
+.transfer-detail-panel .items-header .items-actions {
+  margin-left: auto;
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.transfer-detail-panel .items-header .items-actions .icon-btn {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 6px;
+  font-size: 14px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.transfer-detail-panel .items-header .items-actions .create-btn {
+  background: #17a2b8;
+  color: white;
+}
+
+.transfer-detail-panel .items-header .items-actions .settings-btn {
+  background: transparent;
+  border: 1px solid #e9ecef;
+  color: #495057;
+}
+
+/* Small gear in detail header */
+.transfer-detail-panel .detail-header .settings-small {
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: transparent;
+  border: 1px solid #e9ecef;
+  color: #495057;
+  font-size: 16px;
+}
+
+.transfer-detail-panel .detail-header .import-btn {
+  background: #20a0ff;
+  color: white;
+  padding: 8px 18px;
+  font-size: 14px;
+}
+
+/* Left list edit/delete buttons compact style */
+.result-actions .btn-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px;
+  border-radius: 4px;
+  font-size: 13px;
+  color: #fff;
+}
+
+.result-actions .btn-edit {
+  background: #28a745;
+}
+
+.result-actions .btn-delete {
+  background: #dc3545;
+}
+
+.result-actions .btn-icon .btn-label {
+  display: inline-block;
+  line-height: 1;
+}
+
+.result-actions .btn-edit:hover, .result-actions .btn-delete:hover {
+  opacity: 0.95;
 }
 
 .search-pagination {

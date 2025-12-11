@@ -933,22 +933,25 @@ const getInitialRightCols = () => {
     const total = items.reduce((s, it) => s + (Number(it.price) || 0), 0);
 
     const css = `
-      /* A4 portrait */
-      @page { size: A4 portrait; margin: 18mm 12mm 12mm 12mm; }
-      body { font-family: 'Times New Roman', Times, serif; font-size: 11px; color: #000; }
-      .company { text-align: left; font-weight: 700; }
-      .title { text-align: center; font-size: 18px; font-weight: 700; margin: 6px 0 6px 0; }
-      .meta { margin-bottom: 8px; }
-      .meta td { padding: 2px 6px; }
-      table.items { width: 100%; border-collapse: collapse; margin-top: 6px; table-layout: fixed; }
-      table.items th, table.items td { border: 1px solid #000; padding: 6px; vertical-align: top; word-wrap: break-word; box-sizing: border-box; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
-      table.items th { background: #f5f5f5; font-weight: 700; }
+      /* A4 landscape - margins and sizes tuned to fit full table on one page */
+      @page { size: A4 landscape; margin: 6mm 6mm 6mm 6mm; }
+      html, body { height: 210mm; width: 297mm; margin: 0; padding: 0; }
+      body { font-family: 'Times New Roman', Times, serif; font-size: 12px; color: #000; box-sizing: border-box; }
+      .company { text-align: left; font-weight: 700; margin-bottom: 4px; }
+      .title { text-align: center; font-size: 17px; font-weight: 700; margin: 4px 0; }
+      .meta { margin-bottom: 6px; }
+      .meta td { padding: 2px 6px; font-size: 12px; }
+      table.items { width: 100%; border-collapse: collapse; margin-top: 6px; table-layout: fixed; font-size: 12px; }
+      table.items th, table.items td { border: 1px solid #000; padding: 3px; vertical-align: top; word-wrap: break-word; box-sizing: border-box; white-space: normal; overflow-wrap: anywhere; word-break: break-word; }
+      table.items th { background: #f5f5f5; font-weight: 700; padding: 3px; }
       .right { text-align: right; }
       .center { text-align: center; }
-      /* Column widths adjusted for portrait A4 */
-      .col-name { width: 220px; }
-      .col-desc { width: 120px; }
+      /* Column widths adjusted for A4 landscape */
+      .col-name { width: 260px; }
+      .col-desc { width: 200px; }
       tr { page-break-inside: avoid; }
+      /* Keep headers with table */
+      .company, .title, .meta { page-break-after: avoid; }
     `;
 
     // Reorder columns so 'description' is next to 'note' (at the end)
