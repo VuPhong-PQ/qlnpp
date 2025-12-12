@@ -198,6 +198,10 @@
   width: 100%;
   border-collapse: collapse;
 }
+.items-table {
+  /* Use fixed layout so column widths don't change based on content */
+  table-layout: fixed;
+}
 .items-table th, .items-table td {
   padding: 8px 10px;
   border-bottom: 1px solid #f5f5f5;
@@ -241,6 +245,14 @@
 }
 .items-table thead th { vertical-align: bottom; }
 
+/* Fix: set a consistent column width for header cells so inputs don't expand layout */
+.items-table thead th {
+  width: 140px !important;
+  min-width: 140px !important;
+  max-width: 140px !important;
+  box-sizing: border-box;
+}
+
 /* Make table headers sticky so labels stay fixed at top when scrolling */
 .items-table thead th,
 .table-scroll-x table thead th {
@@ -258,18 +270,51 @@
 }
 
 /* Ensure header dropdowns/inputs have uniform size */
-.items-table thead th .col-filter,
-.items-table thead th select,
-.items-table thead th input,
-.items-table thead th .ant-select,
-.items-table thead th .ant-input {
+ .items-table thead th .col-filter,
+ .items-table thead th select,
+ .items-table thead th input,
+ .items-table thead th .ant-select,
+ .items-table thead th .ant-input {
+   box-sizing: border-box;
+   width: 100% !important;
+   min-width: 0 !important;
+   max-width: 100% !important;
+   height: 34px !important;
+   padding: 4px 8px !important;
+   font-size: 13px !important;
+ }
+
+/* Header input rows (the extra input rows we render) should not expand columns */
+.items-table thead + tr.header-input-row td,
+.items-table .header-input-row td {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.items-table .header-input-row td .ant-select,
+.items-table .header-input-row td .ant-input,
+.items-table .header-input-row td input {
   box-sizing: border-box;
-  width: 160px !important;
-  min-width: 160px !important;
-  max-width: 160px !important;
-  height: 34px !important;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: 32px !important;
   padding: 4px 8px !important;
-  font-size: 13px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Prevent very long option labels from forcing cell expansion */
+.items-table .ant-select-selection-item,
+.items-table .ant-select-selection-placeholder {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
 }
 
 /* Tighter styling for Ant Design select inside header */

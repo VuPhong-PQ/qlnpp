@@ -107,6 +107,9 @@ const ImportGoods = () => {
   const [leftPage, setLeftPage] = useState(1);
   const [showLeftSettings, setShowLeftSettings] = useState(false);
   const [showRightSettings, setShowRightSettings] = useState(false);
+  const itemsTableRef = useRef(null);
+  const productSelectRefs = useRef({});
+  const [headerRows, setHeaderRows] = useState(() => [{ id: Date.now(), values: {} }]);
 
   // Right-side columns & filters (for items table header filters)
   const RIGHT_COLS_KEY = 'import_goods_right_cols_v1';
@@ -210,6 +213,7 @@ const ImportGoods = () => {
         <div style={{display:'flex',alignItems:'center',gap:8,flexDirection:'column'}}>
           <span style={{fontWeight: 'bold', marginBottom: '4px'}}>{label}</span>
           <Select 
+            ref={(el) => { productSelectRefs.current[colKey] = el; }}
             value={selectedProducts[colKey] || undefined} 
             onChange={(value) => handleProductSelect(colKey, value)}
             placeholder={`-- Chọn ${label.toLowerCase()} --`}
@@ -261,20 +265,23 @@ const ImportGoods = () => {
     if (productId && selectedImport) {
       const selectedProduct = products.find(p => p.id.toString() === productId);
       if (selectedProduct) {
+        // Work with the current right-side items (from selectedImport if present)
+        const currentRightItems = (selectedImport && selectedImport.items) ? selectedImport.items : items;
         // Check if product already exists in items
-        const existingItem = items.find(item => 
+        const existingItem = currentRightItems.find(item => 
           item.productCode === selectedProduct.code || 
           item.barcode === selectedProduct.barcode
         );
-        
+
         if (existingItem) {
           // If product already exists, just increase quantity
-          const updatedItems = items.map(item => 
+          const updatedItems = currentRightItems.map(item => 
             item.id === existingItem.id 
-              ? { ...item, quantity: (item.quantity || 1) + 1, total: (item.quantity + 1) * item.unitPrice }
+              ? { ...item, quantity: ((item.quantity || 1) + 1), total: ((item.quantity || 1) + 1) * (item.unitPrice || 0) }
               : item
           );
           setItems(updatedItems);
+          if (selectedImport) setSelectedImport(prev => ({ ...prev, items: updatedItems }));
         } else {
           // Add new item to the current import with complete product information
           const newItem = {
@@ -294,8 +301,53 @@ const ImportGoods = () => {
             volume: selectedProduct.volume || 0,
             warehouse: '',
           };
-          
-          setItems(prevItems => [...prevItems, newItem]);
+
+          // Prepare an empty row so user can continue entering next item immediately
+          const blankItem = {
+            id: Date.now() + Math.random() + 1,
+            barcode: '',
+            productCode: '',
+            productName: '',
+            description: '',
+            conversion: '',
+            quantity: '',
+            unitPrice: '',
+            transportCost: '',
+            noteDate: null,
+            total: '',
+            totalTransport: '',
+            weight: '',
+            volume: '',
+            warehouse: '',
+          };
+
+          // Append product row + blank row, then move pagination to show the new rows
+          const next = [...currentRightItems, newItem, blankItem];
+          setItems(next);
+          if (selectedImport) setSelectedImport(prev => ({ ...prev, items: next }));
+          // Move to last page so the new blank row is visible
+          setTimeout(() => {
+            try {
+              const lastPage = Math.max(1, Math.ceil(next.length / rightItemsPerPage));
+              setRightCurrentPage(lastPage);
+              // scroll the table container to end so new row is visible
+              setTimeout(() => {
+                try {
+                  if (itemsTableRef && itemsTableRef.current) {
+                    itemsTableRef.current.scrollLeft = itemsTableRef.current.scrollWidth;
+                    itemsTableRef.current.scrollTop = itemsTableRef.current.scrollHeight;
+                  }
+                } catch (e) {}
+              }, 120);
+              // focus the barcode header select so user can pick next product
+              setTimeout(() => {
+                try {
+                  const s = productSelectRefs.current && productSelectRefs.current['barcode'];
+                  if (s && typeof s.focus === 'function') s.focus();
+                } catch (e) {}
+              }, 600);
+            } catch (e) {}
+          }, 80);
         }
         
         // Clear all product dropdowns after adding item
@@ -339,6 +391,33 @@ const ImportGoods = () => {
         </div>
       </th>
     );
+  };
+
+  // Handle product selection in a header input row (rowIndex). If selecting in the last row, append a new blank header row.
+  const handleHeaderRowProductSelect = (rowIndex, colKey, productId) => {
+    setHeaderRows(prev => {
+      const copy = prev.map(r => ({ ...r, values: { ...r.values } }));
+      copy[rowIndex].values[colKey] = productId || '';
+      // also keep product id mirrored to other product-related keys for that row
+      if (productId) {
+        copy[rowIndex].values['productCode'] = productId;
+        copy[rowIndex].values['productName'] = productId;
+        copy[rowIndex].values['barcode'] = productId;
+      }
+      // if selecting in last row and a productId was chosen, append blank row
+      if (productId && rowIndex === copy.length - 1) {
+        copy.push({ id: Date.now() + Math.random(), values: {} });
+      }
+      return copy;
+    });
+  };
+
+  const handleHeaderRowChange = (rowIndex, colKey, value) => {
+    setHeaderRows(prev => {
+      const copy = prev.map(r => ({ ...r, values: { ...r.values } }));
+      copy[rowIndex].values[colKey] = value;
+      return copy;
+    });
   };
 
   // Handle warehouse selection
@@ -592,7 +671,8 @@ const ImportGoods = () => {
   }, [rightVisibleCols]);
 
   const rightPageSizeOptions = [10,20,50,100,200,500,1000,5000];
-  const itemsData = selectedImport?.items || [];
+  // Prefer local `items` state when present (we update it when adding rows), otherwise use selectedImport items
+  const itemsData = (items && items.length > 0) ? items : (selectedImport?.items || []);
 
   // apply per-column filters before pagination (ignore Vietnamese diacritics)
   const filteredRightItems = itemsData.filter(item => {
@@ -1459,7 +1539,7 @@ const ImportGoods = () => {
                   </div>
                 </div>
 
-                <div className="items-table-container">
+                <div className="items-table-container" ref={itemsTableRef}>
                   <div style={{margin: '12px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 14}}>
                     <div>{`Dòng ${rightStart}-${rightEnd} trên tổng ${rightTotal} dòng`}</div>
                     <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
@@ -1519,6 +1599,99 @@ const ImportGoods = () => {
                           </th>
                         )}
                       </tr>
+                      {/* Additional header input rows inserted under the main header */}
+                      {headerRows.map((row, rIdx) => (
+                        <tr key={row.id} className="header-input-row">
+                          {['barcode','productCode','productName','description','conversion','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','actions'].map(colKey => {
+                            if (colKey === 'actions') {
+                              if (!rightVisibleCols.includes('actions')) return null;
+                              return (
+                                <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
+                                  <div style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
+                                    {rIdx < headerRows.length - 1 && (
+                                      <button onClick={() => setHeaderRows(prev => prev.filter((_,i)=>i!==rIdx))} style={{padding:'4px 8px',fontSize:12}}>Xóa</button>
+                                    )}
+                                  </div>
+                                </td>
+                              );
+                            }
+
+                            // Product-related columns
+                            if (['productCode','productName','barcode'].includes(colKey)) {
+                              return (
+                                <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
+                                  <Select
+                                    value={row.values[colKey] || undefined}
+                                    onChange={(val) => handleHeaderRowProductSelect(rIdx, colKey, val)}
+                                    placeholder={`-- Chọn ${colKey} --`}
+                                    size="small"
+                                    showSearch
+                                    allowClear
+                                    style={{ width: '100%', minWidth: 120 }}
+                                    filterOption={(input, option) => {
+                                      const p = products.find(pp => pp.id.toString() === option.value);
+                                      if (!p) return false;
+                                      const txt = `${p.code||''} ${p.name||''} ${p.barcode||''}`.toLowerCase();
+                                      return txt.includes((input||'').toLowerCase());
+                                    }}
+                                  >
+                                    {products.map(p => (
+                                      <Select.Option key={p.id} value={p.id.toString()}>
+                                        {p.code} - {p.name}
+                                      </Select.Option>
+                                    ))}
+                                  </Select>
+                                </td>
+                              );
+                            }
+
+                            if (colKey === 'warehouse') {
+                              return (
+                                <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
+                                  <Select
+                                    value={row.values[colKey] || undefined}
+                                    onChange={(val) => handleHeaderRowChange(rIdx, colKey, val)}
+                                    placeholder="-- Chọn kho --"
+                                    size="small"
+                                    allowClear
+                                    style={{ width: '100%', minWidth: 120 }}
+                                  >
+                                    {warehouses.map(w => (
+                                      <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>
+                                    ))}
+                                  </Select>
+                                </td>
+                              );
+                            }
+
+                            if (colKey === 'noteDate') {
+                              return (
+                                <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
+                                  <DatePicker
+                                    value={row.values[colKey] ? dayjs(row.values[colKey]) : null}
+                                    onChange={(d) => handleHeaderRowChange(rIdx, colKey, d ? d.format('YYYY-MM-DD') : null)}
+                                    format="DD/MM/YYYY"
+                                    size="small"
+                                    style={{ width: '100%', minWidth: 120 }}
+                                  />
+                                </td>
+                              );
+                            }
+
+                            // Default: text / numeric inputs
+                            return (
+                              <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
+                                <Input
+                                  value={row.values[colKey] || ''}
+                                  onChange={(e) => handleHeaderRowChange(rIdx, colKey, e.target.value)}
+                                  size="small"
+                                  style={{ width: '100%', minWidth: 100 }}
+                                />
+                              </td>
+                            );
+                          })}
+                        </tr>
+                      ))}
                     </thead>
                     <tbody>
                       {paginatedItems?.length > 0 ? (
