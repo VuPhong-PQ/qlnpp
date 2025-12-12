@@ -2,11 +2,15 @@ import React, { useState, useRef } from 'react';
 import { Menu } from 'antd';
 import './BusinessPage.css';
 import './ImportGoods.css';
-import { Table, Button, Space, Popconfirm, Input, Modal, Popover, DatePicker } from 'antd';
+import { Table, Button, Space, Popconfirm, Input, Modal, Popover, DatePicker, Select } from 'antd';
 import ProductModal from '../common/ProductModal';
 import { SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
+import 'dayjs/locale/vi';
 import { removeVietnameseTones } from '../../utils/searchUtils';
+
+// Set Vietnamese locale for dayjs
+dayjs.locale('vi');
 
 const ImportGoods = () => {
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, record: null });
@@ -95,6 +99,10 @@ const ImportGoods = () => {
   // Core data state
   const [imports, setImports] = useState([]);
   const [items, setItems] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
+  const [selectedProducts, setSelectedProducts] = useState({});
+  const [selectedDates, setSelectedDates] = useState({});
   const [formData, setFormData] = useState({ importNumber: '', createdDate: new Date().toISOString().split('T')[0], employee: '', importType: '', totalWeight: 0, totalVolume: 0, note: '' });
   const [leftPage, setLeftPage] = useState(1);
   const [showLeftSettings, setShowLeftSettings] = useState(false);
@@ -117,6 +125,33 @@ const ImportGoods = () => {
   const [rightItemsPerPage, setRightItemsPerPage] = useState(10);
 
   const renderHeaderFilterTH = (colKey, label, placeholder) => {
+    // Check if this column should have product dropdown
+    const productColumns = ['productCode', 'productName', 'barcode'];
+    const warehouseColumns = ['warehouse'];
+    const numericColumns = ['quantity', 'unitPrice', 'transportCost', 'total', 'totalTransport', 'weight', 'volume', 'conversion'];
+    const textColumns = ['description'];
+    const dateColumns = ['noteDate'];
+    
+    if (productColumns.includes(colKey)) {
+      return renderProductDropdownTH(colKey, label);
+    }
+    
+    if (warehouseColumns.includes(colKey)) {
+      return renderWarehouseDropdownTH(colKey, label);
+    }
+    
+    if (dateColumns.includes(colKey)) {
+      return renderDatePickerTH(colKey, label);
+    }
+    
+    if (numericColumns.includes(colKey)) {
+      return renderNumericInputTH(colKey, label, placeholder);
+    }
+    
+    if (textColumns.includes(colKey)) {
+      return renderTextInputTH(colKey, label, placeholder);
+    }
+    
     return (
       <th key={colKey}>
         <div style={{display:'flex',alignItems:'center',gap:8}}>
@@ -155,9 +190,390 @@ const ImportGoods = () => {
     );
   };
 
-  // Load imports from backend on mount
+  // Render header with product dropdown
+  const renderProductDropdownTH = (colKey, label) => {
+    const getDisplayText = (product) => {
+      switch(colKey) {
+        case 'productCode': return product.code || 'N/A';
+        case 'productName': return product.name || 'N/A';
+        case 'barcode': return product.barcode || 'N/A';
+        default: return product.name || 'N/A';
+      }
+    };
+    
+    const getSearchText = (product) => {
+      return `${product.code || ''} - ${product.name || ''} - ${product.barcode || ''}`.toLowerCase();
+    };
+    
+    return (
+      <th key={colKey}>
+        <div style={{display:'flex',alignItems:'center',gap:8,flexDirection:'column'}}>
+          <span style={{fontWeight: 'bold', marginBottom: '4px'}}>{label}</span>
+          <Select 
+            value={selectedProducts[colKey] || undefined} 
+            onChange={(value) => handleProductSelect(colKey, value)}
+            placeholder={`-- Chọn ${label.toLowerCase()} --`}
+            style={{ 
+              width: '100%',
+              minWidth: '150px'
+            }}
+            size="small"
+            showSearch
+            allowClear
+            filterOption={(input, option) => {
+              const product = products.find(p => p.id.toString() === option.value);
+              if (!product) return false;
+              return getSearchText(product).includes(input.toLowerCase());
+            }}
+          >
+            {products.map(product => (
+              <Select.Option key={product.id} value={product.id}>
+                <div style={{ display: 'flex', flexDirection: 'column', fontSize: '11px' }}>
+                  <div style={{ fontWeight: 'bold' }}>{getDisplayText(product)}</div>
+                  {colKey !== 'productName' && (
+                    <div style={{ color: '#666', fontSize: '10px' }}>
+                      {product.name}
+                    </div>
+                  )}
+                </div>
+              </Select.Option>
+            ))}
+          </Select>
+        </div>
+      </th>
+    );
+  };
+
+  // Handle product selection from dropdown
+  const handleProductSelect = (colKey, productId) => {
+    // Update all product-related dropdowns to show the same selected product
+    if (productId) {
+      setSelectedProducts(prev => ({ 
+        ...prev, 
+        productCode: productId,
+        productName: productId, 
+        barcode: productId 
+      }));
+    } else {
+      setSelectedProducts(prev => ({ ...prev, [colKey]: productId }));
+    }
+    
+    if (productId && selectedImport) {
+      const selectedProduct = products.find(p => p.id.toString() === productId);
+      if (selectedProduct) {
+        // Check if product already exists in items
+        const existingItem = items.find(item => 
+          item.productCode === selectedProduct.code || 
+          item.barcode === selectedProduct.barcode
+        );
+        
+        if (existingItem) {
+          // If product already exists, just increase quantity
+          const updatedItems = items.map(item => 
+            item.id === existingItem.id 
+              ? { ...item, quantity: (item.quantity || 1) + 1, total: (item.quantity + 1) * item.unitPrice }
+              : item
+          );
+          setItems(updatedItems);
+        } else {
+          // Add new item to the current import with complete product information
+          const newItem = {
+            id: Date.now() + Math.random(),
+            barcode: selectedProduct.barcode || '',
+            productCode: selectedProduct.code || '',
+            productName: selectedProduct.name || '',
+            description: selectedProduct.description || '',
+            conversion: 1,
+            quantity: 1,
+            unitPrice: selectedProduct.importPrice || 0,
+            transportCost: 0,
+            noteDate: null,
+            total: selectedProduct.importPrice || 0,
+            totalTransport: 0,
+            weight: selectedProduct.weight || 0,
+            volume: selectedProduct.volume || 0,
+            warehouse: '',
+          };
+          
+          setItems(prevItems => [...prevItems, newItem]);
+        }
+        
+        // Clear all product dropdowns after adding item
+        setTimeout(() => {
+          setSelectedProducts(prev => ({ 
+            ...prev, 
+            productCode: '',
+            productName: '', 
+            barcode: '' 
+          }));
+        }, 500);
+      }
+    }
+  };
+
+  // Render warehouse dropdown
+  const renderWarehouseDropdownTH = (colKey, label) => {
+    return (
+      <th key={colKey}>
+        <div style={{display:'flex',alignItems:'center',gap:8,flexDirection:'column'}}>
+          <span>{label}</span>
+          <Select 
+            value={selectedProducts[colKey] || null}
+            onChange={(value) => handleWarehouseSelect(colKey, value)}
+            style={{ width: '100%', minWidth: '120px' }}
+            size="small"
+            placeholder="-- Chọn kho --"
+            allowClear
+          >
+            {warehouses.map(warehouse => (
+              <Select.Option key={warehouse.id} value={warehouse.id}>
+                <div style={{display:'flex', justifyContent:'space-between', alignItems:'center'}}>
+                  <span>{warehouse.name}</span>
+                  <span style={{fontSize: '11px', color: '#666', marginLeft: '8px'}}>
+                    {warehouse.code}
+                  </span>
+                </div>
+              </Select.Option>
+            ))}
+          </Select>
+        </div>
+      </th>
+    );
+  };
+
+  // Handle warehouse selection
+  const handleWarehouseSelect = (colKey, warehouseId) => {
+    setSelectedProducts(prev => ({ ...prev, [colKey]: warehouseId }));
+    
+    if (warehouseId && selectedImport) {
+      const selectedWarehouse = warehouses.find(w => w.id === warehouseId);
+      if (selectedWarehouse) {
+        // Update the last item or create new item with warehouse
+        const newItem = {
+          id: Date.now() + Math.random(),
+          barcode: '',
+          productCode: '',
+          productName: '',
+          description: '',
+          conversion: 1,
+          quantity: 1,
+          unitPrice: 0,
+          transportCost: 0,
+          noteDate: null,
+          total: 0,
+          totalTransport: 0,
+          weight: 0,
+          volume: 0,
+          warehouse: selectedWarehouse.name,
+        };
+        
+        setItems(prevItems => [...prevItems, newItem]);
+        
+        // Clear warehouse dropdown after selection
+        setTimeout(() => {
+          setSelectedProducts(prev => ({ ...prev, [colKey]: null }));
+        }, 500);
+      }
+    }
+  };
+
+  // Reset header inputs (clear dropdowns/filters in header)
+  const resetHeaderInputs = () => {
+    setSelectedProducts({});
+    setSelectedDates({});
+    setRightFilters({});
+    setRightFilterPopup({ column: null, term: '' });
+    setModalSearchTerm('');
+    setModalSelections([]);
+  };
+
+  // Render date picker for date fields
+  const renderDatePickerTH = (colKey, label) => {
+    return (
+      <th key={colKey}>
+        <div style={{display:'flex',alignItems:'center',gap:8,flexDirection:'column'}}>
+          <span>{label}</span>
+          <DatePicker 
+            value={selectedDates[colKey] ? dayjs(selectedDates[colKey]) : null}
+            onChange={(date) => handleDateSelect(colKey, date)}
+            style={{
+              width: '100%',
+              minWidth: '120px',
+              fontSize: '12px'
+            }}
+            format="DD/MM/YYYY"
+            placeholder="DD/MM/YYYY"
+            allowClear={false}
+            showToday={false}
+            size="small"
+            className="custom-date-picker"
+            popupClassName="custom-date-picker-dropdown"
+            renderExtraFooter={() => (
+              <div style={{
+                display: 'flex', 
+                justifyContent: 'space-between', 
+                padding: '8px 12px',
+                borderTop: '1px solid #f0f0f0',
+                backgroundColor: '#fafafa'
+              }}>
+                <span 
+                  onClick={() => {
+                    setSelectedDates(prev => ({ ...prev, [colKey]: null }));
+                  }} 
+                  style={{
+                    color: '#1677ff', 
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 'normal'
+                  }}
+                >
+                  Clear
+                </span>
+                <span 
+                  onClick={() => {
+                    const today = dayjs();
+                    setSelectedDates(prev => ({ ...prev, [colKey]: today.format('YYYY-MM-DD') }));
+                    handleDateSelect(colKey, today);
+                  }} 
+                  style={{
+                    color: '#1677ff', 
+                    cursor: 'pointer',
+                    fontSize: '14px',
+                    fontWeight: 'normal'
+                  }}
+                >
+                  Today
+                </span>
+              </div>
+            )}
+          />
+        </div>
+      </th>
+    );
+  };
+
+  // Handle date selection
+  const handleDateSelect = (colKey, date) => {
+    setSelectedDates(prev => ({ 
+      ...prev, 
+      [colKey]: date ? date.format('YYYY-MM-DD') : null 
+    }));
+    
+    if (date && selectedImport) {
+      const newItem = {
+        id: Date.now() + Math.random(),
+        barcode: '',
+        productCode: '',
+        productName: '',
+        description: '',
+        conversion: 1,
+        quantity: 1,
+        unitPrice: 0,
+        transportCost: 0,
+        noteDate: date.format('YYYY-MM-DD'),
+        total: 0,
+        totalTransport: 0,
+        weight: 0,
+        volume: 0,
+        warehouse: '',
+      };
+      
+      // Add new item to the current import
+      setItems(prevItems => [...prevItems, newItem]);
+    }
+  };
+
+  // Render numeric input for editable fields
+  const renderNumericInputTH = (colKey, label, placeholder) => {
+    return (
+      <th key={colKey}>
+        <div style={{display:'flex',alignItems:'center',gap:8,flexDirection:'column'}}>
+          <span>{label}</span>
+          <Input
+            placeholder={placeholder}
+            size="small"
+            style={{ width: '100%', minWidth: '100px' }}
+            type={['quantity', 'weight', 'volume', 'conversion'].includes(colKey) ? 'number' : 'text'}
+            onPressEnter={(e) => handleDirectInput(colKey, e.target.value)}
+          />
+        </div>
+      </th>
+    );
+  };
+
+  // Render text input for text fields  
+  const renderTextInputTH = (colKey, label, placeholder) => {
+    return (
+      <th key={colKey}>
+        <div style={{display:'flex',alignItems:'center',gap:8,flexDirection:'column'}}>
+          <span>{label}</span>
+          <Input
+            placeholder={placeholder}
+            size="small"
+            style={{ width: '100%', minWidth: '120px' }}
+            onPressEnter={(e) => handleTextInput(colKey, e.target.value)}
+          />
+        </div>
+      </th>
+    );
+  };
+
+  // Handle direct input for numeric fields
+  const handleDirectInput = (colKey, value) => {
+    if (value && selectedImport) {
+      const numValue = parseFloat(value) || 0;
+      const newItem = {
+        id: Date.now() + Math.random(),
+        barcode: '',
+        productCode: '',
+        productName: '',
+        description: '',
+        conversion: colKey === 'conversion' ? numValue : 1,
+        quantity: colKey === 'quantity' ? numValue : 1,
+        unitPrice: colKey === 'unitPrice' ? numValue : 0,
+        transportCost: colKey === 'transportCost' ? numValue : 0,
+        noteDate: null,
+        total: colKey === 'total' ? numValue : 0,
+        totalTransport: colKey === 'totalTransport' ? numValue : 0,
+        weight: colKey === 'weight' ? numValue : 0,
+        volume: colKey === 'volume' ? numValue : 0,
+        warehouse: '',
+      };
+      
+      setItems(prevItems => [...prevItems, newItem]);
+    }
+  };
+
+  // Handle text input for text fields
+  const handleTextInput = (colKey, value) => {
+    if (value && selectedImport) {
+      const newItem = {
+        id: Date.now() + Math.random(),
+        barcode: '',
+        productCode: '',
+        productName: '',
+        description: colKey === 'description' ? value : '',
+        conversion: 1,
+        quantity: 1,
+        unitPrice: 0,
+        transportCost: 0,
+        noteDate: null,
+        total: 0,
+        totalTransport: 0,
+        weight: 0,
+        volume: 0,
+        warehouse: '',
+      };
+      
+      setItems(prevItems => [...prevItems, newItem]);
+    }
+  };
+
+  // Load imports, products and warehouses from backend on mount
   React.useEffect(() => {
     loadImports();
+    loadProducts();
+    loadWarehouses();
   }, []);
 
   React.useEffect(() => {
@@ -240,6 +656,34 @@ const ImportGoods = () => {
       // fallback to existing sample data
       console.warn('Using local sample imports as fallback');
       // keep current `imports` state as fallback
+    }
+  };
+
+  // Load products list from backend
+  const loadProducts = async () => {
+    try {
+      const res = await fetch('/api/Products');
+      if (!res.ok) throw new Error('Failed to load products');
+      const data = await res.json();
+      setProducts(data || []);
+    } catch (err) {
+      console.error('Load products error', err);
+      // Keep empty array as fallback
+      setProducts([]);
+    }
+  };
+
+  // Load warehouses list from backend
+  const loadWarehouses = async () => {
+    try {
+      const res = await fetch('/api/Warehouses');
+      if (!res.ok) throw new Error('Failed to load warehouses');
+      const data = await res.json();
+      setWarehouses(data || []);
+    } catch (err) {
+      console.error('Load warehouses error', err);
+      // Keep empty array as fallback
+      setWarehouses([]);
     }
   };
 
@@ -1052,7 +1496,28 @@ const ImportGoods = () => {
                         {renderHeaderFilterTH('weight','Số kg','nhập số kg')}
                         {renderHeaderFilterTH('volume','Số khối','nhập số khối')}
                         {renderHeaderFilterTH('warehouse','Kho hàng','nhập kho hàng')}
-                        {rightVisibleCols.includes('actions') && <th>Thao tác</th>}
+                        {rightVisibleCols.includes('actions') && (
+                          <th key="actions">
+                            <div style={{display:'flex',alignItems:'center',gap:8,flexDirection:'column'}}>
+                              <span>Thao tác</span>
+                              <button
+                                className="btn-reset-header"
+                                onClick={() => resetHeaderInputs()}
+                                style={{
+                                  marginTop: 6,
+                                  padding: '6px 10px',
+                                  borderRadius: 6,
+                                  border: '1px solid #e6edf3',
+                                  background: '#fff',
+                                  cursor: 'pointer',
+                                  fontSize: 13
+                                }}
+                              >
+                                Xóa
+                              </button>
+                            </div>
+                          </th>
+                        )}
                       </tr>
                     </thead>
                     <tbody>
@@ -1074,9 +1539,19 @@ const ImportGoods = () => {
                             {rightVisibleCols.includes('volume') && <td>{item.volume}</td>}
                             {rightVisibleCols.includes('warehouse') && <td>{item.warehouse}</td>}
                             {rightVisibleCols.includes('actions') && <td>
-                              <div className="action-up-down">
-                                <button onClick={() => editItem((paginatedItems.indexOf(item) + (rightCurrentPage-1)*rightItemsPerPage))}>Sửa</button>
-                                <button>▼</button>
+                              <div className="action-up-down" style={{display:'flex',gap:'4px',alignItems:'center'}}>
+                                <button 
+                                  onClick={() => editItem((paginatedItems.indexOf(item) + (rightCurrentPage-1)*rightItemsPerPage))} 
+                                  style={{padding:'2px 8px',fontSize:'12px',backgroundColor:'#1677ff',color:'white',border:'none',borderRadius:'3px',cursor:'pointer'}}
+                                >
+                                  Sửa
+                                </button>
+                                <button 
+                                  onClick={() => deleteItem(paginatedItems.indexOf(item))} 
+                                  style={{padding:'2px 8px',fontSize:'12px',backgroundColor:'#ff4d4f',color:'white',border:'none',borderRadius:'3px',cursor:'pointer'}}
+                                >
+                                  Xóa
+                                </button>
                               </div>
                             </td>}
                           </tr>

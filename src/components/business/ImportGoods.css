@@ -7,6 +7,143 @@
   min-height: 100vh;
 }
 
+/* Custom DatePicker Calendar Grid Styles */
+.custom-date-picker-dropdown .ant-picker-dropdown,
+.ant-picker-dropdown.custom-date-picker-dropdown {
+  z-index: 9999 !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-date-panel .ant-picker-body,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-date-panel .ant-picker-body {
+  padding: 8px !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-content table,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content table {
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 2px !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-content thead,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content thead {
+  display: table-header-group !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-content thead tr,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content thead tr {
+  display: table-row !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-content thead th,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content thead th {
+  display: table-cell !important;
+  width: 32px !important;
+  height: 24px !important;
+  line-height: 24px !important;
+  text-align: center !important;
+  padding: 0 !important;
+  font-size: 12px !important;
+  color: #666 !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-content tbody,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content tbody {
+  display: table-row-group !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-content tbody tr,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content tbody tr {
+  display: table-row !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-content tbody td,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content tbody td {
+  display: table-cell !important;
+  width: 32px !important;
+  height: 32px !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  padding: 0 !important;
+  cursor: pointer !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-cell-inner,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-cell-inner {
+  display: inline-block !important;
+  width: 24px !important;
+  height: 24px !important;
+  line-height: 24px !important;
+  text-align: center !important;
+  border-radius: 4px !important;
+  margin: 0 auto !important;
+  transition: all 0.2s !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-cell:hover .ant-picker-cell-inner,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-cell:hover .ant-picker-cell-inner {
+  background-color: #f0f8ff !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-cell-selected .ant-picker-cell-inner,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-cell-selected .ant-picker-cell-inner {
+  background-color: #1677ff !important;
+  color: #fff !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-cell-today .ant-picker-cell-inner,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-cell-today .ant-picker-cell-inner {
+  border: 1px solid #1677ff !important;
+}
+
+/* Remove any list-style display */
+.custom-date-picker-dropdown .ant-picker-content,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content {
+  display: block !important;
+}
+
+.custom-date-picker .ant-picker-cell-inner {
+  display: inline-block !important;
+  width: 24px !important;
+  height: 24px !important;
+  line-height: 24px !important;
+  text-align: center !important;
+  margin: 0 !important;
+}
+
+.custom-date-picker .ant-picker-content {
+  display: grid !important;
+  grid-template-columns: repeat(7, 1fr) !important;
+  grid-gap: 2px !important;
+  width: auto !important;
+}
+
+.custom-date-picker .ant-picker-content thead th {
+  display: grid !important;
+  grid-column: span 1 !important;
+  text-align: center !important;
+  padding: 4px !important;
+}
+
+.custom-date-picker .ant-picker-content tbody {
+  display: contents !important;
+}
+
+.custom-date-picker .ant-picker-content tbody tr {
+  display: contents !important;
+}
+
+.custom-date-picker .ant-picker-content tbody tr td {
+  display: grid !important;
+  grid-column: span 1 !important;
+  text-align: center !important;
+  padding: 2px !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-dropdown {
+  z-index: 9999 !important;
+}
+
 .search-panel {
   flex: 0 0 30%;
   max-width: 30%;
@@ -103,6 +240,66 @@
   pointer-events: none;
 }
 .items-table thead th { vertical-align: bottom; }
+
+/* Make table headers sticky so labels stay fixed at top when scrolling */
+.items-table thead th,
+.table-scroll-x table thead th {
+  position: sticky;
+  top: 0;
+  background: #ffffff; /* match table background */
+  z-index: 50;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+}
+
+/* Slightly higher z-index for the very first header cells to overlay any action buttons */
+.items-table thead th:first-child,
+.table-scroll-x table thead th:first-child {
+  z-index: 55;
+}
+
+/* Ensure header dropdowns/inputs have uniform size */
+.items-table thead th .col-filter,
+.items-table thead th select,
+.items-table thead th input,
+.items-table thead th .ant-select,
+.items-table thead th .ant-input {
+  box-sizing: border-box;
+  width: 160px !important;
+  min-width: 160px !important;
+  max-width: 160px !important;
+  height: 34px !important;
+  padding: 4px 8px !important;
+  font-size: 13px !important;
+}
+
+/* Tighter styling for Ant Design select inside header */
+.items-table thead th .ant-select .ant-select-selector {
+  height: 34px !important;
+  line-height: 24px !important;
+  padding: 4px 8px !important;
+}
+
+/* Make native select options not overflow */
+.items-table thead th select {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* small reset button in header */
+.btn-reset-header {
+  display: inline-block;
+  background: #fff;
+  border: 1px solid #e6edf3;
+  color: #333;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.btn-reset-header:hover {
+  background: #f5f7fa;
+}
 
 /* Popover content inside modal: constrain width and ensure wrapping */
 .ant-popover {
