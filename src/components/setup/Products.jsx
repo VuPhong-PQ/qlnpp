@@ -41,6 +41,16 @@ const Products = () => {
     fetchUnits();
   }, []);
 
+  // Auto-open modal if URL has openModal parameter
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get('openModal') === 'true') {
+      setShowModal(true);
+      // Clean up URL
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, []);
+
   // Check for selected products from search modal
   useEffect(() => {
     const selectedIds = localStorage.getItem('selectedProductIds');

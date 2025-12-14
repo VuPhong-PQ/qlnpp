@@ -16,19 +16,19 @@ namespace QlnppApi.Models
         public Import? Import { get; set; }
 
         [MaxLength(200)]
-        public string Barcode { get; set; }
+        public string Barcode { get; set; } = string.Empty;
 
         [MaxLength(200)]
-        public string ProductCode { get; set; }
+        public string ProductCode { get; set; } = string.Empty;
 
         [MaxLength(500)]
-        public string ProductName { get; set; }
+        public string ProductName { get; set; } = string.Empty;
 
         [MaxLength(1000)]
-        public string Description { get; set; }
+        public string Description { get; set; } = string.Empty;
 
         [MaxLength(100)]
-        public string Specification { get; set; }
+        public string Specification { get; set; } = string.Empty;
 
         [Column(TypeName = "decimal(18,4)")]
         public decimal? Conversion { get; set; }
@@ -49,9 +49,9 @@ namespace QlnppApi.Models
         public decimal? Volume { get; set; }
 
         [MaxLength(200)]
-        public string Warehouse { get; set; }
+        public string Warehouse { get; set; } = string.Empty;
 
         [MaxLength(1000)]
-        public string Note { get; set; }
+        public string Note { get; set; } = string.Empty;
     }
 }

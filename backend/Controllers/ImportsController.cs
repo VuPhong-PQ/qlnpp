@@ -47,17 +47,69 @@ namespace QlnppApi.Controllers
         [HttpPost]
         public async Task<ActionResult<Import>> Post(Import model)
         {
-            if (!ModelState.IsValid) return BadRequest(ModelState);
-            if (model.Items != null)
+            try
             {
-                foreach (var it in model.Items)
+                if (!ModelState.IsValid) 
                 {
-                    it.Id = 0;
+                    return BadRequest(ModelState);
                 }
+
+                // Set default values if missing
+                if (string.IsNullOrEmpty(model.ImportNumber))
+                {
+                    model.ImportNumber = GenerateImportNumber();
+                }
+
+                if (string.IsNullOrEmpty(model.Employee))
+                {
+                    model.Employee = "System";
+                }
+
+                if (string.IsNullOrEmpty(model.Note))
+                {
+                    model.Note = "";
+                }
+
+                // Process items
+                if (model.Items != null)
+                {
+                    foreach (var it in model.Items)
+                    {
+                        it.Id = 0;
+                        it.ImportId = 0; // Will be set automatically
+                        
+                        // Set default values for required string fields
+                        if (string.IsNullOrEmpty(it.Barcode)) it.Barcode = "";
+                        if (string.IsNullOrEmpty(it.ProductCode)) it.ProductCode = "";
+                        if (string.IsNullOrEmpty(it.ProductName)) it.ProductName = "";
+                        if (string.IsNullOrEmpty(it.Description)) it.Description = "";
+                        if (string.IsNullOrEmpty(it.Specification)) it.Specification = "";
+                        if (string.IsNullOrEmpty(it.Warehouse)) it.Warehouse = "";
+                        if (string.IsNullOrEmpty(it.Note)) it.Note = "";
+                    }
+                }
+
+                _context.Imports.Add(model);
+                await _context.SaveChangesAsync();
+                
+                // Reload with items to return complete object
+                var created = await _context.Imports.Include(i => i.Items).FirstOrDefaultAsync(i => i.Id == model.Id);
+                return CreatedAtAction(nameof(Get), new { id = model.Id }, created);
             }
-            _context.Imports.Add(model);
-            await _context.SaveChangesAsync();
-            return CreatedAtAction(nameof(Get), new { id = model.Id }, model);
+            catch (Exception ex)
+            {
+                return Problem(detail: ex.ToString(), title: "Create import error");
+            }
+        }
+
+        private string GenerateImportNumber()
+        {
+            var today = DateTime.Now;
+            var year = today.Year.ToString().Substring(2);
+            var month = today.Month.ToString("00");
+            var day = today.Day.ToString("00");
+            var count = _context.Imports.Count() + 1;
+            return $"PN{year}{month}{day}-{count:000000}";
         }
 
         // PUT: api/Imports/5

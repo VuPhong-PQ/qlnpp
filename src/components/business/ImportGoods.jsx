@@ -101,6 +101,7 @@ const ImportGoods = () => {
   const [items, setItems] = useState([]);
   const [products, setProducts] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
+  const [transactionContents, setTransactionContents] = useState([]);
   const [selectedProducts, setSelectedProducts] = useState({});
   const [selectedDates, setSelectedDates] = useState({});
   const [formData, setFormData] = useState({ importNumber: '', createdDate: new Date().toISOString().split('T')[0], employee: '', importType: '', totalWeight: 0, totalVolume: 0, note: '' });
@@ -110,6 +111,135 @@ const ImportGoods = () => {
   const itemsTableRef = useRef(null);
   const productSelectRefs = useRef({});
   const [headerRows, setHeaderRows] = useState(() => [{ id: Date.now(), values: {} }]);
+
+  // Helper function to calculate totals from items
+  const calculateTotals = (itemsList) => {
+    return itemsList.reduce((totals, item) => {
+      const quantity = parseFloat(item.quantity) || 0;
+      const weight = parseFloat(item.weight) || 0; 
+      const volume = parseFloat(item.volume) || 0;
+      const unitPrice = parseFloat(item.unitPrice) || 0;
+      const transportCost = parseFloat(item.transportCost) || 0;
+      
+      return {
+        totalWeight: Math.round((totals.totalWeight + weight) * 100) / 100, // Round to 2 decimal places
+        totalVolume: Math.round((totals.totalVolume + volume) * 10000) / 10000, // Round to 4 decimal places
+        totalAmount: totals.totalAmount + (quantity * unitPrice),
+        totalTransport: totals.totalTransport + (transportCost * quantity)
+      };
+    }, { totalWeight: 0, totalVolume: 0, totalAmount: 0, totalTransport: 0 });
+  };
+
+  // Helper function to format currency (with comma separators)
+  const formatCurrency = (amount) => {
+    if (amount === null || amount === undefined || amount === '') return '0';
+    const num = Number(amount) || 0;
+    return new Intl.NumberFormat('vi-VN').format(num);
+  };
+
+  // Helper function to format weight (2 decimal places)
+  const formatWeight = (weight) => {
+    if (weight === null || weight === undefined || weight === '') return '0.00';
+    const num = Number(weight) || 0;
+    return num.toFixed(2);
+  };
+
+  // Helper function to format volume (4 decimal places)
+  const formatVolume = (volume) => {
+    if (volume === null || volume === undefined || volume === '') return '0.0000';
+    const num = Number(volume) || 0;
+    return num.toFixed(4);
+  };
+
+  // Helper function to format input value for display
+  const formatInputDisplay = (value, type) => {
+    if (!value || value === '') return '';
+    
+    switch (type) {
+      case 'currency':
+        return formatCurrency(value);
+      case 'weight':
+        return formatWeight(value);
+      case 'volume':
+        return formatVolume(value);
+      case 'number':
+        return value.toString();
+      default:
+        return value;
+    }
+  };
+
+  // Helper function to parse display value back to number
+  const parseDisplayValue = (displayValue) => {
+    if (!displayValue || displayValue === '') return '';
+    // Remove commas and parse as number
+    return displayValue.toString().replace(/,/g, '');
+  };
+
+  // Helper function to convert number to Vietnamese text
+  const numberToVietnameseText = (num) => {
+    if (!num || num === 0) return 'không đồng';
+    
+    const ones = ['', 'một', 'hai', 'ba', 'bốn', 'năm', 'sáu', 'bảy', 'tám', 'chín'];
+    const tens = ['', '', 'hai mươi', 'ba mươi', 'bốn mươi', 'năm mươi', 'sáu mươi', 'bảy mươi', 'tám mươi', 'chín mươi'];
+    const scales = ['', 'nghìn', 'triệu', 'tỷ'];
+
+    if (num < 0) return 'âm ' + numberToVietnameseText(-num);
+    if (num === 0) return 'không';
+
+    const convertHundreds = (n) => {
+      let result = '';
+      const hundreds = Math.floor(n / 100);
+      const remainder = n % 100;
+      
+      if (hundreds > 0) {
+        result += ones[hundreds] + ' trăm';
+        if (remainder > 0) result += ' ';
+      }
+      
+      if (remainder >= 20) {
+        const tensDigit = Math.floor(remainder / 10);
+        const onesDigit = remainder % 10;
+        result += tens[tensDigit];
+        if (onesDigit > 0) {
+          result += ' ' + ones[onesDigit];
+        }
+      } else if (remainder >= 10) {
+        if (remainder === 10) {
+          result += 'mười';
+        } else {
+          result += 'mười ' + ones[remainder - 10];
+        }
+      } else if (remainder > 0) {
+        if (hundreds > 0) {
+          result += 'lẻ ' + ones[remainder];
+        } else {
+          result += ones[remainder];
+        }
+      }
+      
+      return result;
+    };
+
+    let result = '';
+    let scaleIndex = 0;
+    
+    while (num > 0) {
+      const chunk = num % 1000;
+      if (chunk !== 0) {
+        const chunkText = convertHundreds(chunk);
+        if (scaleIndex > 0) {
+          result = chunkText + ' ' + scales[scaleIndex] + (result ? ' ' + result : '');
+        } else {
+          result = chunkText;
+        }
+      }
+      num = Math.floor(num / 1000);
+      scaleIndex++;
+    }
+    
+    return result + ' đồng';
+  };
 
   // Helper function to format product option labels
   const getProductOptionLabel = (product) => {
@@ -293,7 +423,7 @@ const ImportGoods = () => {
             productCode: selectedProduct.code || '',
             productName: selectedProduct.name || '',
             description: selectedProduct.description || '',
-            conversion: 1,
+            conversion: selectedProduct.conversion1 || 1,
             quantity: 1,
             unitPrice: selectedProduct.importPrice || 0,
             transportCost: 0,
@@ -408,6 +538,20 @@ const ImportGoods = () => {
         copy[rowIndex].values['productCode'] = selectedProduct.code || '';
         copy[rowIndex].values['productName'] = selectedProduct.name || '';
         copy[rowIndex].values['barcode'] = selectedProduct.barcode || '';
+        copy[rowIndex].values['description'] = selectedProduct.description || '';
+        copy[rowIndex].values['conversion'] = selectedProduct.conversion1 || 1;
+        copy[rowIndex].values['unitPrice'] = selectedProduct.importPrice || 0;
+        copy[rowIndex].values['weight'] = selectedProduct.weight || 0;
+        copy[rowIndex].values['volume'] = selectedProduct.volume || 0;
+        
+        // Auto-calculate initial totals
+        const quantity = parseFloat(copy[rowIndex].values.quantity) || 1;
+        const unitPrice = parseFloat(selectedProduct.importPrice) || 0;
+        const transportCost = parseFloat(copy[rowIndex].values.transportCost) || 0;
+        
+        copy[rowIndex].values.total = (quantity * unitPrice).toString();
+        copy[rowIndex].values.totalTransport = (quantity * transportCost).toString();
+        
         // Also store the productId for the specific column clicked
         copy[rowIndex].values[colKey + '_id'] = productId;
       } else {
@@ -426,6 +570,19 @@ const ImportGoods = () => {
     setHeaderRows(prev => {
       const copy = prev.map(r => ({ ...r, values: { ...r.values } }));
       copy[rowIndex].values[colKey] = value;
+      
+      // Auto-calculate dependent fields
+      const row = copy[rowIndex].values;
+      const quantity = parseFloat(row.quantity) || 0;
+      const unitPrice = parseFloat(row.unitPrice) || 0;
+      const transportCost = parseFloat(row.transportCost) || 0;
+      const weight = parseFloat(row.weight) || 0;
+      const volume = parseFloat(row.volume) || 0;
+      
+      // Calculate totals and store as raw numbers (they will be formatted for display)
+      copy[rowIndex].values.total = (quantity * unitPrice).toString();
+      copy[rowIndex].values.totalTransport = (quantity * transportCost).toString();
+      
       return copy;
     });
   };
@@ -663,6 +820,7 @@ const ImportGoods = () => {
     loadImports();
     loadProducts();
     loadWarehouses();
+    loadTransactionContents();
   }, []);
 
   React.useEffect(() => {
@@ -774,6 +932,22 @@ const ImportGoods = () => {
       console.error('Load warehouses error', err);
       // Keep empty array as fallback
       setWarehouses([]);
+    }
+  };
+
+  // Load transaction contents list from backend
+  const loadTransactionContents = async () => {
+    try {
+      const res = await fetch('/api/TransactionContents');
+      if (!res.ok) throw new Error('Failed to load transaction contents');
+      const data = await res.json();
+      // Filter only "Nhập" type
+      const importTypes = data.filter(tc => tc.type === 'Nhập' && tc.status === 'active');
+      setTransactionContents(importTypes || []);
+    } catch (err) {
+      console.error('Load transaction contents error', err);
+      // Keep empty array as fallback
+      setTransactionContents([]);
     }
   };
 
@@ -971,6 +1145,14 @@ const ImportGoods = () => {
     setShowItemModal(true);
   };
 
+  const deleteItem = (idx) => {
+    if (!window.confirm('Bạn có chắc chắn muốn xóa hàng hóa này?')) return;
+    const updatedItems = items.filter((_, index) => index !== idx);
+    setItems(updatedItems);
+    if (selectedImport) setSelectedImport(prev => ({ ...prev, items: updatedItems }));
+    setIsEditing(true);
+  };
+
   const filteredImports = imports.filter(importItem => {
     const normalizedSearch = removeVietnameseTones(searchTerm.toLowerCase());
     const normalizedNumber = removeVietnameseTones(importItem.importNumber.toLowerCase());
@@ -1046,19 +1228,15 @@ const ImportGoods = () => {
     alert('Chức năng in A4 đang được phát triển');
   };
 
-  const handleAddItem = () => {
-    // open item modal for creating a new item
-    setItemForm({
-      category: '', barcode: '', productCode: '', productName: '', productNameVat: '', description: '', hsdMonths: 0,
-      defaultUnit: '', priceImport: 0, priceRetail: 0, priceWholesale: 0,
-      unit1Name: '', unit1Conversion: 0, unit1Price: 0, unit1Discount: 0,
-      unit2Name: '', unit2Conversion: 0, unit2Price: 0, unit2Discount: 0,
-      unit3Name: '', unit3Conversion: 0, unit3Price: 0, unit3Discount: 0,
-      unit4Name: '', unit4Conversion: 0, unit4Price: 0, unit4Discount: 0,
-      weight: 0, volume: 0, warehouse: '', note: '', transportCost: 0, totalTransport: 0, noteDate: null
-    });
-    setEditingItemIndex(null);
-    setShowItemModal(true);
+  const handleAddItem = (event) => {
+    // Check if Ctrl key is pressed
+    if (event && (event.ctrlKey || event.metaKey)) {
+      // Open in new tab
+      window.open('/setup/products?openModal=true', '_blank');
+    } else {
+      // Navigate in current tab
+      window.location.href = '/setup/products?openModal=true';
+    }
   };
 
   const handleViewHistory = () => {
@@ -1067,6 +1245,93 @@ const ImportGoods = () => {
 
   const openModal = () => {
     setShowModal(true);
+  };
+
+  const handleCreateNewImport = async () => {
+    try {
+      // Validate that we have selected products
+      const selectedHeaderRows = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode);
+      if (selectedHeaderRows.length === 0) {
+        alert('Vui lòng chọn ít nhất một sản phẩm trước khi tạo phiếu nhập.');
+        return;
+      }
+
+      // Create import items from header rows
+      const items = selectedHeaderRows.map(row => ({
+        barcode: row.values.barcode || '',
+        productCode: row.values.productCode || '',
+        productName: row.values.productName || '',
+        description: row.values.description || '',
+        conversion: parseFloat(row.values.conversion) || 1,
+        quantity: parseFloat(row.values.quantity) || 1,
+        unitPrice: parseFloat(row.values.unitPrice) || 0,
+        total: parseFloat(row.values.total) || 0,
+        weight: parseFloat(row.values.weight) || 0,
+        volume: parseFloat(row.values.volume) || 0,
+        warehouse: row.values.warehouse || '',
+        note: row.values.noteDate || ''
+      }));
+
+      // Calculate total amount
+      const totalAmount = items.reduce((sum, item) => sum + (item.total || 0), 0);
+
+      // Create import object with proper date format
+      const importDate = formData.createdDate || new Date().toISOString().split('T')[0];
+      const newImport = {
+        importNumber: formData.importNumber || generateImportNumber(),
+        date: new Date(importDate).toISOString(), // Convert to proper ISO format
+        employee: formData.employee || '',
+        note: formData.note || '',
+        total: totalAmount,
+        items: items
+      };
+
+      // Submit to API
+      const response = await fetch('/api/Imports', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(newImport)
+      });
+
+      if (!response.ok) {
+        let errorMessage = 'Failed to create import';
+        try {
+          const errorData = await response.text();
+          console.error('Backend error:', errorData);
+          errorMessage += ': ' + errorData;
+        } catch (e) {
+          errorMessage += ': HTTP ' + response.status;
+        }
+        throw new Error(errorMessage);
+      }
+
+      const createdImport = await response.json();
+      
+      // Reload imports list and select the new one
+      await loadImports();
+      
+      // Find and select the newly created import
+      const refreshedImports = await fetch('/api/Imports').then(res => res.json());
+      const newlyCreated = refreshedImports.find(imp => imp.id === createdImport.id);
+      if (newlyCreated) {
+        setSelectedImport(newlyCreated);
+        await loadImportDetails(newlyCreated.id);
+      }
+
+      // Reset header rows
+      setHeaderRows([{ id: Date.now(), values: {} }]);
+      
+      // Close modal
+      setShowModal(false);
+      
+      alert('Tạo phiếu nhập thành công!');
+      
+    } catch (error) {
+      console.error('Error creating import:', error);
+      alert('Có lỗi xảy ra khi tạo phiếu nhập: ' + error.message);
+    }
   };
 
   const generateImportNumber = () => {
@@ -1355,7 +1620,7 @@ const ImportGoods = () => {
                 <button className="btn btn-primary" onClick={openModal}>
                   + Tạo mới
                 </button>
-                <button className="btn btn-success" onClick={handleAddItem}>
+                <button className="btn btn-success" onClick={handleAddItem} title="Click để thêm hàng hóa | Ctrl+Click để mở tab mới">
                   📦 Thêm hàng hóa
                 </button>
                 <button className="btn btn-info" onClick={handleViewHistory}>
@@ -1390,17 +1655,67 @@ const ImportGoods = () => {
                   </div>
                   <div style={{flex:'0 0 20%'}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Loại nhập</label>
-                    <select style={{width:'100%'}}>
-                      <option value={selectedImport.importType}>{selectedImport.importType}</option>
+                    <select 
+                      value={formData.importType || selectedImport.importType || ''}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setFormData(fd => ({ ...fd, importType: v }));
+                        setSelectedImport(si => si ? ({ ...si, importType: v }) : si);
+                        setIsEditing(true);
+                      }}
+                      style={{width:'100%'}}
+                    >
+                      <option value="">Chọn loại nhập</option>
+                      {transactionContents.map(tc => (
+                        <option key={tc.id} value={tc.name}>{tc.name}</option>
+                      ))}
                     </select>
                   </div>
                   <div style={{flex:'0 0 20%'}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}>Tổng số kg</label>
-                    <input type="number" value={selectedImport.totalWeight} readOnly style={{width:'100%'}} />
+                    <input 
+                      type="text" 
+                      value={(() => {
+                        // Get totals from current items
+                        const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
+                        const itemsTotals = calculateTotals(currentItems);
+                        
+                        // Get totals from header rows
+                        const headerTotals = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
+                          .reduce((sum, row) => {
+                            const weight = parseFloat(row.values.weight) || 0; // Sum of weight (no quantity multiplication)
+                            return Math.round((sum + weight) * 100) / 100; // Round to 2 decimal places
+                          }, 0);
+                        
+                        const totalWeight = Math.round((itemsTotals.totalWeight + headerTotals) * 100) / 100;
+                        return formatWeight(totalWeight);
+                      })()} 
+                      readOnly 
+                      style={{width:'100%', background: '#f5f5f5'}} 
+                    />
                   </div>
                   <div style={{flex:'0 0 20%'}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}>Tổng số khối</label>
-                    <input type="number" value={selectedImport.totalVolume} readOnly style={{width:'100%'}} />
+                    <input 
+                      type="text" 
+                      value={(() => {
+                        // Get totals from current items
+                        const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
+                        const itemsTotals = calculateTotals(currentItems);
+                        
+                        // Get totals from header rows
+                        const headerTotals = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
+                          .reduce((sum, row) => {
+                            const volume = parseFloat(row.values.volume) || 0; // Sum of volume (no quantity multiplication)
+                            return Math.round((sum + volume) * 10000) / 10000; // Round to 4 decimal places
+                          }, 0);
+                        
+                        const totalVolume = Math.round((itemsTotals.totalVolume + headerTotals) * 10000) / 10000;
+                        return formatVolume(totalVolume);
+                      })()} 
+                      readOnly 
+                      style={{width:'100%', background: '#f5f5f5'}} 
+                    />
                   </div>
                 </div>
 
@@ -1537,22 +1852,14 @@ const ImportGoods = () => {
               </div>
 
               <div className="items-section">
-                <div className="items-header">
-                  <span>Tổng {selectedImport.items?.length || 0}</span>
-                  <div className="items-actions">
-                    <button className="icon-btn create-btn" onClick={handleAddItem} title="Thêm hàng">
-                      <span>+</span>
-                    </button>
-                    <button className="icon-btn settings-btn" onClick={()=>setShowRightSettings(true)} title="Cài đặt hiển thị cột">
-                      <span>⚙</span>
-                    </button>
-                  </div>
-                </div>
 
                 <div className="items-table-container" ref={itemsTableRef}>
-                  <div style={{margin: '12px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 14}}>
-                    <div>{`Dòng ${rightStart}-${rightEnd} trên tổng ${rightTotal} dòng`}</div>
+                  <div style={{margin: '8px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 14}}>
+                    <span>Tổng {headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode).length}</span>
                     <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                      <button className="icon-btn settings-btn" onClick={()=>setShowRightSettings(true)} title="Cài đặt hiển thị cột" style={{border: 'none', background: '#333', color: 'white', borderRadius: 4, width: 28, height: 28, fontWeight: 'bold'}}>
+                        <span>⚙</span>
+                      </button>
                       <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.max(1, p - 1))}>{'<'}</button>
                       <span style={{fontWeight: 600}}>{rightCurrentPage}</span>
                       <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.min(rightTotalPages, p + 1))}>{'>'}</button>
@@ -1578,7 +1885,7 @@ const ImportGoods = () => {
                         {rightVisibleCols.includes('quantity') && <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>}
                         {rightVisibleCols.includes('unitPrice') && <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>}
                         {rightVisibleCols.includes('transportCost') && <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>}
-                        {rightVisibleCols.includes('noteDate') && <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú (date)</span></th>}
+                        {rightVisibleCols.includes('noteDate') && <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú date PN</span></th>}
                         {rightVisibleCols.includes('total') && <th key="total" style={{textAlign: 'center'}}><span>Thành tiền</span></th>}
                         {rightVisibleCols.includes('totalTransport') && <th key="totalTransport" style={{textAlign: 'center'}}><span>TT vận chuyển</span></th>}
                         {rightVisibleCols.includes('weight') && <th key="weight" style={{textAlign: 'center'}}><span>Số kg</span></th>}
@@ -1622,9 +1929,10 @@ const ImportGoods = () => {
                                         cursor:'pointer'
                                       }}
                                     >
-                                      Xóa
+                                      Reset
                                     </button>
-                                    {rIdx === headerRows.length - 1 && (
+                                    {/* Show Xóa button for rows that have product data */}
+                                    {(row.values.productName || row.values.productCode || row.values.barcode) && (
                                       <button 
                                         onClick={() => setHeaderRows(prev => prev.filter((_,i)=>i!==rIdx))} 
                                         style={{
@@ -1637,7 +1945,7 @@ const ImportGoods = () => {
                                           cursor:'pointer'
                                         }}
                                       >
-                                        Xóa dòng
+                                        Xóa
                                       </button>
                                     )}
                                   </div>
@@ -1764,10 +2072,49 @@ const ImportGoods = () => {
                             return (
                               <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                                 <Input
-                                  value={row.values[colKey] || ''}
-                                  onChange={(e) => handleHeaderRowChange(rIdx, colKey, e.target.value)}
+                                  value={(() => {
+                                    const rawValue = row.values[colKey] || '';
+                                    if (rawValue === '') return '';
+                                    
+                                    // For currency fields - show formatted only when not editing
+                                    if (['unitPrice', 'transportCost'].includes(colKey)) {
+                                      // For user input fields, show with minimal formatting to allow easy editing
+                                      const numValue = parseFloat(rawValue) || 0;
+                                      return numValue === 0 ? '' : formatCurrency(numValue);
+                                    }
+                                    // For calculated fields (total, totalTransport) - always show formatted
+                                    if (['total', 'totalTransport'].includes(colKey)) {
+                                      return formatInputDisplay(rawValue, 'currency');
+                                    }
+                                    // Format weight fields  
+                                    if (colKey === 'weight') {
+                                      return formatInputDisplay(rawValue, 'weight');
+                                    }
+                                    // Format volume fields
+                                    if (colKey === 'volume') {
+                                      return formatInputDisplay(rawValue, 'volume');
+                                    }
+                                    // Default - return as is
+                                    return rawValue;
+                                  })()}
+                                  onChange={(e) => {
+                                    const inputValue = e.target.value;
+                                    
+                                    // For currency fields, allow user to type freely but parse for calculation
+                                    if (['unitPrice', 'transportCost', 'total', 'totalTransport'].includes(colKey)) {
+                                      // Allow only digits and comma
+                                      const sanitizedValue = inputValue.replace(/[^0-9,]/g, '');
+                                      // Store the raw value (without formatting) for calculation
+                                      const rawValue = sanitizedValue.replace(/,/g, '');
+                                      handleHeaderRowChange(rIdx, colKey, rawValue);
+                                    } else {
+                                      handleHeaderRowChange(rIdx, colKey, inputValue);
+                                    }
+                                  }}
                                   size="small"
                                   style={{ width: '100%', minWidth: 100 }}
+                                  readOnly={['total', 'totalTransport'].includes(colKey)}
+                                  placeholder={['total', 'totalTransport'].includes(colKey) ? 'Tự động tính' : ''}
                                 />
                               </td>
                             );
@@ -1783,13 +2130,13 @@ const ImportGoods = () => {
                             {rightVisibleCols.includes('productCode') && <td>{item.productCode}</td>}
                             {rightVisibleCols.includes('productName') && <td style={{maxWidth:220,overflow:'hidden',textOverflow:'ellipsis'}} title={item.productName}>{item.productName}</td>}
                             {rightVisibleCols.includes('quantity') && <td>{item.quantity}</td>}
-                            {rightVisibleCols.includes('unitPrice') && <td>{(item.unitPrice||0).toLocaleString('vi-VN')}</td>}
-                            {rightVisibleCols.includes('transportCost') && <td>{(item.transportCost||0).toLocaleString('vi-VN')}</td>}
+                            {rightVisibleCols.includes('unitPrice') && <td>{formatCurrency(item.unitPrice||0)}</td>}
+                            {rightVisibleCols.includes('transportCost') && <td>{formatCurrency(item.transportCost||0)}</td>}
                             {rightVisibleCols.includes('noteDate') && <td>{item.noteDate ? dayjs(item.noteDate).format('DD/MM/YYYY') : ''}</td>}
-                            {rightVisibleCols.includes('total') && <td>{(item.total||0).toLocaleString('vi-VN')}</td>}
-                            {rightVisibleCols.includes('totalTransport') && <td>{(item.totalTransport||0).toLocaleString('vi-VN')}</td>}
-                            {rightVisibleCols.includes('weight') && <td>{item.weight}</td>}
-                            {rightVisibleCols.includes('volume') && <td>{item.volume}</td>}
+                            {rightVisibleCols.includes('total') && <td>{formatCurrency(item.total||0)}</td>}
+                            {rightVisibleCols.includes('totalTransport') && <td>{formatCurrency(item.totalTransport||0)}</td>}
+                            {rightVisibleCols.includes('weight') && <td>{formatWeight(item.weight)}</td>}
+                            {rightVisibleCols.includes('volume') && <td>{formatVolume(item.volume)}</td>}
                             {rightVisibleCols.includes('warehouse') && <td>{item.warehouse}</td>}
                             {rightVisibleCols.includes('description') && <td style={{maxWidth:360,overflow:'hidden',textOverflow:'ellipsis'}} title={item.description}>{item.description}</td>}
                             {rightVisibleCols.includes('conversion') && <td>{item.conversion}</td>}
@@ -1826,7 +2173,26 @@ const ImportGoods = () => {
                 </div>
 
                 <div className="table-summary">
-                  <span>Tổng tiền: <strong>0</strong></span>
+                  <span>Tổng tiền: <strong>{(() => {
+                    // Calculate total from current items + header rows
+                    const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
+                    const itemsTotal = currentItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+                    
+                    const headerTotal = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
+                      .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
+                    
+                    const grandTotal = itemsTotal + headerTotal;
+                    return formatCurrency(grandTotal);
+                  })()}</strong> ({(() => {
+                    const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
+                    const itemsTotal = currentItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+                    
+                    const headerTotal = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
+                      .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
+                    
+                    const grandTotal = itemsTotal + headerTotal;
+                    return numberToVietnameseText(grandTotal);
+                  })()})</span>
                 </div>
               </div>
 
@@ -1839,7 +2205,7 @@ const ImportGoods = () => {
               >
                 <div style={{display:'flex',flexDirection:'column',gap:8}}>
                   {defaultRightCols.map(colKey=>{
-                    const label = colKey==='barcode'?'Mã vạch':colKey==='productCode'?'Mã hàng':colKey==='productName'?'Hàng hóa':colKey==='description'?'Mô tả':colKey==='conversion'?'Quy đổi':colKey==='quantity'?'Số lượng':colKey==='unitPrice'?'Đơn giá':colKey==='transportCost'?'Tiền vận chuyển':colKey==='noteDate'?'Ghi chú (date)':colKey==='total'?'Thành tiền':colKey==='totalTransport'?'Thành tiền vận chuyển':colKey==='weight'?'Số kg':colKey==='volume'?'Số khối':colKey==='warehouse'?'Kho hàng':colKey==='actions'?'Thao tác':colKey;
+                    const label = colKey==='barcode'?'Mã vạch':colKey==='productCode'?'Mã hàng':colKey==='productName'?'Hàng hóa':colKey==='description'?'Mô tả':colKey==='conversion'?'Quy đổi':colKey==='quantity'?'Số lượng':colKey==='unitPrice'?'Đơn giá':colKey==='transportCost'?'Tiền vận chuyển':colKey==='noteDate'?'Ghi chú date PN':colKey==='total'?'Thành tiền':colKey==='totalTransport'?'Thành tiền vận chuyển':colKey==='weight'?'Số kg':colKey==='volume'?'Số khối':colKey==='warehouse'?'Kho hàng':colKey==='actions'?'Thao tác':colKey;
                     return (
                       <label key={colKey} style={{display:'flex',alignItems:'center',gap:8}}>
                         <input type="checkbox" checked={rightVisibleCols.includes(colKey)} onChange={()=>{
@@ -1894,11 +2260,51 @@ const ImportGoods = () => {
               <button className="close-btn" onClick={() => setShowModal(false)}>×</button>
             </div>
             <div className="modal-body">
-              <p>Chức năng tạo phiếu nhập đang được phát triển...</p>
+              <div style={{marginBottom: 16}}>
+                <strong>Thông tin phiếu nhập:</strong>
+                <div>Số phiếu: {formData.importNumber || generateImportNumber()}</div>
+                <div>Ngày nhập: {formData.createdDate}</div>
+                <div>Nhân viên: {formData.employee}</div>
+                <div>Ghi chú: {formData.note}</div>
+              </div>
+              
+              <div style={{marginBottom: 16}}>
+                <strong>Sản phẩm đã chọn:</strong>
+                <div style={{maxHeight: 200, overflowY: 'auto'}}>
+                  {headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode).map((row, idx) => {
+                    const total = parseFloat(row.values.total) || 0;
+                    return (
+                      <div key={idx} style={{padding: '8px 0', borderBottom: '1px solid #eee'}}>
+                        <div>{row.values.productName || row.values.productCode || row.values.barcode}</div>
+                        <div style={{fontSize: 12, color: '#666'}}>
+                          Số lượng: {row.values.quantity || 1} | 
+                          Đơn giá: {formatCurrency(row.values.unitPrice || 0)} | 
+                          Thành tiền: {formatCurrency(total)}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+              
+              <div style={{marginBottom: 16}}>
+                <strong>Tổng tiền: {(() => {
+                  const total = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
+                    .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
+                  return formatCurrency(total);
+                })()} VNĐ ({(() => {
+                  const total = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
+                    .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
+                  return numberToVietnameseText(total);
+                })()})</strong>
+              </div>
             </div>
             <div className="form-actions">
               <button onClick={() => setShowModal(false)} className="btn btn-secondary">
-                Đóng
+                Hủy
+              </button>
+              <button onClick={handleCreateNewImport} className="btn btn-primary">
+                Tạo phiếu nhập
               </button>
             </div>
           </div>
@@ -1956,6 +2362,19 @@ const ImportGoods = () => {
                     copy[productModalRowIndex].values['productCode'] = firstProduct.code || '';
                     copy[productModalRowIndex].values['productName'] = firstProduct.name || '';
                     copy[productModalRowIndex].values['barcode'] = firstProduct.barcode || '';
+                    copy[productModalRowIndex].values['description'] = firstProduct.description || '';
+                    copy[productModalRowIndex].values['conversion'] = firstProduct.conversion1 || 1;
+                    copy[productModalRowIndex].values['unitPrice'] = firstProduct.importPrice || 0;
+                    copy[productModalRowIndex].values['weight'] = firstProduct.weight || 0;
+                    copy[productModalRowIndex].values['volume'] = firstProduct.volume || 0;
+                    
+                    // Auto-calculate initial totals
+                    const quantity = parseFloat(copy[productModalRowIndex].values.quantity) || 1;
+                    const unitPrice = parseFloat(firstProduct.importPrice) || 0;
+                    const transportCost = parseFloat(copy[productModalRowIndex].values.transportCost) || 0;
+                    
+                    copy[productModalRowIndex].values.total = (quantity * unitPrice).toString();
+                    copy[productModalRowIndex].values.totalTransport = (quantity * transportCost).toString();
                   }
                   
                   // Add new rows for remaining selected products
@@ -1967,6 +2386,21 @@ const ImportGoods = () => {
                       newRow.values['productCode'] = product.code || '';
                       newRow.values['productName'] = product.name || '';
                       newRow.values['barcode'] = product.barcode || '';
+                      newRow.values['description'] = product.description || '';
+                      newRow.values['conversion'] = product.conversion1 || 1;
+                      newRow.values['unitPrice'] = product.importPrice || 0;
+                      newRow.values['weight'] = product.weight || 0;
+                      newRow.values['volume'] = product.volume || 0;
+                      newRow.values['quantity'] = 1;
+                      
+                      // Auto-calculate initial totals
+                      const quantity = 1;
+                      const unitPrice = parseFloat(product.importPrice) || 0;
+                      const transportCost = 0;
+                      
+                      newRow.values.total = (quantity * unitPrice).toString();
+                      newRow.values.totalTransport = (quantity * transportCost).toString();
+                      
                       copy.push(newRow);
                     }
                   });
