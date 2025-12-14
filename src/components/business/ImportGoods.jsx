@@ -111,9 +111,25 @@ const ImportGoods = () => {
   const productSelectRefs = useRef({});
   const [headerRows, setHeaderRows] = useState(() => [{ id: Date.now(), values: {} }]);
 
+  // Helper function to format product option labels
+  const getProductOptionLabel = (product) => {
+    const unit = product.defaultUnit || product.DefaultUnit || product.unit || product.baseUnit || '';
+    const price = product.importPrice || product.price || product.priceRetail || 0;
+    const priceText = Number(price).toLocaleString('vi-VN');
+    return `${product.barcode || ''} - ${product.code || ''} - ${product.name || ''} - ${priceText} - ${unit}`;
+  };
+
+  // Helper function to get selected display value (for productName column, show only name)
+  const getSelectedDisplayValue = (product, colKey) => {
+    if (colKey === 'productName') {
+      return product.name || '';
+    }
+    return getProductOptionLabel(product);
+  };
+
   // Right-side columns & filters (for items table header filters)
   const RIGHT_COLS_KEY = 'import_goods_right_cols_v1';
-  const defaultRightCols = ['barcode','productCode','productName','description','conversion','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','actions'];
+  const defaultRightCols = ['barcode','productCode','productName','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'];
   const [rightVisibleCols, setRightVisibleCols] = useState(() => {
     try {
       const v = JSON.parse(localStorage.getItem(RIGHT_COLS_KEY));
@@ -126,6 +142,18 @@ const ImportGoods = () => {
   const [rightFilterPopup, setRightFilterPopup] = useState({ column: null, term: '' });
   const [rightCurrentPage, setRightCurrentPage] = useState(1);
   const [rightItemsPerPage, setRightItemsPerPage] = useState(10);
+
+  // Product selection modal state
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [productModalSearch, setProductModalSearch] = useState('');
+  const [selectedModalProducts, setSelectedModalProducts] = useState([]);
+  const [productModalColumn, setProductModalColumn] = useState(null);
+  const [productModalRowIndex, setProductModalRowIndex] = useState(null);
+  
+  // Pagination state for product modal
+  const [modalCurrentPage, setModalCurrentPage] = useState(1);
+  const [modalPageSize, setModalPageSize] = useState(10);
+  const [selectAllCurrentPage, setSelectAllCurrentPage] = useState(false);
 
   const renderHeaderFilterTH = (colKey, label, placeholder) => {
     // Check if this column should have product dropdown
@@ -205,44 +233,19 @@ const ImportGoods = () => {
     };
     
     const getSearchText = (product) => {
-      return `${product.code || ''} - ${product.name || ''} - ${product.barcode || ''}`.toLowerCase();
+        return `${product.code || ''} - ${product.name || ''} - ${product.barcode || ''}`.toLowerCase();
     };
     
     return (
       <th key={colKey}>
         <div style={{display:'flex',alignItems:'center',gap:8,flexDirection:'column'}}>
           <span style={{fontWeight: 'bold', marginBottom: '4px'}}>{label}</span>
-          <Select 
-            ref={(el) => { productSelectRefs.current[colKey] = el; }}
-            value={selectedProducts[colKey] || undefined} 
-            onChange={(value) => handleProductSelect(colKey, value)}
-            placeholder={`-- Chọn ${label.toLowerCase()} --`}
-            style={{ 
-              width: '100%',
-              minWidth: '150px'
-            }}
+          <Input
+            placeholder={`nhập ${label.toLowerCase()}`}
             size="small"
-            showSearch
-            allowClear
-            filterOption={(input, option) => {
-              const product = products.find(p => p.id.toString() === option.value);
-              if (!product) return false;
-              return getSearchText(product).includes(input.toLowerCase());
-            }}
-          >
-            {products.map(product => (
-              <Select.Option key={product.id} value={product.id}>
-                <div style={{ display: 'flex', flexDirection: 'column', fontSize: '11px' }}>
-                  <div style={{ fontWeight: 'bold' }}>{getDisplayText(product)}</div>
-                  {colKey !== 'productName' && (
-                    <div style={{ color: '#666', fontSize: '10px' }}>
-                      {product.name}
-                    </div>
-                  )}
-                </div>
-              </Select.Option>
-            ))}
-          </Select>
+            style={{ width: '100%', minWidth: '150px' }}
+            readOnly
+          />
         </div>
       </th>
     );
@@ -395,15 +398,22 @@ const ImportGoods = () => {
 
   // Handle product selection in a header input row (rowIndex). If selecting in the last row, append a new blank header row.
   const handleHeaderRowProductSelect = (rowIndex, colKey, productId) => {
+    const selectedProduct = products.find(p => p.id.toString() === productId);
+    
     setHeaderRows(prev => {
       const copy = prev.map(r => ({ ...r, values: { ...r.values } }));
-      copy[rowIndex].values[colKey] = productId || '';
-      // also keep product id mirrored to other product-related keys for that row
-      if (productId) {
-        copy[rowIndex].values['productCode'] = productId;
-        copy[rowIndex].values['productName'] = productId;
-        copy[rowIndex].values['barcode'] = productId;
+      
+      if (selectedProduct) {
+        // Store actual field values instead of productId
+        copy[rowIndex].values['productCode'] = selectedProduct.code || '';
+        copy[rowIndex].values['productName'] = selectedProduct.name || '';
+        copy[rowIndex].values['barcode'] = selectedProduct.barcode || '';
+        // Also store the productId for the specific column clicked
+        copy[rowIndex].values[colKey + '_id'] = productId;
+      } else {
+        copy[rowIndex].values[colKey] = productId || '';
       }
+      
       // if selecting in last row and a productId was chosen, append blank row
       if (productId && rowIndex === copy.length - 1) {
         copy.push({ id: Date.now() + Math.random(), values: {} });
@@ -1562,54 +1572,73 @@ const ImportGoods = () => {
                   <table className="items-table" style={{minWidth:1300}}>
                     <thead>
                       <tr>
-                        {renderHeaderFilterTH('barcode','Mã vạch','nhập mã vạch')}
-                        {renderHeaderFilterTH('productCode','Mã hàng','nhập mã hàng')}
-                        {renderHeaderFilterTH('productName','Hàng hóa','nhập tên hàng')}
-                        {renderHeaderFilterTH('description','Mô tả','nhập mô tả')}
-                        {renderHeaderFilterTH('conversion','Quy đổi','nhập quy đổi')}
-                        {renderHeaderFilterTH('quantity','Số lượng','nhập số lượng')}
-                        {renderHeaderFilterTH('unitPrice','Đơn giá','nhập đơn giá')}
-                        {renderHeaderFilterTH('transportCost','Tiền vận chuyển','nhập tiền vận chuyển')}
-                        {renderHeaderFilterTH('noteDate','Ghi chú (date)','nhập ghi chú (date)')}
-                        {renderHeaderFilterTH('total','Thành tiền','nhập thành tiền')}
-                        {renderHeaderFilterTH('totalTransport','Thành tiền vận chuyển','nhập thành tiền vận chuyển')}
-                        {renderHeaderFilterTH('weight','Số kg','nhập số kg')}
-                        {renderHeaderFilterTH('volume','Số khối','nhập số khối')}
-                        {renderHeaderFilterTH('warehouse','Kho hàng','nhập kho hàng')}
+                        {rightVisibleCols.includes('barcode') && <th key="barcode" style={{textAlign: 'center'}}><span>Mã vạch</span></th>}
+                        {rightVisibleCols.includes('productCode') && <th key="productCode" style={{textAlign: 'center'}}><span>Mã hàng</span></th>}
+                        {rightVisibleCols.includes('productName') && <th key="productName" style={{textAlign: 'center'}}><span>Hàng hóa</span></th>}
+                        {rightVisibleCols.includes('quantity') && <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>}
+                        {rightVisibleCols.includes('unitPrice') && <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>}
+                        {rightVisibleCols.includes('transportCost') && <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>}
+                        {rightVisibleCols.includes('noteDate') && <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú (date)</span></th>}
+                        {rightVisibleCols.includes('total') && <th key="total" style={{textAlign: 'center'}}><span>Thành tiền</span></th>}
+                        {rightVisibleCols.includes('totalTransport') && <th key="totalTransport" style={{textAlign: 'center'}}><span>TT vận chuyển</span></th>}
+                        {rightVisibleCols.includes('weight') && <th key="weight" style={{textAlign: 'center'}}><span>Số kg</span></th>}
+                        {rightVisibleCols.includes('volume') && <th key="volume" style={{textAlign: 'center'}}><span>Số khối</span></th>}
+                        {rightVisibleCols.includes('warehouse') && <th key="warehouse" style={{textAlign: 'center'}}><span>Kho hàng</span></th>}
+                        {rightVisibleCols.includes('description') && <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>}
+                        {rightVisibleCols.includes('conversion') && <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>}
                         {rightVisibleCols.includes('actions') && (
                           <th key="actions">
-                            <div style={{display:'flex',alignItems:'center',gap:8,flexDirection:'column'}}>
-                              <span>Thao tác</span>
-                              <button
-                                className="btn-reset-header"
-                                onClick={() => resetHeaderInputs()}
-                                style={{
-                                  marginTop: 6,
-                                  padding: '6px 10px',
-                                  borderRadius: 6,
-                                  border: '1px solid #e6edf3',
-                                  background: '#fff',
-                                  cursor: 'pointer',
-                                  fontSize: 13
-                                }}
-                              >
-                                Xóa
-                              </button>
-                            </div>
+                            <span>Thao tác</span>
                           </th>
                         )}
                       </tr>
                       {/* Additional header input rows inserted under the main header */}
                       {headerRows.map((row, rIdx) => (
                         <tr key={row.id} className="header-input-row">
-                          {['barcode','productCode','productName','description','conversion','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','actions'].map(colKey => {
+                          {['barcode','productCode','productName','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'].map(colKey => {
                             if (colKey === 'actions') {
                               if (!rightVisibleCols.includes('actions')) return null;
                               return (
                                 <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
-                                  <div style={{display:'flex',alignItems:'center',justifyContent:'center'}}>
-                                    {rIdx < headerRows.length - 1 && (
-                                      <button onClick={() => setHeaderRows(prev => prev.filter((_,i)=>i!==rIdx))} style={{padding:'4px 8px',fontSize:12}}>Xóa</button>
+                                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'4px'}}>
+                                    <button 
+                                      onClick={() => {
+                                        // Clear all data in this header row
+                                        setHeaderRows(prev => {
+                                          const copy = prev.map(r => ({ ...r, values: { ...r.values } }));
+                                          if (copy[rIdx]) {
+                                            copy[rIdx].values = {}; // Clear all values
+                                          }
+                                          return copy;
+                                        });
+                                      }}
+                                      style={{
+                                        padding:'4px 8px',
+                                        fontSize:12,
+                                        backgroundColor:'#ff4d4f',
+                                        color:'white',
+                                        border:'none',
+                                        borderRadius:'3px',
+                                        cursor:'pointer'
+                                      }}
+                                    >
+                                      Xóa
+                                    </button>
+                                    {rIdx === headerRows.length - 1 && (
+                                      <button 
+                                        onClick={() => setHeaderRows(prev => prev.filter((_,i)=>i!==rIdx))} 
+                                        style={{
+                                          padding:'4px 8px',
+                                          fontSize:12,
+                                          backgroundColor:'#6c757d',
+                                          color:'white',
+                                          border:'none',
+                                          borderRadius:'3px',
+                                          cursor:'pointer'
+                                        }}
+                                      >
+                                        Xóa dòng
+                                      </button>
                                     )}
                                   </div>
                                 </td>
@@ -1618,36 +1647,81 @@ const ImportGoods = () => {
 
                             // Product-related columns
                             if (['productCode','productName','barcode'].includes(colKey)) {
+                              if (!rightVisibleCols.includes(colKey)) return null;
                               return (
-                                <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
-                                  <Select
-                                    value={row.values[colKey] || undefined}
-                                    onChange={(val) => handleHeaderRowProductSelect(rIdx, colKey, val)}
-                                    placeholder={`-- Chọn ${colKey} --`}
-                                    size="small"
-                                    showSearch
-                                    allowClear
-                                    style={{ width: '100%', minWidth: 120 }}
-                                    filterOption={(input, option) => {
-                                      const p = products.find(pp => pp.id.toString() === option.value);
-                                      if (!p) return false;
-                                      const txt = `${p.code||''} ${p.name||''} ${p.barcode||''}`.toLowerCase();
-                                      return txt.includes((input||'').toLowerCase());
-                                    }}
-                                  >
-                                    {products.map(p => (
-                                      <Select.Option key={p.id} value={p.id.toString()}>
-                                        {p.code} - {p.name}
-                                      </Select.Option>
-                                    ))}
-                                  </Select>
+                                <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                                  {colKey === 'productName' ? (
+                                    <button
+                                      onClick={() => {
+                                        console.log('Header input row button clicked', { rIdx, colKey, headerRowsLength: headerRows.length });
+                                        setProductModalColumn(colKey);
+                                        setProductModalRowIndex(rIdx);  // This is key - set the row index
+                                        setProductModalSearch('');
+                                        setModalCurrentPage(1);
+                                        setSelectAllCurrentPage(false);
+                                        setSelectedModalProducts(row.values[colKey] ? [row.values[colKey]] : []);
+                                        setShowProductModal(true);
+                                      }}
+                                      style={{
+                                        width: '100%',
+                                        minWidth: 120,
+                                        padding: '4px 8px',
+                                        border: '1px solid #d9d9d9',
+                                        borderRadius: '4px',
+                                        background: '#fff',
+                                        textAlign: 'left',
+                                        cursor: 'pointer',
+                                        fontSize: '12px'
+                                      }}
+                                    >
+                                      {row.values[colKey] || `-- Chọn ${colKey} --`}
+                                    </button>
+                                  ) : (
+                                    <Select
+                                      value={row.values[colKey] || undefined}
+                                      onChange={(val) => handleHeaderRowProductSelect(rIdx, colKey, val)}
+                                      placeholder={`-- Chọn ${colKey} --`}
+                                      size="small"
+                                      showSearch
+                                      allowClear
+                                      style={{ width: '100%', minWidth: 200 }}
+                                      dropdownStyle={{ 
+                                        maxHeight: 400, 
+                                        overflow: 'auto',
+                                        zIndex: 9999
+                                      }}
+                                      dropdownMatchSelectWidth={false}
+                                      dropdownClassName="product-select-dropdown"
+                                      optionLabelProp={colKey === 'productName' ? 'children' : 'label'}
+                                      filterOption={(input, option) => {
+                                        const p = products.find(pp => pp.id.toString() === option.value);
+                                        if (!p) return false;
+                                        const txt = `${p.code||''} ${p.name||''} ${p.barcode||''}`.toLowerCase();
+                                        return txt.includes((input||'').toLowerCase());
+                                      }}
+                                    >
+                                      {products.map(p => (
+                                        <Select.Option 
+                                          key={p.id} 
+                                          value={p.id.toString()}
+                                          label={colKey === 'productName' ? p.name : getProductOptionLabel(p)}
+                                        >
+                                          {colKey === 'productName' ? (
+                                            <div style={{fontSize:12, fontWeight:600}}>{getProductOptionLabel(p)}</div>
+                                          ) : (
+                                            <div style={{fontSize:12, fontWeight:600}}>{getProductOptionLabel(p)}</div>
+                                          )}
+                                        </Select.Option>
+                                      ))}
+                                    </Select>
+                                  )}
                                 </td>
                               );
                             }
 
                             if (colKey === 'warehouse') {
                               return (
-                                <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
+                                <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                                   <Select
                                     value={row.values[colKey] || undefined}
                                     onChange={(val) => handleHeaderRowChange(rIdx, colKey, val)}
@@ -1666,13 +1740,21 @@ const ImportGoods = () => {
 
                             if (colKey === 'noteDate') {
                               return (
-                                <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
+                                <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                                   <DatePicker
                                     value={row.values[colKey] ? dayjs(row.values[colKey]) : null}
                                     onChange={(d) => handleHeaderRowChange(rIdx, colKey, d ? d.format('YYYY-MM-DD') : null)}
                                     format="DD/MM/YYYY"
+                                    placeholder="Chọn ngày"
                                     size="small"
-                                    style={{ width: '100%', minWidth: 120 }}
+                                    style={{ width: '100%', minWidth: 180 }}
+                                    showToday={true}
+                                    allowClear={true}
+                                    picker="date"
+                                    changeOnBlur={false}
+                                    open={undefined}
+                                    inputReadOnly={false}
+                                    dropdownClassName="calendar-dropdown"
                                   />
                                 </td>
                               );
@@ -1680,7 +1762,7 @@ const ImportGoods = () => {
 
                             // Default: text / numeric inputs
                             return (
-                              <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
+                              <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                                 <Input
                                   value={row.values[colKey] || ''}
                                   onChange={(e) => handleHeaderRowChange(rIdx, colKey, e.target.value)}
@@ -1700,8 +1782,6 @@ const ImportGoods = () => {
                             {rightVisibleCols.includes('barcode') && <td>{item.barcode}</td>}
                             {rightVisibleCols.includes('productCode') && <td>{item.productCode}</td>}
                             {rightVisibleCols.includes('productName') && <td style={{maxWidth:220,overflow:'hidden',textOverflow:'ellipsis'}} title={item.productName}>{item.productName}</td>}
-                            {rightVisibleCols.includes('description') && <td style={{maxWidth:240,overflow:'hidden',textOverflow:'ellipsis'}} title={item.description}>{item.description}</td>}
-                            {rightVisibleCols.includes('conversion') && <td>{item.conversion}</td>}
                             {rightVisibleCols.includes('quantity') && <td>{item.quantity}</td>}
                             {rightVisibleCols.includes('unitPrice') && <td>{(item.unitPrice||0).toLocaleString('vi-VN')}</td>}
                             {rightVisibleCols.includes('transportCost') && <td>{(item.transportCost||0).toLocaleString('vi-VN')}</td>}
@@ -1711,6 +1791,8 @@ const ImportGoods = () => {
                             {rightVisibleCols.includes('weight') && <td>{item.weight}</td>}
                             {rightVisibleCols.includes('volume') && <td>{item.volume}</td>}
                             {rightVisibleCols.includes('warehouse') && <td>{item.warehouse}</td>}
+                            {rightVisibleCols.includes('description') && <td style={{maxWidth:360,overflow:'hidden',textOverflow:'ellipsis'}} title={item.description}>{item.description}</td>}
+                            {rightVisibleCols.includes('conversion') && <td>{item.conversion}</td>}
                             {rightVisibleCols.includes('actions') && <td>
                               <div className="action-up-down" style={{display:'flex',gap:'4px',alignItems:'center'}}>
                                 <button 
@@ -1822,6 +1904,266 @@ const ImportGoods = () => {
           </div>
         </div>
       )}
+
+      {/* Product Selection Modal */}
+      <Modal
+        open={showProductModal}
+        onCancel={() => setShowProductModal(false)}
+        title="Chọn hàng hóa"
+        width={800}
+        footer={[
+          <button key="clear" onClick={() => {
+            setSelectedModalProducts([]);
+            setProductModalSearch('');
+            setSelectAllCurrentPage(false);
+          }} style={{marginRight: 8, padding: '6px 16px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#fff'}}>Bỏ chọn tất cả</button>,
+          <button key="all" onClick={() => {
+            const filteredProducts = products.filter(p => {
+              if (!productModalSearch) return true;
+              
+              const searchTerms = removeVietnameseTones(productModalSearch.toLowerCase()).split(/\s+/).filter(term => term.length > 0);
+              
+              const searchableText = [
+                removeVietnameseTones((p.name || '').toLowerCase()),
+                removeVietnameseTones((p.code || '').toLowerCase()),
+                removeVietnameseTones((p.barcode || '').toLowerCase()),
+                (p.importPrice || p.price || p.priceRetail || 0).toString(),
+                (p.defaultUnit || p.DefaultUnit || p.unit || p.baseUnit || '').toLowerCase()
+              ].join(' ');
+              
+              return searchTerms.every(term => searchableText.includes(term));
+            });
+            const startIndex = (modalCurrentPage - 1) * modalPageSize;
+            const currentPageProducts = filteredProducts.slice(startIndex, startIndex + modalPageSize);
+            
+            setSelectedModalProducts(currentPageProducts.map(p => p.id.toString()));
+            setSelectAllCurrentPage(true);
+          }} style={{marginRight: 8, padding: '6px 16px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#fff'}}>Chọn tất cả</button>,
+          <button key="ok" onClick={() => {
+            if (selectedModalProducts.length > 0) {
+              // Handle multiple product selection
+              if (productModalRowIndex !== null && productModalRowIndex >= 0) {
+                // For header input rows - update with multiple products
+                setHeaderRows(prev => {
+                  const copy = prev.map(r => ({ ...r, values: { ...r.values } }));
+                  
+                  // Update the current row with first selected product
+                  const firstProductId = selectedModalProducts[0];
+                  const firstProduct = products.find(p => p.id.toString() === firstProductId);
+                  
+                  if (copy[productModalRowIndex] && firstProduct) {
+                    copy[productModalRowIndex].values[productModalColumn] = firstProduct?.name || '';
+                    copy[productModalRowIndex].values['productCode'] = firstProduct.code || '';
+                    copy[productModalRowIndex].values['productName'] = firstProduct.name || '';
+                    copy[productModalRowIndex].values['barcode'] = firstProduct.barcode || '';
+                  }
+                  
+                  // Add new rows for remaining selected products
+                  selectedModalProducts.slice(1).forEach(productId => {
+                    const product = products.find(p => p.id.toString() === productId);
+                    if (product) {
+                      const newRow = { id: Date.now() + Math.random(), values: {} };
+                      newRow.values[productModalColumn] = product.name || '';
+                      newRow.values['productCode'] = product.code || '';
+                      newRow.values['productName'] = product.name || '';
+                      newRow.values['barcode'] = product.barcode || '';
+                      copy.push(newRow);
+                    }
+                  });
+                  
+                  // Always add one more blank row at the end
+                  copy.push({ id: Date.now() + Math.random(), values: {} });
+                  
+                  return copy;
+                });
+              } else {
+                // For main header dropdown - trigger the full product selection logic for first product only
+                const firstProductId = selectedModalProducts[0];
+                handleProductSelect(productModalColumn, firstProductId);
+              }
+            }
+            setShowProductModal(false);
+          }} style={{padding: '6px 16px', border: 'none', borderRadius: '4px', background: '#1677ff', color: '#fff'}}>Thêm vào PN</button>
+        ]}
+      >
+        <div style={{marginBottom: 16}}>
+          <Input
+            placeholder="Tìm tên hàng hóa"
+            value={productModalSearch}
+            onChange={(e) => {
+              setProductModalSearch(e.target.value);
+              setModalCurrentPage(1); // Reset to page 1 when searching
+            }}
+            style={{width: '100%'}}
+          />
+        </div>
+        
+        {/* Pagination controls */}
+        <div style={{marginBottom: 16, display: 'flex', alignItems: 'center', gap: 16, flexWrap: 'wrap'}}>
+          <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+            <span style={{fontSize: 13}}>Hiển thị:</span>
+            <Select
+              value={modalPageSize}
+              onChange={(value) => {
+                setModalPageSize(value);
+                setModalCurrentPage(1);
+                setSelectAllCurrentPage(false);
+              }}
+              size="small"
+              style={{width: 80}}
+            >
+              {[10, 20, 50, 100, 200, 500, 1000, 2000, 5000].map(size => (
+                <Select.Option key={size} value={size}>{size}</Select.Option>
+              ))}
+            </Select>
+          </div>
+          
+          <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+            <input
+              type="checkbox"
+              checked={selectAllCurrentPage}
+              onChange={(e) => {
+                const checked = e.target.checked;
+                setSelectAllCurrentPage(checked);
+                
+                const filteredProducts = products.filter(p => 
+                  productModalSearch ? p.name?.toLowerCase().includes(productModalSearch.toLowerCase()) : true
+                );
+                const startIndex = (modalCurrentPage - 1) * modalPageSize;
+                const currentPageProducts = filteredProducts.slice(startIndex, startIndex + modalPageSize);
+                
+                if (checked) {
+                  const currentPageIds = currentPageProducts.map(p => p.id.toString());
+                  setSelectedModalProducts(prev => {
+                    const newSelection = [...prev];
+                    currentPageIds.forEach(id => {
+                      if (!newSelection.includes(id)) {
+                        newSelection.push(id);
+                      }
+                    });
+                    return newSelection;
+                  });
+                } else {
+                  const currentPageIds = currentPageProducts.map(p => p.id.toString());
+                  setSelectedModalProducts(prev => prev.filter(id => !currentPageIds.includes(id)));
+                }
+              }}
+            />
+            <span style={{fontSize: 13}}>Chọn tất cả trang này</span>
+          </div>
+          
+          <div style={{display: 'flex', alignItems: 'center', padding: '6px 12px', background: '#f0f8ff', borderRadius: '4px', border: '1px solid #d1ecf1'}}>
+            <span style={{fontSize: 13, color: '#0c5460', fontWeight: 500}}>
+              Bạn đã chọn: <strong>{selectedModalProducts.length}</strong> sản phẩm
+            </span>
+          </div>
+        </div>
+        
+        <div style={{maxHeight: 400, overflowY: 'auto', border: '1px solid #f0f0f0', borderRadius: '4px'}}>
+          {(() => {
+            const filteredProducts = products.filter(p => {
+              if (!productModalSearch) return true;
+              
+              const searchTerms = removeVietnameseTones(productModalSearch.toLowerCase()).split(/\s+/).filter(term => term.length > 0);
+              
+              const searchableText = [
+                removeVietnameseTones((p.name || '').toLowerCase()),
+                removeVietnameseTones((p.code || '').toLowerCase()),
+                removeVietnameseTones((p.barcode || '').toLowerCase()),
+                (p.importPrice || p.price || p.priceRetail || 0).toString(),
+                (p.defaultUnit || p.DefaultUnit || p.unit || p.baseUnit || '').toLowerCase()
+              ].join(' ');
+              
+              return searchTerms.every(term => searchableText.includes(term));
+            });
+            const startIndex = (modalCurrentPage - 1) * modalPageSize;
+            const currentPageProducts = filteredProducts.slice(startIndex, startIndex + modalPageSize);
+            
+            return currentPageProducts.map(product => (
+              <div key={product.id} style={{padding: '8px 12px', borderBottom: '1px solid #f5f5f5', display: 'flex', alignItems: 'center', gap: 8}}>
+                <input
+                  type="checkbox"
+                  checked={selectedModalProducts.includes(product.id.toString())}
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      setSelectedModalProducts(prev => [...prev, product.id.toString()]); // Allow multiple selection
+                    } else {
+                      setSelectedModalProducts(prev => prev.filter(id => id !== product.id.toString()));
+                    }
+                  }}
+                />
+                <span style={{fontSize: 13}}>{getProductOptionLabel(product)}</span>
+              </div>
+            ))
+          })()
+          }
+        </div>
+        
+        {/* Pagination navigation */}
+        {(() => {
+          const filteredProducts = products.filter(p => {
+            if (!productModalSearch) return true;
+            
+            const searchTerms = removeVietnameseTones(productModalSearch.toLowerCase()).split(/\s+/).filter(term => term.length > 0);
+            
+            const searchableText = [
+              removeVietnameseTones((p.name || '').toLowerCase()),
+              removeVietnameseTones((p.code || '').toLowerCase()),
+              removeVietnameseTones((p.barcode || '').toLowerCase()),
+              (p.importPrice || p.price || p.priceRetail || 0).toString(),
+              (p.defaultUnit || p.DefaultUnit || p.unit || p.baseUnit || '').toLowerCase()
+            ].join(' ');
+            
+            return searchTerms.every(term => searchableText.includes(term));
+          });
+          const totalPages = Math.ceil(filteredProducts.length / modalPageSize);
+          
+          if (totalPages <= 1) return null;
+          
+          return (
+            <div style={{marginTop: 16, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8}}>
+              <button
+                onClick={() => {
+                  setModalCurrentPage(prev => Math.max(1, prev - 1));
+                  setSelectAllCurrentPage(false);
+                }}
+                disabled={modalCurrentPage === 1}
+                style={{
+                  padding: '4px 8px',
+                  border: '1px solid #d9d9d9',
+                  borderRadius: '4px',
+                  background: modalCurrentPage === 1 ? '#f5f5f5' : '#fff',
+                  cursor: modalCurrentPage === 1 ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Trước
+              </button>
+              
+              <span style={{fontSize: 13}}>Trang {modalCurrentPage} / {totalPages}</span>
+              
+              <button
+                onClick={() => {
+                  setModalCurrentPage(prev => Math.min(totalPages, prev + 1));
+                  setSelectAllCurrentPage(false);
+                }}
+                disabled={modalCurrentPage === totalPages}
+                style={{
+                  padding: '4px 8px',
+                  border: '1px solid #d9d9d9',
+                  borderRadius: '4px',
+                  background: modalCurrentPage === totalPages ? '#f5f5f5' : '#fff',
+                  cursor: modalCurrentPage === totalPages ? 'not-allowed' : 'pointer'
+                }}
+              >
+                Sau
+              </button>
+              
+              <span style={{fontSize: 12, color: '#666', marginLeft: 8}}>({filteredProducts.length} sản phẩm)</span>
+            </div>
+          );
+        })()
+        }
+      </Modal>
     </div>
   );
 };
