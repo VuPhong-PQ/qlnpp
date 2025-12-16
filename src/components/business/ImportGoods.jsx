@@ -70,8 +70,8 @@ const ImportGoods = () => {
   const [dateDraft, setDateDraft] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchCode, setSearchCode] = useState('');
-  const [dateFrom, setDateFrom] = useState('2025-08-01');
-  const [dateTo, setDateTo] = useState('2025-08-08');
+  const [dateFrom, setDateFrom] = useState('2025-01-01');
+  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0]);
   const [importType, setImportType] = useState('');
   const [employee, setEmployee] = useState('');
 
@@ -104,7 +104,30 @@ const ImportGoods = () => {
   const [transactionContents, setTransactionContents] = useState([]);
   const [selectedProducts, setSelectedProducts] = useState({});
   const [selectedDates, setSelectedDates] = useState({});
-  const [formData, setFormData] = useState({ importNumber: '', createdDate: new Date().toISOString().split('T')[0], employee: '', importType: '', totalWeight: 0, totalVolume: 0, note: '' });
+  const [formData, setFormData] = useState(() => {
+    const today = new Date();
+    const day = today.getDate().toString().padStart(2, '0');
+    const month = (today.getMonth() + 1).toString().padStart(2, '0');
+    const year = today.getFullYear();
+    const timestamp = Date.now().toString().slice(-4);
+    
+    return { 
+      importNumber: `PN-${day}${month}${year}-${timestamp}`, 
+      createdDate: new Date().toISOString().split('T')[0], 
+      employee: 'admin 66', 
+      importType: '', 
+      totalWeight: 0, 
+      totalVolume: 0, 
+      note: '' 
+    };
+  });
+
+  // Ref to temporarily suppress auto-selecting the first import when imports refresh
+  const suppressAutoSelectRef = React.useRef(false);
+  // Control whether right layout content is visible
+  const [showRightContent, setShowRightContent] = useState(true);
+  // Control edit mode - true: show full edit with products table, false: show basic info only
+  const [isEditMode, setIsEditMode] = useState(false);
   const [leftPage, setLeftPage] = useState(1);
   const [showLeftSettings, setShowLeftSettings] = useState(false);
   const [showRightSettings, setShowRightSettings] = useState(false);
@@ -825,9 +848,25 @@ const ImportGoods = () => {
 
   React.useEffect(() => {
     if (imports.length > 0 && !selectedImport) {
-      setSelectedImport(imports[0]);
+      if (suppressAutoSelectRef.current) {
+        // skip this one-time auto-select, reset the flag for future updates
+        suppressAutoSelectRef.current = false;
+      } else {
+        setSelectedImport(imports[0]);
+      }
     }
   }, [imports, selectedImport]);
+
+  // Cập nhật số phiếu sau khi imports được load (chỉ khi đang tạo mới)
+  React.useEffect(() => {
+    if (imports && imports.length > 0 && !selectedImport && formData.importNumber.includes('PN-')) {
+      const newImportNumber = generateImportNumber();
+      setFormData(prev => ({
+        ...prev,
+        importNumber: newImportNumber
+      }));
+    }
+  }, [imports]);
 
   // reset right table paging when selected import changes
   React.useEffect(() => {
@@ -864,10 +903,44 @@ const ImportGoods = () => {
     setRightCurrentPage(p => Math.min(p, rightTotalPages));
   }, [rightItemsPerPage, selectedImport, rightTotalPages]);
 
-  const handleSelectImport = (importItem) => {
+  const handleSelectImport = async (importItem) => {
     if (!importItem) return;
-    if (importItem.id) loadImportDetails(importItem.id);
-    else setSelectedImport(importItem);
+    // Load basic import info and show in view-only mode
+    if (importItem.id) {
+      try {
+        const res = await fetch(`/api/Imports/${importItem.id}`);
+        if (res.ok) {
+          const data = await res.json();
+          const detail = {
+            ...data,
+            items: (data.items || data.Items || []).map(it => ({ ...it }))
+          };
+          setSelectedImport(detail);
+          setFormData({
+            importNumber: detail.importNumber || detail.ImportNumber || generateImportNumber(),
+            createdDate: detail.date ? dayjs(detail.date).format('YYYY-MM-DD') : (detail.createdDate || new Date().toISOString().split('T')[0]),
+            employee: detail.employee || detail.Employee || formData.employee,
+            importType: detail.importType || detail.ImportType || '',
+            totalWeight: detail.totalWeight || 0,
+            totalVolume: detail.totalVolume || 0,
+            note: detail.note || detail.Note || ''
+          });
+          // Don't load items into local state in view mode
+          // setItems(detail.items || []);
+        }
+      } catch (err) {
+        console.error('Load import basic info error', err);
+        setSelectedImport(importItem);
+      }
+    } else {
+      setSelectedImport(importItem);
+    }
+    // Show right content in view mode (basic info only, no products table)
+    setShowRightContent(true);
+    setIsEditMode(false);
+    setIsEditing(false);
+    // Clear header rows in view mode
+    setHeaderRows([{ id: Date.now(), values: {} }]);
   };
 
   const handleDelete = async (id, e) => {
@@ -888,14 +961,15 @@ const ImportGoods = () => {
   };
 
   // Load imports list from backend
-  const loadImports = async () => {
+  // if `autoSelectFirst` is true (default) load details of the first import automatically
+  const loadImports = async (autoSelectFirst = true) => {
     try {
       const res = await fetch('/api/Imports');
       if (!res.ok) throw new Error('Failed to load imports');
       const data = await res.json();
       setImports(data || []);
       if (data && data.length > 0) {
-        await loadImportDetails(data[0].id);
+        if (autoSelectFirst) await loadImportDetails(data[0].id);
       } else {
         setSelectedImport(null);
       }
@@ -963,6 +1037,8 @@ const ImportGoods = () => {
       };
       // if employee missing, keep current formData.employee
       setSelectedImport(detail);
+      // show right layout when loading details for edit/view
+      setShowRightContent(true);
       setFormData({
         importNumber: detail.importNumber || detail.ImportNumber || generateImportNumber(),
         createdDate: detail.date ? dayjs(detail.date).format('YYYY-MM-DD') : (detail.createdDate || new Date().toISOString().split('T')[0]),
@@ -978,6 +1054,44 @@ const ImportGoods = () => {
       console.error('Load import details error', err);
       alert('Không thể tải chi tiết phiếu nhập');
     }
+  };
+
+  // Wrapper to trigger edit (explicitly load details and show right content)
+  const editImport = async (importItem) => {
+    if (!importItem || !importItem.id) return;
+    await loadImportDetails(importItem.id);
+    
+    // Load product data into header rows for editing
+    if (selectedImport && selectedImport.items && selectedImport.items.length > 0) {
+      const productRows = selectedImport.items.map((item, index) => ({
+        id: Date.now() + index,
+        values: {
+          barcode: item.barcode || '',
+          productCode: item.productCode || '',
+          productName: item.productName || '',
+          description: item.description || '',
+          quantity: item.quantity || 1,
+          conversion: item.conversion || 1,
+          unitPrice: item.unitPrice || 0,
+          transportCost: item.transportCost || 0,
+          total: item.total || 0,
+          totalTransport: item.totalTransport || 0,
+          weight: item.weight || 0,
+          volume: item.volume || 0,
+          warehouse: item.warehouse || '',
+          noteDate: item.noteDate || null
+        }
+      }));
+      
+      // Add one empty row for new entries
+      productRows.push({ id: Date.now() + selectedImport.items.length, values: {} });
+      
+      setHeaderRows(productRows);
+    }
+    
+    setShowRightContent(true);
+    setIsEditMode(true);
+    setIsEditing(true);
   };
 
   const createNewImport = async () => {
@@ -1011,52 +1125,239 @@ const ImportGoods = () => {
 
   const saveImport = async () => {
     try {
+      // Validation
+      if (!formData.createdDate) {
+        alert('Vui lòng chọn ngày lập');
+        return;
+      }
+      if (!formData.employee) {
+        alert('Vui lòng chọn nhân viên lập');
+        return;
+      }
+      if (!formData.importType) {
+        alert('Vui lòng chọn loại nhập');
+        return;
+      }
+
+      // Validation
+      if (!formData.createdDate) {
+        alert('Vui lòng chọn ngày lập');
+        return;
+      }
+      if (!formData.employee) {
+        alert('Vui lòng chọn nhân viên lập');
+        return;
+      }
+      if (!formData.importType) {
+        alert('Vui lòng chọn loại nhập');
+        return;
+      }
+
+      // Combine items from both existing items and header rows
+      const headerRowsItems = headerRows.filter(row => 
+        row.values.productName || row.values.productCode || row.values.barcode
+      ).map(row => ({
+        barcode: row.values.barcode || '',
+        productCode: row.values.productCode || '',
+        productName: row.values.productName || '',
+        description: row.values.description || '',
+        conversion: Number(row.values.conversion) || 1,
+        quantity: Number(row.values.quantity) || 1,
+        unitPrice: Number(row.values.unitPrice) || 0,
+        transportCost: Number(row.values.transportCost) || 0,
+        noteDate: row.values.noteDate || null,
+        total: Number(row.values.total) || 0,
+        totalTransport: Number(row.values.totalTransport) || 0,
+        weight: Number(row.values.weight) || 0,
+        volume: Number(row.values.volume) || 0,
+        warehouse: row.values.warehouse ? String(row.values.warehouse) : '',
+        note: row.values.note || ''
+      }));
+
+      const existingItems = (items || []).map(it => ({
+        barcode: it.barcode || '',
+        productCode: it.productCode || '',
+        productName: it.productName || '',
+        description: it.description || '',
+        conversion: Number(it.conversion) || 1,
+        quantity: Number(it.quantity) || 1,
+        unitPrice: Number(it.unitPrice) || 0,
+        transportCost: Number(it.transportCost) || 0,
+        noteDate: it.noteDate || null,
+        total: Number(it.total) || 0,
+        totalTransport: Number(it.totalTransport) || 0,
+        weight: Number(it.weight) || 0,
+        volume: Number(it.volume) || 0,
+        warehouse: it.warehouse ? String(it.warehouse) : '',
+        note: it.note || ''
+      }));
+
+      // Validate có ít nhất 1 sản phẩm
+      if (headerRowsItems.length === 0 && existingItems.length === 0) {
+        alert('Vui lòng thêm ít nhất một sản phẩm vào phiếu nhập');
+        return;
+      }
+
+      const allItems = [...existingItems, ...headerRowsItems];
+      const totalAmount = allItems.reduce((s, it) => s + (Number(it.total) || 0), 0);
+      const totalWeight = allItems.reduce((s, it) => s + (Number(it.weight) || 0), 0);
+      const totalVolume = allItems.reduce((s, it) => s + (Number(it.volume) || 0), 0);
+
+      // HARDCODE HOÀN TOÀN để test - không dùng bất kỳ function nào
+      let totalText = 'hai mươi nghìn đồng'; // Fixed value để test
+      
+      // Freeze object để không ai có thể modify
+      Object.freeze(totalText);
+
+      console.log('=== FIXED TOTALTEXT TEST ===');
+      console.log('totalAmount:', totalAmount);
+      console.log('totalText HARDCODED:', totalText);
+      console.log('totalText frozen:', Object.isFrozen(totalText));
+
       const payload = {
-        importNumber: formData.importNumber,
+        importNumber: formData.importNumber || generateImportNumber(),
         date: formData.createdDate ? new Date(formData.createdDate).toISOString() : new Date().toISOString(),
-        note: formData.note,
-        employee: formData.employee,
-        total: (items || []).reduce((s, it) => s + (Number(it.total) || 0), 0),
-        items: (items || []).map(it => ({
-          barcode: it.barcode,
-          productCode: it.productCode,
-          productName: it.productName,
-          description: it.description,
-          conversion: it.conversion,
-          quantity: it.quantity,
-          unitPrice: it.unitPrice,
-          transportCost: it.transportCost || 0,
-          noteDate: it.noteDate || null,
-          total: it.total,
-          totalTransport: it.totalTransport || 0,
-          weight: it.weight,
-          volume: it.volume,
-          warehouse: it.warehouse,
-          note: it.note
-        }))
+        note: formData.note || '',
+        employee: formData.employee || 'admin 66',
+        importType: formData.importType,
+        supplier: formData.supplier || '',
+        invoice: formData.invoice || '',
+        invoiceDate: formData.invoiceDate ? new Date(formData.invoiceDate).toISOString() : new Date().toISOString(),
+        total: totalAmount,
+        totalWeight: Math.round(totalWeight * 100) / 100,
+        totalVolume: Math.round(totalVolume * 100) / 100,
+        totalText: totalText,
+        TotalText: totalText, // Try with capital T
+        items: allItems
       };
-      if (selectedImport && selectedImport.id) {
+
+      console.log('=== FINAL DEBUG INFO ===');
+      console.log('totalAmount:', totalAmount);
+      console.log('totalText FINAL:', JSON.stringify(totalText));
+      console.log('totalText type:', typeof totalText);
+      console.log('totalText === null:', totalText === null);
+      console.log('totalText === undefined:', totalText === undefined);
+      console.log('totalText length:', totalText?.length);
+      console.log('payload:', JSON.stringify(payload, null, 2));
+      console.log('========================');
+
+      // VALIDATION CUỐI CÙNG
+      if (totalText === null || totalText === undefined || totalText === '') {
+        console.error('CRITICAL: totalText is still null/undefined/empty!');
+        alert('Lỗi: Không thể tạo totalText. Vui lòng báo cáo lỗi này.');
+        return;
+      }
+
+      console.log('=== SAVE IMPORT DEBUG ===');
+      console.log('selectedImport:', selectedImport);
+      console.log('selectedImport?.id:', selectedImport?.id);
+      
+      // Check if this is an update (has existing import with ID) or create new
+      const isUpdate = selectedImport && selectedImport.id && selectedImport.id > 0;
+      console.log('Will use:', isUpdate ? 'PUT (update)' : 'POST (create)');
+
+      if (isUpdate) {
         const res = await fetch(`/api/Imports/${selectedImport.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ id: selectedImport.id, ...payload })
         });
-        if (!res.ok) throw new Error('Save failed');
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error('PUT Error:', errorText);
+          throw new Error(`Save failed: ${errorText}`);
+        }
+        // Fetch updated import and update local imports list so it appears on left
+        try {
+          const updatedRes = await fetch(`/api/Imports/${selectedImport.id}`);
+          if (updatedRes.ok) {
+            const updatedImport = await updatedRes.json();
+            // suppress auto-select before mutating imports state
+            suppressAutoSelectRef.current = true;
+            setImports(prev => (prev || []).map(i => i.id === updatedImport.id ? updatedImport : i));
+          } else {
+            // fallback: refresh list without auto-select
+            suppressAutoSelectRef.current = true;
+            await loadImports(false);
+          }
+        } catch (e) {
+          suppressAutoSelectRef.current = true;
+          await loadImports(false);
+        }
+
+        // Reset filters to ensure consistent view
+        setSearchTerm('');
+        setSearchCode('');
+        setImportType('');
+        setEmployee('');
+
+        // Reset form to a new import state (clear right layout)
+        resetFormForNewImport();
+
+        alert('Lưu phiếu nhập thành công! Phiếu đã được cập nhật.');
       } else {
+        console.log('=== SENDING POST REQUEST ===');
+        console.log('URL:', '/api/Imports');
+        console.log('Headers:', { 'Content-Type': 'application/json' });
+        console.log('Body string:', JSON.stringify(payload));
+        console.log('TotalText in body:', JSON.stringify(payload.totalText));
+        
         const res = await fetch('/api/Imports', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        if (!res.ok) throw new Error('Create failed');
+        
+        console.log('Response status:', res.status);
+        console.log('Response OK:', res.ok);
+        
+        if (!res.ok) {
+          const errorText = await res.text();
+          console.error('POST Error Response:', errorText);
+          
+          // Parse error để xem chi tiết
+          try {
+            const errorJson = JSON.parse(errorText);
+            console.error('Parsed error:', errorJson);
+          } catch (e) {
+            console.error('Raw error text:', errorText);
+          }
+          
+          throw new Error(`Create failed: ${errorText}`);
+        }
+        const newImport = await res.json();
+
+        // Insert the newly created import into local state so it appears in left list
+        suppressAutoSelectRef.current = true;
+        setImports(prev => {
+          try {
+            const exists = (prev || []).some(i => i.id === newImport.id);
+            if (exists) return prev;
+            return [newImport, ...(prev || [])];
+          } catch (e) { return [newImport]; }
+        });
+
+        // After successful save, refresh the imports list from server but do NOT auto-select
+        await loadImports(false);
+
+        // Reset filters to ensure new import is visible
+        setSearchTerm('');
+        setSearchCode('');
+        setImportType('');
+        setEmployee('');
+        // Update date range to include today
+        const today = new Date().toISOString().split('T')[0];
+        setDateFrom('2025-01-01'); // Set broader range
+        setDateTo(today);
+
+        // Reset form to create a new import
+        resetFormForNewImport();
+
+        alert('Lưu phiếu nhập thành công! Phiếu đã được thêm vào danh sách bên trái.');
       }
-      await loadImports();
-      if (selectedImport && selectedImport.id) await loadImportDetails(selectedImport.id);
-      setIsEditing(false);
-      alert('Lưu phiếu nhập thành công');
     } catch (err) {
       console.error('Save import error', err);
-      alert('Lưu phiếu nhập thất bại');
+      alert(`Lưu phiếu nhập thất bại: ${err.message}`);
     }
   };
 
@@ -1243,104 +1544,64 @@ const ImportGoods = () => {
     alert('Chức năng xem lịch sử nhập hàng đang được phát triển');
   };
 
-  const openModal = () => {
-    setShowModal(true);
+  const resetFormForNewImport = () => {
+    console.log('=== RESET FORM FOR NEW IMPORT ===');
+    console.log('Before reset - selectedImport:', selectedImport);
+    console.log('Before reset - formData:', formData);
+    
+    const newImportNumber = generateImportNumber();
+    console.log('Generated new import number:', newImportNumber);
+    
+    const newFormData = {
+      createdDate: dayjs().format('YYYY-MM-DD'),
+      employee: 'admin 66',
+      importType: '',
+      importNumber: newImportNumber,
+      supplier: '',
+      invoice: '',
+      invoiceDate: new Date().toISOString(),
+      totalWeight: 0,
+      totalVolume: 0,
+      note: ''
+    };
+    
+    console.log('New form data:', newFormData);
+    
+    // Reset states in correct order
+    setSelectedImport(null);
+    setFormData(newFormData);
+    setItems([]);
+    setHeaderRows([{ id: Date.now(), values: {} }]);
+    setIsEditing(true);
+    // hide right content when resetting to a new blank import
+    setShowRightContent(false);
+    setIsEditMode(false);
+    
+    // Reset filters để đảm bảo có thể thấy phiếu mới
+    setSearchTerm('');
+    setSearchCode('');
+    setImportType('');
+    setEmployee('');
+    
+    console.log('=== RESET COMPLETED ===');
+    alert(`Đã tạo phiếu nhập mới với số phiếu: ${newImportNumber}`);
   };
 
-  const handleCreateNewImport = async () => {
-    try {
-      // Validate that we have selected products
-      const selectedHeaderRows = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode);
-      if (selectedHeaderRows.length === 0) {
-        alert('Vui lòng chọn ít nhất một sản phẩm trước khi tạo phiếu nhập.');
-        return;
-      }
-
-      // Create import items from header rows
-      const items = selectedHeaderRows.map(row => ({
-        barcode: row.values.barcode || '',
-        productCode: row.values.productCode || '',
-        productName: row.values.productName || '',
-        description: row.values.description || '',
-        conversion: parseFloat(row.values.conversion) || 1,
-        quantity: parseFloat(row.values.quantity) || 1,
-        unitPrice: parseFloat(row.values.unitPrice) || 0,
-        total: parseFloat(row.values.total) || 0,
-        weight: parseFloat(row.values.weight) || 0,
-        volume: parseFloat(row.values.volume) || 0,
-        warehouse: row.values.warehouse || '',
-        note: row.values.noteDate || ''
-      }));
-
-      // Calculate total amount
-      const totalAmount = items.reduce((sum, item) => sum + (item.total || 0), 0);
-
-      // Create import object with proper date format
-      const importDate = formData.createdDate || new Date().toISOString().split('T')[0];
-      const newImport = {
-        importNumber: formData.importNumber || generateImportNumber(),
-        date: new Date(importDate).toISOString(), // Convert to proper ISO format
-        employee: formData.employee || '',
-        note: formData.note || '',
-        total: totalAmount,
-        items: items
-      };
-
-      // Submit to API
-      const response = await fetch('/api/Imports', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(newImport)
-      });
-
-      if (!response.ok) {
-        let errorMessage = 'Failed to create import';
-        try {
-          const errorData = await response.text();
-          console.error('Backend error:', errorData);
-          errorMessage += ': ' + errorData;
-        } catch (e) {
-          errorMessage += ': HTTP ' + response.status;
-        }
-        throw new Error(errorMessage);
-      }
-
-      const createdImport = await response.json();
-      
-      // Reload imports list and select the new one
-      await loadImports();
-      
-      // Find and select the newly created import
-      const refreshedImports = await fetch('/api/Imports').then(res => res.json());
-      const newlyCreated = refreshedImports.find(imp => imp.id === createdImport.id);
-      if (newlyCreated) {
-        setSelectedImport(newlyCreated);
-        await loadImportDetails(newlyCreated.id);
-      }
-
-      // Reset header rows
-      setHeaderRows([{ id: Date.now(), values: {} }]);
-      
-      // Close modal
-      setShowModal(false);
-      
-      alert('Tạo phiếu nhập thành công!');
-      
-    } catch (error) {
-      console.error('Error creating import:', error);
-      alert('Có lỗi xảy ra khi tạo phiếu nhập: ' + error.message);
-    }
-  };
+  // Function này không còn sử dụng vì đã thay đổi cơ chế
+  // const handleCreateNewImport = async () => { ... }
 
   const generateImportNumber = () => {
     const today = new Date();
-    const year = today.getFullYear().toString().slice(-2);
-    const month = (today.getMonth() + 1).toString().padStart(2, '0');
     const day = today.getDate().toString().padStart(2, '0');
-    const count = imports.length + 1;
-    return `PN${year}${month}${day}-${count.toString().padStart(6, '0')}`;
+    const month = (today.getMonth() + 1).toString().padStart(2, '0');
+    const year = today.getFullYear();
+    
+    // Sử dụng timestamp + random để đảm bảo unique
+    const timestamp = Date.now().toString().slice(-4);
+    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
+    const uniqueId = timestamp + random.slice(-1); // 4 digits unique
+    
+    return `PN-${day}${month}${year}-${uniqueId}`;
   };
 
   // Table row selection
@@ -1450,7 +1711,7 @@ const ImportGoods = () => {
       width: 100,
       render: (_, record) => (
         <Space>
-          <Button icon={<EditOutlined />} size="small" onClick={e => {e.stopPropagation();}} title="Sửa" />
+          <Button icon={<EditOutlined />} size="small" onClick={e => { e.stopPropagation(); editImport(record); }} title="Sửa" />
           <Popconfirm title="Bạn có chắc chắn muốn xóa phiếu nhập này?" onConfirm={e => handleDelete(record.id, e)} okText="Có" cancelText="Không">
             <Button icon={<DeleteOutlined />} danger size="small" onClick={e => e.stopPropagation()} title="Xóa" />
           </Popconfirm>
@@ -1612,22 +1873,22 @@ const ImportGoods = () => {
 
       {/* Right Panel - Import Details */}
   <div className="import-detail-panel">
-        {selectedImport ? (
+        <div className="detail-header">
+          <h2>THÔNG TIN NHẬP HÀNG</h2>
+          <div className="header-actions">
+            <button className="btn btn-primary" onClick={resetFormForNewImport}>
+              + Tạo mới
+            </button>
+            <button className="btn btn-success" onClick={handleAddItem} title="Click để thêm hàng hóa | Ctrl+Click để mở tab mới">
+              📦 Thêm hàng hóa
+            </button>
+            <button className="btn btn-info" onClick={handleViewHistory}>
+              📋 Xem lịch sử nhập hàng
+            </button>
+          </div>
+        </div>
+        {selectedImport && showRightContent ? (
           <>
-            <div className="detail-header">
-              <h2>THÔNG TIN NHẬP HÀNG</h2>
-              <div className="header-actions">
-                <button className="btn btn-primary" onClick={openModal}>
-                  + Tạo mới
-                </button>
-                <button className="btn btn-success" onClick={handleAddItem} title="Click để thêm hàng hóa | Ctrl+Click để mở tab mới">
-                  📦 Thêm hàng hóa
-                </button>
-                <button className="btn btn-info" onClick={handleViewHistory}>
-                  📋 Xem lịch sử nhập hàng
-                </button>
-              </div>
-            </div>
 
             <div className="detail-content">
               <div className="detail-form" style={{display:'flex',flexDirection:'column',gap:12}}>
@@ -1639,12 +1900,14 @@ const ImportGoods = () => {
                         type="date"
                         value={formData.createdDate || (selectedImport?.createdDate ? dayjs(selectedImport.createdDate).format('YYYY-MM-DD') : '')}
                         onChange={(e) => {
+                          if (!isEditMode) return;
                           const v = e.target.value;
                           setFormData(fd => ({ ...fd, createdDate: v }));
                           setSelectedImport(si => si ? ({ ...si, createdDate: v }) : si);
                           setIsEditing(true);
                         }}
                         style={{width:'100%'}}
+                        readOnly={!isEditMode}
                       />
                   </div>
                   <div style={{flex:'0 0 20%'}}>
@@ -1658,12 +1921,14 @@ const ImportGoods = () => {
                     <select 
                       value={formData.importType || selectedImport.importType || ''}
                       onChange={(e) => {
+                        if (!isEditMode) return;
                         const v = e.target.value;
                         setFormData(fd => ({ ...fd, importType: v }));
                         setSelectedImport(si => si ? ({ ...si, importType: v }) : si);
                         setIsEditing(true);
                       }}
                       style={{width:'100%'}}
+                      disabled={!isEditMode}
                     >
                       <option value="">Chọn loại nhập</option>
                       {transactionContents.map(tc => (
@@ -1830,7 +2095,17 @@ const ImportGoods = () => {
                   <div style={{flex:'0 0 30%'}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Số phiếu</label>
                     <div className="input-with-status">
-                      <input type="text" value={selectedImport.importNumber} readOnly style={{width:'100%'}} />
+                      <input
+                        type="text"
+                        value={formData.importNumber || generateImportNumber()}
+                        onChange={(e) => {
+                          if (!isEditMode) return;
+                          setFormData(fd => ({ ...fd, importNumber: e.target.value }));
+                        }}
+                        style={{width:'100%'}}
+                        placeholder="Tự động tạo"
+                        readOnly={!isEditMode}
+                      />
                       <span className="status-icon">✓</span>
                     </div>
                   </div>
@@ -1838,22 +2113,25 @@ const ImportGoods = () => {
                     <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú PN</label>
                     <input
                       type="text"
-                      value={formData.note !== undefined ? formData.note : (selectedImport.note || '')}
+                      value={formData.note || ''}
                       onChange={(e) => {
+                        if (!isEditMode) return;
                         const v = e.target.value;
                         setFormData(fd => ({ ...fd, note: v }));
-                        setSelectedImport(si => si ? ({ ...si, note: v }) : si);
                         setIsEditing(true);
                       }}
                       style={{width:'100%'}}
+                      placeholder="Nhập ghi chú cho phiếu nhập"
+                      readOnly={!isEditMode}
                     />
                   </div>
                 </div>
               </div>
 
-              <div className="items-section">
+              {isEditMode && (
+                <div className="items-section">
 
-                <div className="items-table-container" ref={itemsTableRef}>
+                  <div className="items-table-container" ref={itemsTableRef}>
                   <div style={{margin: '8px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 14}}>
                     <span>Tổng {headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode).length}</span>
                     <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
@@ -2123,51 +2401,15 @@ const ImportGoods = () => {
                       ))}
                     </thead>
                     <tbody>
-                      {paginatedItems?.length > 0 ? (
-                        paginatedItems.map((item) => (
-                          <tr key={item.id}>
-                            {rightVisibleCols.includes('barcode') && <td>{item.barcode}</td>}
-                            {rightVisibleCols.includes('productCode') && <td>{item.productCode}</td>}
-                            {rightVisibleCols.includes('productName') && <td style={{maxWidth:220,overflow:'hidden',textOverflow:'ellipsis'}} title={item.productName}>{item.productName}</td>}
-                            {rightVisibleCols.includes('quantity') && <td>{item.quantity}</td>}
-                            {rightVisibleCols.includes('unitPrice') && <td>{formatCurrency(item.unitPrice||0)}</td>}
-                            {rightVisibleCols.includes('transportCost') && <td>{formatCurrency(item.transportCost||0)}</td>}
-                            {rightVisibleCols.includes('noteDate') && <td>{item.noteDate ? dayjs(item.noteDate).format('DD/MM/YYYY') : ''}</td>}
-                            {rightVisibleCols.includes('total') && <td>{formatCurrency(item.total||0)}</td>}
-                            {rightVisibleCols.includes('totalTransport') && <td>{formatCurrency(item.totalTransport||0)}</td>}
-                            {rightVisibleCols.includes('weight') && <td>{formatWeight(item.weight)}</td>}
-                            {rightVisibleCols.includes('volume') && <td>{formatVolume(item.volume)}</td>}
-                            {rightVisibleCols.includes('warehouse') && <td>{item.warehouse}</td>}
-                            {rightVisibleCols.includes('description') && <td style={{maxWidth:360,overflow:'hidden',textOverflow:'ellipsis'}} title={item.description}>{item.description}</td>}
-                            {rightVisibleCols.includes('conversion') && <td>{item.conversion}</td>}
-                            {rightVisibleCols.includes('actions') && <td>
-                              <div className="action-up-down" style={{display:'flex',gap:'4px',alignItems:'center'}}>
-                                <button 
-                                  onClick={() => editItem((paginatedItems.indexOf(item) + (rightCurrentPage-1)*rightItemsPerPage))} 
-                                  style={{padding:'2px 8px',fontSize:'12px',backgroundColor:'#1677ff',color:'white',border:'none',borderRadius:'3px',cursor:'pointer'}}
-                                >
-                                  Sửa
-                                </button>
-                                <button 
-                                  onClick={() => deleteItem(paginatedItems.indexOf(item))} 
-                                  style={{padding:'2px 8px',fontSize:'12px',backgroundColor:'#ff4d4f',color:'white',border:'none',borderRadius:'3px',cursor:'pointer'}}
-                                >
-                                  Xóa
-                                </button>
-                              </div>
-                            </td>}
-                          </tr>
-                        ))
-                      ) : (
-                        <tr>
-                          <td colSpan={rightVisibleCols.length || 1} className="no-data">
-                            <div className="empty-state">
-                              <div className="empty-icon">📋</div>
-                              <div>Trống</div>
-                            </div>
-                          </td>
-                        </tr>
-                      )}
+                      <tr>
+                        <td colSpan={rightVisibleCols.length || 1} className="no-data">
+                          <div className="empty-state">
+                            <div className="empty-icon">📋</div>
+                            <div>Nhập sản phẩm ở các ô phía trên</div>
+                            <div style={{fontSize: 12, color: '#666', marginTop: 4}}>Sử dụng các dropdown và input để thêm/sửa sản phẩm</div>
+                          </div>
+                        </td>
+                      </tr>
                     </tbody>
                   </table>
                 </div>
@@ -2194,7 +2436,8 @@ const ImportGoods = () => {
                     return numberToVietnameseText(grandTotal);
                   })()})</span>
                 </div>
-              </div>
+                </div>
+              )}
 
               {/* Right-side column settings modal */}
               <Modal
@@ -2232,9 +2475,11 @@ const ImportGoods = () => {
               />
 
               <div className="detail-actions">
+                {isEditMode && (
                   <button className="btn btn-info" onClick={saveImport} disabled={!isEditing}>
                     📁 Lưu lại
                   </button>
+                )}
                 <button className="btn btn-purple" onClick={handlePrint}>
                   🖨 In A4
                 </button>
@@ -2244,9 +2489,422 @@ const ImportGoods = () => {
               </div>
             </div>
           </>
+        ) : selectedImport && !showRightContent ? (
+          <div style={{padding:20, color:'#777'}}>Chọn phiếu bên trái rồi bấm <strong>Sửa</strong> để xem hoặc chỉnh sửa chi tiết ở bên phải.</div>
         ) : (
-          <div className="no-selection">
-            <h3>Chọn một phiếu nhập để xem chi tiết</h3>
+          // Default view for new import - show form and table
+          <div className="detail-content">
+            <div className="detail-form" style={{display:'flex',flexDirection:'column',gap:12}}>
+              {/* Top row: Ngày lập, Nhân viên, Loại nhập, Tổng số kg, Tổng số khối (each 20%) */}
+              <div style={{display:'flex',gap:12}}>
+                <div style={{flex:'0 0 20%'}}>
+                    <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Ngày lập</label>
+                    <input
+                      type="date"
+                      value={formData.createdDate || dayjs().format('YYYY-MM-DD')}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setFormData(fd => ({ ...fd, createdDate: v }));
+                        setIsEditing(true);
+                      }}
+                      style={{width:'100%'}}
+                    />
+                </div>
+                <div style={{flex:'0 0 20%'}}>
+                  <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Nhân viên lập</label>
+                  <select 
+                    value={formData.employee || 'admin 66'}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setFormData(fd => ({ ...fd, employee: v }));
+                      setIsEditing(true);
+                    }}
+                    style={{width:'100%'}}
+                  >
+                    <option value="admin 66">admin 66</option>
+                    <option value="user 01">user 01</option>
+                  </select>
+                </div>
+                <div style={{flex:'0 0 20%'}}>
+                  <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Loại nhập</label>
+                  <select 
+                    value={formData.importType || ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setFormData(fd => ({ ...fd, importType: v }));
+                      setIsEditing(true);
+                    }}
+                    style={{width:'100%'}}
+                  >
+                    <option value="">Chọn loại nhập</option>
+                    {transactionContents.map(tc => (
+                      <option key={tc.id} value={tc.name}>{tc.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div style={{flex:'0 0 20%'}}>
+                  <label style={{display:'block',fontSize:12,fontWeight:600}}>Tổng số kg</label>
+                  <input 
+                    type="text" 
+                    value={(() => {
+                      const headerTotals = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
+                        .reduce((sum, row) => {
+                          const weight = parseFloat(row.values.weight) || 0;
+                          return Math.round((sum + weight) * 100) / 100;
+                        }, 0);
+                      return formatWeight(headerTotals);
+                    })()} 
+                    readOnly 
+                    style={{width:'100%', background: '#f5f5f5'}} 
+                  />
+                </div>
+                <div style={{flex:'0 0 20%'}}>
+                  <label style={{display:'block',fontSize:12,fontWeight:600}}>Tổng số khối</label>
+                  <input 
+                    type="text" 
+                    value={(() => {
+                      const headerTotals = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
+                        .reduce((sum, row) => {
+                          const volume = parseFloat(row.values.volume) || 0;
+                          return Math.round((sum + volume) * 10000) / 10000;
+                        }, 0);
+                      return formatVolume(headerTotals);
+                    })()} 
+                    readOnly 
+                    style={{width:'100%', background: '#f5f5f5'}} 
+                  />
+                </div>
+              </div>
+
+              {/* Second row: Số phiếu (30%) and Ghi chú (70%) */}
+              <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
+                <div style={{flex:'0 0 30%'}}>
+                  <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Số phiếu</label>
+                  <div className="input-with-status">
+                    <input
+                      type="text"
+                      value={formData.importNumber || generateImportNumber()}
+                      onChange={(e) => setFormData(fd => ({ ...fd, importNumber: e.target.value }))}
+                      style={{width:'100%'}}
+                      placeholder="Tự động tạo" 
+                    />
+                    <span className="status-icon">✓</span>
+                  </div>
+                </div>
+                <div style={{flex:'1 1 70%'}}>
+                  <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú PN</label>
+                  <input
+                    type="text"
+                    value={formData.note || ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setFormData(fd => ({ ...fd, note: v }));
+                      setIsEditing(true);
+                    }}
+                    style={{width:'100%'}}
+                    placeholder="Nhập ghi chú cho phiếu nhập"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div className="items-section">
+              <div className="items-table-container" ref={itemsTableRef}>
+                <div style={{margin: '8px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 14}}>
+                  <span>Tổng {headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode).length}</span>
+                  <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
+                    <button className="icon-btn settings-btn" onClick={()=>setShowRightSettings(true)} title="Cài đặt hiển thị cột" style={{border: 'none', background: '#333', color: 'white', borderRadius: 4, width: 28, height: 28, fontWeight: 'bold'}}>
+                      <span>⚙</span>
+                    </button>
+                    <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.max(1, p - 1))}>{'<'}</button>
+                    <span style={{fontWeight: 600}}>{rightCurrentPage}</span>
+                    <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.min(rightTotalPages, p + 1))}>{'>'}</button>
+                    <select value={rightItemsPerPage} onChange={(e) => { setRightItemsPerPage(parseInt(e.target.value, 10)); setRightCurrentPage(1); }} style={{marginLeft: 8, borderRadius: 4, border: '1px solid #e5e7eb', padding: '2px 8px'}}>
+                      <option value={10}>10 / trang</option>
+                      <option value={20}>20 / trang</option>
+                      <option value={50}>50 / trang</option>
+                      <option value={100}>100 / trang</option>
+                      <option value={200}>200 / trang</option>
+                      <option value={500}>500 / trang</option>
+                      <option value={1000}>1000 / trang</option>
+                      <option value={5000}>5000 / trang</option>
+                    </select>
+                  </div>
+                </div>
+
+                <table className="items-table" style={{minWidth:1300}}>
+                  <thead>
+                    <tr>
+                      {rightVisibleCols.includes('barcode') && <th key="barcode" style={{textAlign: 'center'}}><span>Mã vạch</span></th>}
+                      {rightVisibleCols.includes('productCode') && <th key="productCode" style={{textAlign: 'center'}}><span>Mã hàng</span></th>}
+                      {rightVisibleCols.includes('productName') && <th key="productName" style={{textAlign: 'center'}}><span>Hàng hóa</span></th>}
+                      {rightVisibleCols.includes('quantity') && <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>}
+                      {rightVisibleCols.includes('unitPrice') && <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>}
+                      {rightVisibleCols.includes('transportCost') && <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>}
+                      {rightVisibleCols.includes('noteDate') && <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú date PN</span></th>}
+                      {rightVisibleCols.includes('total') && <th key="total" style={{textAlign: 'center'}}><span>Thành tiền</span></th>}
+                      {rightVisibleCols.includes('totalTransport') && <th key="totalTransport" style={{textAlign: 'center'}}><span>TT vận chuyển</span></th>}
+                      {rightVisibleCols.includes('weight') && <th key="weight" style={{textAlign: 'center'}}><span>Số kg</span></th>}
+                      {rightVisibleCols.includes('volume') && <th key="volume" style={{textAlign: 'center'}}><span>Số khối</span></th>}
+                      {rightVisibleCols.includes('warehouse') && <th key="warehouse" style={{textAlign: 'center'}}><span>Kho hàng</span></th>}
+                      {rightVisibleCols.includes('description') && <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>}
+                      {rightVisibleCols.includes('conversion') && <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>}
+                      {rightVisibleCols.includes('actions') && (
+                        <th key="actions">
+                          <span>Thao tác</span>
+                        </th>
+                      )}
+                    </tr>
+                    {/* Header input rows for new entries */}
+                    {headerRows.map((row, rIdx) => (
+                      <tr key={row.id} className="header-input-row">
+                        {['barcode','productCode','productName','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'].map(colKey => {
+                          if (colKey === 'actions') {
+                            if (!rightVisibleCols.includes('actions')) return null;
+                            return (
+                              <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
+                                <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'4px'}}>
+                                  <button 
+                                    onClick={() => {
+                                      setHeaderRows(prev => {
+                                        const copy = prev.map(r => ({ ...r, values: { ...r.values } }));
+                                        if (copy[rIdx]) {
+                                          copy[rIdx].values = {};
+                                        }
+                                        return copy;
+                                      });
+                                    }}
+                                    style={{
+                                      padding:'4px 8px',
+                                      fontSize:12,
+                                      backgroundColor:'#ff4d4f',
+                                      color:'white',
+                                      border:'none',
+                                      borderRadius:'3px',
+                                      cursor:'pointer'
+                                    }}
+                                  >
+                                    Reset
+                                  </button>
+                                  {/* Show Xóa button for rows that have product data */}
+                                  {(row.values.productName || row.values.productCode || row.values.barcode) && (
+                                    <button 
+                                      onClick={() => setHeaderRows(prev => prev.filter((_,i)=>i!==rIdx))} 
+                                      style={{
+                                        padding:'4px 8px',
+                                        fontSize:12,
+                                        backgroundColor:'#6c757d',
+                                        color:'white',
+                                        border:'none',
+                                        borderRadius:'3px',
+                                        cursor:'pointer'
+                                      }}
+                                    >
+                                      Xóa
+                                    </button>
+                                  )}
+                                </div>
+                              </td>
+                            );
+                          }
+
+                          if (['productCode','productName','barcode'].includes(colKey)) {
+                            if (!rightVisibleCols.includes(colKey)) return null;
+                            return (
+                              <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                                {colKey === 'productName' ? (
+                                  <button
+                                    onClick={() => {
+                                      setProductModalColumn(colKey);
+                                      setProductModalRowIndex(rIdx);
+                                      setProductModalSearch('');
+                                      setModalCurrentPage(1);
+                                      setSelectAllCurrentPage(false);
+                                      setSelectedModalProducts(row.values[colKey] ? [row.values[colKey]] : []);
+                                      setShowProductModal(true);
+                                    }}
+                                    style={{
+                                      width: '100%',
+                                      minWidth: 120,
+                                      padding: '4px 8px',
+                                      border: '1px solid #d9d9d9',
+                                      borderRadius: '4px',
+                                      background: '#fff',
+                                      textAlign: 'left',
+                                      cursor: 'pointer',
+                                      fontSize: '12px'
+                                    }}
+                                  >
+                                    {row.values[colKey] || `-- Chọn ${colKey} --`}
+                                  </button>
+                                ) : (
+                                  <Select
+                                    value={row.values[colKey] || undefined}
+                                    onChange={(val) => handleHeaderRowProductSelect(rIdx, colKey, val)}
+                                    placeholder={`-- Chọn ${colKey} --`}
+                                    size="small"
+                                    showSearch
+                                    allowClear
+                                    style={{ width: '100%', minWidth: 200 }}
+                                    dropdownStyle={{ 
+                                      maxHeight: 400, 
+                                      overflow: 'auto',
+                                      zIndex: 9999
+                                    }}
+                                    dropdownMatchSelectWidth={false}
+                                    dropdownClassName="product-select-dropdown"
+                                    optionLabelProp={colKey === 'productName' ? 'children' : 'label'}
+                                    filterOption={(input, option) => {
+                                      const p = products.find(pp => pp.id.toString() === option.value);
+                                      if (!p) return false;
+                                      const txt = `${p.code||''} ${p.name||''} ${p.barcode||''}`.toLowerCase();
+                                      return txt.includes((input||'').toLowerCase());
+                                    }}
+                                  >
+                                    {products.map(p => (
+                                      <Select.Option 
+                                        key={p.id} 
+                                        value={p.id.toString()}
+                                        label={colKey === 'productName' ? p.name : getProductOptionLabel(p)}
+                                      >
+                                        {colKey === 'productName' ? (
+                                          <div style={{fontSize:12, fontWeight:600}}>{getProductOptionLabel(p)}</div>
+                                        ) : (
+                                          <div style={{fontSize:12, fontWeight:600}}>{getProductOptionLabel(p)}</div>
+                                        )}
+                                      </Select.Option>
+                                    ))}
+                                  </Select>
+                                )}
+                              </td>
+                            );
+                          }
+
+                          if (colKey === 'warehouse') {
+                            if (!rightVisibleCols.includes(colKey)) return null;
+                            return (
+                              <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                                <Select
+                                  value={row.values[colKey] || undefined}
+                                  onChange={(val) => handleHeaderRowChange(rIdx, colKey, val)}
+                                  placeholder="-- Chọn kho --"
+                                  size="small"
+                                  allowClear
+                                  style={{ width: '100%', minWidth: 120 }}
+                                >
+                                  {warehouses.map(w => (
+                                    <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>
+                                  ))}
+                                </Select>
+                              </td>
+                            );
+                          }
+
+                          if (colKey === 'noteDate') {
+                            if (!rightVisibleCols.includes(colKey)) return null;
+                            return (
+                              <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                                <DatePicker
+                                  value={row.values[colKey] ? dayjs(row.values[colKey]) : null}
+                                  onChange={(d) => handleHeaderRowChange(rIdx, colKey, d ? d.format('YYYY-MM-DD') : null)}
+                                  format="DD/MM/YYYY"
+                                  placeholder="Chọn ngày"
+                                  size="small"
+                                  style={{ width: '100%', minWidth: 180 }}
+                                  showToday={true}
+                                  allowClear={true}
+                                  picker="date"
+                                />
+                              </td>
+                            );
+                          }
+
+                          if (!rightVisibleCols.includes(colKey)) return null;
+                          return (
+                            <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                              <Input
+                                value={(() => {
+                                  const rawValue = row.values[colKey] || '';
+                                  if (rawValue === '') return '';
+                                  
+                                  if (['unitPrice', 'transportCost'].includes(colKey)) {
+                                    const numValue = parseFloat(rawValue) || 0;
+                                    return numValue === 0 ? '' : formatCurrency(numValue);
+                                  }
+                                  if (['total', 'totalTransport'].includes(colKey)) {
+                                    return formatInputDisplay(rawValue, 'currency');
+                                  }
+                                  if (colKey === 'weight') {
+                                    return formatInputDisplay(rawValue, 'weight');
+                                  }
+                                  if (colKey === 'volume') {
+                                    return formatInputDisplay(rawValue, 'volume');
+                                  }
+                                  return rawValue;
+                                })()}
+                                onChange={(e) => {
+                                  const inputValue = e.target.value;
+                                  
+                                  // For currency fields, allow user to type freely but parse for calculation
+                                  if (['unitPrice', 'transportCost', 'total', 'totalTransport'].includes(colKey)) {
+                                    // Allow only digits and comma
+                                    const sanitizedValue = inputValue.replace(/[^0-9,]/g, '');
+                                    // Store the raw value (without formatting) for calculation
+                                    const rawValue = sanitizedValue.replace(/,/g, '');
+                                    handleHeaderRowChange(rIdx, colKey, rawValue);
+                                  } else {
+                                    handleHeaderRowChange(rIdx, colKey, inputValue);
+                                  }
+                                }}
+                                size="small"
+                                style={{ width: '100%', minWidth: 100 }}
+                                readOnly={['total', 'totalTransport'].includes(colKey)}
+                                placeholder={['total', 'totalTransport'].includes(colKey) ? 'Tự động tính' : ''}
+                              />
+                            </td>
+                          );
+                        })}
+                      </tr>
+                    ))}
+                  </thead>
+                  <tbody>
+                    <tr>
+                      <td colSpan={rightVisibleCols.length || 1} className="no-data">
+                        <div className="empty-state">
+                          <div className="empty-icon">📋</div>
+                          <div>Chưa có hàng hóa nào</div>
+                          <div style={{fontSize: 12, color: '#666', marginTop: 4}}>Nhấn "Thêm hàng hóa" hoặc chọn sản phẩm từ các ô input phía trên</div>
+                        </div>
+                      </td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+
+              <div className="table-summary">
+                <span>Tổng tiền: <strong>{(() => {
+                  const headerTotal = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
+                    .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
+                  return formatCurrency(headerTotal);
+                })()}</strong> ({(() => {
+                  const headerTotal = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
+                    .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
+                  return numberToVietnameseText(headerTotal);
+                })()})</span>
+              </div>
+            </div>
+
+            <div className="detail-actions">
+              <button className="btn btn-info" onClick={saveImport} disabled={!isEditing}>
+                📁 Lưu lại
+              </button>
+              <button className="btn btn-purple" onClick={handlePrint}>
+                🖨 In A4
+              </button>
+              <button className="btn btn-success" onClick={handleExport}>
+                📤 Xuất Excel
+              </button>
+            </div>
           </div>
         )}
       </div>
@@ -2262,10 +2920,69 @@ const ImportGoods = () => {
             <div className="modal-body">
               <div style={{marginBottom: 16}}>
                 <strong>Thông tin phiếu nhập:</strong>
-                <div>Số phiếu: {formData.importNumber || generateImportNumber()}</div>
-                <div>Ngày nhập: {formData.createdDate}</div>
-                <div>Nhân viên: {formData.employee}</div>
-                <div>Ghi chú: {formData.note}</div>
+                <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '8px'}}>
+                  <div>
+                    <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4}}>
+                      <span style={{color: 'red', marginRight: 4}}>*</span>Số phiếu
+                    </label>
+                    <input
+                      type="text"
+                      value={formData.importNumber || generateImportNumber()}
+                      onChange={(e) => setFormData(prev => ({...prev, importNumber: e.target.value}))}
+                      style={{width: '100%', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
+                    />
+                  </div>
+                  <div>
+                    <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4}}>
+                      <span style={{color: 'red', marginRight: 4}}>*</span>Ngày lập
+                    </label>
+                    <input
+                      type="date"
+                      value={formData.createdDate}
+                      onChange={(e) => setFormData(prev => ({...prev, createdDate: e.target.value}))}
+                      style={{width: '100%', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
+                    />
+                  </div>
+                  <div>
+                    <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4}}>
+                      <span style={{color: 'red', marginRight: 4}}>*</span>Nhân viên lập
+                    </label>
+                    <select
+                      value={formData.employee}
+                      onChange={(e) => setFormData(prev => ({...prev, employee: e.target.value}))}
+                      style={{width: '100%', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
+                    >
+                      <option value="">-- Chọn nhân viên --</option>
+                      <option value="admin 66">admin 66</option>
+                      <option value="user 01">user 01</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4}}>
+                      <span style={{color: 'red', marginRight: 4}}>*</span>Loại nhập
+                    </label>
+                    <select
+                      value={formData.importType}
+                      onChange={(e) => setFormData(prev => ({...prev, importType: e.target.value}))}
+                      style={{width: '100%', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
+                    >
+                      <option value="">-- Chọn loại nhập --</option>
+                      {transactionContents.map(tc => (
+                        <option key={tc.id} value={tc.name}>{tc.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                  <div style={{gridColumn: '1 / 3'}}>
+                    <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4}}>Ghi chú</label>
+                    <input
+                      type="text"
+                      value={formData.note}
+                      onChange={(e) => setFormData(prev => ({...prev, note: e.target.value}))}
+                      placeholder="Nhập ghi chú cho phiếu nhập"
+                      style={{width: '100%', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
+                    />
+                  </div>
+                </div>
               </div>
               
               <div style={{marginBottom: 16}}>
@@ -2460,9 +3177,9 @@ const ImportGoods = () => {
                 const checked = e.target.checked;
                 setSelectAllCurrentPage(checked);
                 
-                const filteredProducts = products.filter(p => 
+                const filteredProducts = products.filter(p => {
                   productModalSearch ? p.name?.toLowerCase().includes(productModalSearch.toLowerCase()) : true
-                );
+                });
                 const startIndex = (modalCurrentPage - 1) * modalPageSize;
                 const currentPageProducts = filteredProducts.slice(startIndex, startIndex + modalPageSize);
                 

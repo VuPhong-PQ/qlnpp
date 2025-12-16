@@ -68,7 +68,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("AccountFunds");
+                    b.ToTable("AccountFunds", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.BankLoan", b =>
@@ -119,7 +119,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("BankLoans");
+                    b.ToTable("BankLoans", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.CompanyInfo", b =>
@@ -172,7 +172,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("CompanyInfos");
+                    b.ToTable("CompanyInfos", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.Customer", b =>
@@ -275,7 +275,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Customers");
+                    b.ToTable("Customers", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.CustomerGroup", b =>
@@ -308,7 +308,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("CustomerGroups");
+                    b.ToTable("CustomerGroups", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.GroupPermission", b =>
@@ -350,7 +350,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("GroupPermissions");
+                    b.ToTable("GroupPermissions", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.Import", b =>
@@ -374,18 +374,47 @@ namespace QlnppApi.Migrations
                         .HasMaxLength(100)
                         .HasColumnType("nvarchar(100)");
 
+                    b.Property<string>("ImportType")
+                        .IsRequired()
+                        .HasMaxLength(200)
+                        .HasColumnType("nvarchar(200)");
+
+                    b.Property<string>("Invoice")
+                        .IsRequired()
+                        .HasMaxLength(100)
+                        .HasColumnType("nvarchar(100)");
+
+                    b.Property<DateTime>("InvoiceDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("Note")
                         .IsRequired()
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<string>("Supplier")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
                     b.Property<decimal>("Total")
                         .HasPrecision(18, 2)
                         .HasColumnType("decimal(18,2)");
 
+                    b.Property<string>("TotalText")
+                        .IsRequired()
+                        .HasMaxLength(500)
+                        .HasColumnType("nvarchar(500)");
+
+                    b.Property<decimal>("TotalVolume")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal>("TotalWeight")
+                        .HasColumnType("decimal(18,2)");
+
                     b.HasKey("Id");
 
-                    b.ToTable("Imports");
+                    b.ToTable("Imports", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.ImportItem", b =>
@@ -417,6 +446,9 @@ namespace QlnppApi.Migrations
                         .HasMaxLength(1000)
                         .HasColumnType("nvarchar(1000)");
 
+                    b.Property<DateTime?>("NoteDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<string>("ProductCode")
                         .IsRequired()
                         .HasMaxLength(200)
@@ -437,6 +469,12 @@ namespace QlnppApi.Migrations
 
                     b.Property<decimal?>("Total")
                         .HasPrecision(18, 2)
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("TotalTransport")
+                        .HasColumnType("decimal(18,2)");
+
+                    b.Property<decimal?>("TransportCost")
                         .HasColumnType("decimal(18,2)");
 
                     b.Property<decimal?>("UnitPrice")
@@ -460,7 +498,7 @@ namespace QlnppApi.Migrations
 
                     b.HasIndex("ImportId");
 
-                    b.ToTable("ImportItems");
+                    b.ToTable("ImportItems", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.Order", b =>
@@ -558,7 +596,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Orders");
+                    b.ToTable("Orders", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.Product", b =>
@@ -806,7 +844,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Products");
+                    b.ToTable("Products", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.ProductCategory", b =>
@@ -838,7 +876,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("ProductCategories");
+                    b.ToTable("ProductCategories", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.Quotation", b =>
@@ -878,7 +916,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Quotations");
+                    b.ToTable("Quotations", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.QuotationItem", b =>
@@ -946,7 +984,7 @@ namespace QlnppApi.Migrations
 
                     b.HasIndex("QuotationId");
 
-                    b.ToTable("QuotationItems");
+                    b.ToTable("QuotationItems", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.Supplier", b =>
@@ -1045,7 +1083,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Suppliers");
+                    b.ToTable("Suppliers", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.TransactionContent", b =>
@@ -1078,7 +1116,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("TransactionContents");
+                    b.ToTable("TransactionContents", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.Unit", b =>
@@ -1107,7 +1145,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Units");
+                    b.ToTable("Units", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.User", b =>
@@ -1165,7 +1203,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Users");
+                    b.ToTable("Users", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.UserPermission", b =>
@@ -1209,7 +1247,7 @@ namespace QlnppApi.Migrations
 
                     b.HasIndex("UserId");
 
-                    b.ToTable("UserPermissions");
+                    b.ToTable("UserPermissions", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.Vehicle", b =>
@@ -1264,7 +1302,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Vehicles");
+                    b.ToTable("Vehicles", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.Warehouse", b =>
@@ -1305,7 +1343,7 @@ namespace QlnppApi.Migrations
 
                     b.HasKey("Id");
 
-                    b.ToTable("Warehouses");
+                    b.ToTable("Warehouses", (string)null);
                 });
 
             modelBuilder.Entity("QlnppApi.Models.ImportItem", b =>
