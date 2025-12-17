@@ -63,6 +63,8 @@ const ImportGoods = () => {
       return () => document.removeEventListener('click', handleClick);
     }
   }, [contextMenu.visible]);
+  
+  
   const [showModal, setShowModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [selectedImport, setSelectedImport] = useState(null);
@@ -135,6 +137,21 @@ const ImportGoods = () => {
   const itemsTableRef = useRef(null);
   const productSelectRefs = useRef({});
   const [headerRows, setHeaderRows] = useState(() => [{ id: Date.now(), values: {} }]);
+
+  // Debug logging helper (no-op in non-dev environments)
+  const devLog = (...args) => {
+    try {
+      if (process && process.env && process.env.NODE_ENV === 'development') {
+        console.log(...args);
+      }
+    } catch (e) {
+      // ignore if process not defined in browser
+      // fallback to console.log only if present
+      if (typeof console !== 'undefined' && console.log) console.log(...args);
+    }
+  };
+
+
 
   // Helper function to calculate totals from items
   const calculateTotals = (itemsList) => {
@@ -307,7 +324,32 @@ const ImportGoods = () => {
   // Pagination state for product modal
   const [modalCurrentPage, setModalCurrentPage] = useState(1);
   const [modalPageSize, setModalPageSize] = useState(10);
-  
+
+  // Memoized product filtering for product modal to avoid repeated expensive filters
+  const memoizedFilteredProducts = React.useMemo(() => {
+    if (!products || products.length === 0) return [];
+    if (!productModalSearch) return products;
+    const terms = removeVietnameseTones(productModalSearch.toLowerCase()).split(/\s+/).filter(t => t);
+    return products.filter(p => {
+      const searchableText = [
+        removeVietnameseTones((p.name || '').toLowerCase()),
+        removeVietnameseTones((p.code || '').toLowerCase()),
+        removeVietnameseTones((p.barcode || '').toLowerCase()),
+        (p.importPrice || p.price || p.priceRetail || 0).toString(),
+        (p.defaultUnit || p.DefaultUnit || p.unit || p.baseUnit || '').toLowerCase()
+      ].join(' ');
+      return terms.every(term => searchableText.includes(term));
+    });
+  }, [products, productModalSearch]);
+
+  // Memoized header calculations to avoid repeated expensive filtering during renders
+  const memoizedHeaderTotals = React.useMemo(() => {
+    const validRows = headerRows.filter(row => row && row.values && (row.values.productName || row.values.productCode || row.values.barcode));
+    const totalAmount = validRows.reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
+    const totalWeight = validRows.reduce((sum, row) => sum + (parseFloat(row.values.weight) || 0), 0);
+    const totalVolume = validRows.reduce((sum, row) => sum + (parseFloat(row.values.volume) || 0), 0);
+    return { validRows, totalAmount, totalWeight, totalVolume };
+  }, [headerRows]);
 
   const renderHeaderFilterTH = (colKey, label, placeholder) => {
     // Check if this column should have product dropdown
@@ -592,20 +634,23 @@ const ImportGoods = () => {
 
   const handleHeaderRowChange = (rowIndex, colKey, value) => {
     setHeaderRows(prev => {
-      const copy = prev.map(r => ({ ...r, values: { ...r.values } }));
-      copy[rowIndex].values[colKey] = value;
+      const copy = [...prev];
+      const targetRow = { ...copy[rowIndex], values: { ...copy[rowIndex].values } };
+      targetRow.values[colKey] = value;
+      copy[rowIndex] = targetRow;
       
-      // Auto-calculate dependent fields
-      const row = copy[rowIndex].values;
-      const quantity = parseFloat(row.quantity) || 0;
-      const unitPrice = parseFloat(row.unitPrice) || 0;
-      const transportCost = parseFloat(row.transportCost) || 0;
-      const weight = parseFloat(row.weight) || 0;
-      const volume = parseFloat(row.volume) || 0;
-      
-      // Calculate totals and store as raw numbers (they will be formatted for display)
-      copy[rowIndex].values.total = (quantity * unitPrice).toString();
-      copy[rowIndex].values.totalTransport = (quantity * transportCost).toString();
+      // Only auto-calculate when price/quantity related fields change
+      const needsRecalc = ['quantity', 'unitPrice', 'transportCost'].includes(colKey);
+      if (needsRecalc) {
+        const row = targetRow.values;
+        const quantity = parseFloat(row.quantity) || 0;
+        const unitPrice = parseFloat(row.unitPrice) || 0;
+        const transportCost = parseFloat(row.transportCost) || 0;
+        
+        // Calculate totals only when needed
+        targetRow.values.total = (quantity * unitPrice).toString();
+        targetRow.values.totalTransport = (quantity * transportCost).toString();
+      }
       
       return copy;
     });
@@ -879,34 +924,58 @@ const ImportGoods = () => {
     try { localStorage.setItem(RIGHT_COLS_KEY, JSON.stringify(rightVisibleCols)); } catch {}
   }, [rightVisibleCols]);
 
-  // Keep left list `totalAmount` in sync with right-side totals (headerRows/items)
+  // Debounced sync: update left list `totalAmount` after short idle to reduce re-renders
   React.useEffect(() => {
     if (!selectedImport) return;
-    let total = 0;
+    let active = true;
+    const t = setTimeout(() => {
+      if (!active) return;
 
-    if (isEditMode) {
-      // compute total from headerRows (editing mode)
-      const rows = (headerRows || []).filter(r => r && r.values && (r.values.productName || r.values.productCode || r.values.barcode));
-      total = rows.reduce((s, r) => {
-        const qty = Number(r.values.quantity) || 0;
-        const price = Number(r.values.unitPrice) || 0;
-        const t = Number(r.values.total) || (qty * price) || 0;
-        return s + t;
-      }, 0);
-    } else {
-      // view mode: use selectedImport.totalAmount if available, otherwise sum items
-      total = Number(selectedImport.totalAmount || 0);
-      if (!total) {
-        total = (selectedImport.items || []).reduce((s, it) => s + (Number(it.total) || 0), 0);
+      let total = 0;
+      if (isEditMode) {
+        const rows = (headerRows || []).filter(r => r && r.values && (r.values.productName || r.values.productCode || r.values.barcode));
+        total = rows.reduce((s, r) => {
+          const qty = Number(r.values.quantity) || 0;
+          const price = Number(r.values.unitPrice) || 0;
+          const t = Number(r.values.total) || (qty * price) || 0;
+          return s + t;
+        }, 0);
+      } else {
+        total = Number(selectedImport.totalAmount || 0);
+        if (!total) {
+          total = (selectedImport.items || []).reduce((s, it) => s + (Number(it.total) || 0), 0);
+        }
       }
-    }
 
-    // update selectedImport and reflect into imports list
-    setSelectedImport(prev => prev ? ({ ...prev, totalAmount: total }) : prev);
-    setImports(prev => {
-      if (!prev || prev.length === 0) return prev;
-      return prev.map(it => it && it.id === selectedImport.id ? ({ ...it, totalAmount: total }) : it);
-    });
+      // Only update when changed to avoid extra renders
+      setSelectedImport(prev => {
+        if (!prev) return prev;
+        const existing = Number(prev.totalAmount) || 0;
+        if (existing === total) return prev;
+        return { ...prev, totalAmount: total };
+      });
+
+      setImports(prev => {
+        if (!prev || prev.length === 0) return prev;
+        let changed = false;
+        const next = prev.map(it => {
+          if (!it) return it;
+          if (it.id === selectedImport.id) {
+            const existing = Number(it.totalAmount) || 0;
+            if (existing === total) return it;
+            changed = true;
+            return { ...it, totalAmount: total };
+          }
+          return it;
+        });
+        return changed ? next : prev;
+      });
+    }, 300);
+
+    return () => {
+      active = false;
+      clearTimeout(t);
+    };
   }, [selectedImport?.id, headerRows, items, isEditMode]);
 
   const rightPageSizeOptions = [10,20,50,100,200,500,1000,5000];
@@ -1293,10 +1362,10 @@ const ImportGoods = () => {
       // Freeze object để không ai có thể modify
       Object.freeze(totalText);
 
-      console.log('=== FIXED TOTALTEXT TEST ===');
-      console.log('totalAmount:', totalAmount);
-      console.log('totalText HARDCODED:', totalText);
-      console.log('totalText frozen:', Object.isFrozen(totalText));
+      devLog('=== FIXED TOTALTEXT TEST ===');
+      devLog('totalAmount:', totalAmount);
+      devLog('totalText HARDCODED:', totalText);
+      devLog('totalText frozen:', Object.isFrozen(totalText));
 
       const payload = {
         importNumber: formData.importNumber || generateImportNumber(),
@@ -1315,15 +1384,15 @@ const ImportGoods = () => {
         items: allItems
       };
 
-      console.log('=== FINAL DEBUG INFO ===');
-      console.log('totalAmount:', totalAmount);
-      console.log('totalText FINAL:', JSON.stringify(totalText));
-      console.log('totalText type:', typeof totalText);
-      console.log('totalText === null:', totalText === null);
-      console.log('totalText === undefined:', totalText === undefined);
-      console.log('totalText length:', totalText?.length);
-      console.log('payload:', JSON.stringify(payload, null, 2));
-      console.log('========================');
+      devLog('=== FINAL DEBUG INFO ===');
+      devLog('totalAmount:', totalAmount);
+      devLog('totalText FINAL:', JSON.stringify(totalText));
+      devLog('totalText type:', typeof totalText);
+      devLog('totalText === null:', totalText === null);
+      devLog('totalText === undefined:', totalText === undefined);
+      devLog('totalText length:', totalText?.length);
+      devLog('payload:', JSON.stringify(payload, null, 2));
+      devLog('========================');
 
       // VALIDATION CUỐI CÙNG
       if (totalText === null || totalText === undefined || totalText === '') {
@@ -1332,14 +1401,14 @@ const ImportGoods = () => {
         return;
       }
 
-      console.log('=== SAVE IMPORT DEBUG ===');
-      console.log('selectedImport:', selectedImport);
-      console.log('selectedImport?.id:', selectedImport?.id);
-      console.log('selectedImport?.isTemp:', selectedImport?.isTemp);
+      devLog('=== SAVE IMPORT DEBUG ===');
+      devLog('selectedImport:', selectedImport);
+      devLog('selectedImport?.id:', selectedImport?.id);
+      devLog('selectedImport?.isTemp:', selectedImport?.isTemp);
       
       // Check if this is an update (has existing import with ID) or create new
       const isUpdate = selectedImport && selectedImport.id && selectedImport.id > 0 && !selectedImport.isTemp;
-      console.log('Will use:', isUpdate ? 'PUT (update)' : 'POST (create)');
+      devLog('Will use:', isUpdate ? 'PUT (update)' : 'POST (create)');
 
       if (isUpdate) {
         const res = await fetch(`/api/Imports/${selectedImport.id}`, {
@@ -1381,11 +1450,11 @@ const ImportGoods = () => {
 
         alert('Lưu phiếu nhập thành công! Phiếu đã được cập nhật.');
       } else {
-        console.log('=== SENDING POST REQUEST ===');
-        console.log('URL:', '/api/Imports');
-        console.log('Headers:', { 'Content-Type': 'application/json' });
-        console.log('Body string:', JSON.stringify(payload));
-        console.log('TotalText in body:', JSON.stringify(payload.totalText));
+        devLog('=== SENDING POST REQUEST ===');
+        devLog('URL:', '/api/Imports');
+        devLog('Headers:', { 'Content-Type': 'application/json' });
+        devLog('Body string:', JSON.stringify(payload));
+        devLog('TotalText in body:', JSON.stringify(payload.totalText));
         
         const res = await fetch('/api/Imports', {
           method: 'POST',
@@ -1393,8 +1462,8 @@ const ImportGoods = () => {
           body: JSON.stringify(payload)
         });
         
-        console.log('Response status:', res.status);
-        console.log('Response OK:', res.ok);
+        devLog('Response status:', res.status);
+        devLog('Response OK:', res.ok);
         
         if (!res.ok) {
           const errorText = await res.text();
@@ -1640,10 +1709,10 @@ const ImportGoods = () => {
   };
 
   const resetFormForNewImport = () => {
-    console.log('=== RESET FORM FOR NEW IMPORT ===');
+    devLog('=== RESET FORM FOR NEW IMPORT ===');
     
     const newImportNumber = generateImportNumber();
-    console.log('Generated new import number:', newImportNumber);
+    devLog('Generated new import number:', newImportNumber);
     
     // Create a temporary new import for the left list
     const newTempImport = {
@@ -1675,7 +1744,7 @@ const ImportGoods = () => {
       note: ''
     };
     
-    console.log('New form data:', newFormData);
+    devLog('New form data:', newFormData);
     
     // Add to imports list at the top
     setImports(prev => [newTempImport, ...prev]);
@@ -1695,8 +1764,8 @@ const ImportGoods = () => {
     setImportType('');
     setEmployee('');
     
-    console.log('=== RESET COMPLETED ===');
-    console.log('New temporary import added:', newTempImport);
+    devLog('=== RESET COMPLETED ===');
+    devLog('New temporary import added:', newTempImport);
   };
 
   // Function này không còn sử dụng vì đã thay đổi cơ chế
@@ -2102,14 +2171,8 @@ const ImportGoods = () => {
                         const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
                         const itemsTotals = calculateTotals(currentItems);
                         
-                        // Get totals from header rows
-                        const headerTotals = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
-                          .reduce((sum, row) => {
-                            const weight = parseFloat(row.values.weight) || 0; // Sum of weight (no quantity multiplication)
-                            return Math.round((sum + weight) * 100) / 100; // Round to 2 decimal places
-                          }, 0);
-                        
-                        const totalWeight = Math.round((itemsTotals.totalWeight + headerTotals) * 100) / 100;
+                        // Use memoized header totals
+                        const totalWeight = Math.round((itemsTotals.totalWeight + memoizedHeaderTotals.totalWeight) * 100) / 100;
                         return formatWeight(totalWeight);
                       })()} 
                       readOnly 
@@ -2125,14 +2188,8 @@ const ImportGoods = () => {
                         const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
                         const itemsTotals = calculateTotals(currentItems);
                         
-                        // Get totals from header rows
-                        const headerTotals = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
-                          .reduce((sum, row) => {
-                            const volume = parseFloat(row.values.volume) || 0; // Sum of volume (no quantity multiplication)
-                            return Math.round((sum + volume) * 10000) / 10000; // Round to 4 decimal places
-                          }, 0);
-                        
-                        const totalVolume = Math.round((itemsTotals.totalVolume + headerTotals) * 10000) / 10000;
+                        // Use memoized header totals
+                        const totalVolume = Math.round((itemsTotals.totalVolume + memoizedHeaderTotals.totalVolume) * 10000) / 10000;
                         return formatVolume(totalVolume);
                       })()} 
                       readOnly 
@@ -2394,9 +2451,9 @@ const ImportGoods = () => {
                               return (
                                 <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                                   {colKey === 'productName' ? (
-                                    <button
+                                        <button
                                       onClick={() => {
-                                        console.log('Header input row button clicked', { rIdx, colKey, headerRowsLength: headerRows.length });
+                                        devLog('Header input row button clicked', { rIdx, colKey, headerRowsLength: headerRows.length });
                                         setProductModalColumn(colKey);
                                         setProductModalRowIndex(rIdx);  // This is key - set the row index
                                         setProductModalSearch('');
@@ -2582,10 +2639,8 @@ const ImportGoods = () => {
                 <div className="table-summary">
                   <span>Tổng tiền: <strong>{(() => {
                     if (isEditMode) {
-                      // In edit mode, only count header rows (which are the items being edited)
-                      const headerTotal = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
-                        .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
-                      return formatCurrency(headerTotal);
+                      // In edit mode, use memoized header totals
+                      return formatCurrency(memoizedHeaderTotals.totalAmount);
                     } else {
                       // In view mode, only count existing items
                       const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
@@ -2594,9 +2649,7 @@ const ImportGoods = () => {
                     }
                   })()}</strong> ({(() => {
                     if (isEditMode) {
-                      const headerTotal = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
-                        .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
-                      return numberToVietnameseText(headerTotal);
+                      return numberToVietnameseText(memoizedHeaderTotals.totalAmount);
                     } else {
                       const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
                       const itemsTotal = currentItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
@@ -3058,15 +3111,7 @@ const ImportGoods = () => {
               </div>
 
               <div className="table-summary">
-                <span>Tổng tiền: <strong>{(() => {
-                  const headerTotal = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
-                    .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
-                  return formatCurrency(headerTotal);
-                })()}</strong> ({(() => {
-                  const headerTotal = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
-                    .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
-                  return numberToVietnameseText(headerTotal);
-                })()})</span>
+                <span>Tổng tiền: <strong>{formatCurrency(memoizedHeaderTotals.totalAmount)}</strong> ({numberToVietnameseText(memoizedHeaderTotals.totalAmount)})</span>
               </div>
             </div>
 
@@ -3164,7 +3209,7 @@ const ImportGoods = () => {
               <div style={{marginBottom: 16}}>
                 <strong>Sản phẩm đã chọn:</strong>
                 <div style={{maxHeight: 200, overflowY: 'auto'}}>
-                  {headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode).map((row, idx) => {
+                  {memoizedHeaderTotals.validRows.map((row, idx) => {
                     const total = parseFloat(row.values.total) || 0;
                     return (
                       <div key={idx} style={{padding: '8px 0', borderBottom: '1px solid #eee'}}>
@@ -3181,15 +3226,7 @@ const ImportGoods = () => {
               </div>
               
               <div style={{marginBottom: 16}}>
-                <strong>Tổng tiền: {(() => {
-                  const total = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
-                    .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
-                  return formatCurrency(total);
-                })()} VNĐ ({(() => {
-                  const total = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
-                    .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
-                  return numberToVietnameseText(total);
-                })()})</strong>
+                <strong>Tổng tiền: {formatCurrency(memoizedHeaderTotals.totalAmount)} VNĐ ({numberToVietnameseText(memoizedHeaderTotals.totalAmount)})</strong>
               </div>
             </div>
             <div className="form-actions">
@@ -3216,24 +3253,10 @@ const ImportGoods = () => {
             setProductModalSearch('');
           }} style={{marginRight: 8, padding: '6px 16px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#fff'}}>Bỏ chọn tất cả</button>,
           <button key="all" onClick={() => {
-            const filteredProducts = products.filter(p => {
-              if (!productModalSearch) return true;
-              
-              const searchTerms = removeVietnameseTones(productModalSearch.toLowerCase()).split(/\s+/).filter(term => term.length > 0);
-              
-              const searchableText = [
-                removeVietnameseTones((p.name || '').toLowerCase()),
-                removeVietnameseTones((p.code || '').toLowerCase()),
-                removeVietnameseTones((p.barcode || '').toLowerCase()),
-                (p.importPrice || p.price || p.priceRetail || 0).toString(),
-                (p.defaultUnit || p.DefaultUnit || p.unit || p.baseUnit || '').toLowerCase()
-              ].join(' ');
-              
-              return searchTerms.every(term => searchableText.includes(term));
-            });
+            const filteredProducts = memoizedFilteredProducts;
             const startIndex = (modalCurrentPage - 1) * modalPageSize;
             const currentPageProducts = filteredProducts.slice(startIndex, startIndex + modalPageSize);
-            
+
             setSelectedModalProducts(prev => {
               const currentIds = currentPageProducts.map(p => p.id.toString());
               const merged = new Set([...(prev || []), ...currentIds]);
@@ -3315,6 +3338,7 @@ const ImportGoods = () => {
           }} style={{padding: '6px 16px', border: 'none', borderRadius: '4px', background: '#1677ff', color: '#fff'}}>Thêm vào PN</button>
         ]}
       >
+        
         <div style={{marginBottom: 16}}>
           <Input
             placeholder="Tìm tên hàng hóa"
@@ -3357,21 +3381,7 @@ const ImportGoods = () => {
         
         <div style={{maxHeight: 400, overflowY: 'auto', border: '1px solid #f0f0f0', borderRadius: '4px'}}>
           {(() => {
-            const filteredProducts = products.filter(p => {
-              if (!productModalSearch) return true;
-              
-              const searchTerms = removeVietnameseTones(productModalSearch.toLowerCase()).split(/\s+/).filter(term => term.length > 0);
-              
-              const searchableText = [
-                removeVietnameseTones((p.name || '').toLowerCase()),
-                removeVietnameseTones((p.code || '').toLowerCase()),
-                removeVietnameseTones((p.barcode || '').toLowerCase()),
-                (p.importPrice || p.price || p.priceRetail || 0).toString(),
-                (p.defaultUnit || p.DefaultUnit || p.unit || p.baseUnit || '').toLowerCase()
-              ].join(' ');
-              
-              return searchTerms.every(term => searchableText.includes(term));
-            });
+            const filteredProducts = memoizedFilteredProducts;
             const startIndex = (modalCurrentPage - 1) * modalPageSize;
             const currentPageProducts = filteredProducts.slice(startIndex, startIndex + modalPageSize);
             
@@ -3397,25 +3407,11 @@ const ImportGoods = () => {
         
         {/* Pagination navigation */}
         {(() => {
-          const filteredProducts = products.filter(p => {
-            if (!productModalSearch) return true;
-            
-            const searchTerms = removeVietnameseTones(productModalSearch.toLowerCase()).split(/\s+/).filter(term => term.length > 0);
-            
-            const searchableText = [
-              removeVietnameseTones((p.name || '').toLowerCase()),
-              removeVietnameseTones((p.code || '').toLowerCase()),
-              removeVietnameseTones((p.barcode || '').toLowerCase()),
-              (p.importPrice || p.price || p.priceRetail || 0).toString(),
-              (p.defaultUnit || p.DefaultUnit || p.unit || p.baseUnit || '').toLowerCase()
-            ].join(' ');
-            
-            return searchTerms.every(term => searchableText.includes(term));
-          });
+          const filteredProducts = memoizedFilteredProducts;
           const totalPages = Math.ceil(filteredProducts.length / modalPageSize);
-          
+
           if (totalPages <= 1) return null;
-          
+
           return (
             <div style={{marginTop: 16, display: 'flex', justifyContent: 'center', alignItems: 'center', gap: 8}}>
               <button
