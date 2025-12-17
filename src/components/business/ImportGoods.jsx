@@ -46,13 +46,13 @@ const ImportGoods = () => {
   });
 
   // Xử lý chuột phải trên bảng
-  const handleTableContextMenu = (event) => {
+  const handleTableContextMenu = (event, record) => {
     event.preventDefault();
     setContextMenu({
       visible: true,
       x: event.clientX,
       y: event.clientY,
-      record: null
+      record: record
     });
   };
   // Đóng menu khi click ngoài
@@ -102,6 +102,7 @@ const ImportGoods = () => {
   const [products, setProducts] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [transactionContents, setTransactionContents] = useState([]);
+  const [employeesList, setEmployeesList] = useState([]);
   const [selectedProducts, setSelectedProducts] = useState({});
   const [selectedDates, setSelectedDates] = useState({});
   const [formData, setFormData] = useState(() => {
@@ -306,7 +307,7 @@ const ImportGoods = () => {
   // Pagination state for product modal
   const [modalCurrentPage, setModalCurrentPage] = useState(1);
   const [modalPageSize, setModalPageSize] = useState(10);
-  const [selectAllCurrentPage, setSelectAllCurrentPage] = useState(false);
+  
 
   const renderHeaderFilterTH = (colKey, label, placeholder) => {
     // Check if this column should have product dropdown
@@ -844,6 +845,7 @@ const ImportGoods = () => {
     loadProducts();
     loadWarehouses();
     loadTransactionContents();
+    loadEmployees();
   }, []);
 
   React.useEffect(() => {
@@ -877,6 +879,36 @@ const ImportGoods = () => {
     try { localStorage.setItem(RIGHT_COLS_KEY, JSON.stringify(rightVisibleCols)); } catch {}
   }, [rightVisibleCols]);
 
+  // Keep left list `totalAmount` in sync with right-side totals (headerRows/items)
+  React.useEffect(() => {
+    if (!selectedImport) return;
+    let total = 0;
+
+    if (isEditMode) {
+      // compute total from headerRows (editing mode)
+      const rows = (headerRows || []).filter(r => r && r.values && (r.values.productName || r.values.productCode || r.values.barcode));
+      total = rows.reduce((s, r) => {
+        const qty = Number(r.values.quantity) || 0;
+        const price = Number(r.values.unitPrice) || 0;
+        const t = Number(r.values.total) || (qty * price) || 0;
+        return s + t;
+      }, 0);
+    } else {
+      // view mode: use selectedImport.totalAmount if available, otherwise sum items
+      total = Number(selectedImport.totalAmount || 0);
+      if (!total) {
+        total = (selectedImport.items || []).reduce((s, it) => s + (Number(it.total) || 0), 0);
+      }
+    }
+
+    // update selectedImport and reflect into imports list
+    setSelectedImport(prev => prev ? ({ ...prev, totalAmount: total }) : prev);
+    setImports(prev => {
+      if (!prev || prev.length === 0) return prev;
+      return prev.map(it => it && it.id === selectedImport.id ? ({ ...it, totalAmount: total }) : it);
+    });
+  }, [selectedImport?.id, headerRows, items, isEditMode]);
+
   const rightPageSizeOptions = [10,20,50,100,200,500,1000,5000];
   // Prefer local `items` state when present (we update it when adding rows), otherwise use selectedImport items
   const itemsData = (items && items.length > 0) ? items : (selectedImport?.items || []);
@@ -893,11 +925,18 @@ const ImportGoods = () => {
     });
   });
 
-  const rightTotal = filteredRightItems.length;
+  // Calculate total based on edit mode to avoid double-counting
+  const headerRowCount = headerRows.filter(row => row && row.values && (row.values.productName || row.values.productCode || row.values.barcode)).length;
+  const rightTotal = isEditMode ? headerRowCount : filteredRightItems.length;
   const rightTotalPages = Math.max(1, Math.ceil(rightTotal / Math.max(1, rightItemsPerPage)));
   const rightStart = rightTotal === 0 ? 0 : (rightCurrentPage - 1) * rightItemsPerPage + 1;
   const rightEnd = Math.min(rightTotal, rightCurrentPage * rightItemsPerPage);
   const paginatedItems = filteredRightItems.slice((rightCurrentPage - 1) * rightItemsPerPage, (rightCurrentPage - 1) * rightItemsPerPage + rightItemsPerPage);
+  
+  // Apply pagination to header rows for edit mode
+  const paginatedHeaderRows = isEditMode 
+    ? headerRows.slice((rightCurrentPage - 1) * rightItemsPerPage, (rightCurrentPage - 1) * rightItemsPerPage + rightItemsPerPage)
+    : headerRows;
 
   React.useEffect(() => {
     setRightCurrentPage(p => Math.min(p, rightTotalPages));
@@ -967,11 +1006,54 @@ const ImportGoods = () => {
       const res = await fetch('/api/Imports');
       if (!res.ok) throw new Error('Failed to load imports');
       const data = await res.json();
-      setImports(data || []);
-      if (data && data.length > 0) {
-        if (autoSelectFirst) await loadImportDetails(data[0].id);
+      // normalize imports: ensure fields used by UI exist and compute totals
+      const processed = (data || []).map(imp => {
+        const items = imp.items || imp.Items || [];
+        const total = items.reduce((s, it) => s + (Number(it.total) || 0), 0);
+        return {
+          ...imp,
+          importNumber: imp.importNumber || imp.receiptNumber || imp.importNumber || '',
+          createdDate: imp.createdDate || (imp.date ? dayjs(imp.date).format('DD/MM/YYYY') : ''),
+          date: imp.date || imp.createdDate || null,
+          totalAmount: total,
+          note: imp.note || imp.Note || '',
+          employee: imp.employee || imp.Employee || '',
+          importType: imp.importType || imp.ImportType || '',
+          items: items
+        };
+      });
+      setImports(processed);
+      if (processed && processed.length > 0) {
+        if (autoSelectFirst) await loadImportDetails(processed[0].id);
       } else {
         setSelectedImport(null);
+      }
+
+      // For imports that don't include totals/items in the list response,
+      // fetch details for those with missing totals to compute totalAmount.
+      // Limit to first 50 to avoid excessive requests.
+      try {
+        const idsToFetch = processed
+          .filter(p => !p.totalAmount || Number(p.totalAmount) === 0)
+          .slice(0, 50)
+          .map(p => p.id);
+
+        if (idsToFetch.length > 0) {
+          await Promise.all(idsToFetch.map(async (id) => {
+            try {
+              const r = await fetch(`/api/Imports/${id}`);
+              if (!r.ok) return;
+              const d = await r.json();
+              const items = d.items || d.Items || [];
+              const total = items.reduce((s, it) => s + (Number(it.total) || 0), 0);
+              setImports(prev => (prev || []).map(it => it && it.id === id ? ({ ...it, totalAmount: total, items: items }) : it));
+            } catch (e) {
+              // ignore individual errors
+            }
+          }));
+        }
+      } catch (e) {
+        // ignore
       }
     } catch (err) {
       console.error('Load imports error', err);
@@ -1025,6 +1107,21 @@ const ImportGoods = () => {
     }
   };
 
+  // Load employees/users list from backend
+  const loadEmployees = async () => {
+    try {
+      const res = await fetch('/api/Users');
+      if (!res.ok) throw new Error('Failed to load users');
+      const data = await res.json();
+      // map to simple name list
+      const list = (data || []).map(u => ({ id: u.id || u.idUser || u.userId || u.Id, name: u.userName || u.username || u.name || u.fullName || u.displayName || u.nameDisplay || u.UserName || '' }));
+      setEmployeesList(list);
+    } catch (err) {
+      console.error('Load employees error', err);
+      setEmployeesList([]);
+    }
+  };
+
   const loadImportDetails = async (id) => {
     try {
       const res = await fetch(`/api/Imports/${id}`);
@@ -1060,6 +1157,9 @@ const ImportGoods = () => {
   const editImport = async (importItem) => {
     if (!importItem || !importItem.id) return;
     await loadImportDetails(importItem.id);
+    
+    // Reset pagination to first page
+    setRightCurrentPage(1);
     
     // Load product data into header rows for editing
     if (selectedImport && selectedImport.items && selectedImport.items.length > 0) {
@@ -1153,7 +1253,8 @@ const ImportGoods = () => {
         return;
       }
 
-      // Combine items from both existing items and header rows
+      // In edit mode, use headerRows as the items (they are the edited items)
+      // In view mode, use existing items 
       const headerRowsItems = headerRows.filter(row => 
         row.values.productName || row.values.productCode || row.values.barcode
       ).map(row => ({
@@ -1174,31 +1275,14 @@ const ImportGoods = () => {
         note: row.values.note || ''
       }));
 
-      const existingItems = (items || []).map(it => ({
-        barcode: it.barcode || '',
-        productCode: it.productCode || '',
-        productName: it.productName || '',
-        description: it.description || '',
-        conversion: Number(it.conversion) || 1,
-        quantity: Number(it.quantity) || 1,
-        unitPrice: Number(it.unitPrice) || 0,
-        transportCost: Number(it.transportCost) || 0,
-        noteDate: it.noteDate || null,
-        total: Number(it.total) || 0,
-        totalTransport: Number(it.totalTransport) || 0,
-        weight: Number(it.weight) || 0,
-        volume: Number(it.volume) || 0,
-        warehouse: it.warehouse ? String(it.warehouse) : '',
-        note: it.note || ''
-      }));
+      // Only use headerRows items to avoid duplication
+      const allItems = headerRowsItems;
 
       // Validate có ít nhất 1 sản phẩm
-      if (headerRowsItems.length === 0 && existingItems.length === 0) {
+      if (allItems.length === 0) {
         alert('Vui lòng thêm ít nhất một sản phẩm vào phiếu nhập');
         return;
       }
-
-      const allItems = [...existingItems, ...headerRowsItems];
       const totalAmount = allItems.reduce((s, it) => s + (Number(it.total) || 0), 0);
       const totalWeight = allItems.reduce((s, it) => s + (Number(it.weight) || 0), 0);
       const totalVolume = allItems.reduce((s, it) => s + (Number(it.volume) || 0), 0);
@@ -1251,9 +1335,10 @@ const ImportGoods = () => {
       console.log('=== SAVE IMPORT DEBUG ===');
       console.log('selectedImport:', selectedImport);
       console.log('selectedImport?.id:', selectedImport?.id);
+      console.log('selectedImport?.isTemp:', selectedImport?.isTemp);
       
       // Check if this is an update (has existing import with ID) or create new
-      const isUpdate = selectedImport && selectedImport.id && selectedImport.id > 0;
+      const isUpdate = selectedImport && selectedImport.id && selectedImport.id > 0 && !selectedImport.isTemp;
       console.log('Will use:', isUpdate ? 'PUT (update)' : 'POST (create)');
 
       if (isUpdate) {
@@ -1327,13 +1412,16 @@ const ImportGoods = () => {
         }
         const newImport = await res.json();
 
-        // Insert the newly created import into local state so it appears in left list
+        // Remove temporary import and add the real saved import
         suppressAutoSelectRef.current = true;
         setImports(prev => {
           try {
-            const exists = (prev || []).some(i => i.id === newImport.id);
-            if (exists) return prev;
-            return [newImport, ...(prev || [])];
+            // Remove temporary import if exists
+            const withoutTemp = (prev || []).filter(i => !i.isTemp || i.id !== selectedImport?.id);
+            // Add new saved import
+            const exists = withoutTemp.some(i => i.id === newImport.id);
+            if (exists) return withoutTemp;
+            return [newImport, ...withoutTemp];
           } catch (e) { return [newImport]; }
         });
 
@@ -1455,21 +1543,27 @@ const ImportGoods = () => {
   };
 
   const filteredImports = imports.filter(importItem => {
-    const normalizedSearch = removeVietnameseTones(searchTerm.toLowerCase());
-    const normalizedNumber = removeVietnameseTones(importItem.importNumber.toLowerCase());
-    const normalizedEmployee = removeVietnameseTones(importItem.employee.toLowerCase());
-    const matchesSearch = normalizedNumber.includes(normalizedSearch) || normalizedEmployee.includes(normalizedSearch);
-    
-    const matchesType = !importType || importItem.importType === importType;
-    const matchesEmployee = !employee || importItem.employee === employee;
-    
-    const normalizedCode = removeVietnameseTones(searchCode.toLowerCase());
+    const normalizedSearch = removeVietnameseTones((searchTerm || '').toLowerCase());
+    const normalizedNumber = removeVietnameseTones((importItem.importNumber || importItem.receiptNumber || '').toLowerCase());
+    const normalizedEmployee = removeVietnameseTones(((importItem.employee || importItem.Employee) || '').toLowerCase());
+    const normalizedNote = removeVietnameseTones(((importItem.note || importItem.notePN || '')).toLowerCase());
+
+    // matches search text against number, employee or note
+    const matchesSearch = normalizedNumber.includes(normalizedSearch)
+      || normalizedEmployee.includes(normalizedSearch)
+      || normalizedNote.includes(normalizedSearch);
+
+    // filter by exact selection of import type / employee (from dropdowns)
+    const matchesType = !importType || (importItem.importType || '') === importType;
+    const matchesEmployee = !employee || (importItem.employee || '') === employee;
+
+    // support searchCode (same as before) against number
+    const normalizedCode = removeVietnameseTones((searchCode || '').toLowerCase());
     const matchesCode = !searchCode || normalizedNumber.includes(normalizedCode);
-    
+
     // Lọc theo khoảng ngày nhập (so sánh yyyy-mm-dd)
     let matchesDate = true;
     if (dateFrom && dateTo) {
-      // importItem may provide createdDate (DD/MM/YYYY) or date (ISO). Handle both safely.
       let importDate = null;
       if (importItem.createdDate && typeof importItem.createdDate === 'string' && importItem.createdDate.includes('/')) {
         const parts = importItem.createdDate.split('/');
@@ -1490,6 +1584,7 @@ const ImportGoods = () => {
         matchesDate = importDate >= dateFrom && importDate <= dateTo;
       }
     }
+
     return matchesSearch && matchesType && matchesEmployee && matchesCode && matchesDate;
   });
 
@@ -1546,11 +1641,26 @@ const ImportGoods = () => {
 
   const resetFormForNewImport = () => {
     console.log('=== RESET FORM FOR NEW IMPORT ===');
-    console.log('Before reset - selectedImport:', selectedImport);
-    console.log('Before reset - formData:', formData);
     
     const newImportNumber = generateImportNumber();
     console.log('Generated new import number:', newImportNumber);
+    
+    // Create a temporary new import for the left list
+    const newTempImport = {
+      id: `temp_${Date.now()}`,
+      receiptNumber: newImportNumber,
+      importNumber: newImportNumber,
+      importDate: dayjs().format('YYYY-MM-DD'),
+      createdDate: dayjs().format('DD/MM/YYYY'),
+      date: dayjs().format('YYYY-MM-DD'),
+      totalAmount: 0,
+      supplierName: 'Chưa chọn',
+      employee: 'admin 66',
+      importType: '',
+      note: '',
+      isTemp: true, // Mark as temporary
+      items: []
+    };
     
     const newFormData = {
       createdDate: dayjs().format('YYYY-MM-DD'),
@@ -1567,15 +1677,17 @@ const ImportGoods = () => {
     
     console.log('New form data:', newFormData);
     
-    // Reset states in correct order
-    setSelectedImport(null);
+    // Add to imports list at the top
+    setImports(prev => [newTempImport, ...prev]);
+    
+    // Auto-select this new import and enter edit mode
+    setSelectedImport(newTempImport);
     setFormData(newFormData);
     setItems([]);
     setHeaderRows([{ id: Date.now(), values: {} }]);
     setIsEditing(true);
-    // hide right content when resetting to a new blank import
-    setShowRightContent(false);
-    setIsEditMode(false);
+    setShowRightContent(true);
+    setIsEditMode(true); // Auto enter edit mode for new import
     
     // Reset filters để đảm bảo có thể thấy phiếu mới
     setSearchTerm('');
@@ -1584,7 +1696,7 @@ const ImportGoods = () => {
     setEmployee('');
     
     console.log('=== RESET COMPLETED ===');
-    alert(`Đã tạo phiếu nhập mới với số phiếu: ${newImportNumber}`);
+    console.log('New temporary import added:', newTempImport);
   };
 
   // Function này không còn sử dụng vì đã thay đổi cơ chế
@@ -1653,7 +1765,18 @@ const ImportGoods = () => {
       dataIndex: 'importNumber',
       key: 'importNumber',
       render: (text, record) => (
-        <span style={{fontWeight: selectedImport?.id === record.id ? 600 : 400, cursor:'pointer'}} onClick={() => handleSelectImport(record)}>{text}</span>
+        <span 
+          style={{
+            fontWeight: selectedImport?.id === record.id ? 600 : 400, 
+            cursor:'pointer',
+            fontStyle: record.isTemp ? 'italic' : 'normal',
+            color: record.isTemp ? '#1677ff' : 'inherit'
+          }} 
+          onClick={() => handleSelectImport(record)}
+        >
+          {text}
+          {record.isTemp && <span style={{fontSize: '11px', marginLeft: '4px'}}>(Mới)</span>}
+        </span>
       ),
       sorter: (a, b) => a.importNumber.localeCompare(b.importNumber),
     },
@@ -1681,13 +1804,15 @@ const ImportGoods = () => {
       dataIndex: 'total',
       key: 'total',
       render: (_, record) => {
-        const total = (record.items || []).reduce((sum, item) => sum + (item.total || 0), 0);
-        return total.toLocaleString('vi-VN');
+        const total = (record.totalAmount !== undefined && record.totalAmount !== null)
+          ? Number(record.totalAmount)
+          : (record.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+        return (Number(total) || 0).toLocaleString('vi-VN');
       },
       sorter: (a, b) => {
-        const ta = (a.items||[]).reduce((sum, item) => sum + (item.total||0), 0);
-        const tb = (b.items||[]).reduce((sum, item) => sum + (item.total||0), 0);
-        return ta-tb;
+        const ta = Number(a.totalAmount !== undefined && a.totalAmount !== null ? a.totalAmount : (a.items||[]).reduce((s,it)=>s+(Number(it.total)||0),0)) || 0;
+        const tb = Number(b.totalAmount !== undefined && b.totalAmount !== null ? b.totalAmount : (b.items||[]).reduce((s,it)=>s+(Number(it.total)||0),0)) || 0;
+        return ta - tb;
       }
     },
     {
@@ -1712,9 +1837,11 @@ const ImportGoods = () => {
       render: (_, record) => (
         <Space>
           <Button icon={<EditOutlined />} size="small" onClick={e => { e.stopPropagation(); editImport(record); }} title="Sửa" />
-          <Popconfirm title="Bạn có chắc chắn muốn xóa phiếu nhập này?" onConfirm={e => handleDelete(record.id, e)} okText="Có" cancelText="Không">
-            <Button icon={<DeleteOutlined />} danger size="small" onClick={e => e.stopPropagation()} title="Xóa" />
-          </Popconfirm>
+          {!record.isTemp && (
+            <Popconfirm title="Bạn có chắc chắn muốn xóa phiếu nhập này?" onConfirm={e => handleDelete(record.id, e)} okText="Có" cancelText="Không">
+              <Button icon={<DeleteOutlined />} danger size="small" onClick={e => e.stopPropagation()} title="Xóa" />
+            </Popconfirm>
+          )}
         </Space>
       )
     }
@@ -1736,17 +1863,19 @@ const ImportGoods = () => {
               </div>
               <div className="search-panel-select-row">
                 <select value={importType} onChange={e=>setImportType(e.target.value)}>
-                  <option value="">loại nhập</option>
-                  <option value="nhập thường">Nhập thường</option>
-                  <option value="nhập khẩn cấp">Nhập khẩn cấp</option>
-                  <option value="nhập trả hàng">Nhập trả hàng</option>
+                  <option value="">tất cả</option>
+                  {transactionContents.map(tc => (
+                    <option key={tc.id} value={tc.name}>{tc.name}</option>
+                  ))}
                 </select>
                 <select value={employee} onChange={e=>setEmployee(e.target.value)}>
-                  <option value="">nhân viên lập</option>
-                  <option value="admin 66">admin 66</option>
-                  <option value="user 01">user 01</option>
+                  <option value="">tất cả</option>
+                  {employeesList.map(emp => (
+                    <option key={emp.id} value={emp.name}>{emp.name}</option>
+                  ))}
                 </select>
               </div>
+              {/* removed manual Total / Note filters - not required */}
             </div>
             <div className="search-panel-button">
               <Button type="primary" style={{height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>Tìm kiếm</Button>
@@ -1754,12 +1883,12 @@ const ImportGoods = () => {
           </div>
         </div>
         <div className="search-panel-total" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <span>Tổng {filteredLeft.length}</span>
+          <span>Tổng {filteredLeft.length} phiếu</span>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
             <button style={{background:'transparent',border:'none',cursor:'pointer'}} title="Cài đặt bảng" onClick={()=>setShowLeftSettings(true)}>⚙</button>
           </div>
         </div>
-        <div className="table-scroll-x" onContextMenu={handleTableContextMenu} style={{ position: 'relative' }}>
+        <div className="table-scroll-x" style={{ position: 'relative' }}>
           <Table
             rowKey="id"
             columns={columns.filter(c => leftVisibleCols.includes(c.dataIndex || c.key || ''))}
@@ -1779,21 +1908,40 @@ const ImportGoods = () => {
               onShowSizeChange: (page, size) => { setLeftPageSize(size); },
               onChange: (page, size) => { setLeftPage(page); setLeftPageSize(size); }
             }}
-            size="small"
-            onRow={record => ({
-              onClick: () => handleSelectImport(record)
+            onRow={(record) => ({
+              onClick: () => handleSelectImport(record),
+              onContextMenu: (event) => handleTableContextMenu(event, record),
             })}
-            rowClassName={record => selectedImport?.id === record.id ? 'selected' : ''}
+            size="small"
+            rowClassName={record => {
+              let className = selectedImport?.id === record.id ? 'selected' : '';
+              if (record.isTemp) className += ' temp-import';
+              return className;
+            }}
             style={{minWidth:600}}
           />
           {contextMenu.visible && (
             <Menu
               style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 9999, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
-              onClick={() => setContextMenu(c => ({ ...c, visible: false }))}
+              onClick={(info) => {
+                if (info.key === 'view') {
+                  if (contextMenu.record) {
+                    editImport(contextMenu.record);
+                  }
+                } else if (info.key === 'delete') {
+                  if (contextMenu.record && !contextMenu.record.isTemp) {
+                    if (window.confirm('Bạn có chắc chắn muốn xóa phiếu nhập này?')) {
+                      handleDelete(contextMenu.record.id);
+                    }
+                  }
+                }
+                setContextMenu(c => ({ ...c, visible: false }));
+              }}
             >
-              <Menu.Item key="view">✔️ Xem chi tiết</Menu.Item>
-              <Menu.Item key="delete">🗑️ Xóa</Menu.Item>
-              <Menu.Item key="print">🖨️ In danh sách đã chọn</Menu.Item>
+              <Menu.Item key="view" icon={<EditOutlined />}>Xem chi tiết</Menu.Item>
+              {contextMenu.record && !contextMenu.record.isTemp && (
+                <Menu.Item key="delete" icon={<DeleteOutlined />} style={{ color: '#ff4d4f' }}>Xóa</Menu.Item>
+              )}
             </Menu>
           )}
         </div>
@@ -1912,8 +2060,17 @@ const ImportGoods = () => {
                   </div>
                   <div style={{flex:'0 0 20%'}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Nhân viên lập</label>
-                    <select style={{width:'100%'}}>
-                      <option value={selectedImport.employee}>{selectedImport.employee}</option>
+                    <select style={{width:'100%'}} value={formData.employee || selectedImport.employee || ''} onChange={(e)=>{
+                      if (!isEditMode) return;
+                      const v = e.target.value;
+                      setFormData(fd => ({ ...fd, employee: v }));
+                      setSelectedImport(si => si ? ({ ...si, employee: v }) : si);
+                      setIsEditing(true);
+                    }} disabled={!isEditMode}>
+                      <option value="">-- Chọn nhân viên --</option>
+                      {employeesList.map(emp => (
+                        <option key={emp.id} value={emp.name}>{emp.name}</option>
+                      ))}
                     </select>
                   </div>
                   <div style={{flex:'0 0 20%'}}>
@@ -2133,7 +2290,7 @@ const ImportGoods = () => {
 
                   <div className="items-table-container" ref={itemsTableRef}>
                   <div style={{margin: '8px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 14}}>
-                    <span>Tổng {headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode).length}</span>
+                    <span>Tổng {rightTotal} mặt hàng ({rightStart}-{rightEnd})</span>
                     <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
                       <button className="icon-btn settings-btn" onClick={()=>setShowRightSettings(true)} title="Cài đặt hiển thị cột" style={{border: 'none', background: '#333', color: 'white', borderRadius: 4, width: 28, height: 28, fontWeight: 'bold'}}>
                         <span>⚙</span>
@@ -2141,7 +2298,7 @@ const ImportGoods = () => {
                       <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.max(1, p - 1))}>{'<'}</button>
                       <span style={{fontWeight: 600}}>{rightCurrentPage}</span>
                       <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.min(rightTotalPages, p + 1))}>{'>'}</button>
-                      <select value={rightItemsPerPage} onChange={(e) => { setRightItemsPerPage(parseInt(e.target.value, 10)); setRightCurrentPage(1); }} style={{marginLeft: 8, borderRadius: 4, border: '1px solid #e5e7eb', padding: '2px 8px'}}>
+                      <select value={rightItemsPerPage} onChange={(e) => { const size = parseInt(e.target.value, 10); setRightItemsPerPage(size); const newMaxPage = Math.max(1, Math.ceil(rightTotal / size)); setRightCurrentPage(p => Math.min(p, newMaxPage)); }} style={{marginLeft: 8, borderRadius: 4, border: '1px solid #e5e7eb', padding: '2px 8px'}}>
                         <option value={10}>10 / trang</option>
                         <option value={20}>20 / trang</option>
                         <option value={50}>50 / trang</option>
@@ -2178,7 +2335,7 @@ const ImportGoods = () => {
                         )}
                       </tr>
                       {/* Additional header input rows inserted under the main header */}
-                      {headerRows.map((row, rIdx) => (
+                      {paginatedHeaderRows.map((row, rIdx) => (
                         <tr key={row.id} className="header-input-row">
                           {['barcode','productCode','productName','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'].map(colKey => {
                             if (colKey === 'actions') {
@@ -2244,7 +2401,6 @@ const ImportGoods = () => {
                                         setProductModalRowIndex(rIdx);  // This is key - set the row index
                                         setProductModalSearch('');
                                         setModalCurrentPage(1);
-                                        setSelectAllCurrentPage(false);
                                         setSelectedModalProducts(row.values[colKey] ? [row.values[colKey]] : []);
                                         setShowProductModal(true);
                                       }}
@@ -2400,40 +2556,52 @@ const ImportGoods = () => {
                         </tr>
                       ))}
                     </thead>
-                    <tbody>
-                      <tr>
-                        <td colSpan={rightVisibleCols.length || 1} className="no-data">
-                          <div className="empty-state">
-                            <div className="empty-icon">📋</div>
-                            <div>Nhập sản phẩm ở các ô phía trên</div>
-                            <div style={{fontSize: 12, color: '#666', marginTop: 4}}>Sử dụng các dropdown và input để thêm/sửa sản phẩm</div>
-                          </div>
-                        </td>
-                      </tr>
-                    </tbody>
+                    {(() => {
+                      const hasHeaderProducts = headerRows.some(r => r && r.values && (r.values.productName || r.values.productCode || r.values.barcode));
+                      const hasItems = (items && items.length > 0) || ((selectedImport && selectedImport.items && selectedImport.items.length > 0));
+                      if (!hasHeaderProducts && !hasItems) {
+                        return (
+                          <tbody>
+                            <tr>
+                              <td colSpan={rightVisibleCols.length || 1} className="no-data">
+                                <div className="empty-state">
+                                  <div className="empty-icon">📋</div>
+                                  <div>Nhập sản phẩm ở các ô phía trên</div>
+                                  <div style={{fontSize: 12, color: '#666', marginTop: 4}}>Sử dụng các dropdown và input để thêm/sửa sản phẩm</div>
+                                </div>
+                              </td>
+                            </tr>
+                          </tbody>
+                        );
+                      }
+                      return null;
+                    })()}
                   </table>
                 </div>
 
                 <div className="table-summary">
                   <span>Tổng tiền: <strong>{(() => {
-                    // Calculate total from current items + header rows
-                    const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
-                    const itemsTotal = currentItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
-                    
-                    const headerTotal = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
-                      .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
-                    
-                    const grandTotal = itemsTotal + headerTotal;
-                    return formatCurrency(grandTotal);
+                    if (isEditMode) {
+                      // In edit mode, only count header rows (which are the items being edited)
+                      const headerTotal = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
+                        .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
+                      return formatCurrency(headerTotal);
+                    } else {
+                      // In view mode, only count existing items
+                      const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
+                      const itemsTotal = currentItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+                      return formatCurrency(itemsTotal);
+                    }
                   })()}</strong> ({(() => {
-                    const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
-                    const itemsTotal = currentItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
-                    
-                    const headerTotal = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
-                      .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
-                    
-                    const grandTotal = itemsTotal + headerTotal;
-                    return numberToVietnameseText(grandTotal);
+                    if (isEditMode) {
+                      const headerTotal = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
+                        .reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
+                      return numberToVietnameseText(headerTotal);
+                    } else {
+                      const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
+                      const itemsTotal = currentItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
+                      return numberToVietnameseText(itemsTotal);
+                    }
                   })()})</span>
                 </div>
                 </div>
@@ -2611,7 +2779,7 @@ const ImportGoods = () => {
             <div className="items-section">
               <div className="items-table-container" ref={itemsTableRef}>
                 <div style={{margin: '8px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 14}}>
-                  <span>Tổng {headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode).length}</span>
+                  <span>Tổng {rightTotal} mặt hàng ({rightStart}-{rightEnd})</span>
                   <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
                     <button className="icon-btn settings-btn" onClick={()=>setShowRightSettings(true)} title="Cài đặt hiển thị cột" style={{border: 'none', background: '#333', color: 'white', borderRadius: 4, width: 28, height: 28, fontWeight: 'bold'}}>
                       <span>⚙</span>
@@ -2619,7 +2787,7 @@ const ImportGoods = () => {
                     <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.max(1, p - 1))}>{'<'}</button>
                     <span style={{fontWeight: 600}}>{rightCurrentPage}</span>
                     <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.min(rightTotalPages, p + 1))}>{'>'}</button>
-                    <select value={rightItemsPerPage} onChange={(e) => { setRightItemsPerPage(parseInt(e.target.value, 10)); setRightCurrentPage(1); }} style={{marginLeft: 8, borderRadius: 4, border: '1px solid #e5e7eb', padding: '2px 8px'}}>
+                    <select value={rightItemsPerPage} onChange={(e) => { const size = parseInt(e.target.value, 10); setRightItemsPerPage(size); const newMaxPage = Math.max(1, Math.ceil(rightTotal / size)); setRightCurrentPage(p => Math.min(p, newMaxPage)); }} style={{marginLeft: 8, borderRadius: 4, border: '1px solid #e5e7eb', padding: '2px 8px'}}>
                       <option value={10}>10 / trang</option>
                       <option value={20}>20 / trang</option>
                       <option value={50}>50 / trang</option>
@@ -2656,7 +2824,7 @@ const ImportGoods = () => {
                       )}
                     </tr>
                     {/* Header input rows for new entries */}
-                    {headerRows.map((row, rIdx) => (
+                    {paginatedHeaderRows.map((row, rIdx) => (
                       <tr key={row.id} className="header-input-row">
                         {['barcode','productCode','productName','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'].map(colKey => {
                           if (colKey === 'actions') {
@@ -2719,7 +2887,6 @@ const ImportGoods = () => {
                                       setProductModalRowIndex(rIdx);
                                       setProductModalSearch('');
                                       setModalCurrentPage(1);
-                                      setSelectAllCurrentPage(false);
                                       setSelectedModalProducts(row.values[colKey] ? [row.values[colKey]] : []);
                                       setShowProductModal(true);
                                     }}
@@ -2867,17 +3034,26 @@ const ImportGoods = () => {
                       </tr>
                     ))}
                   </thead>
-                  <tbody>
-                    <tr>
-                      <td colSpan={rightVisibleCols.length || 1} className="no-data">
-                        <div className="empty-state">
-                          <div className="empty-icon">📋</div>
-                          <div>Chưa có hàng hóa nào</div>
-                          <div style={{fontSize: 12, color: '#666', marginTop: 4}}>Nhấn "Thêm hàng hóa" hoặc chọn sản phẩm từ các ô input phía trên</div>
-                        </div>
-                      </td>
-                    </tr>
-                  </tbody>
+                  {(() => {
+                    const hasHeaderProducts = headerRows.some(r => r && r.values && (r.values.productName || r.values.productCode || r.values.barcode));
+                    const hasItems = (items && items.length > 0) || ((selectedImport && selectedImport.items && selectedImport.items.length > 0));
+                    if (!hasHeaderProducts && !hasItems) {
+                      return (
+                        <tbody>
+                          <tr>
+                            <td colSpan={rightVisibleCols.length || 1} className="no-data">
+                              <div className="empty-state">
+                                <div className="empty-icon">📋</div>
+                                <div>Chưa có hàng hóa nào</div>
+                                <div style={{fontSize: 12, color: '#666', marginTop: 4}}>Nhấn "Thêm hàng hóa" hoặc chọn sản phẩm từ các ô input phía trên</div>
+                              </div>
+                            </td>
+                          </tr>
+                        </tbody>
+                      );
+                    }
+                    return null;
+                  })()}
                 </table>
               </div>
 
@@ -3038,7 +3214,6 @@ const ImportGoods = () => {
           <button key="clear" onClick={() => {
             setSelectedModalProducts([]);
             setProductModalSearch('');
-            setSelectAllCurrentPage(false);
           }} style={{marginRight: 8, padding: '6px 16px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#fff'}}>Bỏ chọn tất cả</button>,
           <button key="all" onClick={() => {
             const filteredProducts = products.filter(p => {
@@ -3059,8 +3234,11 @@ const ImportGoods = () => {
             const startIndex = (modalCurrentPage - 1) * modalPageSize;
             const currentPageProducts = filteredProducts.slice(startIndex, startIndex + modalPageSize);
             
-            setSelectedModalProducts(currentPageProducts.map(p => p.id.toString()));
-            setSelectAllCurrentPage(true);
+            setSelectedModalProducts(prev => {
+              const currentIds = currentPageProducts.map(p => p.id.toString());
+              const merged = new Set([...(prev || []), ...currentIds]);
+              return Array.from(merged);
+            });
           }} style={{marginRight: 8, padding: '6px 16px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#fff'}}>Chọn tất cả</button>,
           <button key="ok" onClick={() => {
             if (selectedModalProducts.length > 0) {
@@ -3158,7 +3336,6 @@ const ImportGoods = () => {
               onChange={(value) => {
                 setModalPageSize(value);
                 setModalCurrentPage(1);
-                setSelectAllCurrentPage(false);
               }}
               size="small"
               style={{width: 80}}
@@ -3169,39 +3346,7 @@ const ImportGoods = () => {
             </Select>
           </div>
           
-          <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
-            <input
-              type="checkbox"
-              checked={selectAllCurrentPage}
-              onChange={(e) => {
-                const checked = e.target.checked;
-                setSelectAllCurrentPage(checked);
-                
-                const filteredProducts = products.filter(p => {
-                  productModalSearch ? p.name?.toLowerCase().includes(productModalSearch.toLowerCase()) : true
-                });
-                const startIndex = (modalCurrentPage - 1) * modalPageSize;
-                const currentPageProducts = filteredProducts.slice(startIndex, startIndex + modalPageSize);
-                
-                if (checked) {
-                  const currentPageIds = currentPageProducts.map(p => p.id.toString());
-                  setSelectedModalProducts(prev => {
-                    const newSelection = [...prev];
-                    currentPageIds.forEach(id => {
-                      if (!newSelection.includes(id)) {
-                        newSelection.push(id);
-                      }
-                    });
-                    return newSelection;
-                  });
-                } else {
-                  const currentPageIds = currentPageProducts.map(p => p.id.toString());
-                  setSelectedModalProducts(prev => prev.filter(id => !currentPageIds.includes(id)));
-                }
-              }}
-            />
-            <span style={{fontSize: 13}}>Chọn tất cả trang này</span>
-          </div>
+          
           
           <div style={{display: 'flex', alignItems: 'center', padding: '6px 12px', background: '#f0f8ff', borderRadius: '4px', border: '1px solid #d1ecf1'}}>
             <span style={{fontSize: 13, color: '#0c5460', fontWeight: 500}}>
@@ -3276,7 +3421,6 @@ const ImportGoods = () => {
               <button
                 onClick={() => {
                   setModalCurrentPage(prev => Math.max(1, prev - 1));
-                  setSelectAllCurrentPage(false);
                 }}
                 disabled={modalCurrentPage === 1}
                 style={{
@@ -3295,7 +3439,6 @@ const ImportGoods = () => {
               <button
                 onClick={() => {
                   setModalCurrentPage(prev => Math.min(totalPages, prev + 1));
-                  setSelectAllCurrentPage(false);
                 }}
                 disabled={modalCurrentPage === totalPages}
                 style={{

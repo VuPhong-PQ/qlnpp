@@ -309,6 +309,8 @@
 .items-table-container {
   width: 100%;
   overflow-x: auto;
+  overflow-y: auto;
+  max-height: 600px; /* Limit height to prevent header from being hidden */
 }
 .items-table {
   min-width: 1000px;
@@ -698,3 +700,12 @@ button[title="Cài đặt cột"] {
 /* label and required styling to match Products page */
 .product-modal .field-label { display:block; font-weight:700; font-size:13px; margin-bottom:6px; }
 .product-modal .field-label.required::after { content: ' *'; color: #d00; }
+
+/* Temporary import styling */
+.temp-import {
+  background-color: #f0f8ff !important;
+}
+
+.temp-import:hover {
+  background-color: #e6f3ff !important;
+}
