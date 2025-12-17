@@ -138,17 +138,9 @@ const ImportGoods = () => {
   const productSelectRefs = useRef({});
   const [headerRows, setHeaderRows] = useState(() => [{ id: Date.now(), values: {} }]);
 
-  // Debug logging helper (no-op in non-dev environments)
-  const devLog = (...args) => {
-    try {
-      if (process && process.env && process.env.NODE_ENV === 'development') {
-        console.log(...args);
-      }
-    } catch (e) {
-      // ignore if process not defined in browser
-      // fallback to console.log only if present
-      if (typeof console !== 'undefined' && console.log) console.log(...args);
-    }
+  // Debug logging helper (completely disabled for performance)
+  const devLog = () => {
+    // No-op for production performance - all logging disabled
   };
 
 
@@ -632,7 +624,7 @@ const ImportGoods = () => {
     });
   };
 
-  const handleHeaderRowChange = (rowIndex, colKey, value) => {
+  const handleHeaderRowChange = React.useCallback((rowIndex, colKey, value) => {
     setHeaderRows(prev => {
       const copy = [...prev];
       const targetRow = { ...copy[rowIndex], values: { ...copy[rowIndex].values } };
@@ -654,7 +646,7 @@ const ImportGoods = () => {
       
       return copy;
     });
-  };
+  }, []); // Empty dependency array since we only use prev state
 
   // Handle warehouse selection
   const handleWarehouseSelect = (colKey, warehouseId) => {
@@ -722,7 +714,7 @@ const ImportGoods = () => {
             showToday={false}
             size="small"
             className="custom-date-picker"
-            popupClassName="custom-date-picker-dropdown"
+            classNames={{ popup: { root: 'custom-date-picker-dropdown' } }}
             renderExtraFooter={() => (
               <div style={{
                 display: 'flex', 
@@ -924,7 +916,7 @@ const ImportGoods = () => {
     try { localStorage.setItem(RIGHT_COLS_KEY, JSON.stringify(rightVisibleCols)); } catch {}
   }, [rightVisibleCols]);
 
-  // Debounced sync: update left list `totalAmount` after short idle to reduce re-renders
+  // Optimized debounced sync: update totals with minimal re-renders
   React.useEffect(() => {
     if (!selectedImport) return;
     let active = true;
@@ -932,19 +924,12 @@ const ImportGoods = () => {
       if (!active) return;
 
       let total = 0;
-      if (isEditMode) {
-        const rows = (headerRows || []).filter(r => r && r.values && (r.values.productName || r.values.productCode || r.values.barcode));
-        total = rows.reduce((s, r) => {
-          const qty = Number(r.values.quantity) || 0;
-          const price = Number(r.values.unitPrice) || 0;
-          const t = Number(r.values.total) || (qty * price) || 0;
-          return s + t;
-        }, 0);
+      if (isEditMode && headerRows.length > 0) {
+        // Use memoized total from memoizedHeaderTotals
+        total = memoizedHeaderTotals.totalAmount;
       } else {
-        total = Number(selectedImport.totalAmount || 0);
-        if (!total) {
-          total = (selectedImport.items || []).reduce((s, it) => s + (Number(it.total) || 0), 0);
-        }
+        total = Number(selectedImport.totalAmount || 0) || 
+                (selectedImport.items || []).reduce((s, it) => s + (Number(it.total) || 0), 0);
       }
 
       // Only update when changed to avoid extra renders
@@ -970,13 +955,13 @@ const ImportGoods = () => {
         });
         return changed ? next : prev;
       });
-    }, 300);
+    }, 100); // Reduced timeout for better responsiveness
 
     return () => {
       active = false;
       clearTimeout(t);
     };
-  }, [selectedImport?.id, headerRows, items, isEditMode]);
+  }, [selectedImport?.id, memoizedHeaderTotals.totalAmount, isEditMode]); // More specific dependencies
 
   const rightPageSizeOptions = [10,20,50,100,200,500,1000,5000];
   // Prefer local `items` state when present (we update it when adding rows), otherwise use selectedImport items
@@ -1013,42 +998,38 @@ const ImportGoods = () => {
 
   const handleSelectImport = async (importItem) => {
     if (!importItem) return;
-    // Load basic import info and show in view-only mode
-    if (importItem.id) {
-      try {
-        const res = await fetch(`/api/Imports/${importItem.id}`);
-        if (res.ok) {
-          const data = await res.json();
-          const detail = {
-            ...data,
-            items: (data.items || data.Items || []).map(it => ({ ...it }))
-          };
-          setSelectedImport(detail);
-          setFormData({
-            importNumber: detail.importNumber || detail.ImportNumber || generateImportNumber(),
-            createdDate: detail.date ? dayjs(detail.date).format('YYYY-MM-DD') : (detail.createdDate || new Date().toISOString().split('T')[0]),
-            employee: detail.employee || detail.Employee || formData.employee,
-            importType: detail.importType || detail.ImportType || '',
-            totalWeight: detail.totalWeight || 0,
-            totalVolume: detail.totalVolume || 0,
-            note: detail.note || detail.Note || ''
-          });
-          // Don't load items into local state in view mode
-          // setItems(detail.items || []);
-        }
-      } catch (err) {
-        console.error('Load import basic info error', err);
-        setSelectedImport(importItem);
-      }
-    } else {
+
+    // If this is a temporary client-side import (created via "Tạo mới"),
+    // select it locally and open editor without server call.
+    if (importItem.isTemp) {
       setSelectedImport(importItem);
+      if (importItem.items && importItem.items.length > 0) {
+        const productRows = importItem.items.map((item, index) => ({
+          id: Date.now() + index,
+          values: { ...item }
+        }));
+        productRows.push({ id: Date.now() + importItem.items.length, values: {} });
+        setHeaderRows(productRows);
+      } else {
+        setHeaderRows([{ id: Date.now(), values: {} }]);
+      }
+      setShowRightContent(true);
+      setIsEditMode(true);
+      setIsEditing(true);
+      return;
     }
-    // Show right content in view mode (basic info only, no products table)
-    setShowRightContent(true);
-    setIsEditMode(false);
-    setIsEditing(false);
-    // Clear header rows in view mode
-    setHeaderRows([{ id: Date.now(), values: {} }]);
+
+    // For regular imports, open the full editor flow (same as clicking "Sửa")
+    try {
+      await editImport(importItem);
+    } catch (err) {
+      // fallback to minimal selection if edit flow fails
+      setSelectedImport(importItem);
+      setShowRightContent(true);
+      setIsEditMode(false);
+      setIsEditing(false);
+      setHeaderRows([{ id: Date.now(), values: {} }]);
+    }
   };
 
   const handleDelete = async (id, e) => {
@@ -1125,7 +1106,7 @@ const ImportGoods = () => {
         // ignore
       }
     } catch (err) {
-      console.error('Load imports error', err);
+      // Silent error handling
       // fallback to existing sample data
       console.warn('Using local sample imports as fallback');
       // keep current `imports` state as fallback
@@ -1140,7 +1121,7 @@ const ImportGoods = () => {
       const data = await res.json();
       setProducts(data || []);
     } catch (err) {
-      console.error('Load products error', err);
+      // Silent error handling
       // Keep empty array as fallback
       setProducts([]);
     }
@@ -1154,7 +1135,7 @@ const ImportGoods = () => {
       const data = await res.json();
       setWarehouses(data || []);
     } catch (err) {
-      console.error('Load warehouses error', err);
+      // Silent error handling
       // Keep empty array as fallback
       setWarehouses([]);
     }
@@ -1170,7 +1151,7 @@ const ImportGoods = () => {
       const importTypes = data.filter(tc => tc.type === 'Nhập' && tc.status === 'active');
       setTransactionContents(importTypes || []);
     } catch (err) {
-      console.error('Load transaction contents error', err);
+      // Silent error handling
       // Keep empty array as fallback
       setTransactionContents([]);
     }
@@ -1186,14 +1167,15 @@ const ImportGoods = () => {
       const list = (data || []).map(u => ({ id: u.id || u.idUser || u.userId || u.Id, name: u.userName || u.username || u.name || u.fullName || u.displayName || u.nameDisplay || u.UserName || '' }));
       setEmployeesList(list);
     } catch (err) {
-      console.error('Load employees error', err);
+      // Silent error handling
       setEmployeesList([]);
     }
   };
 
   const loadImportDetails = async (id) => {
     try {
-      const res = await fetch(`/api/Imports/${id}`);
+      // Simple cache buster for fresh data
+      const res = await fetch(`/api/Imports/${id}?_=${Date.now()}`);
       if (!res.ok) throw new Error('Failed to load import details');
       const data = await res.json();
       // normalize to frontend shape
@@ -1225,13 +1207,16 @@ const ImportGoods = () => {
   // Wrapper to trigger edit (explicitly load details and show right content)
   const editImport = async (importItem) => {
     if (!importItem || !importItem.id) return;
-    await loadImportDetails(importItem.id);
     
-    // Reset pagination to first page
-    setRightCurrentPage(1);
-    
-    // Load product data into header rows for editing
-    if (selectedImport && selectedImport.items && selectedImport.items.length > 0) {
+    try {
+      // Force fresh load from server to avoid stale data
+      await loadImportDetails(importItem.id);
+      
+      // Reset pagination to first page
+      setRightCurrentPage(1);
+      
+      // Load product data into header rows for editing
+      if (selectedImport && selectedImport.items && selectedImport.items.length > 0) {
       const productRows = selectedImport.items.map((item, index) => ({
         id: Date.now() + index,
         values: {
@@ -1261,6 +1246,10 @@ const ImportGoods = () => {
     setShowRightContent(true);
     setIsEditMode(true);
     setIsEditing(true);
+    } catch (err) {
+      console.error('Edit import error', err);
+      alert('Không thể chỉnh sửa phiếu nhập');
+    }
   };
 
   const createNewImport = async () => {
@@ -1362,11 +1351,6 @@ const ImportGoods = () => {
       // Freeze object để không ai có thể modify
       Object.freeze(totalText);
 
-      devLog('=== FIXED TOTALTEXT TEST ===');
-      devLog('totalAmount:', totalAmount);
-      devLog('totalText HARDCODED:', totalText);
-      devLog('totalText frozen:', Object.isFrozen(totalText));
-
       const payload = {
         importNumber: formData.importNumber || generateImportNumber(),
         date: formData.createdDate ? new Date(formData.createdDate).toISOString() : new Date().toISOString(),
@@ -1384,15 +1368,7 @@ const ImportGoods = () => {
         items: allItems
       };
 
-      devLog('=== FINAL DEBUG INFO ===');
-      devLog('totalAmount:', totalAmount);
-      devLog('totalText FINAL:', JSON.stringify(totalText));
-      devLog('totalText type:', typeof totalText);
-      devLog('totalText === null:', totalText === null);
-      devLog('totalText === undefined:', totalText === undefined);
-      devLog('totalText length:', totalText?.length);
-      devLog('payload:', JSON.stringify(payload, null, 2));
-      devLog('========================');
+      // Final validation only
 
       // VALIDATION CUỐI CÙNG
       if (totalText === null || totalText === undefined || totalText === '') {
@@ -1401,24 +1377,43 @@ const ImportGoods = () => {
         return;
       }
 
-      devLog('=== SAVE IMPORT DEBUG ===');
-      devLog('selectedImport:', selectedImport);
-      devLog('selectedImport?.id:', selectedImport?.id);
-      devLog('selectedImport?.isTemp:', selectedImport?.isTemp);
-      
       // Check if this is an update (has existing import with ID) or create new
       const isUpdate = selectedImport && selectedImport.id && selectedImport.id > 0 && !selectedImport.isTemp;
-      devLog('Will use:', isUpdate ? 'PUT (update)' : 'POST (create)');
 
       if (isUpdate) {
+        // Ensure we have the most current data by refetching before update
+        let currentImport;
+        try {
+          const currentRes = await fetch(`/api/Imports/${selectedImport.id}`);
+          if (currentRes.ok) {
+            currentImport = await currentRes.json();
+          }
+        } catch (e) {
+          console.error('Failed to fetch current import:', e);
+        }
+
         const res = await fetch(`/api/Imports/${selectedImport.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ id: selectedImport.id, ...payload })
+          body: JSON.stringify({ 
+            id: selectedImport.id, 
+            // Include any version/timestamp fields if they exist
+            ...(currentImport || {}),
+            ...payload 
+          })
         });
         if (!res.ok) {
           const errorText = await res.text();
           console.error('PUT Error:', errorText);
+          
+          // Check if it's a concurrency exception
+          if (errorText.includes('DbUpdateConcurrencyException') || errorText.includes('concurrency')) {
+            alert('Dữ liệu đã bị thay đổi bởi người dùng khác. Vui lòng tải lại trang và thử lại.');
+            // Refresh the page to get latest data
+            window.location.reload();
+            return;
+          }
+          
           throw new Error(`Save failed: ${errorText}`);
         }
         // Fetch updated import and update local imports list so it appears on left
@@ -1450,20 +1445,11 @@ const ImportGoods = () => {
 
         alert('Lưu phiếu nhập thành công! Phiếu đã được cập nhật.');
       } else {
-        devLog('=== SENDING POST REQUEST ===');
-        devLog('URL:', '/api/Imports');
-        devLog('Headers:', { 'Content-Type': 'application/json' });
-        devLog('Body string:', JSON.stringify(payload));
-        devLog('TotalText in body:', JSON.stringify(payload.totalText));
-        
         const res = await fetch('/api/Imports', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
         });
-        
-        devLog('Response status:', res.status);
-        devLog('Response OK:', res.ok);
         
         if (!res.ok) {
           const errorText = await res.text();
@@ -1709,10 +1695,7 @@ const ImportGoods = () => {
   };
 
   const resetFormForNewImport = () => {
-    devLog('=== RESET FORM FOR NEW IMPORT ===');
-    
     const newImportNumber = generateImportNumber();
-    devLog('Generated new import number:', newImportNumber);
     
     // Create a temporary new import for the left list
     const newTempImport = {
@@ -1744,7 +1727,7 @@ const ImportGoods = () => {
       note: ''
     };
     
-    devLog('New form data:', newFormData);
+
     
     // Add to imports list at the top
     setImports(prev => [newTempImport, ...prev]);
@@ -1764,8 +1747,7 @@ const ImportGoods = () => {
     setImportType('');
     setEmployee('');
     
-    devLog('=== RESET COMPLETED ===');
-    devLog('New temporary import added:', newTempImport);
+
   };
 
   // Function này không còn sử dụng vì đã thay đổi cơ chế
@@ -2205,7 +2187,7 @@ const ImportGoods = () => {
                   title={null}
                   width={280}
                   footer={null}
-                  bodyStyle={{padding:0}}
+                  styles={{ body: { padding: 0 } }}
                 >
                   <div style={{padding:16}}>
                     <div style={{marginBottom:16}}>
@@ -2453,7 +2435,7 @@ const ImportGoods = () => {
                                   {colKey === 'productName' ? (
                                         <button
                                       onClick={() => {
-                                        devLog('Header input row button clicked', { rIdx, colKey, headerRowsLength: headerRows.length });
+
                                         setProductModalColumn(colKey);
                                         setProductModalRowIndex(rIdx);  // This is key - set the row index
                                         setProductModalSearch('');
@@ -2484,13 +2466,13 @@ const ImportGoods = () => {
                                       showSearch
                                       allowClear
                                       style={{ width: '100%', minWidth: 200 }}
-                                      dropdownStyle={{ 
+                                      popupStyle={{ 
                                         maxHeight: 400, 
                                         overflow: 'auto',
                                         zIndex: 9999
                                       }}
-                                      dropdownMatchSelectWidth={false}
-                                      dropdownClassName="product-select-dropdown"
+                                      popupMatchSelectWidth={false}
+                                      classNames={{ popup: { root: 'product-select-dropdown' } }}
                                       optionLabelProp={colKey === 'productName' ? 'children' : 'label'}
                                       filterOption={(input, option) => {
                                         const p = products.find(pp => pp.id.toString() === option.value);
@@ -2553,7 +2535,7 @@ const ImportGoods = () => {
                                     changeOnBlur={false}
                                     open={undefined}
                                     inputReadOnly={false}
-                                    dropdownClassName="calendar-dropdown"
+                                    classNames={{ popup: { root: 'calendar-dropdown' } }}
                                   />
                                 </td>
                               );
@@ -2966,13 +2948,13 @@ const ImportGoods = () => {
                                     showSearch
                                     allowClear
                                     style={{ width: '100%', minWidth: 200 }}
-                                    dropdownStyle={{ 
+                                    popupStyle={{ 
                                       maxHeight: 400, 
                                       overflow: 'auto',
                                       zIndex: 9999
                                     }}
-                                    dropdownMatchSelectWidth={false}
-                                    dropdownClassName="product-select-dropdown"
+                                    popupMatchSelectWidth={false}
+                                    classNames={{ popup: { root: 'product-select-dropdown' } }}
                                     optionLabelProp={colKey === 'productName' ? 'children' : 'label'}
                                     filterOption={(input, option) => {
                                       const p = products.find(pp => pp.id.toString() === option.value);
