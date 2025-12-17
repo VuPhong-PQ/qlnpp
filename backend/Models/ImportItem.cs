@@ -53,5 +53,13 @@ namespace QlnppApi.Models
 
         [MaxLength(1000)]
         public string Note { get; set; } = string.Empty;
+
+        public DateTime? NoteDate { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? TransportCost { get; set; }
+
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal? TotalTransport { get; set; }
     }
 }

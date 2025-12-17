@@ -128,20 +128,42 @@ namespace QlnppApi.Controllers
                 existing.Note = model.Note;
                 existing.Employee = model.Employee;
                 existing.Total = model.Total;
+                existing.TotalWeight = model.TotalWeight;
+                existing.TotalVolume = model.TotalVolume;
+                existing.TotalText = model.TotalText;
+                existing.ImportType = model.ImportType;
+                existing.Supplier = model.Supplier;
+                existing.Invoice = model.Invoice;
+                existing.InvoiceDate = model.InvoiceDate;
 
-                // replace items: remove existing and add new
-                _context.ImportItems.RemoveRange(existing.Items);
+                // Explicitly remove all existing items first and save
+                if (existing.Items != null && existing.Items.Any())
+                {
+                    _context.ImportItems.RemoveRange(existing.Items);
+                    await _context.SaveChangesAsync(); // Save deletion first
+                }
+
+                // Add new items
                 if (model.Items != null && model.Items.Any())
                 {
                     foreach (var it in model.Items)
                     {
-                        it.Id = 0;
+                        it.Id = 0; // Ensure new item
                         it.ImportId = existing.Id;
+                        
+                        // Set default values for required string fields
+                        if (string.IsNullOrEmpty(it.Barcode)) it.Barcode = "";
+                        if (string.IsNullOrEmpty(it.ProductCode)) it.ProductCode = "";
+                        if (string.IsNullOrEmpty(it.ProductName)) it.ProductName = "";
+                        if (string.IsNullOrEmpty(it.Description)) it.Description = "";
+                        if (string.IsNullOrEmpty(it.Specification)) it.Specification = "";
+                        if (string.IsNullOrEmpty(it.Warehouse)) it.Warehouse = "";
+                        if (string.IsNullOrEmpty(it.Note)) it.Note = "";
                     }
                     await _context.ImportItems.AddRangeAsync(model.Items);
+                    await _context.SaveChangesAsync(); // Save addition
                 }
 
-                await _context.SaveChangesAsync();
                 return NoContent();
             }
             catch (System.Exception ex)

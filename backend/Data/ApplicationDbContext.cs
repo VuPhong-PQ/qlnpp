@@ -256,6 +256,14 @@ namespace QlnppApi.Data
                 .Property(i => i.Volume)
                 .HasPrecision(18, 2);
 
+            modelBuilder.Entity<ImportItem>()
+                .Property(i => i.TransportCost)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<ImportItem>()
+                .Property(i => i.TotalTransport)
+                .HasPrecision(18, 2);
+
             // Import header precision
             modelBuilder.Entity<Import>()
                 .Property(i => i.Total)

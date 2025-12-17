@@ -1006,7 +1006,7 @@ const ImportGoods = () => {
       if (importItem.items && importItem.items.length > 0) {
         const productRows = importItem.items.map((item, index) => ({
           id: Date.now() + index,
-          values: { ...item }
+          values: { ...item, warehouse: item.warehouse ? String(item.warehouse) : '' }
         }));
         productRows.push({ id: Date.now() + importItem.items.length, values: {} });
         setHeaderRows(productRows);
@@ -1210,14 +1210,36 @@ const ImportGoods = () => {
     
     try {
       // Force fresh load from server to avoid stale data
-      await loadImportDetails(importItem.id);
+      const res = await fetch(`/api/Imports/${importItem.id}?_=${Date.now()}`);
+      if (!res.ok) throw new Error('Failed to load import details');
+      const data = await res.json();
+      
+      // normalize to frontend shape
+      const detail = {
+        ...data,
+        items: (data.items || data.Items || []).map(it => ({ ...it }))
+      };
+      
+      // Update selectedImport immediately
+      setSelectedImport(detail);
+      
+      // Update form data
+      setFormData({
+        importNumber: detail.importNumber || detail.ImportNumber || generateImportNumber(),
+        createdDate: detail.date ? dayjs(detail.date).format('YYYY-MM-DD') : (detail.createdDate || new Date().toISOString().split('T')[0]),
+        employee: detail.employee || detail.Employee || formData.employee,
+        importType: detail.importType || detail.ImportType || '',
+        totalWeight: detail.totalWeight || 0,
+        totalVolume: detail.totalVolume || 0,
+        note: detail.note || detail.Note || ''
+      });
       
       // Reset pagination to first page
       setRightCurrentPage(1);
       
-      // Load product data into header rows for editing
-      if (selectedImport && selectedImport.items && selectedImport.items.length > 0) {
-      const productRows = selectedImport.items.map((item, index) => ({
+      // Load product data into header rows for editing using the fresh data
+      if (detail.items && detail.items.length > 0) {
+        const productRows = detail.items.map((item, index) => ({
         id: Date.now() + index,
         values: {
           barcode: item.barcode || '',
@@ -1232,20 +1254,24 @@ const ImportGoods = () => {
           totalTransport: item.totalTransport || 0,
           weight: item.weight || 0,
           volume: item.volume || 0,
-          warehouse: item.warehouse || '',
+          warehouse: item.warehouse ? String(item.warehouse) : '',
           noteDate: item.noteDate || null
         }
       }));
+        
+        // Add one empty row for new entries
+        productRows.push({ id: Date.now() + detail.items.length, values: {} });
+        
+        setHeaderRows(productRows);
+      } else {
+        // No existing items, start with one empty row
+        setHeaderRows([{ id: Date.now(), values: {} }]);
+      }
       
-      // Add one empty row for new entries
-      productRows.push({ id: Date.now() + selectedImport.items.length, values: {} });
-      
-      setHeaderRows(productRows);
-    }
-    
-    setShowRightContent(true);
-    setIsEditMode(true);
-    setIsEditing(true);
+      setItems(detail.items || []);
+      setShowRightContent(true);
+      setIsEditMode(true);
+      setIsEditing(true);
     } catch (err) {
       console.error('Edit import error', err);
       alert('Không thể chỉnh sửa phiếu nhập');
@@ -1313,9 +1339,12 @@ const ImportGoods = () => {
 
       // In edit mode, use headerRows as the items (they are the edited items)
       // In view mode, use existing items 
-      const headerRowsItems = headerRows.filter(row => 
-        row.values.productName || row.values.productCode || row.values.barcode
-      ).map(row => ({
+      const headerRowsItems = headerRows.filter(row => {
+        // Only include rows that have at least product name/code/barcode AND quantity > 0
+        const hasProduct = row.values.productName?.trim() || row.values.productCode?.trim() || row.values.barcode?.trim();
+        const hasQuantity = Number(row.values.quantity) > 0;
+        return hasProduct && hasQuantity;
+      }).map(row => ({
         barcode: row.values.barcode || '',
         productCode: row.values.productCode || '',
         productName: row.values.productName || '',
@@ -2504,17 +2533,17 @@ const ImportGoods = () => {
                               return (
                                 <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                                   <Select
-                                    value={row.values[colKey] || undefined}
-                                    onChange={(val) => handleHeaderRowChange(rIdx, colKey, val)}
-                                    placeholder="-- Chọn kho --"
-                                    size="small"
-                                    allowClear
-                                    style={{ width: '100%', minWidth: 120 }}
-                                  >
-                                    {warehouses.map(w => (
-                                      <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>
-                                    ))}
-                                  </Select>
+                                      value={row.values[colKey] ? String(row.values[colKey]) : undefined}
+                                      onChange={(val) => handleHeaderRowChange(rIdx, colKey, val ? String(val) : null)}
+                                      placeholder="-- Chọn kho --"
+                                      size="small"
+                                      allowClear
+                                      style={{ width: '100%', minWidth: 120 }}
+                                    >
+                                      {warehouses.map(w => (
+                                        <Select.Option key={w.id} value={String(w.id)}>{w.name}</Select.Option>
+                                      ))}
+                                    </Select>
                                 </td>
                               );
                             }
@@ -2987,15 +3016,15 @@ const ImportGoods = () => {
                             return (
                               <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                                 <Select
-                                  value={row.values[colKey] || undefined}
-                                  onChange={(val) => handleHeaderRowChange(rIdx, colKey, val)}
+                                  value={row.values[colKey] ? String(row.values[colKey]) : undefined}
+                                  onChange={(val) => handleHeaderRowChange(rIdx, colKey, val ? String(val) : null)}
                                   placeholder="-- Chọn kho --"
                                   size="small"
                                   allowClear
                                   style={{ width: '100%', minWidth: 120 }}
                                 >
                                   {warehouses.map(w => (
-                                    <Select.Option key={w.id} value={w.id}>{w.name}</Select.Option>
+                                    <Select.Option key={w.id} value={String(w.id)}>{w.name}</Select.Option>
                                   ))}
                                 </Select>
                               </td>
