@@ -7,6 +7,7 @@ import ProductModal from '../common/ProductModal';
 import { SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import 'dayjs/locale/vi';
+import { API_ENDPOINTS, api } from '../../config/api';
 import { removeVietnameseTones } from '../../utils/searchUtils';
 
 // Set Vietnamese locale for dayjs
@@ -1704,8 +1705,219 @@ const ImportGoods = () => {
     alert('Chức năng import Excel đang được phát triển');
   };
 
-  const handlePrint = () => {
-    alert('Chức năng in A4 đang được phát triển');
+  const handlePrint = async () => {
+    try {
+      // Load company info dynamically (only need first record)
+      let companyNameDynamic = '';
+      let companyAddressDynamic = '';
+      let companyPhoneDynamic = '';
+      try {
+        const compData = await api.get(API_ENDPOINTS.companyInfos);
+        if (Array.isArray(compData) && compData.length > 0) {
+          const c = compData[0];
+          companyNameDynamic = c.companyName || c.name || companyNameDynamic;
+          companyAddressDynamic = c.address || companyAddressDynamic;
+          companyPhoneDynamic = c.phone || companyPhoneDynamic;
+        }
+      } catch (e) {
+        // ignore fetch error and fall back to defaults
+      }
+      // Build combined row list (items if present, otherwise header rows)
+      const headerRowsData = (memoizedHeaderTotals.validRows || []).map(r => ({ ...r.values }));
+      const itemsData = (items && items.length > 0) ? items.map(it => ({
+        barcode: it.barcode || it.Barcode || '',
+        productCode: it.productCode || it.code || it.productCode || '',
+        productName: it.productName || it.name || it.productNameVat || '',
+        quantity: it.quantity || it.qty || '',
+        unitPrice: it.unitPrice || it.importPrice || it.price || 0,
+        transportCost: it.transportCost || 0,
+        noteDate: it.noteDate || it.note || '',
+        total: it.total || ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)),
+        totalTransport: it.totalTransport || 0,
+        weight: it.weight || 0,
+        volume: it.volume || 0,
+        warehouse: it.warehouse || (it.warehouseName || ''),
+        description: it.description || it.note || '',
+        conversion: it.conversion || ''
+      })) : [];
+
+      // Ensure headerRowsData entries use consistent keys
+      const headerMapped = headerRowsData.map(h => ({
+        barcode: h.barcode || '',
+        productCode: h.productCode || h.productCode || '',
+        productName: h.productName || h.productName || '',
+        quantity: h.quantity || h.qty || '',
+        unitPrice: h.unitPrice || 0,
+        transportCost: h.transportCost || 0,
+        noteDate: h.noteDate || '',
+        total: h.total || 0,
+        totalTransport: h.totalTransport || 0,
+        weight: h.weight || 0,
+        volume: h.volume || 0,
+        warehouse: h.warehouse || '',
+        description: h.description || '',
+        conversion: h.conversion || ''
+      }));
+
+      const combined = itemsData.length > 0 ? itemsData : headerMapped;
+
+      const totalAmount = combined.reduce((s, r) => s + (Number(r.total) || 0), 0) || memoizedHeaderTotals.totalAmount || 0;
+      const totalWeight = combined.reduce((s, r) => s + (Number(r.weight) || 0), 0) || memoizedHeaderTotals.totalWeight || 0;
+      const totalVolume = combined.reduce((s, r) => s + (Number(r.volume) || 0), 0) || memoizedHeaderTotals.totalVolume || 0;
+
+      const htmlRows = combined.map((v, idx) => {
+        const qty = v.quantity || '';
+        const unitPrice = v.unitPrice ? formatCurrency(Number(v.unitPrice)) : '';
+        const transport = v.transportCost ? formatCurrency(Number(v.transportCost)) : '';
+        let noteDate = v.noteDate || '';
+        try {
+          if (noteDate) noteDate = dayjs(noteDate).format('DD/MM/YYYY');
+        } catch (e) { }
+        const amount = v.total ? formatCurrency(Number(v.total)) : '';
+        const totalTransport = v.totalTransport ? formatCurrency(Number(v.totalTransport)) : '';
+        const weight = v.weight ? formatWeight(Number(v.weight)) : '';
+        const volume = v.volume ? formatVolume(Number(v.volume)) : '';
+        // Resolve warehouse name if warehouses list available
+        let warehouseName = v.warehouse || '';
+        try {
+          if (warehouses && warehouses.length > 0 && warehouseName) {
+            const found = warehouses.find(w => String(w.id) === String(warehouseName) || String(w.id) === String(v.warehouse));
+            if (found) warehouseName = found.name || warehouseName;
+          }
+        } catch (e) { }
+
+        return `
+          <tr>
+            <td style="text-align:center;padding:4px;border:1px solid #000">${idx + 1}</td>
+            <td style="text-align:left;padding:4px;border:1px solid #000">${v.barcode || ''}</td>
+            <td style="text-align:left;padding:4px;border:1px solid #000">${v.productCode || ''}</td>
+            <td style="text-align:left;padding:4px;border:1px solid #000">${v.productName || ''}</td>
+            <td style="text-align:center;padding:4px;border:1px solid #000">${qty}</td>
+            <td style="text-align:right;padding:4px;border:1px solid #000">${unitPrice}</td>
+            <td style="text-align:right;padding:4px;border:1px solid #000">${transport}</td>
+            <td style="text-align:center;padding:4px;border:1px solid #000">${noteDate}</td>
+            <td style="text-align:right;padding:4px;border:1px solid #000">${amount}</td>
+            <td style="text-align:right;padding:4px;border:1px solid #000">${totalTransport}</td>
+            <td style="text-align:right;padding:4px;border:1px solid #000">${weight}</td>
+            <td style="text-align:right;padding:4px;border:1px solid #000">${volume}</td>
+            <td style="text-align:left;padding:4px;border:1px solid #000">${warehouseName || ''}</td>
+            <td style="text-align:left;padding:4px;border:1px solid #000">${v.description || ''}</td>
+            <td style="text-align:left;padding:4px;border:1px solid #000">${v.conversion || ''}</td>
+          </tr>
+        `;
+      }).join('');
+
+      const companyName = companyNameDynamic || 'NPP THỊNH PHÚ QUỐC';
+      const printedAt = formData.createdDate || new Date().toISOString().split('T')[0];
+      const importNumber = formData.importNumber || '';
+      const supplierName = (selectedImport && (selectedImport.supplierName || selectedImport.supplier)) || '';
+      const employeeName = formData.employee || '';
+      const importTypeName = formData.importType || '';
+
+      const html = `
+        <!doctype html>
+        <html>
+        <head>
+          <meta charset="utf-8" />
+          <title>In A4 - Ngang</title>
+          <style>
+            @page { size: A4 landscape; margin: 12mm; }
+            body { font-family: 'Times New Roman', Times, serif; font-size: 11px; color: #000; }
+            .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px }
+            .company { font-weight:800; font-size:16px; }
+            .title { text-align:center; font-weight:800; font-size:14px; margin:6px 0; }
+            table { width:100%; border-collapse:collapse; font-size:10.5px }
+            th, td { border:1px solid #000; padding:4px; vertical-align:top }
+            thead th { background:#f5f5f5; }
+            .small { font-size:10px; color:#333 }
+            .footer-sign { display:flex; justify-content:space-around; margin-top:28px }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div>
+              <div class="company">${companyName}</div>
+              <div class="small">Địa chỉ: ${companyAddressDynamic || ''}</div>
+              <div class="small">Điện thoại: ${companyPhoneDynamic || ''}</div>
+            </div>
+            <div style="text-align:right">
+              <div class="small">Số phiếu: <strong>${importNumber}</strong></div>
+              <div class="small">Ngày lập: <strong>${printedAt}</strong></div>
+              <div class="small">Nhân viên: <strong>${employeeName}</strong></div>
+              <div class="small">Loại nhập: <strong>${importTypeName}</strong></div>
+              <div class="small">Nhà cung cấp: <strong>${supplierName}</strong></div>
+            </div>
+          </div>
+
+          <div class="title">PHIẾU NHẬP HÀNG</div>
+          <div style="text-align:left;margin-bottom:8px;font-size:12px">
+            <strong>Ghi chú PN:</strong>
+            <span style="margin-left:8px">${(formData.note && formData.note) || (selectedImport && (selectedImport.note || selectedImport.description)) || ''}</span>
+          </div>
+
+          <table>
+            <thead>
+              <tr>
+                <th style="width:3%">STT</th>
+                <th style="width:6%">Mã vạch</th>
+                <th style="width:6%">Mã hàng</th>
+                <th style="width:14%">Hàng hóa</th>
+                <th style="width:4%">Số lượng</th>
+                <th style="width:6%">Đơn giá</th>
+                <th style="width:6%">Tiền vận chuyển</th>
+                <th style="width:7%">Ghi chú date PN</th>
+                <th style="width:7%">Thành tiền</th>
+                <th style="width:5%">TT vận chuyển</th>
+                <th style="width:4%">Số kg</th>
+                <th style="width:4%">Số khối</th>
+                <th style="width:6%">Kho hàng</th>
+                <th style="width:18%">Mô tả</th>
+                <th style="width:11%">Quy đổi</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${htmlRows}
+              <tr>
+                <td colspan="4" style="text-align:left;padding:6px">Tổng tiền bằng chữ: <strong>${numberToVietnameseText(Math.round(totalAmount))}</strong></td>
+                <td style="text-align:center;padding:6px"></td>
+                <td style="text-align:right;padding:6px"><strong>Tổng</strong></td>
+                <td style="text-align:right;padding:6px">${formatCurrency(combined.reduce((s,r)=>s+(Number(r.transportCost)||0),0))}</td>
+                <td style="text-align:center;padding:6px"></td>
+                <td style="text-align:right;padding:6px"><strong>${formatCurrency(totalAmount)}</strong></td>
+                <td style="text-align:right;padding:6px">${formatCurrency(combined.reduce((s,r)=>s+(Number(r.totalTransport)||0),0))}</td>
+                <td style="text-align:right;padding:6px">${formatWeight(totalWeight)}</td>
+                <td style="text-align:right;padding:6px">${formatVolume(totalVolume)}</td>
+                <td colspan="3" style="text-align:left;padding:6px"></td>
+              </tr>
+            </tbody>
+          </table>
+
+          <div class="footer-sign">
+            <div style="text-align:center">Người giao hàng<br/><br/><br/>_______________</div>
+            <div style="text-align:center">Người nhận<br/><br/><br/>_______________</div>
+            <div style="text-align:center">Người lập phiếu<br/><br/><br/>${employeeName}</div>
+          </div>
+
+        </body>
+        </html>
+      `;
+
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) {
+        alert('Không thể mở cửa sổ in. Vui lòng cho phép popup.');
+        return;
+      }
+      printWindow.document.open();
+      printWindow.document.write(html);
+      printWindow.document.close();
+      printWindow.focus();
+      setTimeout(() => {
+        try { printWindow.print(); } catch (e) { console.error(e); }
+      }, 700);
+    } catch (e) {
+      console.error(e);
+      alert('Lỗi khi tạo bản in A4');
+    }
   };
 
   const handleAddItem = (event) => {
