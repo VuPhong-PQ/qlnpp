@@ -575,7 +575,7 @@ const ImportGoods = () => {
           <Select 
             value={selectedProducts[colKey] || null}
             onChange={(value) => handleWarehouseSelect(colKey, value)}
-            style={{ width: '100%', minWidth: '120px' }}
+            style={{ width: '100%', minWidth: '80px' }}
             size="small"
             placeholder="-- Chọn kho --"
             allowClear
@@ -830,7 +830,7 @@ const ImportGoods = () => {
           <Input
             placeholder={placeholder}
             size="small"
-            style={{ width: '100%', minWidth: '120px' }}
+            style={{ width: '100%', minWidth: '250px' }}
             onPressEnter={(e) => handleTextInput(colKey, e.target.value)}
           />
         </div>
@@ -2863,7 +2863,7 @@ const ImportGoods = () => {
                                       placeholder="-- Chọn kho --"
                                       size="small"
                                       allowClear
-                                      style={{ width: '100%', minWidth: 120 }}
+                                      style={{ width: '100%', minWidth: 80 }}
                                     >
                                       {warehouses.map(w => (
                                         <Select.Option key={w.id} value={String(w.id)}>{w.name}</Select.Option>
@@ -2939,7 +2939,7 @@ const ImportGoods = () => {
                                     }
                                   }}
                                   size="small"
-                                  style={{ width: '100%', minWidth: 100 }}
+                                  style={{ width: '100%', minWidth: colKey === 'description' ? 250 : 100 }}
                                   readOnly={['total', 'totalTransport'].includes(colKey)}
                                   placeholder={['total', 'totalTransport'].includes(colKey) ? 'Tự động tính' : ''}
                                 />
@@ -3326,7 +3326,7 @@ const ImportGoods = () => {
                                   placeholder="-- Chọn kho --"
                                   size="small"
                                   allowClear
-                                  style={{ width: '100%', minWidth: 120 }}
+                                  style={{ width: '100%', minWidth: 80 }}
                                 >
                                   {warehouses.map(w => (
                                     <Select.Option key={w.id} value={String(w.id)}>{w.name}</Select.Option>
@@ -3393,7 +3393,7 @@ const ImportGoods = () => {
                                   }
                                 }}
                                 size="small"
-                                style={{ width: '100%', minWidth: 100 }}
+                                style={{ width: '100%', minWidth: colKey === 'description' ? 250 : 100 }}
                                 readOnly={['total', 'totalTransport'].includes(colKey)}
                                 placeholder={['total', 'totalTransport'].includes(colKey) ? 'Tự động tính' : ''}
                               />

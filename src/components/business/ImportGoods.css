@@ -19,11 +19,11 @@
   text-overflow: ellipsis;
 }
 
-/* Specific width controls for description and date columns */
+/* Specific width controls for warehouse and date columns */
 .items-table th:nth-child(13),
 .items-table td:nth-child(13) {
-  min-width: 360px !important;
-  width: 360px !important;
+  min-width: 200px !important;
+  width: 200px !important;
 }
 
 .items-table th:nth-child(7),
@@ -45,17 +45,24 @@
   width: 200px !important;
 }
 
-/* Column width controls */
-.items-table th:has(span:contains("Mô tả")),
-.items-table td:nth-child(13) {
-  min-width: 720px !important;
-  width: 720px !important;
+/* Column width controls for description column */
+.items-table th:nth-child(14),
+.items-table td:nth-child(14) {
+  min-width: 400px !important;
+  width: 400px !important;
 }
 
 .items-table th:has(span:contains("Ghi chú (date)")),
 .items-table td:nth-child(7) {
   min-width: 360px !important;
   width: 360px !important;
+}
+
+/* Column width controls for actions column */
+.items-table th:nth-child(16),
+.items-table td:nth-child(16) {
+  min-width: 100px !important;
+  width: 100px !important;
 }
 
 /* Custom DatePicker Calendar Grid Styles */
