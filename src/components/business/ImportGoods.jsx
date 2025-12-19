@@ -293,11 +293,22 @@ const ImportGoods = () => {
 
   // Right-side columns & filters (for items table header filters)
   const RIGHT_COLS_KEY = 'import_goods_right_cols_v1';
-  const defaultRightCols = ['barcode','productCode','productName','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'];
+  const defaultRightCols = ['barcode','productCode','productName','unit','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'];
   const [rightVisibleCols, setRightVisibleCols] = useState(() => {
     try {
       const v = JSON.parse(localStorage.getItem(RIGHT_COLS_KEY));
-      if (Array.isArray(v)) return v;
+      if (Array.isArray(v)) {
+        // Merge stored cols with defaults to ensure new columns (like 'unit') appear in default order
+        const stored = v;
+        const merged = [];
+        defaultRightCols.forEach(dc => {
+          if (stored.includes(dc)) merged.push(dc);
+          else merged.push(dc);
+        });
+        // Append any stored-only columns (custom) after defaults
+        stored.forEach(s => { if (!merged.includes(s)) merged.push(s); });
+        return merged;
+      }
     } catch {}
     return defaultRightCols;
   });
@@ -598,6 +609,7 @@ const ImportGoods = () => {
         copy[rowIndex].values['productName'] = selectedProduct.name || '';
         copy[rowIndex].values['barcode'] = selectedProduct.barcode || '';
         copy[rowIndex].values['description'] = selectedProduct.description || '';
+        copy[rowIndex].values['unit'] = selectedProduct.defaultUnit || selectedProduct.unit || selectedProduct.baseUnit || '';
         copy[rowIndex].values['conversion'] = selectedProduct.conversion1 || 1;
         copy[rowIndex].values['unitPrice'] = selectedProduct.importPrice || 0;
         copy[rowIndex].values['weight'] = selectedProduct.weight || 0;
@@ -1349,6 +1361,7 @@ const ImportGoods = () => {
         barcode: row.values.barcode || '',
         productCode: row.values.productCode || '',
         productName: row.values.productName || '',
+        unit: row.values.unit || '',
         description: row.values.description || '',
         conversion: Number(row.values.conversion) || 1,
         quantity: Number(row.values.quantity) || 1,
@@ -1698,7 +1711,126 @@ const ImportGoods = () => {
   }, [leftPageSize]);
 
   const handleExport = () => {
-    alert('Chức năng xuất Excel đang được phát triển');
+    try {
+      const headerRowsData = (memoizedHeaderTotals.validRows || []).map(r => ({ ...r.values }));
+      const itemsData = (items && items.length > 0) ? items.map(it => ({
+        barcode: it.barcode || it.Barcode || '',
+        productCode: it.productCode || it.code || it.productCode || '',
+        productName: it.productName || it.name || it.productNameVat || '',
+        unit: it.unit || it.defaultUnit || it.unitName || it.unit1Name || '',
+        quantity: it.quantity || it.qty || '',
+        unitPrice: it.unitPrice || it.importPrice || it.price || 0,
+        transportCost: it.transportCost || 0,
+        noteDate: it.noteDate || it.note || '',
+        total: it.total || ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)),
+        totalTransport: it.totalTransport || 0,
+        weight: it.weight || 0,
+        volume: it.volume || 0,
+        warehouse: it.warehouse || (it.warehouseName || ''),
+        description: it.description || it.note || '',
+        conversion: it.conversion || ''
+      })) : [];
+
+      const headerMapped = headerRowsData.map(h => ({
+        barcode: h.barcode || '',
+        productCode: h.productCode || h.productCode || '',
+        productName: h.productName || h.productName || '',
+        unit: h.unit || h.defaultUnit || '',
+        quantity: h.quantity || h.qty || '',
+        unitPrice: h.unitPrice || 0,
+        transportCost: h.transportCost || 0,
+        noteDate: h.noteDate || '',
+        total: h.total || 0,
+        totalTransport: h.totalTransport || 0,
+        weight: h.weight || 0,
+        volume: h.volume || 0,
+        warehouse: h.warehouse || '',
+        description: h.description || '',
+        conversion: h.conversion || ''
+      }));
+
+      const combined = itemsData.length > 0 ? itemsData : headerMapped;
+
+      const rowsHtml = combined.map((v, idx) => {
+        let noteDate = v.noteDate || '';
+        try { if (noteDate) noteDate = dayjs(noteDate).format('DD/MM/YYYY'); } catch (e) {}
+        const unitPrice = v.unitPrice ? formatCurrency(Number(v.unitPrice)) : '';
+        const transport = v.transportCost ? formatCurrency(Number(v.transportCost)) : '';
+        const amount = v.total ? formatCurrency(Number(v.total)) : '';
+        const totalTransport = v.totalTransport ? formatCurrency(Number(v.totalTransport)) : '';
+        const weight = v.weight ? formatWeight(Number(v.weight)) : '';
+        const volume = v.volume ? formatVolume(Number(v.volume)) : '';
+        const warehouseName = (() => {
+          try {
+            if (warehouses && warehouses.length > 0 && v.warehouse) {
+              const found = warehouses.find(w => String(w.id) === String(v.warehouse) || String(w.id) === String(v.warehouse));
+              if (found) return found.name || v.warehouse;
+            }
+          } catch(e) {}
+          return v.warehouse || '';
+        })();
+        return `<tr>
+          <td style="border:1px solid #ccc;padding:4px;text-align:center">${idx+1}</td>
+          <td style="border:1px solid #ccc;padding:4px">${v.barcode||''}</td>
+          <td style="border:1px solid #ccc;padding:4px">${v.productCode||''}</td>
+          <td style="border:1px solid #ccc;padding:4px">${v.productName||''}</td>
+          <td style="border:1px solid #ccc;padding:4px">${v.unit||''}</td>
+          <td style="border:1px solid #ccc;padding:4px;text-align:right">${v.quantity||''}</td>
+          <td style="border:1px solid #ccc;padding:4px;text-align:right">${unitPrice}</td>
+          <td style="border:1px solid #ccc;padding:4px;text-align:right">${transport}</td>
+          <td style="border:1px solid #ccc;padding:4px;text-align:center">${noteDate}</td>
+          <td style="border:1px solid #ccc;padding:4px;text-align:right">${amount}</td>
+          <td style="border:1px solid #ccc;padding:4px;text-align:right">${totalTransport}</td>
+          <td style="border:1px solid #ccc;padding:4px;text-align:right">${weight}</td>
+          <td style="border:1px solid #ccc;padding:4px;text-align:right">${volume}</td>
+          <td style="border:1px solid #ccc;padding:4px">${warehouseName}</td>
+          <td style="border:1px solid #ccc;padding:4px">${v.description||''}</td>
+          <td style="border:1px solid #ccc;padding:4px">${v.conversion||''}</td>
+        </tr>`;
+      }).join('');
+
+      const html = `
+        <table border="1" style="border-collapse:collapse;font-family:Times New Roman;">
+          <thead>
+            <tr>
+              <th>STT</th>
+              <th>Mã vạch</th>
+              <th>Mã hàng</th>
+              <th>Hàng hóa</th>
+              <th>Đơn vị tính</th>
+              <th>Số lượng</th>
+              <th>Đơn giá</th>
+              <th>Tiền vận chuyển</th>
+              <th>Ghi chú date PN</th>
+              <th>Thành tiền</th>
+              <th>TT vận chuyển</th>
+              <th>Số kg</th>
+              <th>Số khối</th>
+              <th>Kho hàng</th>
+              <th>Mô tả</th>
+              <th>Quy đổi</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${rowsHtml}
+          </tbody>
+        </table>
+      `;
+
+      const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      const fileName = `Phieu_Nhap_${(formData.importNumber || (selectedImport && selectedImport.importNumber) || dayjs().format('YYYYMMDD_HHmmss'))}.xls`;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch (e) {
+      console.error('Export error', e);
+      alert('Xuất Excel thất bại');
+    }
   };
 
   const handleImport = () => {
@@ -1728,6 +1860,7 @@ const ImportGoods = () => {
         barcode: it.barcode || it.Barcode || '',
         productCode: it.productCode || it.code || it.productCode || '',
         productName: it.productName || it.name || it.productNameVat || '',
+        unit: it.unit || it.defaultUnit || it.unitName || it.unit1Name || '',
         quantity: it.quantity || it.qty || '',
         unitPrice: it.unitPrice || it.importPrice || it.price || 0,
         transportCost: it.transportCost || 0,
@@ -1746,6 +1879,7 @@ const ImportGoods = () => {
         barcode: h.barcode || '',
         productCode: h.productCode || h.productCode || '',
         productName: h.productName || h.productName || '',
+        unit: h.unit || h.defaultUnit || '',
         quantity: h.quantity || h.qty || '',
         unitPrice: h.unitPrice || 0,
         transportCost: h.transportCost || 0,
@@ -1792,6 +1926,7 @@ const ImportGoods = () => {
             <td style="text-align:left;padding:4px;border:1px solid #000">${v.barcode || ''}</td>
             <td style="text-align:left;padding:4px;border:1px solid #000">${v.productCode || ''}</td>
             <td style="text-align:left;padding:4px;border:1px solid #000">${v.productName || ''}</td>
+            <td style="text-align:center;padding:4px;border:1px solid #000">${v.unit || ''}</td>
             <td style="text-align:center;padding:4px;border:1px solid #000">${qty}</td>
             <td style="text-align:right;padding:4px;border:1px solid #000">${unitPrice}</td>
             <td style="text-align:right;padding:4px;border:1px solid #000">${transport}</td>
@@ -1861,7 +1996,8 @@ const ImportGoods = () => {
                 <th style="width:3%">STT</th>
                 <th style="width:6%">Mã vạch</th>
                 <th style="width:6%">Mã hàng</th>
-                <th style="width:14%">Hàng hóa</th>
+                <th style="width:12%">Hàng hóa</th>
+                <th style="width:6%">Đơn vị tính</th>
                 <th style="width:4%">Số lượng</th>
                 <th style="width:6%">Đơn giá</th>
                 <th style="width:6%">Tiền vận chuyển</th>
@@ -1878,7 +2014,7 @@ const ImportGoods = () => {
             <tbody>
               ${htmlRows}
               <tr>
-                <td colspan="4" style="text-align:left;padding:6px">Tổng tiền bằng chữ: <strong>${numberToVietnameseText(Math.round(totalAmount))}</strong></td>
+                <td colspan="5" style="text-align:left;padding:6px">Tổng tiền bằng chữ: <strong>${numberToVietnameseText(Math.round(totalAmount))}</strong></td>
                 <td style="text-align:center;padding:6px"></td>
                 <td style="text-align:right;padding:6px"><strong>Tổng</strong></td>
                 <td style="text-align:right;padding:6px">${formatCurrency(combined.reduce((s,r)=>s+(Number(r.transportCost)||0),0))}</td>
@@ -1931,9 +2067,7 @@ const ImportGoods = () => {
     }
   };
 
-  const handleViewHistory = () => {
-    alert('Chức năng xem lịch sử nhập hàng đang được phát triển');
-  };
+  // (history view removed) 
 
   const resetFormForNewImport = () => {
     const newImportNumber = generateImportNumber();
@@ -2123,18 +2257,20 @@ const ImportGoods = () => {
       sorter: (a, b) => (a.note || '').localeCompare(b.note || ''),
     },
     {
-      title: 'Thao tác',
+      title: (<div style={{textAlign: 'center'}}>Thao tác</div>),
       key: 'actions',
       width: 100,
       render: (_, record) => (
-        <Space>
-          <Button icon={<EditOutlined />} size="small" onClick={e => { e.stopPropagation(); editImport(record); }} title="Sửa" />
-          {!record.isTemp && (
-            <Popconfirm title="Bạn có chắc chắn muốn xóa phiếu nhập này?" onConfirm={e => handleDelete(record.id, e)} okText="Có" cancelText="Không">
-              <Button icon={<DeleteOutlined />} danger size="small" onClick={e => e.stopPropagation()} title="Xóa" />
-            </Popconfirm>
-          )}
-        </Space>
+        <div style={{display: 'flex', justifyContent: 'center'}}>
+          <Space>
+            <Button icon={<EditOutlined />} size="small" onClick={e => { e.stopPropagation(); editImport(record); }} title="Sửa" />
+            {!record.isTemp && (
+              <Popconfirm title="Bạn có chắc chắn muốn xóa phiếu nhập này?" onConfirm={e => handleDelete(record.id, e)} okText="Có" cancelText="Không">
+                <Button icon={<DeleteOutlined />} danger size="small" onClick={e => e.stopPropagation()} title="Xóa" />
+              </Popconfirm>
+            )}
+          </Space>
+        </div>
       )
     }
   ];
@@ -2322,9 +2458,7 @@ const ImportGoods = () => {
             <button className="btn btn-success" onClick={handleAddItem} title="Click để thêm hàng hóa | Ctrl+Click để mở tab mới">
               📦 Thêm hàng hóa
             </button>
-            <button className="btn btn-info" onClick={handleViewHistory}>
-              📋 Xem lịch sử nhập hàng
-            </button>
+            {/* Removed redundant "Xem lịch sử nhập hàng" button */}
           </div>
         </div>
         {selectedImport && showRightContent ? (
@@ -2597,6 +2731,7 @@ const ImportGoods = () => {
                         {rightVisibleCols.includes('barcode') && <th key="barcode" style={{textAlign: 'center'}}><span>Mã vạch</span></th>}
                         {rightVisibleCols.includes('productCode') && <th key="productCode" style={{textAlign: 'center'}}><span>Mã hàng</span></th>}
                         {rightVisibleCols.includes('productName') && <th key="productName" style={{textAlign: 'center'}}><span>Hàng hóa</span></th>}
+                        {rightVisibleCols.includes('unit') && <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>}
                         {rightVisibleCols.includes('quantity') && <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>}
                         {rightVisibleCols.includes('unitPrice') && <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>}
                         {rightVisibleCols.includes('transportCost') && <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>}
@@ -2609,7 +2744,7 @@ const ImportGoods = () => {
                         {rightVisibleCols.includes('description') && <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>}
                         {rightVisibleCols.includes('conversion') && <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>}
                         {rightVisibleCols.includes('actions') && (
-                          <th key="actions">
+                          <th key="actions" style={{textAlign: 'center', verticalAlign: 'middle'}}>
                             <span>Thao tác</span>
                           </th>
                         )}
@@ -2617,35 +2752,13 @@ const ImportGoods = () => {
                       {/* Additional header input rows inserted under the main header */}
                       {paginatedHeaderRows.map((row, rIdx) => (
                         <tr key={row.id} className="header-input-row">
-                          {['barcode','productCode','productName','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'].map(colKey => {
+                          {['barcode','productCode','productName','unit','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'].map(colKey => {
                             if (colKey === 'actions') {
                               if (!rightVisibleCols.includes('actions')) return null;
                               return (
                                 <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
                                   <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'4px'}}>
-                                    <button 
-                                      onClick={() => {
-                                        // Clear all data in this header row
-                                        setHeaderRows(prev => {
-                                          const copy = prev.map(r => ({ ...r, values: { ...r.values } }));
-                                          if (copy[rIdx]) {
-                                            copy[rIdx].values = {}; // Clear all values
-                                          }
-                                          return copy;
-                                        });
-                                      }}
-                                      style={{
-                                        padding:'4px 8px',
-                                        fontSize:12,
-                                        backgroundColor:'#ff4d4f',
-                                        color:'white',
-                                        border:'none',
-                                        borderRadius:'3px',
-                                        cursor:'pointer'
-                                      }}
-                                    >
-                                      Reset
-                                    </button>
+                                    {/* Reset button removed as requested */}
                                     {/* Show Xóa button for rows that have product data */}
                                     {(row.values.productName || row.values.productCode || row.values.barcode) && (
                                       <button 
@@ -3082,6 +3195,7 @@ const ImportGoods = () => {
                       {rightVisibleCols.includes('barcode') && <th key="barcode" style={{textAlign: 'center'}}><span>Mã vạch</span></th>}
                       {rightVisibleCols.includes('productCode') && <th key="productCode" style={{textAlign: 'center'}}><span>Mã hàng</span></th>}
                       {rightVisibleCols.includes('productName') && <th key="productName" style={{textAlign: 'center'}}><span>Hàng hóa</span></th>}
+                      {rightVisibleCols.includes('unit') && <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>}
                       {rightVisibleCols.includes('quantity') && <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>}
                       {rightVisibleCols.includes('unitPrice') && <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>}
                       {rightVisibleCols.includes('transportCost') && <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>}
@@ -3094,7 +3208,7 @@ const ImportGoods = () => {
                       {rightVisibleCols.includes('description') && <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>}
                       {rightVisibleCols.includes('conversion') && <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>}
                       {rightVisibleCols.includes('actions') && (
-                        <th key="actions">
+                        <th key="actions" style={{textAlign: 'center', verticalAlign: 'middle'}}>
                           <span>Thao tác</span>
                         </th>
                       )}
@@ -3102,34 +3216,13 @@ const ImportGoods = () => {
                     {/* Header input rows for new entries */}
                     {paginatedHeaderRows.map((row, rIdx) => (
                       <tr key={row.id} className="header-input-row">
-                        {['barcode','productCode','productName','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'].map(colKey => {
+                        {['barcode','productCode','productName','unit','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'].map(colKey => {
                           if (colKey === 'actions') {
                             if (!rightVisibleCols.includes('actions')) return null;
                             return (
                               <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
                                 <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'4px'}}>
-                                  <button 
-                                    onClick={() => {
-                                      setHeaderRows(prev => {
-                                        const copy = prev.map(r => ({ ...r, values: { ...r.values } }));
-                                        if (copy[rIdx]) {
-                                          copy[rIdx].values = {};
-                                        }
-                                        return copy;
-                                      });
-                                    }}
-                                    style={{
-                                      padding:'4px 8px',
-                                      fontSize:12,
-                                      backgroundColor:'#ff4d4f',
-                                      color:'white',
-                                      border:'none',
-                                      borderRadius:'3px',
-                                      cursor:'pointer'
-                                    }}
-                                  >
-                                    Reset
-                                  </button>
+                                  {/* Reset button removed as requested */}
                                   {/* Show Xóa button for rows that have product data */}
                                   {(row.values.productName || row.values.productCode || row.values.barcode) && (
                                     <button 
@@ -3504,6 +3597,7 @@ const ImportGoods = () => {
                     copy[productModalRowIndex].values['productName'] = firstProduct.name || '';
                     copy[productModalRowIndex].values['barcode'] = firstProduct.barcode || '';
                     copy[productModalRowIndex].values['description'] = firstProduct.description || '';
+                    copy[productModalRowIndex].values['unit'] = firstProduct.defaultUnit || firstProduct.unit || firstProduct.baseUnit || '';
                     copy[productModalRowIndex].values['conversion'] = firstProduct.conversion1 || 1;
                     copy[productModalRowIndex].values['unitPrice'] = firstProduct.importPrice || 0;
                     copy[productModalRowIndex].values['weight'] = firstProduct.weight || 0;
@@ -3528,6 +3622,7 @@ const ImportGoods = () => {
                       newRow.values['productName'] = product.name || '';
                       newRow.values['barcode'] = product.barcode || '';
                       newRow.values['description'] = product.description || '';
+                      newRow.values['unit'] = product.defaultUnit || product.unit || product.baseUnit || '';
                       newRow.values['conversion'] = product.conversion1 || 1;
                       newRow.values['unitPrice'] = product.importPrice || 0;
                       newRow.values['weight'] = product.weight || 0;
