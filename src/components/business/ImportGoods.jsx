@@ -29,7 +29,8 @@ const ImportGoods = () => {
     description: '',
     hsdMonths: 0,
     defaultUnit: '',
-    priceImport: 0,
+      priceImport: 0,
+      unit: '',
     priceRetail: 0,
     priceWholesale: 0,
     // unit variants
@@ -493,7 +494,8 @@ const ImportGoods = () => {
             productCode: selectedProduct.code || '',
             productName: selectedProduct.name || '',
             description: selectedProduct.description || '',
-            conversion: selectedProduct.conversion1 || 1,
+              conversion: selectedProduct.conversion1 || 1,
+              unit: selectedProduct.defaultUnit || selectedProduct.unit || selectedProduct.baseUnit || '',
             quantity: 1,
             unitPrice: selectedProduct.importPrice || 0,
             transportCost: 0,
@@ -655,6 +657,46 @@ const ImportGoods = () => {
         // Calculate totals only when needed
         targetRow.values.total = (quantity * unitPrice).toString();
         targetRow.values.totalTransport = (quantity * transportCost).toString();
+      }
+
+      // When unit changes, attempt to set conversion according to product's unit definitions
+      if (colKey === 'unit') {
+        try {
+          const row = targetRow.values;
+          // try to get product id stored by product dropdown (productName_id / productCode_id / barcode_id)
+          const prodId = row.productName_id || row.productCode_id || row.barcode_id || null;
+          let prod = null;
+          if (prodId && products && products.length > 0) {
+            prod = products.find(p => String(p.id) === String(prodId));
+          }
+          // fallback: try to match by productCode/barcode/productName text
+          if (!prod) {
+            const code = row.productCode || row.barcode || row.productName || '';
+            if (code) {
+              prod = products.find(p => p.code === code || p.barcode === code || p.name === code);
+            }
+          }
+
+          if (prod) {
+            const selectedUnit = value || '';
+            let conv = 1;
+            const baseUnit = prod.baseUnit || prod.defaultUnit || prod.DefaultUnit || prod.unit || '';
+            if (selectedUnit === baseUnit) {
+              conv = 1;
+            } else if (prod.unit1 && selectedUnit === prod.unit1) {
+              conv = Number(prod.conversion1) || 1;
+            } else if (prod.unit2 && selectedUnit === prod.unit2) {
+              conv = Number(prod.conversion2) || 1;
+            } else if (prod.unit3 && selectedUnit === prod.unit3) {
+              conv = Number(prod.conversion3) || 1;
+            } else if (prod.unit4 && selectedUnit === prod.unit4) {
+              conv = Number(prod.conversion4) || 1;
+            }
+            targetRow.values.conversion = conv;
+          }
+        } catch (e) {
+          // ignore errors; do not block user
+        }
       }
       
       return copy;
@@ -1259,6 +1301,7 @@ const ImportGoods = () => {
           productCode: item.productCode || '',
           productName: item.productName || '',
           description: item.description || '',
+          unit: item.unit || '',
           quantity: item.quantity || 1,
           conversion: item.conversion || 1,
           unitPrice: item.unitPrice || 0,
@@ -2528,8 +2571,11 @@ const ImportGoods = () => {
                         const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
                         const itemsTotals = calculateTotals(currentItems);
                         
-                        // Use memoized header totals
-                        const totalWeight = Math.round((itemsTotals.totalWeight + memoizedHeaderTotals.totalWeight) * 100) / 100;
+                        // If there are any editable header rows, use their totals (user is editing);
+                        // otherwise use saved items totals. This avoids double-counting.
+                        const headerWeight = memoizedHeaderTotals.validRows.length ? memoizedHeaderTotals.totalWeight : 0;
+                        const sourceWeight = headerWeight || itemsTotals.totalWeight || 0;
+                        const totalWeight = Math.round(sourceWeight * 100) / 100;
                         return formatWeight(totalWeight);
                       })()} 
                       readOnly 
@@ -2545,8 +2591,11 @@ const ImportGoods = () => {
                         const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
                         const itemsTotals = calculateTotals(currentItems);
                         
-                        // Use memoized header totals
-                        const totalVolume = Math.round((itemsTotals.totalVolume + memoizedHeaderTotals.totalVolume) * 10000) / 10000;
+                        // If there are any editable header rows, use their totals (user is editing);
+                        // otherwise use saved items totals. This avoids double-counting.
+                        const headerVolume = memoizedHeaderTotals.validRows.length ? memoizedHeaderTotals.totalVolume : 0;
+                        const sourceVolume = headerVolume || itemsTotals.totalVolume || 0;
+                        const totalVolume = Math.round(sourceVolume * 10000) / 10000;
                         return formatVolume(totalVolume);
                       })()} 
                       readOnly 
@@ -2891,6 +2940,52 @@ const ImportGoods = () => {
                                     inputReadOnly={false}
                                     classNames={{ popup: { root: 'calendar-dropdown' } }}
                                   />
+                                </td>
+                              );
+                            }
+
+                            if (colKey === 'unit') {
+                              return (
+                                <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                                  {(() => {
+                                    try {
+                                      const rowValues = row.values || {};
+                                      const prodId = rowValues.productName_id || rowValues.productCode_id || rowValues.barcode_id || null;
+                                      let prod = null;
+                                      if (prodId && products && products.length > 0) prod = products.find(p => String(p.id) === String(prodId));
+                                      if (!prod) {
+                                        const keyMatch = rowValues.productCode || rowValues.barcode || rowValues.productName || '';
+                                        if (keyMatch) prod = products.find(p => p.code === keyMatch || p.barcode === keyMatch || p.name === keyMatch);
+                                      }
+                                      const opts = [];
+                                      if (prod) {
+                                        const base = prod.baseUnit || prod.defaultUnit || prod.DefaultUnit || prod.unit || '';
+                                        if (base) opts.push({ name: base, conv: 1 });
+                                        if (prod.unit1) opts.push({ name: prod.unit1, conv: Number(prod.conversion1) || 1 });
+                                        if (prod.unit2) opts.push({ name: prod.unit2, conv: Number(prod.conversion2) || 1 });
+                                        if (prod.unit3) opts.push({ name: prod.unit3, conv: Number(prod.conversion3) || 1 });
+                                        if (prod.unit4) opts.push({ name: prod.unit4, conv: Number(prod.conversion4) || 1 });
+                                      }
+                                      // unique by name
+                                      const uniq = [];
+                                      opts.forEach(o => { if (o.name && !uniq.find(u=>u.name===o.name)) uniq.push(o); });
+
+                                      return (
+                                        <Select
+                                          value={row.values.unit || undefined}
+                                          onChange={(val) => handleHeaderRowChange(rIdx, 'unit', val ? String(val) : null)}
+                                          placeholder="-- Chọn đơn vị --"
+                                          size="small"
+                                          allowClear
+                                          style={{ width: '100%', minWidth: 120 }}
+                                        >
+                                          {uniq.map(u => <Select.Option key={u.name} value={u.name}>{u.name}</Select.Option>)}
+                                        </Select>
+                                      );
+                                    } catch (e) {
+                                      return <Input value={row.values.unit || ''} onChange={(e)=>handleHeaderRowChange(rIdx,'unit',e.target.value)} size="small" />;
+                                    }
+                                  })()}
                                 </td>
                               );
                             }

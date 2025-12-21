@@ -84,6 +84,7 @@ namespace QlnppApi.Controllers
                         if (string.IsNullOrEmpty(it.ProductName)) it.ProductName = "";
                         if (string.IsNullOrEmpty(it.Description)) it.Description = "";
                         if (string.IsNullOrEmpty(it.Specification)) it.Specification = "";
+                        if (string.IsNullOrEmpty(it.Unit)) it.Unit = "";
                         if (string.IsNullOrEmpty(it.Warehouse)) it.Warehouse = "";
                         if (string.IsNullOrEmpty(it.Note)) it.Note = "";
                     }
@@ -157,6 +158,7 @@ namespace QlnppApi.Controllers
                         if (string.IsNullOrEmpty(it.ProductName)) it.ProductName = "";
                         if (string.IsNullOrEmpty(it.Description)) it.Description = "";
                         if (string.IsNullOrEmpty(it.Specification)) it.Specification = "";
+                        if (string.IsNullOrEmpty(it.Unit)) it.Unit = "";
                         if (string.IsNullOrEmpty(it.Warehouse)) it.Warehouse = "";
                         if (string.IsNullOrEmpty(it.Note)) it.Note = "";
                     }

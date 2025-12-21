@@ -30,6 +30,9 @@ namespace QlnppApi.Models
         [MaxLength(100)]
         public string Specification { get; set; } = string.Empty;
 
+        [MaxLength(100)]
+        public string Unit { get; set; } = string.Empty;
+
         [Column(TypeName = "decimal(18,4)")]
         public decimal? Conversion { get; set; }
 
