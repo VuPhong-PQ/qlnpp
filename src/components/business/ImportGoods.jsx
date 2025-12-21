@@ -165,7 +165,7 @@ const ImportGoods = () => {
 
   // Helper function to calculate totals from items
   const calculateTotals = (itemsList) => {
-    return itemsList.reduce((totals, item) => {
+    const result = itemsList.reduce((totals, item) => {
       const quantity = parseFloat(item.quantity) || 0;
       const weight = parseFloat(item.weight) || 0; 
       const volume = parseFloat(item.volume) || 0;
@@ -173,12 +173,20 @@ const ImportGoods = () => {
       const transportCost = parseFloat(item.transportCost) || 0;
       
       return {
-        totalWeight: Math.round((totals.totalWeight + weight) * 100) / 100, // Round to 2 decimal places
-        totalVolume: Math.round((totals.totalVolume + volume) * 10000) / 10000, // Round to 4 decimal places
+        totalWeight: totals.totalWeight + weight, // Don't round yet
+        totalVolume: totals.totalVolume + volume, // Don't round yet
         totalAmount: totals.totalAmount + (quantity * unitPrice),
         totalTransport: totals.totalTransport + (transportCost * quantity)
       };
     }, { totalWeight: 0, totalVolume: 0, totalAmount: 0, totalTransport: 0 });
+    
+    // Only round at the end to avoid cumulative rounding errors
+    return {
+      totalWeight: Math.round(result.totalWeight * 100) / 100, // Round to 2 decimal places
+      totalVolume: Math.round(result.totalVolume * 10000) / 10000, // Round to 4 decimal places
+      totalAmount: result.totalAmount,
+      totalTransport: result.totalTransport
+    };
   };
 
   // Helper function to format currency (with comma separators)
@@ -371,7 +379,13 @@ const ImportGoods = () => {
     const totalAmount = validRows.reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
     const totalWeight = validRows.reduce((sum, row) => sum + (parseFloat(row.values.weight) || 0), 0);
     const totalVolume = validRows.reduce((sum, row) => sum + (parseFloat(row.values.volume) || 0), 0);
-    return { validRows, totalAmount, totalWeight, totalVolume };
+    
+    return { 
+      validRows, 
+      totalAmount, 
+      totalWeight: Math.round(totalWeight * 100) / 100, // Round to 2 decimal places 
+      totalVolume: Math.round(totalVolume * 10000) / 10000 // Round to 4 decimal places
+    };
   }, [headerRows]);
 
   const renderHeaderFilterTH = (colKey, label, placeholder) => {
@@ -568,6 +582,9 @@ const ImportGoods = () => {
             // ignore
           }
           // Add new item to the current import with complete product information
+          const isKMImport = (formData.importType && formData.importType.toLowerCase().includes('km')) || 
+                             (selectedImport?.importType && selectedImport.importType.toLowerCase().includes('km'));
+          
           const newItem = {
             id: Date.now() + Math.random(),
             barcode: selectedProduct.barcode || '',
@@ -577,10 +594,10 @@ const ImportGoods = () => {
             conversion: (lastMatch && (lastMatch.conversion || lastMatch.Conversion)) || selectedProduct.conversion1 || 1,
             unit: (lastMatch && (lastMatch.unit || lastMatch.Unit)) || selectedProduct.defaultUnit || selectedProduct.unit || '',
             quantity: 1,
-            unitPrice: (lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0,
+            unitPrice: isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0),
             transportCost: (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0,
             noteDate: (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null,
-            total: ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0),
+            total: isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0),
             totalTransport: ((lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0),
             weight: selectedProduct.weight || 0,
             volume: selectedProduct.volume || 0,
@@ -597,7 +614,7 @@ const ImportGoods = () => {
             conversion: (lastMatch && (lastMatch.conversion || lastMatch.Conversion)) || selectedProduct.conversion1 || 1,
             unit: (lastMatch && (lastMatch.unit || lastMatch.Unit)) || selectedProduct.defaultUnit || selectedProduct.unit || '',
             quantity: 1,
-            unitPrice: (lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0,
+            unitPrice: isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0),
             transportCost: (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0,
             noteDate: (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null,
             total: '',
@@ -741,13 +758,16 @@ const ImportGoods = () => {
           // ignore
         }
         // Store actual field values instead of productId
+        const isKMImport = (formData.importType && formData.importType.toLowerCase().includes('km')) || 
+                           (selectedImport?.importType && selectedImport.importType.toLowerCase().includes('km'));
+        
         copy[rowIndex].values['productCode'] = selectedProduct.code || '';
         copy[rowIndex].values['productName'] = selectedProduct.name || '';
         copy[rowIndex].values['barcode'] = selectedProduct.barcode || '';
         copy[rowIndex].values['description'] = selectedProduct.description || '';
         copy[rowIndex].values['unit'] = (lastMatch && (lastMatch.unit || lastMatch.Unit)) || selectedProduct.defaultUnit || selectedProduct.unit || selectedProduct.baseUnit || '';
         copy[rowIndex].values['conversion'] = (lastMatch && (lastMatch.conversion || lastMatch.Conversion)) || selectedProduct.conversion1 || 1;
-        copy[rowIndex].values['unitPrice'] = (lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0;
+        copy[rowIndex].values['unitPrice'] = isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0);
         copy[rowIndex].values['weight'] = selectedProduct.weight || 0;
         copy[rowIndex].values['volume'] = selectedProduct.volume || 0;
         copy[rowIndex].values['transportCost'] = (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || copy[rowIndex].values.transportCost || 0;
@@ -3969,6 +3989,9 @@ const ImportGoods = () => {
                       // ignore
                     }
 
+                    const isKMImport = (formData.importType && formData.importType.toLowerCase().includes('km')) || 
+                                       (selectedImport?.importType && selectedImport.importType.toLowerCase().includes('km'));
+
                     copy[productModalRowIndex].values[productModalColumn] = firstProduct?.name || '';
                     copy[productModalRowIndex].values['productCode'] = firstProduct.code || '';
                     copy[productModalRowIndex].values['productName'] = firstProduct.name || '';
@@ -3976,7 +3999,7 @@ const ImportGoods = () => {
                     copy[productModalRowIndex].values['description'] = firstProduct.description || '';
                     copy[productModalRowIndex].values['unit'] = (lastMatch && (lastMatch.unit || lastMatch.Unit)) || firstProduct.defaultUnit || firstProduct.unit || firstProduct.baseUnit || '';
                     copy[productModalRowIndex].values['conversion'] = (lastMatch && (lastMatch.conversion || lastMatch.Conversion)) || firstProduct.conversion1 || 1;
-                    copy[productModalRowIndex].values['unitPrice'] = (lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || firstProduct.importPrice || 0;
+                    copy[productModalRowIndex].values['unitPrice'] = isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || firstProduct.importPrice || 0);
                     copy[productModalRowIndex].values['transportCost'] = (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0;
                     copy[productModalRowIndex].values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null;
                     copy[productModalRowIndex].values['weight'] = firstProduct.weight || 0;
@@ -4046,6 +4069,9 @@ const ImportGoods = () => {
                         // ignore
                       }
 
+                      const isKMImport = (formData.importType && formData.importType.toLowerCase().includes('km')) || 
+                                         (selectedImport?.importType && selectedImport.importType.toLowerCase().includes('km'));
+
                       const newRow = { id: Date.now() + Math.random(), values: {} };
                       newRow.values[productModalColumn] = product.name || '';
                       newRow.values['productCode'] = product.code || '';
@@ -4054,7 +4080,7 @@ const ImportGoods = () => {
                       newRow.values['description'] = product.description || '';
                       newRow.values['unit'] = (lastMatch && (lastMatch.unit || lastMatch.Unit)) || product.defaultUnit || product.unit || product.baseUnit || '';
                       newRow.values['conversion'] = (lastMatch && (lastMatch.conversion || lastMatch.Conversion)) || product.conversion1 || 1;
-                      newRow.values['unitPrice'] = (lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || product.importPrice || 0;
+                      newRow.values['unitPrice'] = isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || product.importPrice || 0);
                       newRow.values['transportCost'] = (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0;
                       newRow.values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null;
                       newRow.values['weight'] = product.weight || 0;
