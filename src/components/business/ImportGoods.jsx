@@ -341,6 +341,8 @@ const ImportGoods = () => {
   const [selectedModalProducts, setSelectedModalProducts] = useState([]);
   const [productModalColumn, setProductModalColumn] = useState(null);
   const [productModalRowIndex, setProductModalRowIndex] = useState(null);
+  const [productModalScope, setProductModalScope] = useState('all'); // 'all' or 'currentImport'
+  const [highlightRowId, setHighlightRowId] = useState(null);
   
   // Pagination state for product modal
   const [modalCurrentPage, setModalCurrentPage] = useState(1);
@@ -456,7 +458,19 @@ const ImportGoods = () => {
     return (
       <th key={colKey}>
         <div style={{display:'flex',alignItems:'center',gap:8,flexDirection:'column'}}>
-          <span style={{fontWeight: 'bold', marginBottom: '4px'}}>{label}</span>
+          <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <span style={{fontWeight: 'bold'}}>{label}</span>
+            <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => {
+              // Open product modal but restrict results to products present in this import
+              setProductModalColumn(colKey);
+              setProductModalRowIndex(null);
+              setProductModalSearch('');
+              setSelectedModalProducts([]);
+              setModalCurrentPage(1);
+              setProductModalScope('currentImport');
+              setShowProductModal(true);
+            }} />
+          </div>
           <Input
             placeholder={`nhập ${label.toLowerCase()}`}
             size="small"
@@ -2818,13 +2832,16 @@ const ImportGoods = () => {
                         <button 
                           className="btn btn-primary" 
                           style={{width:'100%'}}
-                          onClick={()=>{
-                            const iso = dateDraft.format('YYYY-MM-DD');
-                            setSelectedImport(si => si ? ({ ...si, createdDate: iso }) : si);
-                            setFormData(fd => ({ ...fd, createdDate: iso }));
-                            setIsEditing(true);
-                            setShowDatePickerModal(false);
-                          }}>
+                          onClick={() => {
+                            setProductModalColumn(colKey);
+                            setProductModalRowIndex(rIdx);  // This is key - set the row index
+                            setProductModalSearch('');
+                            setModalCurrentPage(1);
+                            setSelectedModalProducts(row.values[colKey] ? [row.values[colKey]] : []);
+                            setProductModalScope('all');
+                            setShowProductModal(true);
+                          }}
+                        >
                           OK
                         </button>
                       </div>
@@ -2899,9 +2916,54 @@ const ImportGoods = () => {
                   <table className="items-table" style={{minWidth:1300}}>
                     <thead>
                       <tr>
-                        {rightVisibleCols.includes('barcode') && <th key="barcode" style={{textAlign: 'center'}}><span>Mã vạch</span></th>}
-                        {rightVisibleCols.includes('productCode') && <th key="productCode" style={{textAlign: 'center'}}><span>Mã hàng</span></th>}
-                        {rightVisibleCols.includes('productName') && <th key="productName" style={{textAlign: 'center'}}><span>Hàng hóa</span></th>}
+                        {rightVisibleCols.includes('barcode') && (
+                          <th key="barcode" style={{textAlign: 'center'}}>
+                            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                              <span>Mã vạch</span>
+                              <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
+                                setProductModalColumn('barcode');
+                                setProductModalRowIndex(null);
+                                setProductModalSearch('');
+                                setModalCurrentPage(1);
+                                setSelectedModalProducts([]);
+                                setProductModalScope('currentImport');
+                                setShowProductModal(true);
+                              }} />
+                            </div>
+                          </th>
+                        )}
+                        {rightVisibleCols.includes('productCode') && (
+                          <th key="productCode" style={{textAlign: 'center'}}>
+                            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                              <span>Mã hàng</span>
+                              <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
+                                setProductModalColumn('productCode');
+                                setProductModalRowIndex(null);
+                                setProductModalSearch('');
+                                setModalCurrentPage(1);
+                                setSelectedModalProducts([]);
+                                setProductModalScope('currentImport');
+                                setShowProductModal(true);
+                              }} />
+                            </div>
+                          </th>
+                        )}
+                        {rightVisibleCols.includes('productName') && (
+                          <th key="productName" style={{textAlign: 'center'}}>
+                            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                              <span>Hàng hóa</span>
+                              <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
+                                setProductModalColumn('productName');
+                                setProductModalRowIndex(null);
+                                setProductModalSearch('');
+                                setModalCurrentPage(1);
+                                setSelectedModalProducts([]);
+                                setProductModalScope('currentImport');
+                                setShowProductModal(true);
+                              }} />
+                            </div>
+                          </th>
+                        )}
                         {rightVisibleCols.includes('unit') && <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>}
                         {rightVisibleCols.includes('quantity') && <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>}
                         {rightVisibleCols.includes('unitPrice') && <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>}
@@ -2922,7 +2984,7 @@ const ImportGoods = () => {
                       </tr>
                       {/* Additional header input rows inserted under the main header */}
                       {paginatedHeaderRows.map((row, rIdx) => (
-                        <tr key={row.id} className="header-input-row">
+                        <tr key={row.id} className="header-input-row" style={row.id === highlightRowId ? { background: '#fff7e6', boxShadow: 'inset 0 0 0 2px #ffd666' } : {}}>
                           {['barcode','productCode','productName','unit','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'].map(colKey => {
                             if (colKey === 'actions') {
                               if (!rightVisibleCols.includes('actions')) return null;
@@ -3432,7 +3494,7 @@ const ImportGoods = () => {
                     </tr>
                     {/* Header input rows for new entries */}
                     {paginatedHeaderRows.map((row, rIdx) => (
-                      <tr key={row.id} className="header-input-row">
+                      <tr key={row.id} className="header-input-row" style={row.id === highlightRowId ? { background: '#fff7e6', boxShadow: 'inset 0 0 0 2px #ffd666' } : {}}>
                         {['barcode','productCode','productName','unit','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'].map(colKey => {
                           if (colKey === 'actions') {
                             if (!rightVisibleCols.includes('actions')) return null;
@@ -3474,7 +3536,8 @@ const ImportGoods = () => {
                                       setProductModalSearch('');
                                       setModalCurrentPage(1);
                                       setSelectedModalProducts(row.values[colKey] ? [row.values[colKey]] : []);
-                                      setShowProductModal(true);
+                                        setProductModalScope('all');
+                                        setShowProductModal(true);
                                     }}
                                     style={{
                                       width: '100%',
@@ -3777,7 +3840,7 @@ const ImportGoods = () => {
       {/* Product Selection Modal */}
       <Modal
         open={showProductModal}
-        onCancel={() => setShowProductModal(false)}
+        onCancel={() => { setShowProductModal(false); setProductModalScope('all'); }}
         title="Chọn hàng hóa"
         width={800}
         footer={[
@@ -3786,7 +3849,13 @@ const ImportGoods = () => {
             setProductModalSearch('');
           }} style={{marginRight: 8, padding: '6px 16px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#fff'}}>Bỏ chọn tất cả</button>,
           <button key="all" onClick={() => {
-            const filteredProducts = memoizedFilteredProducts;
+            const filteredProducts = (() => {
+              if (productModalScope === 'currentImport') {
+                const present = new Set((itemsData || []).flatMap(it => [String(it.productCode||''), String(it.barcode||''), String(it.productName||'')]).filter(Boolean));
+                return memoizedFilteredProducts.filter(p => present.has(String(p.code)) || present.has(String(p.barcode)) || present.has(String(p.name)));
+              }
+              return memoizedFilteredProducts;
+            })();
             const startIndex = (modalCurrentPage - 1) * modalPageSize;
             const currentPageProducts = filteredProducts.slice(startIndex, startIndex + modalPageSize);
 
@@ -3797,6 +3866,47 @@ const ImportGoods = () => {
             });
           }} style={{marginRight: 8, padding: '6px 16px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#fff'}}>Chọn tất cả</button>,
           <button key="ok" onClick={() => {
+            if (selectedModalProducts.length > 0 && productModalScope === 'currentImport') {
+              // Find the first selected product and navigate/highlight existing row in current import
+              const firstProductId = selectedModalProducts[0];
+              const firstProduct = products.find(p => p.id.toString() === firstProductId);
+              if (firstProduct) {
+                const keys = new Set([String(firstProduct.code || ''), String(firstProduct.barcode || ''), String(firstProduct.name || '')]);
+                // Search headerRows first (edit-mode rows)
+                let foundIndex = -1;
+                for (let i = 0; i < headerRows.length; i++) {
+                  const r = headerRows[i];
+                  if (!r || !r.values) continue;
+                  const v = r.values;
+                  if (keys.has(String(v.productCode)) || keys.has(String(v.barcode)) || keys.has(String(v.productName))) { foundIndex = i; break; }
+                }
+
+                if (foundIndex !== -1) {
+                  setHighlightRowId(headerRows[foundIndex].id);
+                  const page = Math.floor(foundIndex / Math.max(1, rightItemsPerPage)) + 1;
+                  setRightCurrentPage(page);
+                } else {
+                  // Fallback: search itemsData
+                  const itemsList = (itemsData || []);
+                  let foundInItems = -1;
+                  for (let i = 0; i < itemsList.length; i++) {
+                    const it = itemsList[i];
+                    if (!it) continue;
+                    if (keys.has(String(it.productCode)) || keys.has(String(it.barcode)) || keys.has(String(it.productName))) { foundInItems = i; break; }
+                  }
+                  if (foundInItems !== -1) {
+                    const page = Math.floor(foundInItems / Math.max(1, rightItemsPerPage)) + 1;
+                    setRightCurrentPage(page);
+                  }
+                }
+              }
+              setShowProductModal(false);
+              setProductModalScope('all');
+              // clear highlight after a short delay
+              setTimeout(() => setHighlightRowId(null), 3000);
+              return;
+            }
+
             if (selectedModalProducts.length > 0) {
               // Handle multiple product selection
               if (productModalRowIndex !== null && productModalRowIndex >= 0) {
@@ -3976,7 +4086,8 @@ const ImportGoods = () => {
               }
             }
             setShowProductModal(false);
-          }} style={{padding: '6px 16px', border: 'none', borderRadius: '4px', background: '#1677ff', color: '#fff'}}>Thêm vào PN</button>
+            setProductModalScope('all');
+          }} style={{padding: '6px 16px', border: 'none', borderRadius: '4px', background: '#1677ff', color: '#fff'}}>{productModalScope === 'currentImport' ? 'Tìm' : 'Thêm vào PN'}</button>
         ]}
       >
         
@@ -4022,7 +4133,13 @@ const ImportGoods = () => {
         
         <div style={{maxHeight: 400, overflowY: 'auto', border: '1px solid #f0f0f0', borderRadius: '4px'}}>
           {(() => {
-            const filteredProducts = memoizedFilteredProducts;
+            const filteredProducts = (() => {
+              if (productModalScope === 'currentImport') {
+                const present = new Set((itemsData || []).flatMap(it => [String(it.productCode||''), String(it.barcode||''), String(it.productName||'')]).filter(Boolean));
+                return memoizedFilteredProducts.filter(p => present.has(String(p.code)) || present.has(String(p.barcode)) || present.has(String(p.name)));
+              }
+              return memoizedFilteredProducts;
+            })();
             const startIndex = (modalCurrentPage - 1) * modalPageSize;
             const currentPageProducts = filteredProducts.slice(startIndex, startIndex + modalPageSize);
             
@@ -4048,7 +4165,13 @@ const ImportGoods = () => {
         
         {/* Pagination navigation */}
         {(() => {
-          const filteredProducts = memoizedFilteredProducts;
+          const filteredProducts = (() => {
+            if (productModalScope === 'currentImport') {
+              const present = new Set((itemsData || []).flatMap(it => [String(it.productCode||''), String(it.barcode||''), String(it.productName||'')]).filter(Boolean));
+              return memoizedFilteredProducts.filter(p => present.has(String(p.code)) || present.has(String(p.barcode)) || present.has(String(p.name)));
+            }
+            return memoizedFilteredProducts;
+          })();
           const totalPages = Math.ceil(filteredProducts.length / modalPageSize);
 
           if (totalPages <= 1) return null;
