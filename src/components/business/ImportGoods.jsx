@@ -507,12 +507,43 @@ const ImportGoods = () => {
           let lastMatch = null;
           try {
             if (imports && imports.length > 0) {
-              // create array with parsed dates
-              const withDates = imports.map(imp => ({
-                imp,
-                _date: imp.date ? new Date(imp.date) : (imp.createdDate ? (dayjs(imp.createdDate, 'DD/MM/YYYY').isValid() ? dayjs(imp.createdDate, 'DD/MM/YYYY').toDate() : new Date(0)) : new Date(0))
-              }));
-              withDates.sort((a,b) => b._date - a._date);
+              // Improved date parsing with ID fallback for accurate newest-first sorting
+              const withDates = imports.map(imp => {
+                let parsedDate = new Date(0);
+                
+                if (imp.date) {
+                  try {
+                    const d = new Date(imp.date);
+                    if (!isNaN(d.getTime())) parsedDate = d;
+                  } catch (e) {}
+                }
+                
+                if (parsedDate.getTime() === 0 && imp.createdDate) {
+                  try {
+                    if (imp.createdDate.includes('/')) {
+                      const djs = dayjs(imp.createdDate, 'DD/MM/YYYY');
+                      if (djs.isValid()) parsedDate = djs.toDate();
+                    } else {
+                      const d = new Date(imp.createdDate);
+                      if (!isNaN(d.getTime())) parsedDate = d;
+                    }
+                  } catch (e) {}
+                }
+                
+                const fallbackSort = parseInt(imp.id) || 0;
+                
+                return {
+                  imp,
+                  _date: parsedDate,
+                  _fallbackSort: fallbackSort
+                };
+              });
+              
+              withDates.sort((a, b) => {
+                const dateCompare = b._date.getTime() - a._date.getTime();
+                if (dateCompare !== 0) return dateCompare;
+                return b._fallbackSort - a._fallbackSort;
+              });
               for (const w of withDates) {
                 const itemsList = w.imp.items || w.imp.Items || [];
                 const match = itemsList.find(it => (it.productCode && it.productCode === selectedProduct.code) || (it.barcode && it.barcode === selectedProduct.barcode) || (it.productName && it.productName === selectedProduct.name));
@@ -646,11 +677,46 @@ const ImportGoods = () => {
         let lastMatch = null;
         try {
           if (imports && imports.length > 0) {
-            const withDates = imports.map(imp => ({
-              imp,
-              _date: imp.date ? new Date(imp.date) : (imp.createdDate ? (dayjs(imp.createdDate, 'DD/MM/YYYY').isValid() ? dayjs(imp.createdDate, 'DD/MM/YYYY').toDate() : new Date(0)) : new Date(0))
-            }));
-            withDates.sort((a,b) => b._date - a._date);
+            // Improved date parsing with ID fallback for accurate newest-first sorting
+            const withDates = imports.map(imp => {
+              let parsedDate = new Date(0);
+              
+              // Try imp.date first (ISO format)
+              if (imp.date) {
+                try {
+                  const d = new Date(imp.date);
+                  if (!isNaN(d.getTime())) parsedDate = d;
+                } catch (e) {}
+              }
+              
+              // Fallback to createdDate
+              if (parsedDate.getTime() === 0 && imp.createdDate) {
+                try {
+                  if (imp.createdDate.includes('/')) {
+                    const djs = dayjs(imp.createdDate, 'DD/MM/YYYY');
+                    if (djs.isValid()) parsedDate = djs.toDate();
+                  } else {
+                    const d = new Date(imp.createdDate);
+                    if (!isNaN(d.getTime())) parsedDate = d;
+                  }
+                } catch (e) {}
+              }
+              
+              const fallbackSort = parseInt(imp.id) || 0;
+              
+              return {
+                imp,
+                _date: parsedDate,
+                _fallbackSort: fallbackSort
+              };
+            });
+            
+            // Sort by date desc, then by ID desc as fallback
+            withDates.sort((a, b) => {
+              const dateCompare = b._date.getTime() - a._date.getTime();
+              if (dateCompare !== 0) return dateCompare;
+              return b._fallbackSort - a._fallbackSort;
+            });
             for (const w of withDates) {
               const itemsList = w.imp.items || w.imp.Items || [];
               const match = itemsList.find(it => (it.productCode && it.productCode === selectedProduct.code) || (it.barcode && it.barcode === selectedProduct.barcode) || (it.productName && it.productName === selectedProduct.name));
@@ -3747,11 +3813,42 @@ const ImportGoods = () => {
                     let lastMatch = null;
                     try {
                       if (imports && imports.length > 0) {
-                        const withDates = imports.map(imp => ({
-                          imp,
-                          _date: imp.date ? new Date(imp.date) : (imp.createdDate ? (dayjs(imp.createdDate, 'DD/MM/YYYY').isValid() ? dayjs(imp.createdDate, 'DD/MM/YYYY').toDate() : new Date(0)) : new Date(0))
-                        }));
-                        withDates.sort((a,b) => b._date - a._date);
+                        const withDates = imports.map(imp => {
+                          let parsedDate = new Date(0);
+                          
+                          if (imp.date) {
+                            try {
+                              const d = new Date(imp.date);
+                              if (!isNaN(d.getTime())) parsedDate = d;
+                            } catch (e) {}
+                          }
+                          
+                          if (parsedDate.getTime() === 0 && imp.createdDate) {
+                            try {
+                              if (imp.createdDate.includes('/')) {
+                                const djs = dayjs(imp.createdDate, 'DD/MM/YYYY');
+                                if (djs.isValid()) parsedDate = djs.toDate();
+                              } else {
+                                const d = new Date(imp.createdDate);
+                                if (!isNaN(d.getTime())) parsedDate = d;
+                              }
+                            } catch (e) {}
+                          }
+                          
+                          const fallbackSort = parseInt(imp.id) || 0;
+                          
+                          return {
+                            imp,
+                            _date: parsedDate,
+                            _fallbackSort: fallbackSort
+                          };
+                        });
+                        
+                        withDates.sort((a, b) => {
+                          const dateCompare = b._date.getTime() - a._date.getTime();
+                          if (dateCompare !== 0) return dateCompare;
+                          return b._fallbackSort - a._fallbackSort;
+                        });
                         for (const w of withDates) {
                           const itemsList = w.imp.items || w.imp.Items || [];
                           const match = itemsList.find(it => (it.productCode && it.productCode === firstProduct.code) || (it.barcode && it.barcode === firstProduct.barcode) || (it.productName && it.productName === firstProduct.name));
@@ -3793,11 +3890,42 @@ const ImportGoods = () => {
                       let lastMatch = null;
                       try {
                         if (imports && imports.length > 0) {
-                          const withDates = imports.map(imp => ({
-                            imp,
-                            _date: imp.date ? new Date(imp.date) : (imp.createdDate ? (dayjs(imp.createdDate, 'DD/MM/YYYY').isValid() ? dayjs(imp.createdDate, 'DD/MM/YYYY').toDate() : new Date(0)) : new Date(0))
-                          }));
-                          withDates.sort((a,b) => b._date - a._date);
+                          const withDates = imports.map(imp => {
+                            let parsedDate = new Date(0);
+                            
+                            if (imp.date) {
+                              try {
+                                const d = new Date(imp.date);
+                                if (!isNaN(d.getTime())) parsedDate = d;
+                              } catch (e) {}
+                            }
+                            
+                            if (parsedDate.getTime() === 0 && imp.createdDate) {
+                              try {
+                                if (imp.createdDate.includes('/')) {
+                                  const djs = dayjs(imp.createdDate, 'DD/MM/YYYY');
+                                  if (djs.isValid()) parsedDate = djs.toDate();
+                                } else {
+                                  const d = new Date(imp.createdDate);
+                                  if (!isNaN(d.getTime())) parsedDate = d;
+                                }
+                              } catch (e) {}
+                            }
+                            
+                            const fallbackSort = parseInt(imp.id) || 0;
+                            
+                            return {
+                              imp,
+                              _date: parsedDate,
+                              _fallbackSort: fallbackSort
+                            };
+                          });
+                          
+                          withDates.sort((a, b) => {
+                            const dateCompare = b._date.getTime() - a._date.getTime();
+                            if (dateCompare !== 0) return dateCompare;
+                            return b._fallbackSort - a._fallbackSort;
+                          });
                           for (const w of withDates) {
                             const itemsList = w.imp.items || w.imp.Items || [];
                             const match = itemsList.find(it => (it.productCode && it.productCode === product.code) || (it.barcode && it.barcode === product.barcode) || (it.productName && it.productName === product.name));
