@@ -127,6 +127,22 @@ const ImportGoods = () => {
     };
   });
 
+  // Helper to get default warehouse id (prefer one that contains 'NPP')
+  const getDefaultWarehouseName = () => {
+    try {
+      if (!warehouses || warehouses.length === 0) return '';
+      const found = warehouses.find(w => {
+        if (!w || !w.name) return false;
+        const n = String(w.name).toLowerCase();
+        return n.includes('npp') || n.includes('kho npp') || n.includes('kho_npp');
+      });
+      if (found) return String(found.id);
+      return String(warehouses[0].id || '');
+    } catch (e) {
+      return '';
+    }
+  };
+
   // Ref to temporarily suppress auto-selecting the first import when imports refresh
   const suppressAutoSelectRef = React.useRef(false);
   // Control whether right layout content is visible
@@ -487,6 +503,25 @@ const ImportGoods = () => {
           setItems(updatedItems);
           if (selectedImport) setSelectedImport(prev => ({ ...prev, items: updatedItems }));
         } else {
+          // Try to find the most recent import that contains this product and use its prices/units
+          let lastMatch = null;
+          try {
+            if (imports && imports.length > 0) {
+              // create array with parsed dates
+              const withDates = imports.map(imp => ({
+                imp,
+                _date: imp.date ? new Date(imp.date) : (imp.createdDate ? (dayjs(imp.createdDate, 'DD/MM/YYYY').isValid() ? dayjs(imp.createdDate, 'DD/MM/YYYY').toDate() : new Date(0)) : new Date(0))
+              }));
+              withDates.sort((a,b) => b._date - a._date);
+              for (const w of withDates) {
+                const itemsList = w.imp.items || w.imp.Items || [];
+                const match = itemsList.find(it => (it.productCode && it.productCode === selectedProduct.code) || (it.barcode && it.barcode === selectedProduct.barcode) || (it.productName && it.productName === selectedProduct.name));
+                if (match) { lastMatch = match; break; }
+              }
+            }
+          } catch (e) {
+            // ignore
+          }
           // Add new item to the current import with complete product information
           const newItem = {
             id: Date.now() + Math.random(),
@@ -494,17 +529,17 @@ const ImportGoods = () => {
             productCode: selectedProduct.code || '',
             productName: selectedProduct.name || '',
             description: selectedProduct.description || '',
-              conversion: selectedProduct.conversion1 || 1,
-              unit: selectedProduct.defaultUnit || selectedProduct.unit || selectedProduct.baseUnit || '',
+            conversion: (lastMatch && (lastMatch.conversion || lastMatch.Conversion)) || selectedProduct.conversion1 || 1,
+            unit: (lastMatch && (lastMatch.unit || lastMatch.Unit)) || selectedProduct.defaultUnit || selectedProduct.unit || '',
             quantity: 1,
-            unitPrice: selectedProduct.importPrice || 0,
-            transportCost: 0,
-            noteDate: null,
-            total: selectedProduct.importPrice || 0,
-            totalTransport: 0,
+            unitPrice: (lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0,
+            transportCost: (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0,
+            noteDate: (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null,
+            total: ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0),
+            totalTransport: ((lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0),
             weight: selectedProduct.weight || 0,
             volume: selectedProduct.volume || 0,
-            warehouse: '',
+            warehouse: getDefaultWarehouseName(),
           };
 
           // Prepare an empty row so user can continue entering next item immediately
@@ -514,16 +549,17 @@ const ImportGoods = () => {
             productCode: '',
             productName: '',
             description: '',
-            conversion: '',
-            quantity: '',
-            unitPrice: '',
-            transportCost: '',
-            noteDate: null,
+            conversion: (lastMatch && (lastMatch.conversion || lastMatch.Conversion)) || selectedProduct.conversion1 || 1,
+            unit: (lastMatch && (lastMatch.unit || lastMatch.Unit)) || selectedProduct.defaultUnit || selectedProduct.unit || '',
+            quantity: 1,
+            unitPrice: (lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0,
+            transportCost: (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0,
+            noteDate: (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null,
             total: '',
             totalTransport: '',
             weight: '',
             volume: '',
-            warehouse: '',
+            warehouse: getDefaultWarehouseName(),
           };
 
           // Append product row + blank row, then move pagination to show the new rows
@@ -606,21 +642,41 @@ const ImportGoods = () => {
       const copy = prev.map(r => ({ ...r, values: { ...r.values } }));
       
       if (selectedProduct) {
+        // Try to find most recent import item for this product to reuse last prices/units
+        let lastMatch = null;
+        try {
+          if (imports && imports.length > 0) {
+            const withDates = imports.map(imp => ({
+              imp,
+              _date: imp.date ? new Date(imp.date) : (imp.createdDate ? (dayjs(imp.createdDate, 'DD/MM/YYYY').isValid() ? dayjs(imp.createdDate, 'DD/MM/YYYY').toDate() : new Date(0)) : new Date(0))
+            }));
+            withDates.sort((a,b) => b._date - a._date);
+            for (const w of withDates) {
+              const itemsList = w.imp.items || w.imp.Items || [];
+              const match = itemsList.find(it => (it.productCode && it.productCode === selectedProduct.code) || (it.barcode && it.barcode === selectedProduct.barcode) || (it.productName && it.productName === selectedProduct.name));
+              if (match) { lastMatch = match; break; }
+            }
+          }
+        } catch (e) {
+          // ignore
+        }
         // Store actual field values instead of productId
         copy[rowIndex].values['productCode'] = selectedProduct.code || '';
         copy[rowIndex].values['productName'] = selectedProduct.name || '';
         copy[rowIndex].values['barcode'] = selectedProduct.barcode || '';
         copy[rowIndex].values['description'] = selectedProduct.description || '';
-        copy[rowIndex].values['unit'] = selectedProduct.defaultUnit || selectedProduct.unit || selectedProduct.baseUnit || '';
-        copy[rowIndex].values['conversion'] = selectedProduct.conversion1 || 1;
-        copy[rowIndex].values['unitPrice'] = selectedProduct.importPrice || 0;
+        copy[rowIndex].values['unit'] = (lastMatch && (lastMatch.unit || lastMatch.Unit)) || selectedProduct.defaultUnit || selectedProduct.unit || selectedProduct.baseUnit || '';
+        copy[rowIndex].values['conversion'] = (lastMatch && (lastMatch.conversion || lastMatch.Conversion)) || selectedProduct.conversion1 || 1;
+        copy[rowIndex].values['unitPrice'] = (lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0;
         copy[rowIndex].values['weight'] = selectedProduct.weight || 0;
         copy[rowIndex].values['volume'] = selectedProduct.volume || 0;
+        copy[rowIndex].values['transportCost'] = (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || copy[rowIndex].values.transportCost || 0;
+        copy[rowIndex].values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || copy[rowIndex].values.noteDate || null;
         
         // Auto-calculate initial totals
         const quantity = parseFloat(copy[rowIndex].values.quantity) || 1;
-        const unitPrice = parseFloat(selectedProduct.importPrice) || 0;
-        const transportCost = parseFloat(copy[rowIndex].values.transportCost) || 0;
+        const unitPrice = parseFloat(copy[rowIndex].values.unitPrice) || 0;
+        const transportCost = parseFloat(copy[rowIndex].values.transportCost || ((lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0)) || 0;
         
         copy[rowIndex].values.total = (quantity * unitPrice).toString();
         copy[rowIndex].values.totalTransport = (quantity * transportCost).toString();
@@ -633,7 +689,7 @@ const ImportGoods = () => {
       
       // if selecting in last row and a productId was chosen, append blank row
       if (productId && rowIndex === copy.length - 1) {
-        copy.push({ id: Date.now() + Math.random(), values: {} });
+        copy.push({ id: Date.now() + Math.random(), values: { warehouse: getDefaultWarehouseName() } });
       }
       return copy;
     });
@@ -726,7 +782,7 @@ const ImportGoods = () => {
           totalTransport: 0,
           weight: 0,
           volume: 0,
-          warehouse: selectedWarehouse.name,
+          warehouse: String(selectedWarehouse.id),
         };
         
         setItems(prevItems => [...prevItems, newItem]);
@@ -837,7 +893,7 @@ const ImportGoods = () => {
         totalTransport: 0,
         weight: 0,
         volume: 0,
-        warehouse: '',
+        warehouse: getDefaultWarehouseName(),
       };
       
       // Add new item to the current import
@@ -899,7 +955,7 @@ const ImportGoods = () => {
         totalTransport: colKey === 'totalTransport' ? numValue : 0,
         weight: colKey === 'weight' ? numValue : 0,
         volume: colKey === 'volume' ? numValue : 0,
-        warehouse: '',
+        warehouse: getDefaultWarehouseName(),
       };
       
       setItems(prevItems => [...prevItems, newItem]);
@@ -924,7 +980,7 @@ const ImportGoods = () => {
         totalTransport: 0,
         weight: 0,
         volume: 0,
-        warehouse: '',
+        warehouse: getDefaultWarehouseName(),
       };
       
       setItems(prevItems => [...prevItems, newItem]);
@@ -1063,10 +1119,10 @@ const ImportGoods = () => {
           id: Date.now() + index,
           values: { ...item, warehouse: item.warehouse ? String(item.warehouse) : '' }
         }));
-        productRows.push({ id: Date.now() + importItem.items.length, values: {} });
+        productRows.push({ id: Date.now() + importItem.items.length, values: { warehouse: getDefaultWarehouseName() } });
         setHeaderRows(productRows);
       } else {
-        setHeaderRows([{ id: Date.now(), values: {} }]);
+        setHeaderRows([{ id: Date.now(), values: { warehouse: getDefaultWarehouseName() } }]);
       }
       setShowRightContent(true);
       setIsEditMode(true);
@@ -1083,7 +1139,7 @@ const ImportGoods = () => {
       setShowRightContent(true);
       setIsEditMode(false);
       setIsEditing(false);
-      setHeaderRows([{ id: Date.now(), values: {} }]);
+      setHeaderRows([{ id: Date.now(), values: { warehouse: getDefaultWarehouseName() } }]);
     }
   };
 
@@ -1316,12 +1372,12 @@ const ImportGoods = () => {
       }));
         
         // Add one empty row for new entries
-        productRows.push({ id: Date.now() + detail.items.length, values: {} });
+        productRows.push({ id: Date.now() + detail.items.length, values: { warehouse: getDefaultWarehouseName() } });
         
         setHeaderRows(productRows);
       } else {
         // No existing items, start with one empty row
-        setHeaderRows([{ id: Date.now(), values: {} }]);
+        setHeaderRows([{ id: Date.now(), values: { warehouse: getDefaultWarehouseName() } }]);
       }
       
       setItems(detail.items || []);
@@ -2154,7 +2210,7 @@ const ImportGoods = () => {
     setSelectedImport(newTempImport);
     setFormData(newFormData);
     setItems([]);
-    setHeaderRows([{ id: Date.now(), values: {} }]);
+    setHeaderRows([{ id: Date.now(), values: { warehouse: getDefaultWarehouseName() } }]);
     setIsEditing(true);
     setShowRightContent(true);
     setIsEditMode(true); // Auto enter edit mode for new import
@@ -3687,21 +3743,43 @@ const ImportGoods = () => {
                   const firstProduct = products.find(p => p.id.toString() === firstProductId);
                   
                   if (copy[productModalRowIndex] && firstProduct) {
+                    // Try to find most recent import item for this product to reuse last prices/units
+                    let lastMatch = null;
+                    try {
+                      if (imports && imports.length > 0) {
+                        const withDates = imports.map(imp => ({
+                          imp,
+                          _date: imp.date ? new Date(imp.date) : (imp.createdDate ? (dayjs(imp.createdDate, 'DD/MM/YYYY').isValid() ? dayjs(imp.createdDate, 'DD/MM/YYYY').toDate() : new Date(0)) : new Date(0))
+                        }));
+                        withDates.sort((a,b) => b._date - a._date);
+                        for (const w of withDates) {
+                          const itemsList = w.imp.items || w.imp.Items || [];
+                          const match = itemsList.find(it => (it.productCode && it.productCode === firstProduct.code) || (it.barcode && it.barcode === firstProduct.barcode) || (it.productName && it.productName === firstProduct.name));
+                          if (match) { lastMatch = match; break; }
+                        }
+                      }
+                    } catch (e) {
+                      // ignore
+                    }
+
                     copy[productModalRowIndex].values[productModalColumn] = firstProduct?.name || '';
                     copy[productModalRowIndex].values['productCode'] = firstProduct.code || '';
                     copy[productModalRowIndex].values['productName'] = firstProduct.name || '';
                     copy[productModalRowIndex].values['barcode'] = firstProduct.barcode || '';
                     copy[productModalRowIndex].values['description'] = firstProduct.description || '';
-                    copy[productModalRowIndex].values['unit'] = firstProduct.defaultUnit || firstProduct.unit || firstProduct.baseUnit || '';
-                    copy[productModalRowIndex].values['conversion'] = firstProduct.conversion1 || 1;
-                    copy[productModalRowIndex].values['unitPrice'] = firstProduct.importPrice || 0;
+                    copy[productModalRowIndex].values['unit'] = (lastMatch && (lastMatch.unit || lastMatch.Unit)) || firstProduct.defaultUnit || firstProduct.unit || firstProduct.baseUnit || '';
+                    copy[productModalRowIndex].values['conversion'] = (lastMatch && (lastMatch.conversion || lastMatch.Conversion)) || firstProduct.conversion1 || 1;
+                    copy[productModalRowIndex].values['unitPrice'] = (lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || firstProduct.importPrice || 0;
+                    copy[productModalRowIndex].values['transportCost'] = (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0;
+                    copy[productModalRowIndex].values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null;
                     copy[productModalRowIndex].values['weight'] = firstProduct.weight || 0;
                     copy[productModalRowIndex].values['volume'] = firstProduct.volume || 0;
+                    copy[productModalRowIndex].values['warehouse'] = copy[productModalRowIndex].values['warehouse'] || getDefaultWarehouseName();
                     
                     // Auto-calculate initial totals
                     const quantity = parseFloat(copy[productModalRowIndex].values.quantity) || 1;
-                    const unitPrice = parseFloat(firstProduct.importPrice) || 0;
-                    const transportCost = parseFloat(copy[productModalRowIndex].values.transportCost) || 0;
+                    const unitPrice = parseFloat(copy[productModalRowIndex].values['unitPrice']) || 0;
+                    const transportCost = parseFloat(copy[productModalRowIndex].values['transportCost']) || 0;
                     
                     copy[productModalRowIndex].values.total = (quantity * unitPrice).toString();
                     copy[productModalRowIndex].values.totalTransport = (quantity * transportCost).toString();
@@ -3711,23 +3789,45 @@ const ImportGoods = () => {
                   selectedModalProducts.slice(1).forEach(productId => {
                     const product = products.find(p => p.id.toString() === productId);
                     if (product) {
+                      // Try to find most recent import item for this product
+                      let lastMatch = null;
+                      try {
+                        if (imports && imports.length > 0) {
+                          const withDates = imports.map(imp => ({
+                            imp,
+                            _date: imp.date ? new Date(imp.date) : (imp.createdDate ? (dayjs(imp.createdDate, 'DD/MM/YYYY').isValid() ? dayjs(imp.createdDate, 'DD/MM/YYYY').toDate() : new Date(0)) : new Date(0))
+                          }));
+                          withDates.sort((a,b) => b._date - a._date);
+                          for (const w of withDates) {
+                            const itemsList = w.imp.items || w.imp.Items || [];
+                            const match = itemsList.find(it => (it.productCode && it.productCode === product.code) || (it.barcode && it.barcode === product.barcode) || (it.productName && it.productName === product.name));
+                            if (match) { lastMatch = match; break; }
+                          }
+                        }
+                      } catch (e) {
+                        // ignore
+                      }
+
                       const newRow = { id: Date.now() + Math.random(), values: {} };
                       newRow.values[productModalColumn] = product.name || '';
                       newRow.values['productCode'] = product.code || '';
                       newRow.values['productName'] = product.name || '';
                       newRow.values['barcode'] = product.barcode || '';
                       newRow.values['description'] = product.description || '';
-                      newRow.values['unit'] = product.defaultUnit || product.unit || product.baseUnit || '';
-                      newRow.values['conversion'] = product.conversion1 || 1;
-                      newRow.values['unitPrice'] = product.importPrice || 0;
+                      newRow.values['unit'] = (lastMatch && (lastMatch.unit || lastMatch.Unit)) || product.defaultUnit || product.unit || product.baseUnit || '';
+                      newRow.values['conversion'] = (lastMatch && (lastMatch.conversion || lastMatch.Conversion)) || product.conversion1 || 1;
+                      newRow.values['unitPrice'] = (lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || product.importPrice || 0;
+                      newRow.values['transportCost'] = (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0;
+                      newRow.values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null;
                       newRow.values['weight'] = product.weight || 0;
                       newRow.values['volume'] = product.volume || 0;
+                      newRow.values['warehouse'] = getDefaultWarehouseName();
                       newRow.values['quantity'] = 1;
                       
                       // Auto-calculate initial totals
                       const quantity = 1;
-                      const unitPrice = parseFloat(product.importPrice) || 0;
-                      const transportCost = 0;
+                      const unitPrice = parseFloat(newRow.values['unitPrice']) || 0;
+                      const transportCost = parseFloat(newRow.values['transportCost']) || 0;
                       
                       newRow.values.total = (quantity * unitPrice).toString();
                       newRow.values.totalTransport = (quantity * transportCost).toString();
@@ -3737,7 +3837,7 @@ const ImportGoods = () => {
                   });
                   
                   // Always add one more blank row at the end
-                  copy.push({ id: Date.now() + Math.random(), values: {} });
+                  copy.push({ id: Date.now() + Math.random(), values: { warehouse: getDefaultWarehouseName() } });
                   
                   return copy;
                 });
