@@ -190,10 +190,10 @@ const ImportGoods = () => {
       };
     }, { totalWeight: 0, totalVolume: 0, totalAmount: 0, totalTransport: 0 });
     
-    // Only round at the end to avoid cumulative rounding errors
+    // No rounding - preserve exact values
     return {
-      totalWeight: Math.round(result.totalWeight * 100) / 100, // Round to 2 decimal places
-      totalVolume: Math.round(result.totalVolume * 10000) / 10000, // Round to 4 decimal places
+      totalWeight: result.totalWeight,
+      totalVolume: result.totalVolume,
       totalAmount: result.totalAmount,
       totalTransport: result.totalTransport
     };
@@ -312,10 +312,42 @@ const ImportGoods = () => {
 
   // Helper function to format product option labels
   const getProductOptionLabel = (product) => {
-    const unit = product.defaultUnit || product.DefaultUnit || product.unit || product.baseUnit || '';
-    const price = product.importPrice || product.price || product.priceRetail || 0;
-    const priceText = Number(price).toLocaleString('vi-VN');
-    return `${product.barcode || ''} - ${product.code || ''} - ${product.name || ''} - ${priceText} - ${unit}`;
+    // Show: mã vạch - mã hàng - tên sản phẩm - giá bán lẻ - tồn kho
+    // Try explicit common fields first
+    const priceCandidates = [
+      'priceRetail','retailPrice','giaBanLe','GiaBanLe','price','importPrice','PriceRetail','gia_ban_le','giabanle','giá_bán_lẻ'
+    ];
+    let priceVal = null;
+    for (const k of priceCandidates) {
+      if (product && Object.prototype.hasOwnProperty.call(product, k)) {
+        const v = product[k];
+        if (v !== null && v !== undefined && v !== '') { priceVal = v; break; }
+      }
+    }
+    // fallback: scan keys for anything that looks like price/gia
+    if ((priceVal === null || priceVal === undefined) && product) {
+      const pk = Object.keys(product).find(k => /gia|price|banle|retail/i.test(k));
+      if (pk) priceVal = product[pk];
+    }
+    const priceNumber = Number(priceVal) || 0;
+    const priceText = priceNumber.toLocaleString('vi-VN');
+
+    // Stock candidates
+    const stockCandidates = ['stock','quantity','qty','available','onHand','tonkho','soLuong','so_luong','tồnKho','TồnKho','SoKg'];
+    let stockVal = null;
+    for (const k of stockCandidates) {
+      if (product && Object.prototype.hasOwnProperty.call(product, k)) {
+        const v = product[k];
+        if (v !== null && v !== undefined && v !== '') { stockVal = v; break; }
+      }
+    }
+    if ((stockVal === null || stockVal === undefined) && product) {
+      const sk = Object.keys(product).find(k => /stock|qty|quantity|so|ton|onHand|available/i.test(k));
+      if (sk) stockVal = product[sk];
+    }
+    const stockText = (stockVal === null || stockVal === undefined) ? '0' : String(stockVal);
+
+    return `${product.barcode || ''} - ${product.code || ''} - ${product.name || ''} - ${priceText} - ${stockText}`;
   };
 
   // Helper function to get selected display value (for productName column, show only name)
@@ -393,8 +425,8 @@ const ImportGoods = () => {
     return { 
       validRows, 
       totalAmount, 
-      totalWeight: Math.round(totalWeight * 100) / 100, // Round to 2 decimal places 
-      totalVolume: Math.round(totalVolume * 10000) / 10000 // Round to 4 decimal places
+      totalWeight: totalWeight, 
+      totalVolume: totalVolume
     };
   }, [headerRows]);
 
@@ -1645,8 +1677,8 @@ const ImportGoods = () => {
         invoice: formData.invoice || '',
         invoiceDate: formData.invoiceDate ? new Date(formData.invoiceDate).toISOString() : new Date().toISOString(),
         total: totalAmount,
-        totalWeight: Math.round(totalWeight * 100) / 100,
-        totalVolume: Math.round(totalVolume * 100) / 100,
+        totalWeight: totalWeight,
+        totalVolume: totalVolume,
         totalText: totalText,
         TotalText: totalText, // Try with capital T
         items: allItems
@@ -1992,15 +2024,24 @@ const ImportGoods = () => {
 
       const combined = itemsData.length > 0 ? itemsData : headerMapped;
 
+      // DEBUG: log combined data to inspect raw numeric values before formatting
+      try { console.info('EXPORT DEBUG - combined rows:', JSON.parse(JSON.stringify(combined))); } catch (e) { console.info('EXPORT DEBUG - combined rows (stringify failed)', combined); }
       const rowsHtml = combined.map((v, idx) => {
         let noteDate = v.noteDate || '';
         try { if (noteDate) noteDate = dayjs(noteDate).format('DD/MM/YYYY'); } catch (e) {}
-        const unitPrice = v.unitPrice ? formatCurrency(Number(v.unitPrice)) : '';
-        const transport = v.transportCost ? formatCurrency(Number(v.transportCost)) : '';
-        const amount = v.total ? formatCurrency(Number(v.total)) : '';
-        const totalTransport = v.totalTransport ? formatCurrency(Number(v.totalTransport)) : '';
-        const weight = v.weight ? formatWeight(Number(v.weight)) : '';
-        const volume = v.volume ? formatVolume(Number(v.volume)) : '';
+        // Use raw numeric values for Excel and let mso-number-format style them.
+        const unitPriceRaw = v.unitPrice ? Number(v.unitPrice) : 0;
+        const transportRaw = v.transportCost ? Number(v.transportCost) : 0;
+        const amountRaw = v.total ? Number(v.total) : ((Number(v.quantity)||0) * (Number(v.unitPrice)||0));
+        const totalTransportRaw = v.totalTransport ? Number(v.totalTransport) : 0;
+        const weightRaw = v.weight ? Number(v.weight) : 0;
+        const volumeRaw = v.volume ? Number(v.volume) : 0;
+        const unitPrice = unitPriceRaw;
+        const transport = transportRaw;
+        const amount = amountRaw;
+        const totalTransport = totalTransportRaw;
+        const weight = weightRaw;
+        const volume = volumeRaw;
         const warehouseName = (() => {
           try {
             if (warehouses && warehouses.length > 0 && v.warehouse) {
@@ -2011,22 +2052,22 @@ const ImportGoods = () => {
           return v.warehouse || '';
         })();
         return `<tr>
-          <td style="border:1px solid #ccc;padding:4px;text-align:center">${idx+1}</td>
-          <td style="border:1px solid #ccc;padding:4px; mso-number-format:'\\@';">${v.barcode||''}</td>
-          <td style="border:1px solid #ccc;padding:4px; mso-number-format:'\\@';">${v.productCode||''}</td>
-          <td style="border:1px solid #ccc;padding:4px">${v.productName||''}</td>
-          <td style="border:1px solid #ccc;padding:4px">${v.unit||''}</td>
-          <td style="border:1px solid #ccc;padding:4px;text-align:right">${v.quantity||''}</td>
-          <td style="border:1px solid #ccc;padding:4px;text-align:right">${unitPrice}</td>
-          <td style="border:1px solid #ccc;padding:4px;text-align:right">${transport}</td>
-          <td style="border:1px solid #ccc;padding:4px;text-align:center">${noteDate}</td>
-          <td style="border:1px solid #ccc;padding:4px;text-align:right">${amount}</td>
-          <td style="border:1px solid #ccc;padding:4px;text-align:right">${totalTransport}</td>
-          <td style="border:1px solid #ccc;padding:4px;text-align:right">${weight}</td>
-          <td style="border:1px solid #ccc;padding:4px;text-align:right">${volume}</td>
-          <td style="border:1px solid #ccc;padding:4px">${warehouseName}</td>
-          <td style="border:1px solid #ccc;padding:4px">${v.description||''}</td>
-          <td style="border:1px solid #ccc;padding:4px">${v.conversion||''}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;text-align:center">${idx+1}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px; mso-number-format:'\\@';">${v.barcode||''}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px; mso-number-format:'\\@';">${v.productCode||''}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px">${v.productName||''}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px">${v.unit||''}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0'">${v.quantity || 0}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0'">${unitPrice}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0'">${transport}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;text-align:center">${noteDate}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0'">${amount}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0'">${totalTransport}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0.00'">${weight}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0.0000'">${volume}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px">${warehouseName}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px">${v.description||''}</td>
+          <td style="border:1px solid #ccc;padding:6px 8px">${v.conversion||''}</td>
         </tr>`;
       }).join('');
 
@@ -2060,28 +2101,36 @@ const ImportGoods = () => {
           <meta charset="utf-8" />
           <title>Phiếu nhập</title>
           <style>
-            table { border-collapse:collapse; font-family:Times New Roman; }
-            th, td { border:1px solid #000; padding:4px; }
-            .company { font-weight:800; font-size:16px; }
-            .small { font-size:10px }
-            .header { display:flex; justify-content:space-between }
+            /* A4-like print/export styles (default font-size 10px) */
+            html, body { font-family: 'Times New Roman', Times, serif; font-size:10pt; }
+            table { border-collapse:collapse; font-family: 'Times New Roman', Times, serif; font-size:10pt; }
+            th, td { border:1px solid #000; padding:6px 8px; font-size:10pt; }
+            th { background:#f7f7f7; }
+            .company { font-weight:800; font-size:14pt; font-family: 'Times New Roman', Times, serif; }
+            .small { font-size:10pt; }
+            .header { display:flex; justify-content:space-between; align-items:flex-start; }
+            /* signature area removed per request */
           </style>
         </head>
         <body>
-          <div class="header">
-            <div>
-              <div class="company">${companyName}</div>
-              <div class="small">Địa chỉ: ${companyAddressDynamic || ''}</div>
-              <div class="small">Điện thoại: ${companyPhoneDynamic || ''}</div>
-            </div>
-            <div style="text-align:right">
-              <div class="small">Số phiếu: <strong>${importNumber}</strong></div>
-              <div class="small">Ngày lập: <strong>${printedAt}</strong></div>
-              <div class="small">Nhân viên: <strong>${employeeName}</strong></div>
-              <div class="small">Loại nhập: <strong>${importTypeName}</strong></div>
-              <div class="small">Nhà cung cấp: <strong>${supplierName}</strong></div>
-            </div>
-          </div>
+          <table style="width:100%; border:none; margin-bottom:6px;">
+            <tr>
+              <td style="border:none; vertical-align:top; padding:0; width:65%;">
+                <div class="company" style="margin:0; padding:0;">${companyName}</div>
+                <div class="small" style="margin:0; padding:0;">Địa chỉ: ${companyAddressDynamic || ''}</div>
+                <div class="small" style="margin:0; padding:0;">Điện thoại: ${companyPhoneDynamic || ''}</div>
+                <div class="small" style="margin-top:8px; padding:0;"><strong>Ghi chú PN:</strong> ${formData.note || (selectedImport && (selectedImport.note || '')) || ''}</div>
+              </td>
+              <td style="border:none; vertical-align:top; padding:0; width:35%; text-align:right;">
+                <div style="display:inline-block; text-align:right; white-space:nowrap;">
+                  <div class="small" style="margin:0; padding:0;">Số phiếu: <strong>${importNumber}</strong></div>
+                  <div class="small" style="margin:0; padding:0;">Ngày lập: <strong>${printedAt}</strong></div>
+                  <div class="small" style="margin:0; padding:0;">Nhân viên: <strong>${employeeName}</strong></div>
+                  <div class="small" style="margin:0; padding:0;">Loại nhập: <strong>${importTypeName}</strong></div>
+                </div>
+              </td>
+            </tr>
+          </table>
 
           <h3 style="text-align:center;margin:12px 0">PHIẾU NHẬP HÀNG</h3>
 
@@ -2111,13 +2160,7 @@ const ImportGoods = () => {
             </tbody>
           </table>
 
-          <div style="margin-top:18px;">
-            <div style="display:flex;justify-content:space-between;">
-              <div style="text-align:center;width:30%">Người giao hàng<br/><br/><br/>__________________</div>
-              <div style="text-align:center;width:30%">Người nhận<br/><br/><br/>__________________</div>
-              <div style="text-align:center;width:30%">Người lập phiếu<br/><br/><br/>${employeeName || ''}</div>
-            </div>
-          </div>
+          <!-- signature area removed -->
         </body>
         </html>
       `;
@@ -2269,7 +2312,7 @@ const ImportGoods = () => {
             table { width:100%; border-collapse:collapse; font-size:10.5px }
             th, td { border:1px solid #000; padding:4px; vertical-align:top }
             thead th { background:#f5f5f5; }
-            .small { font-size:10px; color:#333 }
+            .small { font-size:10pt; color:#333 }
             .footer-sign { display:flex; justify-content:space-around; margin-top:28px }
           </style>
         </head>
@@ -3328,9 +3371,9 @@ const ImportGoods = () => {
                                     if (colKey === 'weight') {
                                       return formatInputDisplay(rawValue, 'weight');
                                     }
-                                    // Format volume fields
+                                    // For volume allow free typing (do not force formatted value)
                                     if (colKey === 'volume') {
-                                      return formatInputDisplay(rawValue, 'volume');
+                                      return rawValue;
                                     }
                                     // Default - return as is
                                     return rawValue;
@@ -3344,6 +3387,11 @@ const ImportGoods = () => {
                                       const sanitizedValue = inputValue.replace(/[^0-9,]/g, '');
                                       // Store the raw value (without formatting) for calculation
                                       const rawValue = sanitizedValue.replace(/,/g, '');
+                                      handleHeaderRowChange(rIdx, colKey, rawValue);
+                                    } else if (colKey === 'volume') {
+                                      // Allow digits, dot and comma while typing; store using dot as decimal separator
+                                      const sanitized = inputValue.replace(/[^0-9.,]/g, '');
+                                      const rawValue = sanitized.replace(/,/g, '.');
                                       handleHeaderRowChange(rIdx, colKey, rawValue);
                                     } else {
                                       handleHeaderRowChange(rIdx, colKey, inputValue);
