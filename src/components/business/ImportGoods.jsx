@@ -4038,10 +4038,13 @@ const ImportGoods = () => {
               return memoizedFilteredProducts;
             })();
 
-            // Select ALL filtered products (not only current page) so subsequent "Tìm" can act on whole set
-            const allIds = filteredProducts.map(p => p.id.toString());
+            // Only select products on current page instead of all filtered products
+            const startIndex = (modalCurrentPage - 1) * modalPageSize;
+            const currentPageProducts = filteredProducts.slice(startIndex, startIndex + modalPageSize);
+            const currentPageIds = currentPageProducts.map(p => p.id.toString());
+            
             setSelectedModalProducts(prev => {
-              const merged = new Set([...(prev || []), ...allIds]);
+              const merged = new Set([...(prev || []), ...currentPageIds]);
               return Array.from(merged);
             });
           }} style={{marginRight: 8, padding: '6px 16px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#fff'}}>Chọn tất cả</button>,
