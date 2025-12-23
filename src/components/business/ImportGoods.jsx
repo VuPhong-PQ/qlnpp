@@ -995,8 +995,28 @@ const ImportGoods = () => {
             // Get product data based on selected unit (ĐVT gốc, ĐVT 1, ĐVT 2...)
             const productData = getProductDataByUnit(prod, selectedUnit);
             
+            console.log('Unit change debug:', {
+              selectedUnit,
+              productData,
+              prodUnit1: prod.unit1,
+              prodUnit1Name: prod.unit1Name,
+              prodConversion1: prod.conversion1
+            });
+            
             // Calculate weight and volume with quantity: số kg = weight_theo_đơn_vị × số_lượng
-            const quantity = parseFloat(colKey === 'quantity' ? value : targetRow.values.quantity) || 0;
+            let quantity = parseFloat(colKey === 'quantity' ? value : targetRow.values.quantity) || 0;
+            
+            // When changing unit, if quantity is 0, set default quantity to 1
+            if (colKey === 'unit' && quantity === 0) {
+              quantity = 1;
+              targetRow.values.quantity = '1';
+            }
+            
+            console.log('Calculation debug:', {
+              quantity,
+              weightCalc: `${productData.weight} × ${quantity} = ${productData.weight * quantity}`,
+              volumeCalc: `${productData.volume} × ${quantity} = ${productData.volume * quantity}`
+            });
             
             if (productData.weight !== undefined) {
               const calculatedWeight = productData.weight * quantity;
