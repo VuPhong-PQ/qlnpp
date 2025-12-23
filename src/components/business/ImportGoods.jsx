@@ -706,9 +706,29 @@ const ImportGoods = () => {
           const baseUnit = selectedProduct.baseUnit || selectedProduct.defaultUnit || selectedProduct.unit || '';
           const defaultUnit = baseUnit || ((lastMatch && (lastMatch.unit || lastMatch.Unit)) || '');
           
-
-          
           const productData = getProductDataByUnit(selectedProduct, defaultUnit);
+          
+          // Quy đổi giá từ lastMatch về đơn vị nhỏ nhất (conversion = 1)
+          let convertedUnitPrice = 0;
+          let convertedTransportCost = 0;
+          
+          // Kiểm tra loại nhập có phải "Nhập mua" không
+          const importType = formData.importType || selectedImport?.importType || '';
+          const isNhapMua = importType.toLowerCase().includes('nhập mua') || importType.toLowerCase() === 'nhập mua';
+          
+          if (lastMatch) {
+            const lastMatchConversion = parseFloat(lastMatch.conversion || lastMatch.Conversion) || 1;
+            const lastMatchUnitPrice = parseFloat(lastMatch.unitPrice || lastMatch.UnitPrice) || 0;
+            const lastMatchTransportCost = parseFloat(lastMatch.transportCost || lastMatch.TransportCost) || 0;
+            
+            // Quy đổi về đơn vị nhỏ nhất: giá_mới = giá_cũ / hệ_số_cũ × hệ_số_mới
+            // Đơn giá: chỉ copy nếu loại nhập là "Nhập mua" và không phải KM
+            if (isNhapMua && !isKMImport) {
+              convertedUnitPrice = (lastMatchUnitPrice / lastMatchConversion) * productData.conversion;
+            }
+            // Tiền vận chuyển: luôn copy cho tất cả loại nhập (kể cả KM)
+            convertedTransportCost = (lastMatchTransportCost / lastMatchConversion) * productData.conversion;
+          }
           
           const newItem = {
             id: Date.now() + Math.random(),
@@ -719,29 +739,31 @@ const ImportGoods = () => {
             conversion: productData.conversion,
             unit: defaultUnit,
             quantity: 1,
-            unitPrice: isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0),
-            transportCost: (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0,
+            // Sử dụng giá đã quy đổi về đơn vị nhỏ nhất
+            unitPrice: convertedUnitPrice,
+            transportCost: convertedTransportCost,
             noteDate: (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null,
-            total: isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0),
-            totalTransport: ((lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0),
+            total: convertedUnitPrice,
+            totalTransport: convertedTransportCost,
             weight: productData.weight * 1, // số kg = weight_theo_đơn_vị × số_lượng (1)
             volume: productData.volume * 1, // số khối = volume_theo_đơn_vị × số_lượng (1)
             warehouse: getDefaultWarehouseName(),
           };
 
           // Prepare an empty row so user can continue entering next item immediately
+          // Blank item: dòng trống để nhập sản phẩm tiếp theo, không cần copy giá
           const blankItem = {
             id: Date.now() + Math.random() + 1,
             barcode: '',
             productCode: '',
             productName: '',
             description: '',
-            conversion: 1, // Default to base unit conversion
-            unit: (lastMatch && (lastMatch.unit || lastMatch.Unit)) || selectedProduct.defaultUnit || selectedProduct.unit || '',
+            conversion: 1,
+            unit: '',
             quantity: 1,
-            unitPrice: isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0),
-            transportCost: (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0,
-            noteDate: (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null,
+            unitPrice: 0,
+            transportCost: 0,
+            noteDate: null,
             total: '',
             totalTransport: '',
             weight: '',
@@ -894,9 +916,6 @@ const ImportGoods = () => {
         // Always prioritize base unit first, then fallback to last match
         const baseUnit = selectedProduct.baseUnit || selectedProduct.defaultUnit || selectedProduct.unit || '';
         copy[rowIndex].values['unit'] = baseUnit || ((lastMatch && (lastMatch.unit || lastMatch.Unit)) || '');
-        copy[rowIndex].values['unitPrice'] = isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0);
-        copy[rowIndex].values['transportCost'] = (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || copy[rowIndex].values.transportCost || 0;
-        copy[rowIndex].values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || copy[rowIndex].values.noteDate || null;
         
         // Get product data for initial unit to set correct values
         const initialUnit = copy[rowIndex].values['unit'];
@@ -904,16 +923,38 @@ const ImportGoods = () => {
         
         // Update with correct unit-specific data including conversion
         copy[rowIndex].values['conversion'] = productData.conversion.toString();
-        copy[rowIndex].values['transportCost'] = (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || copy[rowIndex].values.transportCost || 0;
+        
+        // Quy đổi giá từ lastMatch về đơn vị nhỏ nhất
+        let convertedUnitPrice = 0;
+        let convertedTransportCost = 0;
+        
+        // Kiểm tra loại nhập có phải "Nhập mua" không
+        const importType = formData.importType || selectedImport?.importType || '';
+        const isNhapMua = importType.toLowerCase().includes('nhập mua') || importType.toLowerCase() === 'nhập mua';
+        
+        if (lastMatch) {
+          const lastMatchConversion = parseFloat(lastMatch.conversion || lastMatch.Conversion) || 1;
+          const lastMatchUnitPrice = parseFloat(lastMatch.unitPrice || lastMatch.UnitPrice) || 0;
+          const lastMatchTransportCost = parseFloat(lastMatch.transportCost || lastMatch.TransportCost) || 0;
+          
+          // Quy đổi: giá_mới = giá_cũ / hệ_số_cũ × hệ_số_mới
+          // Đơn giá: chỉ copy nếu loại nhập là "Nhập mua" và không phải KM
+          if (isNhapMua && !isKMImport) {
+            convertedUnitPrice = (lastMatchUnitPrice / lastMatchConversion) * productData.conversion;
+          }
+          // Tiền vận chuyển: luôn copy cho tất cả loại nhập (kể cả KM)
+          convertedTransportCost = (lastMatchTransportCost / lastMatchConversion) * productData.conversion;
+        }
+        
+        copy[rowIndex].values['unitPrice'] = convertedUnitPrice;
+        copy[rowIndex].values['transportCost'] = convertedTransportCost;
         copy[rowIndex].values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || copy[rowIndex].values.noteDate || null;
         
         // Auto-calculate initial totals
         const quantity = parseFloat(copy[rowIndex].values.quantity) || 1;
-        const unitPrice = parseFloat(copy[rowIndex].values.unitPrice) || 0;
-        const transportCost = parseFloat(copy[rowIndex].values.transportCost || ((lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0)) || 0;
         
-        copy[rowIndex].values.total = (quantity * unitPrice).toString();
-        copy[rowIndex].values.totalTransport = (quantity * transportCost).toString();
+        copy[rowIndex].values.total = (quantity * convertedUnitPrice).toString();
+        copy[rowIndex].values.totalTransport = (quantity * convertedTransportCost).toString();
         // calculate derived fields based on selected product
         try {
           const prodId = copy[rowIndex].values.productName_id || copy[rowIndex].values.productCode_id || copy[rowIndex].values.barcode_id || null;
@@ -995,14 +1036,6 @@ const ImportGoods = () => {
             // Get product data based on selected unit (ĐVT gốc, ĐVT 1, ĐVT 2...)
             const productData = getProductDataByUnit(prod, selectedUnit);
             
-            console.log('Unit change debug:', {
-              selectedUnit,
-              productData,
-              prodUnit1: prod.unit1,
-              prodUnit1Name: prod.unit1Name,
-              prodConversion1: prod.conversion1
-            });
-            
             // Calculate weight and volume with quantity: số kg = weight_theo_đơn_vị × số_lượng
             let quantity = parseFloat(colKey === 'quantity' ? value : targetRow.values.quantity) || 0;
             
@@ -1011,12 +1044,6 @@ const ImportGoods = () => {
               quantity = 1;
               targetRow.values.quantity = '1';
             }
-            
-            console.log('Calculation debug:', {
-              quantity,
-              weightCalc: `${productData.weight} × ${quantity} = ${productData.weight * quantity}`,
-              volumeCalc: `${productData.volume} × ${quantity} = ${productData.volume * quantity}`
-            });
             
             if (productData.weight !== undefined) {
               const calculatedWeight = productData.weight * quantity;
@@ -1029,74 +1056,40 @@ const ImportGoods = () => {
             
             // Auto-update conversion when unit changes
             if (colKey === 'unit' && productData.conversion !== undefined) {
-              // Calculate unit price conversion when unit changes
-              const currentPrice = parseFloat(targetRow.values.unitPrice) || 0;
               const currentConversion = parseFloat(targetRow.values.conversion) || 1;
               const newConversion = productData.conversion;
               
-              if (currentPrice > 0 && currentConversion > 0 && newConversion > 0) {
-                // Formula: new_price = (current_price / current_conversion) * new_conversion
-                const basePrice = currentPrice / currentConversion; // Convert to base unit price
-                const newPrice = basePrice * newConversion; // Convert to new unit price
-                targetRow.values.unitPrice = newPrice.toString();
-                
-                // Recalculate total after price change
-                const newTotal = quantity * newPrice;
-                targetRow.values.total = newTotal.toString();
-              }
-              
               targetRow.values.conversion = newConversion.toString();
+              
+              // Đơn giản: Phiếu đã lưu = có số phiếu hợp lệ (PN-...)
+              const currentImportNumber = formData?.importNumber || '';
+              const isSavedImport = currentImportNumber.startsWith('PN-') && !currentImportNumber.includes('temp_');
+              
+              const currentPrice = parseFloat(targetRow.values.unitPrice) || 0;
+              const currentTransport = parseFloat(targetRow.values.transportCost) || 0;
+              
+              if (isSavedImport) {
+                // Phiếu đã lưu: áp dụng công thức quy đổi
+                if (currentConversion > 0 && newConversion > 0) {
+                  const newPrice = (currentPrice / currentConversion) * newConversion;
+                  const newTransport = (currentTransport / currentConversion) * newConversion;
+                  
+                  targetRow.values.unitPrice = newPrice.toString();
+                  targetRow.values.transportCost = newTransport.toString();
+                  targetRow.values.total = (quantity * newPrice).toString();
+                  targetRow.values.totalTransport = (quantity * newTransport).toString();
+                }
+              } else {
+                // Phiếu chưa lưu: reset về 0
+                targetRow.values.unitPrice = '0';
+                targetRow.values.transportCost = '0';
+                targetRow.values.total = '0';
+                targetRow.values.totalTransport = '0';
+              }
             }
           }
         } catch (e) {
           // Ignore calculation errors
-        }
-      }
-
-      // When unit changes, attempt to set conversion according to product's unit definitions
-      if (colKey === 'unit') {
-        try {
-          const row = targetRow.values;
-          // try to get product id stored by product dropdown (productName_id / productCode_id / barcode_id)
-          const prodId = row.productName_id || row.productCode_id || row.barcode_id || null;
-          let prod = null;
-          if (prodId && products && products.length > 0) {
-            prod = products.find(p => String(p.id) === String(prodId));
-          }
-          // fallback: try to match by productCode/barcode/productName text
-          if (!prod) {
-            const code = row.productCode || row.barcode || row.productName || '';
-            if (code) {
-              prod = products.find(p => p.code === code || p.barcode === code || p.name === code);
-            }
-          }
-
-          if (prod) {
-            // Use getProductDataByUnit for consistent logic
-            const selectedUnit = value || '';
-            const productData = getProductDataByUnit(prod, selectedUnit);
-            const newConv = productData.conversion;
-            
-            // Calculate unit price conversion when unit changes
-            const currentPrice = parseFloat(row.unitPrice) || 0;
-            const currentConv = parseFloat(row.conversion) || 1;
-            
-            if (currentPrice > 0 && currentConv > 0 && newConv > 0) {
-              // Formula: new_price = (current_price / current_conversion) * new_conversion  
-              const basePrice = currentPrice / currentConv; // Convert to base unit price
-              const newPrice = basePrice * newConv; // Convert to new unit price
-              targetRow.values.unitPrice = newPrice.toString();
-              
-              // Recalculate total after price change
-              const quantity = parseFloat(row.quantity) || 0;
-              const newTotal = quantity * newPrice;
-              targetRow.values.total = newTotal.toString();
-            }
-            
-            targetRow.values.conversion = newConv.toString();
-          }
-        } catch (e) {
-          // ignore errors; do not block user
         }
       }
       
@@ -4541,19 +4534,38 @@ const ImportGoods = () => {
                     const productData = getProductDataByUnit(firstProduct, defaultUnit);
                     copy[productModalRowIndex].values['conversion'] = productData.conversion.toString();
                     
-                    copy[productModalRowIndex].values['unitPrice'] = isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || firstProduct.importPrice || 0);
-                    copy[productModalRowIndex].values['transportCost'] = (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0;
+                    // Quy đổi giá từ lastMatch về đơn vị nhỏ nhất
+                    let convertedUnitPrice = 0;
+                    let convertedTransportCost = 0;
+                    
+                    // Kiểm tra loại nhập có phải "Nhập mua" không
+                    const importType = formData.importType || selectedImport?.importType || '';
+                    const isNhapMua = importType.toLowerCase().includes('Nhập mua') || importType.toLowerCase() === 'nhập mua';
+                    
+                    if (lastMatch) {
+                      const lastMatchConversion = parseFloat(lastMatch.conversion || lastMatch.Conversion) || 1;
+                      const lastMatchUnitPrice = parseFloat(lastMatch.unitPrice || lastMatch.UnitPrice) || 0;
+                      const lastMatchTransportCost = parseFloat(lastMatch.transportCost || lastMatch.TransportCost) || 0;
+                      
+                      // Đơn giá: chỉ copy nếu loại nhập là "Nhập mua" và không phải KM
+                      if (isNhapMua && !isKMImport) {
+                        convertedUnitPrice = (lastMatchUnitPrice / lastMatchConversion) * productData.conversion;
+                      }
+                      // Tiền vận chuyển: luôn copy cho tất cả loại nhập (kể cả KM)
+                      convertedTransportCost = (lastMatchTransportCost / lastMatchConversion) * productData.conversion;
+                    }
+                    
+                    copy[productModalRowIndex].values['unitPrice'] = convertedUnitPrice;
+                    copy[productModalRowIndex].values['transportCost'] = convertedTransportCost;
                     copy[productModalRowIndex].values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null;
                     // weight and volume will be calculated after we determine quantity below
                     copy[productModalRowIndex].values['warehouse'] = copy[productModalRowIndex].values['warehouse'] || getDefaultWarehouseName();
                     
                     // Auto-calculate initial totals
                     const quantity = parseFloat(copy[productModalRowIndex].values.quantity) || 1;
-                    const unitPrice = parseFloat(copy[productModalRowIndex].values['unitPrice']) || 0;
-                    const transportCost = parseFloat(copy[productModalRowIndex].values['transportCost']) || 0;
                     
-                    copy[productModalRowIndex].values.total = (quantity * unitPrice).toString();
-                    copy[productModalRowIndex].values.totalTransport = (quantity * transportCost).toString();
+                    copy[productModalRowIndex].values.total = (quantity * convertedUnitPrice).toString();
+                    copy[productModalRowIndex].values.totalTransport = (quantity * convertedTransportCost).toString();
                     // calculate derived fields based on the product
                     try {
                       if (firstProduct) {
@@ -4620,29 +4632,53 @@ const ImportGoods = () => {
                       const isKMImport = (formData.importType && formData.importType.toLowerCase().includes('km')) || 
                                          (selectedImport?.importType && selectedImport.importType.toLowerCase().includes('km'));
 
+                      // Always prioritize base unit first
+                      const baseUnit = product.baseUnit || product.defaultUnit || product.unit || '';
+                      const defaultUnit = baseUnit || ((lastMatch && (lastMatch.unit || lastMatch.Unit)) || '');
+                      
+                      // Get product data for correct conversion based on unit
+                      const productData = getProductDataByUnit(product, defaultUnit);
+                      
+                      // Quy đổi giá từ lastMatch về đơn vị nhỏ nhất
+                      let convertedUnitPrice = 0;
+                      let convertedTransportCost = 0;
+                      
+                      // Kiểm tra loại nhập có phải "Nhập mua" không
+                      const importType = formData.importType || selectedImport?.importType || '';
+                      const isNhapMua = importType.toLowerCase().includes('nhập mua') || importType.toLowerCase() === 'nhập mua';
+                      
+                      if (lastMatch) {
+                        const lastMatchConversion = parseFloat(lastMatch.conversion || lastMatch.Conversion) || 1;
+                        const lastMatchUnitPrice = parseFloat(lastMatch.unitPrice || lastMatch.UnitPrice) || 0;
+                        const lastMatchTransportCost = parseFloat(lastMatch.transportCost || lastMatch.TransportCost) || 0;
+                        
+                        // Đơn giá: chỉ copy nếu loại nhập là "Nhập mua" và không phải KM
+                        if (isNhapMua && !isKMImport) {
+                          convertedUnitPrice = (lastMatchUnitPrice / lastMatchConversion) * productData.conversion;
+                        }
+                        // Tiền vận chuyển: luôn copy cho tất cả loại nhập (kể cả KM)
+                        convertedTransportCost = (lastMatchTransportCost / lastMatchConversion) * productData.conversion;
+                      }
+
                       const newRow = { id: Date.now() + Math.random(), values: {} };
                       newRow.values[productModalColumn] = product.name || '';
                       newRow.values['productCode'] = product.code || '';
                       newRow.values['productName'] = product.name || '';
                       newRow.values['barcode'] = product.barcode || '';
                       newRow.values['description'] = product.description || '';
-                      newRow.values['unit'] = (lastMatch && (lastMatch.unit || lastMatch.Unit)) || product.defaultUnit || product.unit || product.baseUnit || '';
-                      newRow.values['conversion'] = (lastMatch && (lastMatch.conversion || lastMatch.Conversion)) || product.conversion1 || 1;
-                      newRow.values['unitPrice'] = isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || product.importPrice || 0);
-                      newRow.values['transportCost'] = (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0;
+                      newRow.values['unit'] = defaultUnit;
+                      newRow.values['conversion'] = productData.conversion;
+                      newRow.values['unitPrice'] = convertedUnitPrice;
+                      newRow.values['transportCost'] = convertedTransportCost;
                       newRow.values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null;
-                      newRow.values['weight'] = (product.weight || 0) * 1; // số kg = số kg sản phẩm × số lượng (1)
-                      newRow.values['volume'] = (product.volume || 0) * 1;
+                      newRow.values['weight'] = productData.weight * 1;
+                      newRow.values['volume'] = productData.volume * 1;
                       newRow.values['warehouse'] = getDefaultWarehouseName();
                       newRow.values['quantity'] = 1;
                       
                       // Auto-calculate initial totals
-                      const quantity = 1;
-                      const unitPrice = parseFloat(newRow.values['unitPrice']) || 0;
-                      const transportCost = parseFloat(newRow.values['transportCost']) || 0;
-                      
-                      newRow.values.total = (quantity * unitPrice).toString();
-                      newRow.values.totalTransport = (quantity * transportCost).toString();
+                      newRow.values.total = convertedUnitPrice.toString();
+                      newRow.values.totalTransport = convertedTransportCost.toString();
                       
                       copy.push(newRow);
                     }
