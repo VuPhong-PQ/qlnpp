@@ -200,6 +200,57 @@ const ImportGoods = () => {
   };
 
   // Helper function to format currency (with comma separators)
+  // Helper function to get product weight/volume/price/conversion based on selected unit
+  const getProductDataByUnit = (product, unitName) => {
+    if (!product || !unitName) return { weight: 0, volume: 0, price: 0, conversion: 1 };
+    
+    const baseUnit = product.baseUnit || product.defaultUnit || product.DefaultUnit || product.unit || '';
+    const baseWeight = parseFloat(product.weight) || 0;
+    const baseVolume = parseFloat(product.volume) || 0;
+    
+    // If selected unit is base unit, use base data
+    if (unitName === baseUnit) {
+      return {
+        weight: baseWeight, // weight gốc × 1
+        volume: baseVolume, // volume gốc × 1  
+        price: parseFloat(product.price) || 0,
+        conversion: 1
+      };
+    }
+    
+    // Check unit1 (ĐVT 1) - try different field name patterns
+    const unit1Name = product.unit1Name || product.unit1 || product.unitName1 || product.dvt1Name;
+    if (unit1Name && unitName === unit1Name) {
+      const unit1Conversion = parseFloat(product.unit1Conversion || product.conversion1 || product.dvt1Conversion) || 1;
+      return {
+        weight: baseWeight * unit1Conversion, // weight gốc × quy đổi 1
+        volume: baseVolume * unit1Conversion, // volume gốc × quy đổi 1
+        price: parseFloat(product.unit1Price || product.price1 || product.dvt1Price) || 0,
+        conversion: unit1Conversion
+      };
+    }
+    
+    // Check unit2 (ĐVT 2) 
+    const unit2Name = product.unit2Name || product.unit2 || product.unitName2 || product.dvt2Name;
+    if (unit2Name && unitName === unit2Name) {
+      const unit2Conversion = parseFloat(product.unit2Conversion || product.conversion2 || product.dvt2Conversion) || 1;
+      return {
+        weight: baseWeight * unit2Conversion, // weight gốc × quy đổi 2
+        volume: baseVolume * unit2Conversion, // volume gốc × quy đổi 2
+        price: parseFloat(product.unit2Price || product.price2 || product.dvt2Price) || 0,
+        conversion: unit2Conversion
+      };
+    }
+    
+    // Fallback to base unit if unit not found
+    return {
+      weight: baseWeight,
+      volume: baseVolume,
+      price: parseFloat(product.price) || 0,
+      conversion: 1
+    };
+  };
+
   const formatCurrency = (amount) => {
     if (amount === null || amount === undefined || amount === '') return '0';
     const num = Number(amount) || 0;
@@ -208,16 +259,38 @@ const ImportGoods = () => {
 
   // Helper function to format weight (2 decimal places)
   const formatWeight = (weight) => {
-    if (weight === null || weight === undefined || weight === '') return '0.00';
+    if (weight === null || weight === undefined || weight === '') return '0';
     const num = Number(weight) || 0;
-    return num.toFixed(2);
+    if (num === 0) return '0';
+    
+    // Chuyển thành string và cắt bớt chữ số thập phân (không làm tròn)
+    const str = num.toString();
+    const dotIndex = str.indexOf('.');
+    
+    if (dotIndex === -1) {
+      // Không có chữ số thập phân
+      return str;
+    }
+    
+    // Chỉ lấy 2 chữ số thập phân đầu tiên (cắt bớt, không làm tròn)
+    return str.substring(0, dotIndex + 3);
   };
 
   // Helper function to format volume (4 decimal places)
   const formatVolume = (volume) => {
     if (volume === null || volume === undefined || volume === '') return '0.0000';
     const num = Number(volume) || 0;
-    return num.toFixed(4);
+    if (num === 0) return '0.0000';
+    // Convert to string and truncate to 4 decimal places without rounding
+    const str = num.toString();
+    const dotIndex = str.indexOf('.');
+    if (dotIndex === -1) return str + '.0000';
+    const neededLen = dotIndex + 1 + 4; // dot + 4 decimals
+    let out = str.substring(0, Math.min(neededLen, str.length));
+    // pad zeros if necessary
+    const decimals = out.length - dotIndex - 1;
+    if (decimals < 4) out = out + '0'.repeat(4 - decimals);
+    return out;
   };
 
   // Helper function to format input value for display
@@ -629,22 +702,30 @@ const ImportGoods = () => {
           const isKMImport = (formData.importType && formData.importType.toLowerCase().includes('km')) || 
                              (selectedImport?.importType && selectedImport.importType.toLowerCase().includes('km'));
           
+          // Always prioritize base unit first, then fallback to last match
+          const baseUnit = selectedProduct.baseUnit || selectedProduct.defaultUnit || selectedProduct.unit || '';
+          const defaultUnit = baseUnit || ((lastMatch && (lastMatch.unit || lastMatch.Unit)) || '');
+          
+
+          
+          const productData = getProductDataByUnit(selectedProduct, defaultUnit);
+          
           const newItem = {
             id: Date.now() + Math.random(),
             barcode: selectedProduct.barcode || '',
             productCode: selectedProduct.code || '',
             productName: selectedProduct.name || '',
             description: selectedProduct.description || '',
-            conversion: (lastMatch && (lastMatch.conversion || lastMatch.Conversion)) || selectedProduct.conversion1 || 1,
-            unit: (lastMatch && (lastMatch.unit || lastMatch.Unit)) || selectedProduct.defaultUnit || selectedProduct.unit || '',
+            conversion: productData.conversion,
+            unit: defaultUnit,
             quantity: 1,
             unitPrice: isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0),
             transportCost: (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0,
             noteDate: (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null,
             total: isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0),
             totalTransport: ((lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0),
-            weight: selectedProduct.weight || 0,
-            volume: selectedProduct.volume || 0,
+            weight: productData.weight * 1, // số kg = weight_theo_đơn_vị × số_lượng (1)
+            volume: productData.volume * 1, // số khối = volume_theo_đơn_vị × số_lượng (1)
             warehouse: getDefaultWarehouseName(),
           };
 
@@ -655,7 +736,7 @@ const ImportGoods = () => {
             productCode: '',
             productName: '',
             description: '',
-            conversion: (lastMatch && (lastMatch.conversion || lastMatch.Conversion)) || selectedProduct.conversion1 || 1,
+            conversion: 1, // Default to base unit conversion
             unit: (lastMatch && (lastMatch.unit || lastMatch.Unit)) || selectedProduct.defaultUnit || selectedProduct.unit || '',
             quantity: 1,
             unitPrice: isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0),
@@ -810,11 +891,19 @@ const ImportGoods = () => {
         copy[rowIndex].values['productName'] = selectedProduct.name || '';
         copy[rowIndex].values['barcode'] = selectedProduct.barcode || '';
         copy[rowIndex].values['description'] = selectedProduct.description || '';
-        copy[rowIndex].values['unit'] = (lastMatch && (lastMatch.unit || lastMatch.Unit)) || selectedProduct.defaultUnit || selectedProduct.unit || selectedProduct.baseUnit || '';
-        copy[rowIndex].values['conversion'] = (lastMatch && (lastMatch.conversion || lastMatch.Conversion)) || selectedProduct.conversion1 || 1;
+        // Always prioritize base unit first, then fallback to last match
+        const baseUnit = selectedProduct.baseUnit || selectedProduct.defaultUnit || selectedProduct.unit || '';
+        copy[rowIndex].values['unit'] = baseUnit || ((lastMatch && (lastMatch.unit || lastMatch.Unit)) || '');
         copy[rowIndex].values['unitPrice'] = isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || selectedProduct.importPrice || 0);
-        copy[rowIndex].values['weight'] = selectedProduct.weight || 0;
-        copy[rowIndex].values['volume'] = selectedProduct.volume || 0;
+        copy[rowIndex].values['transportCost'] = (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || copy[rowIndex].values.transportCost || 0;
+        copy[rowIndex].values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || copy[rowIndex].values.noteDate || null;
+        
+        // Get product data for initial unit to set correct values
+        const initialUnit = copy[rowIndex].values['unit'];
+        const productData = getProductDataByUnit(selectedProduct, initialUnit);
+        
+        // Update with correct unit-specific data including conversion
+        copy[rowIndex].values['conversion'] = productData.conversion.toString();
         copy[rowIndex].values['transportCost'] = (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || copy[rowIndex].values.transportCost || 0;
         copy[rowIndex].values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || copy[rowIndex].values.noteDate || null;
         
@@ -825,9 +914,29 @@ const ImportGoods = () => {
         
         copy[rowIndex].values.total = (quantity * unitPrice).toString();
         copy[rowIndex].values.totalTransport = (quantity * transportCost).toString();
+        // calculate derived fields based on selected product
+        try {
+          const prodId = copy[rowIndex].values.productName_id || copy[rowIndex].values.productCode_id || copy[rowIndex].values.barcode_id || null;
+          let prod = null;
+          if (prodId && products && products.length > 0) prod = products.find(p => String(p.id) === String(prodId));
+          if (!prod) {
+            const code = copy[rowIndex].values.productCode || copy[rowIndex].values.barcode || copy[rowIndex].values.productName || '';
+            if (code) prod = products.find(p => p.code === code || p.barcode === code || p.name === code);
+          }
+          if (prod) {
+            const selectedUnit = copy[rowIndex].values.unit || '';
+            const productData = getProductDataByUnit(prod, selectedUnit);
+            
+            // Use weight/volume based on selected unit
+            if (productData.weight !== undefined) copy[rowIndex].values.weight = (productData.weight * quantity) + '';
+            if (productData.volume !== undefined) copy[rowIndex].values.volume = (productData.volume * quantity) + '';
+          }
+        } catch (e) {}
         
-        // Also store the productId for the specific column clicked
-        copy[rowIndex].values[colKey + '_id'] = productId;
+        // Also store the productId for ALL product-related columns to ensure calculation works
+        copy[rowIndex].values['productCode_id'] = productId;
+        copy[rowIndex].values['productName_id'] = productId;
+        copy[rowIndex].values['barcode_id'] = productId;
       } else {
         copy[rowIndex].values[colKey] = productId || '';
       }
@@ -847,8 +956,10 @@ const ImportGoods = () => {
       targetRow.values[colKey] = value;
       copy[rowIndex] = targetRow;
       
-      // Only auto-calculate when price/quantity related fields change
+      // Auto-calculate when price/quantity related fields change
       const needsRecalc = ['quantity', 'unitPrice', 'transportCost'].includes(colKey);
+      const needsWeightRecalc = ['quantity', 'unit'].includes(colKey); // Add 'unit' to trigger recalc
+      
       if (needsRecalc) {
         const row = targetRow.values;
         const quantity = parseFloat(row.quantity) || 0;
@@ -858,6 +969,68 @@ const ImportGoods = () => {
         // Calculate totals only when needed
         targetRow.values.total = (quantity * unitPrice).toString();
         targetRow.values.totalTransport = (quantity * transportCost).toString();
+      }
+      
+      // Auto-calculate weight and volume: số kg/khối = weight/volume_theo_đơn_vị × số_lượng
+      if (needsWeightRecalc) {
+        try {
+          const row = targetRow.values;
+          const selectedUnit = colKey === 'unit' ? value : (row.unit || '');
+          
+          // Try to get product info to calculate weight and volume
+          const prodId = row.productName_id || row.productCode_id || row.barcode_id || null;
+          let prod = null;
+          if (prodId && products && products.length > 0) {
+            prod = products.find(p => String(p.id) === String(prodId));
+          }
+          // fallback: try to match by productCode/barcode/productName text
+          if (!prod && products && products.length > 0) {
+            const code = row.productCode || row.barcode || row.productName || '';
+            if (code) {
+              prod = products.find(p => p.code === code || p.barcode === code || p.name === code);
+            }
+          }
+          
+          if (prod) {
+            // Get product data based on selected unit (ĐVT gốc, ĐVT 1, ĐVT 2...)
+            const productData = getProductDataByUnit(prod, selectedUnit);
+            
+            // Calculate weight and volume with quantity: số kg = weight_theo_đơn_vị × số_lượng
+            const quantity = parseFloat(colKey === 'quantity' ? value : targetRow.values.quantity) || 0;
+            
+            if (productData.weight !== undefined) {
+              const calculatedWeight = productData.weight * quantity;
+              targetRow.values.weight = calculatedWeight.toString();
+            }
+            if (productData.volume !== undefined) {
+              const calculatedVolume = productData.volume * quantity;
+              targetRow.values.volume = calculatedVolume.toString();
+            }
+            
+            // Auto-update conversion when unit changes
+            if (colKey === 'unit' && productData.conversion !== undefined) {
+              // Calculate unit price conversion when unit changes
+              const currentPrice = parseFloat(targetRow.values.unitPrice) || 0;
+              const currentConversion = parseFloat(targetRow.values.conversion) || 1;
+              const newConversion = productData.conversion;
+              
+              if (currentPrice > 0 && currentConversion > 0 && newConversion > 0) {
+                // Formula: new_price = (current_price / current_conversion) * new_conversion
+                const basePrice = currentPrice / currentConversion; // Convert to base unit price
+                const newPrice = basePrice * newConversion; // Convert to new unit price
+                targetRow.values.unitPrice = newPrice.toString();
+                
+                // Recalculate total after price change
+                const newTotal = quantity * newPrice;
+                targetRow.values.total = newTotal.toString();
+              }
+              
+              targetRow.values.conversion = newConversion.toString();
+            }
+          }
+        } catch (e) {
+          // Ignore calculation errors
+        }
       }
 
       // When unit changes, attempt to set conversion according to product's unit definitions
@@ -879,21 +1052,28 @@ const ImportGoods = () => {
           }
 
           if (prod) {
+            // Use getProductDataByUnit for consistent logic
             const selectedUnit = value || '';
-            let conv = 1;
-            const baseUnit = prod.baseUnit || prod.defaultUnit || prod.DefaultUnit || prod.unit || '';
-            if (selectedUnit === baseUnit) {
-              conv = 1;
-            } else if (prod.unit1 && selectedUnit === prod.unit1) {
-              conv = Number(prod.conversion1) || 1;
-            } else if (prod.unit2 && selectedUnit === prod.unit2) {
-              conv = Number(prod.conversion2) || 1;
-            } else if (prod.unit3 && selectedUnit === prod.unit3) {
-              conv = Number(prod.conversion3) || 1;
-            } else if (prod.unit4 && selectedUnit === prod.unit4) {
-              conv = Number(prod.conversion4) || 1;
+            const productData = getProductDataByUnit(prod, selectedUnit);
+            const newConv = productData.conversion;
+            
+            // Calculate unit price conversion when unit changes
+            const currentPrice = parseFloat(row.unitPrice) || 0;
+            const currentConv = parseFloat(row.conversion) || 1;
+            
+            if (currentPrice > 0 && currentConv > 0 && newConv > 0) {
+              // Formula: new_price = (current_price / current_conversion) * new_conversion  
+              const basePrice = currentPrice / currentConv; // Convert to base unit price
+              const newPrice = basePrice * newConv; // Convert to new unit price
+              targetRow.values.unitPrice = newPrice.toString();
+              
+              // Recalculate total after price change
+              const quantity = parseFloat(row.quantity) || 0;
+              const newTotal = quantity * newPrice;
+              targetRow.values.total = newTotal.toString();
             }
-            targetRow.values.conversion = conv;
+            
+            targetRow.values.conversion = newConv.toString();
           }
         } catch (e) {
           // ignore errors; do not block user
@@ -902,7 +1082,7 @@ const ImportGoods = () => {
       
       return copy;
     });
-  }, []); // Empty dependency array since we only use prev state
+  }, [products]); // Thêm products vào dependencies để đảm bảo logic tính toán được cập nhật
 
   // Handle warehouse selection
   const handleWarehouseSelect = (colKey, warehouseId) => {
@@ -1281,6 +1461,64 @@ const ImportGoods = () => {
     setRightCurrentPage(p => Math.min(p, rightTotalPages));
   }, [rightItemsPerPage, selectedImport, rightTotalPages]);
 
+  // Recalculate weight/volume for items when products change (to fix any rounding issues)
+  React.useEffect(() => {
+    if (!products || products.length === 0) return;
+    if (!items || items.length === 0) return;
+    
+    const updatedItems = items.map((item, idx) => {
+      try {
+        const quantity = parseFloat(item.quantity) || 0;
+        if (quantity <= 0) return item;
+        
+        // Find product by multiple possible identifiers
+        let prod = products.find(p => p.code === item.productCode || p.barcode === item.barcode || p.name === item.productName);
+        
+        if (prod) {
+          const updatedItem = { ...item };
+          const selectedUnit = item.unit || '';
+          
+          // Get product data based on unit (support multiple units: ĐVT gốc, ĐVT 1, ĐVT 2...)
+          const productData = getProductDataByUnit(prod, selectedUnit);
+          
+          // Recalculate weight: số kg = số kg sản phẩm × số lượng (no rounding)
+          if (productData.weight !== undefined) {
+            const calculatedWeight = productData.weight * quantity;
+            updatedItem.weight = calculatedWeight;
+          }
+          
+          // Recalculate volume: số khối = số khối sản phẩm × số lượng (no rounding)  
+          if (productData.volume !== undefined) {
+            const calculatedVolume = productData.volume * quantity;
+            updatedItem.volume = calculatedVolume;
+          }
+          
+          // Update conversion based on unit
+          if (productData.conversion !== undefined) {
+            updatedItem.conversion = productData.conversion;
+          }
+          
+          return updatedItem;
+        }
+      } catch (e) {
+        // ignore calculation errors
+      }
+      return item;
+    });
+    
+    // Only update if there are actual changes
+    const hasChanges = updatedItems.some((item, idx) => 
+      item.weight !== items[idx].weight || item.volume !== items[idx].volume
+    );
+    
+    if (hasChanges) {
+      setItems(updatedItems);
+      if (selectedImport) {
+        setSelectedImport(prev => ({ ...prev, items: updatedItems }));
+      }
+    }
+  }, [products, items?.length]); // Only depend on products and items length, not items content to avoid infinite loop
+
   const handleSelectImport = async (importItem) => {
     if (!importItem) return;
 
@@ -1482,6 +1720,53 @@ const ImportGoods = () => {
         note: detail.note || detail.Note || ''
       });
       setItems(detail.items || []);
+      
+      // Recalculate weight and volume for all items after loading (fix any rounding issues from database)
+      if (detail.items && detail.items.length > 0 && products && products.length > 0) {
+        const updatedItems = detail.items.map(item => {
+          try {
+            const quantity = parseFloat(item.quantity) || 0;
+            if (quantity <= 0) return item;
+            
+            // Find product by multiple possible identifiers
+            let prod = products.find(p => p.code === item.productCode || p.barcode === item.barcode || p.name === item.productName);
+            
+            if (prod) {
+              const updatedItem = { ...item };
+              const selectedUnit = item.unit || '';
+              
+              // Get product data based on unit (support multiple units: ĐVT gốc, ĐVT 1, ĐVT 2...)
+              const productData = getProductDataByUnit(prod, selectedUnit);
+              
+              // Recalculate weight: số kg = số kg sản phẩm × số lượng (no rounding)
+              if (productData.weight !== undefined) {
+                const calculatedWeight = productData.weight * quantity;
+                updatedItem.weight = calculatedWeight;
+              }
+              
+              // Recalculate volume: số khối = số khối sản phẩm × số lượng (no rounding)  
+              if (productData.volume !== undefined) {
+                const calculatedVolume = productData.volume * quantity;
+                updatedItem.volume = calculatedVolume;
+              }
+              
+              // Update conversion based on unit
+              if (productData.conversion !== undefined) {
+                updatedItem.conversion = productData.conversion;
+              }
+              
+              return updatedItem;
+            }
+          } catch (e) {
+            // ignore calculation errors
+          }
+          return item;
+        });
+        setItems(updatedItems);
+        // Update selectedImport as well to keep data in sync
+        setSelectedImport(prev => ({ ...prev, items: updatedItems }));
+      }
+      
       setIsEditing(false);
     } catch (err) {
       console.error('Load import details error', err);
@@ -2024,8 +2309,6 @@ const ImportGoods = () => {
 
       const combined = itemsData.length > 0 ? itemsData : headerMapped;
 
-      // DEBUG: log combined data to inspect raw numeric values before formatting
-      try { console.info('EXPORT DEBUG - combined rows:', JSON.parse(JSON.stringify(combined))); } catch (e) { console.info('EXPORT DEBUG - combined rows (stringify failed)', combined); }
       const rowsHtml = combined.map((v, idx) => {
         let noteDate = v.noteDate || '';
         try { if (noteDate) noteDate = dayjs(noteDate).format('DD/MM/YYYY'); } catch (e) {}
@@ -2881,8 +3164,7 @@ const ImportGoods = () => {
                         // otherwise use saved items totals. This avoids double-counting.
                         const headerWeight = memoizedHeaderTotals.validRows.length ? memoizedHeaderTotals.totalWeight : 0;
                         const sourceWeight = headerWeight || itemsTotals.totalWeight || 0;
-                        const totalWeight = Math.round(sourceWeight * 100) / 100;
-                        return formatWeight(totalWeight);
+                        return formatWeight(sourceWeight); // Không làm tròn, giữ nguyên độ chính xác
                       })()} 
                       readOnly 
                       style={{width:'100%', background: '#f5f5f5'}} 
@@ -2901,8 +3183,7 @@ const ImportGoods = () => {
                         // otherwise use saved items totals. This avoids double-counting.
                         const headerVolume = memoizedHeaderTotals.validRows.length ? memoizedHeaderTotals.totalVolume : 0;
                         const sourceVolume = headerVolume || itemsTotals.totalVolume || 0;
-                        const totalVolume = Math.round(sourceVolume * 10000) / 10000;
-                        return formatVolume(totalVolume);
+                        return formatVolume(sourceVolume); // Không làm tròn, giữ nguyên độ chính xác
                       })()} 
                       readOnly 
                       style={{width:'100%', background: '#f5f5f5'}} 
@@ -3369,11 +3650,13 @@ const ImportGoods = () => {
                                     }
                                     // Format weight fields  
                                     if (colKey === 'weight') {
+                                      // Số kg = số kg sản phẩm × số lượng (auto-calculated)
                                       return formatInputDisplay(rawValue, 'weight');
                                     }
                                     // For volume allow free typing (do not force formatted value)
                                     if (colKey === 'volume') {
-                                      return rawValue;
+                                      // Volume is auto-filled from product data, display only
+                                      return formatInputDisplay(rawValue, 'volume');
                                     }
                                     // Default - return as is
                                     return rawValue;
@@ -3389,18 +3672,19 @@ const ImportGoods = () => {
                                       const rawValue = sanitizedValue.replace(/,/g, '');
                                       handleHeaderRowChange(rIdx, colKey, rawValue);
                                     } else if (colKey === 'volume') {
-                                      // Allow digits, dot and comma while typing; store using dot as decimal separator
-                                      const sanitized = inputValue.replace(/[^0-9.,]/g, '');
-                                      const rawValue = sanitized.replace(/,/g, '.');
-                                      handleHeaderRowChange(rIdx, colKey, rawValue);
+                                      // Volume is read-only, no changes allowed
+                                      return;
+                                    } else if (colKey === 'weight') {
+                                      // Số kg is auto-calculated (số kg sản phẩm × số lượng), no manual changes allowed
+                                      return;
                                     } else {
                                       handleHeaderRowChange(rIdx, colKey, inputValue);
                                     }
                                   }}
                                   size="small"
                                   style={{ width: '100%', minWidth: colKey === 'description' ? 250 : 100 }}
-                                  readOnly={['total', 'totalTransport'].includes(colKey)}
-                                  placeholder={['total', 'totalTransport'].includes(colKey) ? 'Tự động tính' : ''}
+                                  readOnly={['total', 'totalTransport', 'volume', 'weight'].includes(colKey)}
+                                  placeholder={['total', 'totalTransport'].includes(colKey) ? 'Tự động tính' : colKey === 'volume' ? 'Lấy từ sản phẩm' : colKey === 'weight' ? 'Số kg SP × Số lượng' : ''}
                                 />
                               </td>
                             );
@@ -3566,7 +3850,7 @@ const ImportGoods = () => {
                       const headerTotals = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
                         .reduce((sum, row) => {
                           const weight = parseFloat(row.values.weight) || 0;
-                          return Math.round((sum + weight) * 100) / 100;
+                          return sum + weight; // Không làm tròn, giữ nguyên độ chính xác
                         }, 0);
                       return formatWeight(headerTotals);
                     })()} 
@@ -3582,7 +3866,7 @@ const ImportGoods = () => {
                       const headerTotals = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
                         .reduce((sum, row) => {
                           const volume = parseFloat(row.values.volume) || 0;
-                          return Math.round((sum + volume) * 10000) / 10000;
+                          return sum + volume; // Không làm tròn, giữ nguyên độ chính xác
                         }, 0);
                       return formatVolume(headerTotals);
                     })()} 
@@ -3832,18 +4116,25 @@ const ImportGoods = () => {
                                     return formatInputDisplay(rawValue, 'currency');
                                   }
                                   if (colKey === 'weight') {
+                                    // Số kg = số kg sản phẩm × số lượng (auto-calculated)
                                     return formatInputDisplay(rawValue, 'weight');
                                   }
                                   if (colKey === 'volume') {
+                                    // Volume is auto-filled from product data, display only
                                     return formatInputDisplay(rawValue, 'volume');
                                   }
                                   return rawValue;
                                 })()}
                                 onChange={(e) => {
+                                  // Skip onChange for read-only fields like volume
+                                  if (['total', 'totalTransport', 'volume'].includes(colKey)) {
+                                    return;
+                                  }
+                                  
                                   const inputValue = e.target.value;
                                   
                                   // For currency fields, allow user to type freely but parse for calculation
-                                  if (['unitPrice', 'transportCost', 'total', 'totalTransport'].includes(colKey)) {
+                                  if (['unitPrice', 'transportCost'].includes(colKey)) {
                                     // Allow only digits and comma
                                     const sanitizedValue = inputValue.replace(/[^0-9,]/g, '');
                                     // Store the raw value (without formatting) for calculation
@@ -3855,8 +4146,8 @@ const ImportGoods = () => {
                                 }}
                                 size="small"
                                 style={{ width: '100%', minWidth: colKey === 'description' ? 250 : 100 }}
-                                readOnly={['total', 'totalTransport'].includes(colKey)}
-                                placeholder={['total', 'totalTransport'].includes(colKey) ? 'Tự động tính' : ''}
+                                readOnly={['total', 'totalTransport', 'volume', 'weight'].includes(colKey)}
+                                placeholder={['total', 'totalTransport'].includes(colKey) ? 'Tự động tính' : colKey === 'volume' ? 'Lấy từ sản phẩm' : colKey === 'weight' ? 'Số kg SP × Số lượng' : ''}
                               />
                             </td>
                           );
@@ -4220,13 +4511,20 @@ const ImportGoods = () => {
                     copy[productModalRowIndex].values['productName'] = firstProduct.name || '';
                     copy[productModalRowIndex].values['barcode'] = firstProduct.barcode || '';
                     copy[productModalRowIndex].values['description'] = firstProduct.description || '';
-                    copy[productModalRowIndex].values['unit'] = (lastMatch && (lastMatch.unit || lastMatch.Unit)) || firstProduct.defaultUnit || firstProduct.unit || firstProduct.baseUnit || '';
-                    copy[productModalRowIndex].values['conversion'] = (lastMatch && (lastMatch.conversion || lastMatch.Conversion)) || firstProduct.conversion1 || 1;
+                    
+                    // Always prioritize base unit first, then fallback to last match
+                    const baseUnit = firstProduct.baseUnit || firstProduct.defaultUnit || firstProduct.unit || '';
+                    const defaultUnit = baseUnit || ((lastMatch && (lastMatch.unit || lastMatch.Unit)) || '');
+                    copy[productModalRowIndex].values['unit'] = defaultUnit;
+                    
+                    // Get product data for correct conversion based on unit
+                    const productData = getProductDataByUnit(firstProduct, defaultUnit);
+                    copy[productModalRowIndex].values['conversion'] = productData.conversion.toString();
+                    
                     copy[productModalRowIndex].values['unitPrice'] = isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || firstProduct.importPrice || 0);
                     copy[productModalRowIndex].values['transportCost'] = (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0;
                     copy[productModalRowIndex].values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null;
-                    copy[productModalRowIndex].values['weight'] = firstProduct.weight || 0;
-                    copy[productModalRowIndex].values['volume'] = firstProduct.volume || 0;
+                    // weight and volume will be calculated after we determine quantity below
                     copy[productModalRowIndex].values['warehouse'] = copy[productModalRowIndex].values['warehouse'] || getDefaultWarehouseName();
                     
                     // Auto-calculate initial totals
@@ -4236,6 +4534,13 @@ const ImportGoods = () => {
                     
                     copy[productModalRowIndex].values.total = (quantity * unitPrice).toString();
                     copy[productModalRowIndex].values.totalTransport = (quantity * transportCost).toString();
+                    // calculate derived fields based on the product
+                    try {
+                      if (firstProduct) {
+                        copy[productModalRowIndex].values['weight'] = ((firstProduct.weight || 0) * quantity).toString();
+                        copy[productModalRowIndex].values['volume'] = ((firstProduct.volume || 0) * quantity).toString();
+                      }
+                    } catch (e) {}
                   }
                   
                   // Add new rows for remaining selected products
@@ -4306,8 +4611,8 @@ const ImportGoods = () => {
                       newRow.values['unitPrice'] = isKMImport ? 0 : ((lastMatch && (lastMatch.unitPrice || lastMatch.UnitPrice)) || product.importPrice || 0);
                       newRow.values['transportCost'] = (lastMatch && (lastMatch.transportCost || lastMatch.TransportCost)) || 0;
                       newRow.values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null;
-                      newRow.values['weight'] = product.weight || 0;
-                      newRow.values['volume'] = product.volume || 0;
+                      newRow.values['weight'] = (product.weight || 0) * 1; // số kg = số kg sản phẩm × số lượng (1)
+                      newRow.values['volume'] = (product.volume || 0) * 1;
                       newRow.values['warehouse'] = getDefaultWarehouseName();
                       newRow.values['quantity'] = 1;
                       
