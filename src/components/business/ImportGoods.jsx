@@ -652,8 +652,18 @@ const ImportGoods = () => {
           let lastMatch = null;
           try {
             if (imports && imports.length > 0) {
+              // Filter out current import and temp imports to find actual last prices
+              const currentImportId = selectedImport?.id;
+              const filteredImports = imports.filter(imp => {
+                // Exclude current import being edited
+                if (currentImportId && imp.id === currentImportId) return false;
+                // Exclude temp imports (not yet saved)
+                if (imp.importNumber && imp.importNumber.includes('temp_')) return false;
+                return true;
+              });
+              
               // Improved date parsing with ID fallback for accurate newest-first sorting
-              const withDates = imports.map(imp => {
+              const withDates = filteredImports.map(imp => {
                 let parsedDate = new Date(0);
                 
                 if (imp.date) {
@@ -684,11 +694,8 @@ const ImportGoods = () => {
                 };
               });
               
-              withDates.sort((a, b) => {
-                const dateCompare = b._date.getTime() - a._date.getTime();
-                if (dateCompare !== 0) return dateCompare;
-                return b._fallbackSort - a._fallbackSort;
-              });
+              // Sort by ID desc (most reliable - auto increment means higher ID = newer)
+              withDates.sort((a, b) => b._fallbackSort - a._fallbackSort);
               for (const w of withDates) {
                 const itemsList = w.imp.items || w.imp.Items || [];
                 const match = itemsList.find(it => (it.productCode && it.productCode === selectedProduct.code) || (it.barcode && it.barcode === selectedProduct.barcode) || (it.productName && it.productName === selectedProduct.name));
@@ -856,8 +863,18 @@ const ImportGoods = () => {
         let lastMatch = null;
         try {
           if (imports && imports.length > 0) {
+            // Filter out current import and temp imports to find actual last prices
+            const currentImportId = selectedImport?.id;
+            const filteredImports = imports.filter(imp => {
+              // Exclude current import being edited
+              if (currentImportId && imp.id === currentImportId) return false;
+              // Exclude temp imports (not yet saved)
+              if (imp.importNumber && imp.importNumber.includes('temp_')) return false;
+              return true;
+            });
+            
             // Improved date parsing with ID fallback for accurate newest-first sorting
-            const withDates = imports.map(imp => {
+            const withDates = filteredImports.map(imp => {
               let parsedDate = new Date(0);
               
               // Try imp.date first (ISO format)
@@ -890,12 +907,8 @@ const ImportGoods = () => {
               };
             });
             
-            // Sort by date desc, then by ID desc as fallback
-            withDates.sort((a, b) => {
-              const dateCompare = b._date.getTime() - a._date.getTime();
-              if (dateCompare !== 0) return dateCompare;
-              return b._fallbackSort - a._fallbackSort;
-            });
+            // Sort by ID desc (most reliable - auto increment means higher ID = newer)
+            withDates.sort((a, b) => b._fallbackSort - a._fallbackSort);
             for (const w of withDates) {
               const itemsList = w.imp.items || w.imp.Items || [];
               const match = itemsList.find(it => (it.productCode && it.productCode === selectedProduct.code) || (it.barcode && it.barcode === selectedProduct.barcode) || (it.productName && it.productName === selectedProduct.name));
@@ -4470,7 +4483,17 @@ const ImportGoods = () => {
                     let lastMatch = null;
                     try {
                       if (imports && imports.length > 0) {
-                        const withDates = imports.map(imp => {
+                        // Filter out current import and temp imports to find actual last prices
+                        const currentImportId = selectedImport?.id;
+                        const filteredImports = imports.filter(imp => {
+                          // Exclude current import being edited
+                          if (currentImportId && imp.id === currentImportId) return false;
+                          // Exclude temp imports (not yet saved)
+                          if (imp.importNumber && imp.importNumber.includes('temp_')) return false;
+                          return true;
+                        });
+                        
+                        const withDates = filteredImports.map(imp => {
                           let parsedDate = new Date(0);
                           
                           if (imp.date) {
@@ -4501,11 +4524,8 @@ const ImportGoods = () => {
                           };
                         });
                         
-                        withDates.sort((a, b) => {
-                          const dateCompare = b._date.getTime() - a._date.getTime();
-                          if (dateCompare !== 0) return dateCompare;
-                          return b._fallbackSort - a._fallbackSort;
-                        });
+                        // Sort by ID desc (most reliable - auto increment means higher ID = newer)
+                        withDates.sort((a, b) => b._fallbackSort - a._fallbackSort);
                         for (const w of withDates) {
                           const itemsList = w.imp.items || w.imp.Items || [];
                           const match = itemsList.find(it => (it.productCode && it.productCode === firstProduct.code) || (it.barcode && it.barcode === firstProduct.barcode) || (it.productName && it.productName === firstProduct.name));
@@ -4583,7 +4603,17 @@ const ImportGoods = () => {
                       let lastMatch = null;
                       try {
                         if (imports && imports.length > 0) {
-                          const withDates = imports.map(imp => {
+                          // Filter out current import and temp imports to find actual last prices
+                          const currentImportId = selectedImport?.id;
+                          const filteredImports = imports.filter(imp => {
+                            // Exclude current import being edited
+                            if (currentImportId && imp.id === currentImportId) return false;
+                            // Exclude temp imports (not yet saved)
+                            if (imp.importNumber && imp.importNumber.includes('temp_')) return false;
+                            return true;
+                          });
+                          
+                          const withDates = filteredImports.map(imp => {
                             let parsedDate = new Date(0);
                             
                             if (imp.date) {
@@ -4614,11 +4644,8 @@ const ImportGoods = () => {
                             };
                           });
                           
-                          withDates.sort((a, b) => {
-                            const dateCompare = b._date.getTime() - a._date.getTime();
-                            if (dateCompare !== 0) return dateCompare;
-                            return b._fallbackSort - a._fallbackSort;
-                          });
+                          // Sort by ID desc (most reliable - auto increment means higher ID = newer)
+                          withDates.sort((a, b) => b._fallbackSort - a._fallbackSort);
                           for (const w of withDates) {
                             const itemsList = w.imp.items || w.imp.Items || [];
                             const match = itemsList.find(it => (it.productCode && it.productCode === product.code) || (it.barcode && it.barcode === product.barcode) || (it.productName && it.productName === product.name));

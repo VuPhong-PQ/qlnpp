@@ -23,7 +23,12 @@ namespace QlnppApi.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Import>>> Get()
         {
-            var list = await _context.Imports.OrderByDescending(i => i.Date).ToListAsync();
+            // Include Items to support lastcopy feature (finding most recent price/transport cost for products)
+            var list = await _context.Imports
+                .Include(i => i.Items)
+                .OrderByDescending(i => i.Date)
+                .ThenByDescending(i => i.Id)
+                .ToListAsync();
             return Ok(list);
         }
 
