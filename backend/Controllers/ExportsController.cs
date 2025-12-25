@@ -423,6 +423,35 @@ namespace QlnppApi.Controllers
 
                 if (singleExport != null)
                 {
+                    // Validate product codes exist in Products table (mã hàng)
+                    var codes = singleExport.Items
+                        .Select(i => i.ProductCode?.Trim())
+                        .Where(s => !string.IsNullOrEmpty(s))
+                        .Distinct(StringComparer.OrdinalIgnoreCase)
+                        .ToList();
+
+                    if (codes.Any())
+                    {
+                        var existingCodes = await _context.Products
+                            .Where(p => codes.Contains(p.Code))
+                            .Select(p => p.Code)
+                            .ToListAsync();
+
+                        var missing = codes.Except(existingCodes, StringComparer.OrdinalIgnoreCase).ToList();
+                        if (missing.Any())
+                        {
+                            var missingDetails = missing.Select(code =>
+                            {
+                                var item = singleExport.Items.FirstOrDefault(it => string.Equals(it.ProductCode, code, StringComparison.OrdinalIgnoreCase));
+                                var name = item?.ProductName ?? string.Empty;
+                                return string.IsNullOrEmpty(name) ? code : $"{code}: {name}";
+                            }).ToList();
+
+                            var msg = $"Phiếu nhập thêm vào có sản phẩm chưa tồn tại trong hệ thống: {string.Join(", ", missingDetails)}. Vui lòng thêm sản phẩm trước";
+                            return BadRequest(msg);
+                        }
+                    }
+
                     singleExport.Total = singleExport.Items.Sum(i => i.Total ?? 0);
                     singleExport.TotalWeight = singleExport.Items.Sum(i => i.Weight ?? 0);
                     singleExport.TotalVolume = singleExport.Items.Sum(i => i.Volume ?? 0);
