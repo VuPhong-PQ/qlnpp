@@ -1,377 +1,844 @@
-.col-resizer {
-  display: inline-block;
-  position: absolute;
-  right: 0;
-  top: 0;
-  width: 6px;
-  height: 100%;
-  cursor: col-resize;
-  z-index: 2;
-  background: transparent;
-  transition: background 0.2s;
-}
-.col-resizer:hover {
-  background: #1677ff33;
-}
-.export-goods-layout {
+﻿
+.export-goods-page {
   display: flex;
-  gap: 24px;
-  align-items: flex-start;
-  width: 100%;
-  margin: 0 auto;
-  max-width: 1800px;
+  height: 100%;
+  background: #f7f7fa;
+  width: 100vw;
+  min-height: 100vh;
 }
 
-.export-goods-search {
+/* Increase column widths for better display */
+.items-table {
+  table-layout: fixed;
+}
+
+.items-table th,
+.items-table td {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Specific width controls for warehouse and date columns */
+.items-table th:nth-child(13),
+.items-table td:nth-child(13) {
+  min-width: 200px !important;
+  width: 200px !important;
+}
+
+.items-table th:nth-child(7),
+.items-table td:nth-child(7) {
+  min-width: 180px !important;
+  width: 180px !important;
+}
+
+/* Width controls for barcode and product code columns */
+.items-table th:nth-child(1),
+.items-table td:nth-child(1) {
+  min-width: 200px !important;
+  width: 200px !important;
+}
+
+.items-table th:nth-child(2),
+.items-table td:nth-child(2) {
+  min-width: 200px !important;
+  width: 200px !important;
+}
+
+/* Column width controls for description column */
+.items-table th:nth-child(14),
+.items-table td:nth-child(14) {
+  min-width: 400px !important;
+  width: 400px !important;
+}
+
+.items-table th:has(span:contains("Ghi chú (date)")),
+.items-table td:nth-child(7) {
+  min-width: 360px !important;
+  width: 360px !important;
+}
+
+/* Column width controls for actions column */
+.items-table th:nth-child(16),
+.items-table td:nth-child(16) {
+  min-width: 100px !important;
+  width: 100px !important;
+}
+
+/* Custom DatePicker Calendar Grid Styles */
+.custom-date-picker-dropdown .ant-picker-dropdown,
+.ant-picker-dropdown.custom-date-picker-dropdown,
+.calendar-dropdown {
+  z-index: 9999 !important;
+}
+
+/* Force calendar view instead of date selector */
+.calendar-dropdown .ant-picker-date-panel {
+  display: block !important;
+}
+
+.calendar-dropdown .ant-picker-time-panel {
+  display: none !important;
+}
+
+.calendar-dropdown .ant-picker-body {
+  display: block !important;
+}
+
+.calendar-dropdown .ant-picker-content {
+  display: block !important;
+}
+
+.calendar-dropdown .ant-picker-content table {
+  display: table !important;
+  width: 100% !important;
+}
+
+.calendar-dropdown .ant-picker-content thead,
+.calendar-dropdown .ant-picker-content tbody {
+  display: table-header-group !important;
+}
+
+.calendar-dropdown .ant-picker-content tbody {
+  display: table-row-group !important;
+}
+
+.calendar-dropdown .ant-picker-content tr {
+  display: table-row !important;
+}
+
+.calendar-dropdown .ant-picker-content th,
+.calendar-dropdown .ant-picker-content td {
+  display: table-cell !important;
+}
+
+/* Product select dropdown styles for better visibility */
+.product-select-dropdown {
+  z-index: 9999 !important;
+  min-width: 400px !important;
+}
+
+.product-select-dropdown .ant-select-item {
+  padding: 8px 12px !important;
+  white-space: normal !important;
+  word-wrap: break-word !important;
+  min-height: 32px !important;
+  line-height: 1.4 !important;
+}
+
+.product-select-dropdown .ant-select-item-option-content {
+  white-space: normal !important;
+  word-wrap: break-word !important;
+}
+
+/* Ensure dropdown doesn't get cut off by table boundaries */
+.ant-select-dropdown.product-select-dropdown {
+  position: fixed !important;
+  z-index: 9999 !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-date-panel .ant-picker-body,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-date-panel .ant-picker-body {
+  padding: 8px !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-content table,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content table {
+  width: 100% !important;
+  border-collapse: separate !important;
+  border-spacing: 2px !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-content thead,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content thead {
+  display: table-header-group !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-content thead tr,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content thead tr {
+  display: table-row !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-content thead th,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content thead th {
+  display: table-cell !important;
+  width: 32px !important;
+  height: 24px !important;
+  line-height: 24px !important;
+  text-align: center !important;
+  padding: 0 !important;
+  font-size: 12px !important;
+  color: #666 !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-content tbody,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content tbody {
+  display: table-row-group !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-content tbody tr,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content tbody tr {
+  display: table-row !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-content tbody td,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content tbody td {
+  display: table-cell !important;
+  width: 32px !important;
+  height: 32px !important;
+  text-align: center !important;
+  vertical-align: middle !important;
+  padding: 0 !important;
+  cursor: pointer !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-cell-inner,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-cell-inner {
+  display: inline-block !important;
+  width: 24px !important;
+  height: 24px !important;
+  line-height: 24px !important;
+  text-align: center !important;
+  border-radius: 4px !important;
+  margin: 0 auto !important;
+  transition: all 0.2s !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-cell:hover .ant-picker-cell-inner,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-cell:hover .ant-picker-cell-inner {
+  background-color: #f0f8ff !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-cell-selected .ant-picker-cell-inner,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-cell-selected .ant-picker-cell-inner {
+  background-color: #1677ff !important;
+  color: #fff !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-cell-today .ant-picker-cell-inner,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-cell-today .ant-picker-cell-inner {
+  border: 1px solid #1677ff !important;
+}
+
+/* Remove any list-style display */
+.custom-date-picker-dropdown .ant-picker-content,
+.ant-picker-dropdown.custom-date-picker-dropdown .ant-picker-content {
+  display: block !important;
+}
+
+.custom-date-picker .ant-picker-cell-inner {
+  display: inline-block !important;
+  width: 24px !important;
+  height: 24px !important;
+  line-height: 24px !important;
+  text-align: center !important;
+  margin: 0 !important;
+}
+
+.custom-date-picker .ant-picker-content {
+  display: grid !important;
+  grid-template-columns: repeat(7, 1fr) !important;
+  grid-gap: 2px !important;
+  width: auto !important;
+}
+
+.custom-date-picker .ant-picker-content thead th {
+  display: grid !important;
+  grid-column: span 1 !important;
+  text-align: center !important;
+  padding: 4px !important;
+}
+
+.custom-date-picker .ant-picker-content tbody {
+  display: contents !important;
+}
+
+.custom-date-picker .ant-picker-content tbody tr {
+  display: contents !important;
+}
+
+.custom-date-picker .ant-picker-content tbody tr td {
+  display: grid !important;
+  grid-column: span 1 !important;
+  text-align: center !important;
+  padding: 2px !important;
+}
+
+.custom-date-picker-dropdown .ant-picker-dropdown {
+  z-index: 9999 !important;
+}
+
+.search-panel {
+  flex: 0 0 30%;
+  max-width: 30%;
+  min-width: 240px;
   background: #fff;
   border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  padding: 24px 18px 18px 18px;
-  width: 340px;
-  min-width: 320px;
-  margin-bottom: 24px;
-}
-.search-title {
-  font-size: 20px;
-  font-weight: 600;
-  margin-bottom: 18px;
-}
-.search-fields {
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  margin-right: 16px;
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  margin-bottom: 18px;
+  padding: 16px;
+  overflow-x: auto;
 }
-.search-input {
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  padding: 7px 10px;
-  font-size: 15px;
+
+.export-detail-panel {
+  flex: 1 1 70%;
+  max-width: 70%;
+  min-width: 0;
+  background: #fff;
+  border-radius: 12px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+  padding: 12px 14px;
+  overflow-x: auto;
+  display: flex;
+  flex-direction: column;
 }
-.btn-search {
-  background: #1677ff;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 0;
-  font-size: 15px;
-  cursor: pointer;
-  margin-top: 4px;
-  transition: background 0.2s;
-}
-.btn-search:hover {
-  background: #0958d9;
-}
-.search-table {
-  margin-top: 10px;
-}
-.search-table-header {
+
+/* Ensure we can absolutely position child elements (action buttons) */
+.export-detail-panel { position: relative; }
+
+.panel-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 6px;
+  margin-bottom: 8px;
 }
-.search-table-actions {
-  display: flex;
-  gap: 6px;
+
+.table-scroll-x {
+  border-radius: 8px;
+  border: 1px solid #f3f4f6;
+  background: #fff;
+  overflow-x: auto;
+  width: 100%;
 }
-.btn-table-action {
-  width: 28px;
-  height: 28px;
-  border-radius: 6px;
-  border: none;
-  cursor: pointer;
+/* Thanh cuộn ngang cho bảng panel phải (chi tiết nhập hàng) */
+.items-table-container {
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: auto;
+  max-height: 600px; /* Limit height to prevent header from being hidden */
 }
-.btn-table-action.purple { background: #722ed1; }
-.btn-table-action.pink { background: #eb2f96; }
-.btn-table-action.gray { background: #d9d9d9; }
-.search-list-table {
+.items-table {
+  min-width: 1000px;
   width: 100%;
   border-collapse: collapse;
-  background: #fafbfc;
-  border-radius: 8px;
-  overflow: hidden;
-  font-size: 14px;
 }
-.search-list-table th, .search-list-table td {
-  padding: 6px 8px;
-  text-align: center;
-  border-bottom: 1px solid #f0f0f0;
+.items-table {
+  /* Use fixed layout so column widths don't change based on content */
+  table-layout: fixed;
 }
-.search-link {
-  color: #1677ff;
-  cursor: pointer;
-  text-decoration: underline;
-}
-.btn-table-edit, .btn-table-delete {
-  background: none;
-  border: none;
-  font-size: 18px;
-  cursor: pointer;
-  margin: 0 2px;
-}
-.btn-table-edit { color: #1677ff; }
-.btn-table-delete { color: #ff4d4f; }
-.search-pagination {
-  margin-top: 8px;
-  font-size: 13px;
-  color: #888;
-}
-.search-page {
-  background: #1677ff;
-  color: #fff;
-  border-radius: 4px;
-  padding: 2px 7px;
-  margin: 0 4px;
-}
-.search-page-size {
-  background: #fafbfc;
-  border-radius: 4px;
-  padding: 2px 7px;
-  margin-left: 4px;
+.items-table th, .items-table td {
+  padding: 8px 10px;
+  border-bottom: 1px solid #f5f5f5;
+  white-space: nowrap;
 }
 
-.export-goods-main {
-  flex: 1;
-  background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  padding: 24px 18px 18px 18px;
-  min-width: 900px;
-}
-.main-title {
-  font-size: 20px;
-  font-weight: 600;
-}
-.export-goods-info-row {
-  display: flex;
-  gap: 18px;
-  margin-bottom: 10px;
-}
-.info-group {
-  display: flex;
-  flex-direction: column;
-  min-width: 160px;
-  flex: none;
-}
-.info-group label {
-  font-size: 14px;
-  font-weight: 500;
-  margin-bottom: 2px;
-}
-.required { color: #ff4d4f; }
-.export-goods-table-wrapper {
-  overflow-x: auto;
-  background: #fafbfc;
-  border-radius: 8px;
-  padding: 12px 0 0 0;
-  margin-top: 10px;
-}
-.export-goods-table {
+/* small filter input inside table header */
+.items-table thead .col-filter {
   width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  min-width: 1200px;
+  padding: 6px 8px;
+  border: 1px solid #e6edf3;
+  border-radius: 6px;
+  font-size: 13px;
+  box-sizing: border-box;
 }
-.export-goods-table th, .export-goods-table td {
-  padding: 8px 10px;
-  text-align: center;
-  border-bottom: 1px solid #f0f0f0;
+
+/* Fix: remove stray small boxed border on the right edge when scrollbars appear */
+.items-table {
+  border-collapse: collapse;
 }
-.export-goods-table th {
-  background: #f5f7fa;
-  font-weight: 600;
-  font-size: 15px;
+.items-table th, .items-table td {
+  /* ensure no visible vertical borders that create a small boxed corner */
+  border-right: 1px solid transparent;
 }
-.export-goods-table td input {
-  width: 100%;
-  padding: 5px 8px;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
-  font-size: 14px;
+.items-table thead th:last-child, .items-table tbody td:last-child {
+  border-right: none;
+}
+.items-table-container {
+  position: relative;
+}
+/* Overlay the scrollbar corner area with transparent block to avoid a visible box in some browsers */
+.items-table-container::after {
+  content: '';
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 18px;
+  height: 18px;
+  background: transparent;
+  pointer-events: none;
+}
+.items-table thead th { vertical-align: bottom; }
+
+/* Fix: set a consistent column width for header cells so inputs don't expand layout */
+.items-table thead th {
+  width: 140px !important;
+  min-width: 140px !important;
+  max-width: 140px !important;
+  box-sizing: border-box;
+}
+
+/* Keep barcode (1) and productCode (2) same as default; make productName (3) three times wider */
+.items-table thead th:nth-child(3),
+.items-table tbody td:nth-child(3),
+.items-table .header-input-row td:nth-child(3) {
+  width: 420px !important;
+  min-width: 420px !important;
+  max-width: 420px !important;
+}
+
+/* Make table headers sticky so labels stay fixed at top when scrolling */
+.items-table thead th,
+.table-scroll-x table thead th {
+  position: sticky;
+  top: 0;
+  background: #ffffff; /* match table background */
+  z-index: 50;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.03);
+}
+
+/* Slightly higher z-index for the very first header cells to overlay any action buttons */
+.items-table thead th:first-child,
+.table-scroll-x table thead th:first-child {
+  z-index: 55;
+}
+
+/* Ensure header dropdowns/inputs have uniform size */
+ .items-table thead th .col-filter,
+ .items-table thead th select,
+ .items-table thead th input,
+ .items-table thead th .ant-select,
+ .items-table thead th .ant-input {
+   box-sizing: border-box;
+   width: 100% !important;
+   min-width: 0 !important;
+   max-width: 100% !important;
+   height: 34px !important;
+   padding: 4px 8px !important;
+   font-size: 13px !important;
+ }
+
+/* Header input rows (the extra input rows we render) should not expand columns */
+.items-table thead + tr.header-input-row td,
+.items-table .header-input-row td {
+  padding-top: 6px;
+  padding-bottom: 6px;
+  vertical-align: middle;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.items-table .header-input-row td .ant-select,
+.items-table .header-input-row td .ant-input,
+.items-table .header-input-row td input {
+  box-sizing: border-box;
+  width: 100% !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  height: 32px !important;
+  padding: 4px 8px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+/* Prevent very long option labels from forcing cell expansion */
+.items-table .ant-select-selection-item,
+.items-table .ant-select-selection-placeholder {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+/* Tighter styling for Ant Design select inside header */
+.items-table thead th .ant-select .ant-select-selector {
+  height: 34px !important;
+  line-height: 24px !important;
+  padding: 4px 8px !important;
+}
+
+/* Make native select options not overflow */
+.items-table thead th select {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* small reset button in header */
+.btn-reset-header {
+  display: inline-block;
   background: #fff;
-}
-.btn-delete {
-  background: #ff4d4f;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  padding: 4px 8px;
+  border: 1px solid #e6edf3;
+  color: #333;
+  padding: 6px 10px;
+  border-radius: 6px;
+  font-size: 13px;
   cursor: pointer;
-  font-size: 16px;
-  transition: background 0.2s;
 }
-.btn-delete:hover {
-  background: #d9363e;
+
+.btn-reset-header:hover {
+  background: #f5f7fa;
 }
-.export-goods-actions {
+
+/* Popover content inside modal: constrain width and ensure wrapping */
+.ant-popover {
+  max-width: 340px !important;
+}
+.ant-popover-inner-content {
+  padding: 12px !important;
+  box-sizing: border-box;
+}
+.ant-popover .btn { white-space: nowrap; }
+
+/* Popup cài đặt cột */
+.settings-modal-overlay {
+  position: fixed;
+  z-index: 1000;
+  left: 0; top: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.08);
   display: flex;
-  gap: 16px;
-  margin-top: 18px;
+  align-items: flex-start;
   justify-content: flex-end;
 }
-.btn-save {
-  background: #1677ff;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 18px;
-  font-size: 15px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.btn-save:hover {
-  background: #0958d9;
-}
-.btn-print {
-  background: #722ed1;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 18px;
-  font-size: 15px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.btn-print:hover {
-  background: #531dab;
-}
-.btn-excel {
-  background: #52c41a;
-  color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 18px;
-  font-size: 15px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.btn-excel:hover {
-  background: #389e0d;
-}
-.export-goods-container {
+.column-settings-modal {
   background: #fff;
-  border-radius: 12px;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.08);
-  padding: 24px;
-  margin: 24px auto;
-  max-width: 98vw;
+  border-radius: 10px;
+  box-shadow: 0 4px 24px #0001;
+  padding: 18px 20px 16px 20px;
+  min-width: 320px;
+  margin: 60px 40px 0 0;
+  position: relative;
+  z-index: 1001;
 }
-
-.export-goods-header {
+.popup-arrow {
+  position: absolute;
+  top: -12px;
+  right: 32px;
+  width: 0; height: 0;
+  border-left: 10px solid transparent;
+  border-right: 10px solid transparent;
+  border-bottom: 12px solid #fff;
+}
+.popup-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: 16px;
+  margin-bottom: 8px;
 }
-
-.export-goods-header h2 {
-  font-size: 20px;
-  font-weight: 600;
-  margin: 0;
-}
-
-.btn-create {
-  background: #1677ff;
-  color: #fff;
+.popup-reset-btn {
+  background: #f0f0f0;
   border: none;
   border-radius: 6px;
-  padding: 8px 18px;
-  font-size: 15px;
-  cursor: pointer;
-  transition: background 0.2s;
-}
-.btn-create:hover {
-  background: #0958d9;
-}
-
-.export-goods-table-wrapper {
-  overflow-x: auto;
-  background: #fafbfc;
-  border-radius: 8px;
-  padding: 12px 0 0 0;
-}
-
-.export-goods-table {
-  width: 100%;
-  border-collapse: separate;
-  border-spacing: 0;
-  min-width: 1200px;
-}
-.export-goods-table th, .export-goods-table td {
-  padding: 8px 10px;
-  text-align: center;
-  border-bottom: 1px solid #f0f0f0;
-}
-.export-goods-table th {
-  background: #f5f7fa;
-  font-weight: 600;
-  font-size: 15px;
-}
-.export-goods-table td input {
-  width: 100%;
-  padding: 5px 8px;
-  border: 1px solid #d9d9d9;
-  border-radius: 4px;
+  padding: 4px 12px;
   font-size: 14px;
-  background: #fff;
-}
-.btn-delete {
-  background: #ff4d4f;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  padding: 4px 8px;
   cursor: pointer;
-  font-size: 16px;
-  transition: background 0.2s;
 }
-.btn-delete:hover {
-  background: #d9363e;
+.popup-group-label {
+  font-size: 13px;
+  color: #888;
+  margin: 8px 0 2px 0;
+}
+.popup-list {
+  margin-bottom: 4px;
+}
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 0;
+  cursor: grab;
+  background: none;
+  border-radius: 4px;
+  transition: background 0.15s;
+}
+.setting-row.dragging {
+  opacity: 0.5;
+}
+.setting-row.dragover {
+  background: #e6f4ff;
+}
+.setting-row.hidden {
+  opacity: 0.5;
+}
+.drag-icon {
+  font-size: 16px;
+  color: #bbb;
+  cursor: grab;
 }
 
-.export-goods-actions {
+/* Table row highlight */
+.ant-table-row.selected {
+  background: #e6f4ff !important;
+}
+
+/* Nút bánh răng cài đặt */
+button[title="Cài đặt cột"] {
+  background: #888;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  width: 28px;
+  height: 28px;
+  font-size: 15px;
+  margin-left: 4px;
+  cursor: pointer;
   display: flex;
-  gap: 16px;
-  margin-top: 18px;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
 }
-.btn-save {
-  background: #1677ff;
-  color: #fff;
+
+/* Icon buttons in items header */
+.items-actions .icon-btn {
   border: none;
-  border-radius: 6px;
-  padding: 8px 18px;
-  font-size: 15px;
+  background: transparent;
   cursor: pointer;
-  transition: background 0.2s;
+  width: 36px;
+  height: 36px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
 }
-.btn-save:hover {
-  background: #0958d9;
-}
-.btn-print {
-  background: #722ed1;
+.items-actions .icon-btn.create-btn {
+  background: #2db7f5;
   color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 18px;
-  font-size: 15px;
-  cursor: pointer;
-  transition: background 0.2s;
+  font-weight: 600;
 }
-.btn-print:hover {
-  background: #531dab;
-}
-.btn-excel {
-  background: #52c41a;
+.items-actions .icon-btn.settings-btn {
+  background: #2f6fd6;
   color: #fff;
-  border: none;
-  border-radius: 6px;
-  padding: 8px 18px;
-  font-size: 15px;
-  cursor: pointer;
-  transition: background 0.2s;
 }
-.btn-excel:hover {
-  background: #389e0d;
+.items-actions .icon-btn:hover { opacity: 0.95; }
+
+/* Các style input, select, button panel trái */
+.search-controls-grid {
+  display: grid;
+  grid-template-columns: 1fr 64px;
+  grid-template-rows: auto auto;
+  gap: 8px;
+  align-items: start;
+}
+.search-left {
+  grid-column: 1 / 2;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.search-panel-button {
+  grid-column: 2 / 3;
+  grid-row: 1 / span 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.search-panel-date-row,
+.search-panel-select-row {
+  display: flex;
+  gap: 8px;
+}
+.search-panel-date-row input[type="date"],
+.search-panel-select-row select {
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+  padding: 8px 12px;
+  font-size: 15px;
+  flex: 1;
+  height: 36px;
+  box-sizing: border-box;
+}
+.search-panel-button .ant-btn {
+  width: 100%;
+  height: 100%;
+  min-height: 72px;
+}
+
+/* fallback: when grid isn't supported, ensure inputs still look okay */
+.search-panel input[type="date"],
+.search-panel select {
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+  padding: 8px 12px;
+  font-size: 15px;
+}
+
+/* Modal tìm kiếm số phiếu */
+.ant-modal .ant-modal-content {
+  border-radius: 10px;
+}
+
+/* Ẩn thanh cuộn ngang khi không cần thiết */
+.table-scroll-x::-webkit-scrollbar {
+  height: 8px;
+}
+.table-scroll-x::-webkit-scrollbar-thumb {
+  background: #e5e7eb;
+  border-radius: 4px;
+}
+
+/* Item modal layout */
+.item-modal-grid { display: flex; flex-direction: column; gap: 12px; }
+.item-modal-grid .form-row { display: flex; gap: 12px; align-items: center; }
+.item-modal-grid .form-row.full { flex-direction: column; align-items: stretch; }
+.item-modal-grid label { min-width: 100px; font-weight: 600; font-size: 13px; }
+.item-modal-grid input, .item-modal-grid select { flex: 1; padding: 8px 10px; border: 1px solid #e5e7eb; border-radius: 6px; }
+.units-section { display: flex; gap: 12px; }
+.unit-col { display:flex; flex-direction:column; gap:6px; background:#fafafa; padding:8px; border-radius:6px; flex:1; }
+.unit-title { font-weight:700; margin-bottom:4px; }
+.unit-col input { padding:6px 8px; }
+
+/* Product modal grid */
+.product-modal .product-grid { display:flex; flex-direction:column; gap:12px; }
+.product-modal .row { display:flex; gap:12px; }
+.product-modal .col-3 { flex: 0 0 25%; }
+.product-modal .col-4 { flex: 0 0 33%; }
+.product-modal .col-5 { flex: 0 0 42%; }
+.product-modal .col-8 { flex: 0 0 66%; }
+.product-modal .col-9 { flex: 0 0 75%; }
+.product-modal .col-2 { flex: 0 0 16%; }
+.product-modal .col-1 { flex: 0 0 8%; }
+.product-modal input, .product-modal select, .product-modal textarea { width:100%; padding:8px; border:1px solid #e5e7eb; border-radius:6px; box-sizing:border-box; }
+.unit-table { border-top:1px solid #f0f0f0; padding-top:8px; display:flex; flex-direction:column; gap:6px; }
+.unit-row { display:grid; grid-template-columns: 1fr 1fr 1fr 1fr 1fr 1fr 1fr; gap:8px; align-items:center; }
+.unit-row.header { font-weight:700; color:#666; }
+.bottom-cols { display:flex; gap:12px; }
+.product-modal .btn { padding:6px 10px; border:none; cursor:pointer; }
+.product-modal .btn-primary { background:#1677ff;color:#fff;border-radius:6px;padding:6px 12px; }
+/* label and required styling to match Products page */
+.product-modal .field-label { display:block; font-weight:700; font-size:13px; margin-bottom:6px; }
+.product-modal .field-label.required::after { content: ' *'; color: #d00; }
+
+/* Temporary import styling */
+.temp-export {
+  background: #e8f4fd !important;
+  border-left: 3px solid #1677ff !important;
+}
+
+/* Fixed pagination controls at right edge */
+.items-table-container {
+  position: relative !important;
+}
+
+.items-table-container > div:first-child {
+  position: sticky !important;
+  top: 0 !important;
+  background: white !important;
+  z-index: 100 !important;
+  padding: 8px 0 !important;
+  border-bottom: 1px solid #e5e7eb !important;
+  margin: 0 !important;
+}
+
+.items-table-container > div:first-child > div:last-child {
+  position: fixed !important;
+  right: 20px !important;
+  top: 320px !important;
+  background: white !important;
+  padding: 8px 16px !important;
+  border: 1px solid #e5e7eb !important;
+  border-radius: 8px !important;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+  z-index: 1000 !important;
+}
+  background-color: #f0f8ff !important;
+}
+
+.temp-export:hover {
+  background-color: #e6f3ff !important;
+}
+
+/* ===== RESPONSIVE DESIGN ===== */
+
+/* Container adjustments */
+.export-goods-page {
+  flex-direction: row;
+  overflow-x: auto;
+}
+
+/* Tablet and below (768px and below) */
+@media (max-width: 768px) {
+  .export-goods-page {
+    flex-direction: column !important;
+    height: auto !important;
+    overflow-x: visible !important;
+  }
+  
+  /* Fix pagination position for mobile */
+  .items-table-container > div:first-child > div:last-child {
+    position: relative !important;
+    right: auto !important;
+    top: auto !important;
+    background: #f5f5f5 !important;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: 6px !important;
+    box-shadow: none !important;
+    z-index: auto !important;
+    padding: 6px 12px !important;
+    margin-left: auto !important;
+  }
+  
+  /* Adjust table container */
+  .items-table-container {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch !important;
+  }
+  
+  /* Make table scrollable */
+  .items-table {
+    min-width: 1000px !important;
+  }
+  
+  /* Smaller controls */
+  .items-table-container > div:first-child > div:last-child button {
+    width: 24px !important;
+    height: 24px !important;
+    font-size: 12px !important;
+  }
+  
+  .items-table-container > div:first-child > div:last-child select {
+    font-size: 12px !important;
+    padding: 2px 6px !important;
+  }
+}
+
+/* Small mobile (480px and below) */
+@media (max-width: 480px) {
+  .export-goods-page {
+    padding: 0 4px !important;
+    font-size: 13px !important;
+  }
+  
+  /* Stack pagination controls vertically on very small screens */
+  .items-table-container > div:first-child {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 8px !important;
+  }
+  
+  .items-table-container > div:first-child > span {
+    text-align: center !important;
+    font-size: 12px !important;
+  }
+  
+  .items-table-container > div:first-child > div:last-child {
+    justify-content: center !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  
+  .items-table-container > div:first-child > div:last-child button {
+    width: 28px !important;
+    height: 28px !important;
+    flex: 0 0 auto !important;
+  }
+  
+  .items-table-container > div:first-child > div:last-child select {
+    flex: 1 1 auto !important;
+    min-width: 120px !important;
+  }
+  
+  /* Keep table scrollable but reduce min-width */
+  .items-table {
+    min-width: 800px !important;
+  }
 }

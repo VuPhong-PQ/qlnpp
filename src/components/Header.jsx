@@ -111,6 +111,7 @@ const Header = () => {
       items: [
         { name: 'Bảng báo giá', path: '/business/quotation-table' },
         { name: 'Nhập hàng', path: '/business/import-goods' },
+        { name: 'Xuất hàng', path: '/business/exports' },
         { name: 'Chuyển kho', path: '/business/warehouse-transfer' },
         { 
           name: 'Bán hàng', 
@@ -125,7 +126,7 @@ const Header = () => {
         { name: 'Phiếu thu', path: '/business/accounting/receipt-voucher' },
         { name: 'Phiếu chi', path: '/business/accounting/expense-voucher' },
         { name: 'Tính giá vốn', path: '/business/cost-calculation' },
-        { name: 'Xuất kho', path: '/business/exports' },
+        
         { name: 'Điều chỉnh kho', path: '/business/adjustments' },
         { name: 'Khách trả hàng', path: '/business/returns' }
       ]

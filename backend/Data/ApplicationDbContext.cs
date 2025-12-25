@@ -30,6 +30,8 @@ namespace QlnppApi.Data
         public DbSet<QuotationItem> QuotationItems { get; set; }
         public DbSet<Import> Imports { get; set; }
         public DbSet<ImportItem> ImportItems { get; set; }
+        public DbSet<Export> Exports { get; set; }
+        public DbSet<ExportItem> ExportItems { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
