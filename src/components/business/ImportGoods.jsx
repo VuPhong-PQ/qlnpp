@@ -1721,6 +1721,119 @@ const ImportGoods = () => {
     }
   };
 
+  // Export Excel template for imports
+  const exportImportTemplate = async () => {
+    try {
+      let url = '/api/Imports/template?format=xlsx';
+      let fileName = 'import_template.xlsx';
+      
+      // Priority 1: If user has selected rows via checkboxes, export those
+      if (selectedRowKeys && selectedRowKeys.length > 0) {
+        const exportSelected = window.confirm('Bạn có muốn xuất phiếu nhập này ra exel?');
+        if (exportSelected) {
+          const ids = selectedRowKeys.join(',');
+          url += `&ids=${ids}`;
+          fileName = `import_selected_${selectedRowKeys.length}.xlsx`;
+        }
+      }
+      // Priority 2: If a single import is selected, offer to export just that import
+      else if (selectedImport && selectedImport.id) {
+        const exportSingleImport = window.confirm('Bạn có muốn xuất phiếu nhập này ra exel?');
+        if (exportSingleImport) {
+          url += `&ids=${selectedImport.id}`;
+          fileName = `import_${selectedImport.importNumber}.xlsx`;
+        } else {
+          return; // User cancelled, exit without further prompts
+        }
+      }
+      // Priority 3: No selection, ask for all
+      else {
+        const exportAll = window.confirm('Bạn có muốn xuất phiếu nhập này ra exel?');
+        if (exportAll) {
+          url += '&exportAll=true';
+          fileName = 'import_all_template.xlsx';
+        } else {
+          return; // User cancelled
+        }
+      }
+      
+      const res = await fetch(url);
+      if (!res.ok) throw new Error('Failed to download template');
+      const blob = await res.blob();
+      const link = document.createElement('a');
+      const objectUrl = window.URL.createObjectURL(blob);
+      link.href = objectUrl;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(objectUrl);
+    } catch (err) {
+      console.error('Export template error', err);
+      alert('Không thể tải mẫu. Vui lòng thử lại.');
+    }
+  };
+
+  // Handle uploaded CSV/Excel template and import
+  const handleTemplateUpload = async (e, forceOverwrite = false) => {
+    const file = e.target.files && e.target.files[0];
+    if (!file) return;
+    
+    try {
+      const fd = new FormData();
+      fd.append('file', file);
+      
+      let url = '/api/Imports/import-template';
+      if (forceOverwrite) {
+        url += '?forceOverwrite=true';
+      }
+      
+      const res = await fetch(url, { method: 'POST', body: fd });
+      if (!res.ok) {
+        const text = await res.text();
+        // Check if it's a duplicate error
+        if (text.includes('Phiếu này đã bị trùng trong hệ thống')) {
+          alert('Phiếu này đã bị trùng trong hệ thống');
+          if (e.target) e.target.value = null;
+          return;
+        }
+        // Check for missing product error returned by backend
+        if (text && text.includes('Sản phẩm có mã hàng')) {
+          alert('Phiếu nhập có sản phẩm chưa có trong hệ thống, vui lòng thêm sản phẩm vào trước');
+          if (e.target) e.target.value = null;
+          return;
+        }
+        throw new Error(text || 'Import failed');
+      }
+      
+      const data = await res.json();
+      
+      // If duplicate detected, notify and stop (no confirm/overwrite)
+      if (data.isDuplicate) {
+        alert('Phiếu nhập này đã có trong hệ thống');
+        if (e.target) e.target.value = null;
+        return;
+      }
+      
+      alert('Import phiếu nhập thành công');
+      await loadImports();
+    } catch (err) {
+      console.error('Import template error', err);
+      // If the thrown error contains server text, show it; otherwise show generic message
+      const msg = (err && err.message) ? err.message : null;
+      if (msg && msg.includes('Sản phẩm có mã hàng')) {
+        alert('Phiếu nhập có sản phẩm chưa có trong hệ thống, vui lòng thêm sản phẩm vào trước');
+      } else if (msg) {
+        alert(msg);
+      } else {
+        alert('Import thất bại');
+      }
+    } finally {
+      // reset input
+      if (e.target && !forceOverwrite) e.target.value = null;
+    }
+  };
+
   const loadImportDetails = async (id) => {
     try {
       // Simple cache buster for fresh data
@@ -2971,6 +3084,17 @@ const ImportGoods = () => {
         <div className="search-panel-total" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span>Tổng {filteredLeft.length} phiếu</span>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <Button onClick={exportImportTemplate} title="Xuất mẫu">Xuất mẫu</Button>
+            <Button onClick={() => document.getElementById('template-file-input').click()} title="Nhập mẫu" style={{marginLeft:4}}>
+              Nhập mẫu
+            </Button>
+            <input 
+              id="template-file-input"
+              type="file" 
+              accept=".csv,.xlsx" 
+              style={{display:'none'}} 
+              onChange={handleTemplateUpload} 
+            />
             <button style={{background:'transparent',border:'none',cursor:'pointer'}} title="Cài đặt bảng" onClick={()=>setShowLeftSettings(true)}>⚙</button>
           </div>
         </div>
