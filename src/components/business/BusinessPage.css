@@ -1834,6 +1834,97 @@
   }
 }
 
+/* Export Goods Page Layout */
+.export-goods-page {
+  display: flex;
+  height: calc(100vh - 80px);
+  gap: 10px;
+  background-color: #f5f5f5;
+  padding: 10px;
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.export-detail-panel {
+  flex: 1;
+  min-width: 0;
+  background: white;
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  display: flex;
+  flex-direction: column;
+}
+
+/* Responsive Design for Export Goods - Mobile First */
+@media (max-width: 768px) {
+  /* Export Goods Mobile Layout */
+  .export-goods-page {
+    flex-direction: column;
+    height: auto;
+    padding: 8px;
+    gap: 8px;
+  }
+  
+  .search-panel {
+    width: 100%;
+    margin-bottom: 10px;
+  }
+  
+  .export-detail-panel {
+    width: 100%;
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+  
+  .header-actions {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .search-content {
+    padding: 15px;
+  }
+}
+
+@media (min-width: 769px) and (max-width: 1024px) {
+  /* Export Goods Tablet Layout */
+  .search-panel {
+    width: 30%;
+  }
+  
+  .export-detail-panel {
+    width: 70%;
+  }
+  
+  .form-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .header-actions {
+    flex-wrap: wrap;
+    gap: 8px;
+  }
+  
+  .search-content {
+    padding: 18px;
+  }
+}
+
+@media (min-width: 1025px) {
+  /* Export Goods Desktop Layout */
+  .form-grid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+  
+  .form-row-full {
+    grid-column: 1 / -1;
+  }
+}
+
 /* Warehouse Transfer Page Layout */
 .transfer-page {
   display: flex;

@@ -282,7 +282,7 @@
   z-index: 9999 !important;
 }
 
-.search-panel {
+.import-goods-page .search-panel {
   flex: 0 0 30%;
   max-width: 30%;
   min-width: 240px;
@@ -296,8 +296,8 @@
   overflow-x: auto;
 }
 
-.import-detail-panel {
-  flex: 1 1 70%;
+.import-goods-page .import-detail-panel {
+  flex: 0 0 70%;
   max-width: 70%;
   min-width: 0;
   background: #fff;
