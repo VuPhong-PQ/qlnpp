@@ -3590,7 +3590,7 @@ const ExportGoods = () => {
                       {/* Additional header input rows inserted under the main header */}
                       {paginatedHeaderRows.map((row, rIdx) => (
                         <tr key={row.id} className="header-input-row" style={row.id === highlightRowId ? { background: '#fff7e6', boxShadow: 'inset 0 0 0 2px #ffd666' } : {}}>
-                          {['barcode','productCode','productName','unit','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'].map(colKey => {
+                          {rightColOrder.map(colKey => {
                             if (colKey === 'actions') {
                               if (!rightVisibleCols.includes('actions')) return null;
                               return (
