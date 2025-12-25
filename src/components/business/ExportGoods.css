@@ -283,9 +283,9 @@
 }
 
 .export-goods-page .search-panel {
-  flex: 0 0 30%;
-  max-width: 30%;
-  min-width: 240px;
+  flex: 0 0 20%;
+  max-width: 20%;
+  min-width: 200px;
   background: #fff;
   border-radius: 8px;
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
@@ -296,8 +296,8 @@
 }
 
 .export-goods-page .export-detail-panel {
-  flex: 0 0 70%;
-  max-width: 70%;
+  flex: 0 0 80%;
+  max-width: 80%;
   min-width: 0;
   background: #fff;
   border-radius: 8px;
@@ -774,7 +774,8 @@ button[title="Cài đặt cột"] {
   width: 28px;
   height: 28px;
   font-size: 15px;
-  margin-left: 4px;
+  margin-left: 0; /* align more closely with inputs */
+  margin-right: 8px;
   cursor: pointer;
   display: flex;
   align-items: center;

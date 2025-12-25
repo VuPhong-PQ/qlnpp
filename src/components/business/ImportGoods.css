@@ -283,9 +283,9 @@
 }
 
 .import-goods-page .search-panel {
-  flex: 0 0 30%;
-  max-width: 30%;
-  min-width: 240px;
+  flex: 0 0 20%;
+  max-width: 20%;
+  min-width: 200px;
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 1px 4px rgba(0,0,0,0.06);
@@ -297,8 +297,8 @@
 }
 
 .import-goods-page .import-detail-panel {
-  flex: 0 0 70%;
-  max-width: 70%;
+  flex: 0 0 80%;
+  max-width: 80%;
   min-width: 0;
   background: #fff;
   border-radius: 12px;

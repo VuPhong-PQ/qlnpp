@@ -503,6 +503,18 @@
   background: transparent;
 }
 
+/* Specific override for ExportGoods detail panel: align buttons to right edge (same as import) */
+.export-detail-panel .detail-actions {
+  justify-content: flex-end;
+  padding-right: 0;
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 20;
+  margin: 0;
+  background: transparent;
+}
+
 .btn {
   padding: 10px 20px;
   border: none;

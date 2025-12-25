@@ -365,7 +365,7 @@ const ImportGoods = () => {
 
     let result = '';
     let scaleIndex = 0;
-    
+
     while (num > 0) {
       const chunk = num % 1000;
       if (chunk !== 0) {
@@ -379,7 +379,7 @@ const ImportGoods = () => {
       num = Math.floor(num / 1000);
       scaleIndex++;
     }
-    
+
     return result + ' đồng';
   };
 
@@ -429,144 +429,6 @@ const ImportGoods = () => {
       return product.name || '';
     }
     return getProductOptionLabel(product);
-  };
-
-  // Right-side columns & filters (for items table header filters)
-  const RIGHT_COLS_KEY = 'import_goods_right_cols_v1';
-  const defaultRightCols = ['barcode','productCode','productName','unit','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'];
-  const [rightVisibleCols, setRightVisibleCols] = useState(() => {
-    try {
-      const v = JSON.parse(localStorage.getItem(RIGHT_COLS_KEY));
-      if (Array.isArray(v)) {
-        // Merge stored cols with defaults to ensure new columns (like 'unit') appear in default order
-        const stored = v;
-        const merged = [];
-        defaultRightCols.forEach(dc => {
-          if (stored.includes(dc)) merged.push(dc);
-          else merged.push(dc);
-        });
-        // Append any stored-only columns (custom) after defaults
-        stored.forEach(s => { if (!merged.includes(s)) merged.push(s); });
-        return merged;
-      }
-    } catch {}
-    return defaultRightCols;
-  });
-
-  const [rightFilters, setRightFilters] = useState({});
-  const [rightFilterPopup, setRightFilterPopup] = useState({ column: null, term: '' });
-  const [rightCurrentPage, setRightCurrentPage] = useState(1);
-  const [rightItemsPerPage, setRightItemsPerPage] = useState(10);
-
-  // Product selection modal state
-  const [showProductModal, setShowProductModal] = useState(false);
-  const [productModalSearch, setProductModalSearch] = useState('');
-  const [selectedModalProducts, setSelectedModalProducts] = useState([]);
-  const [productModalColumn, setProductModalColumn] = useState(null);
-  const [productModalRowIndex, setProductModalRowIndex] = useState(null);
-  const [productModalScope, setProductModalScope] = useState('all'); // 'all' or 'currentImport'
-  const [highlightRowId, setHighlightRowId] = useState(null);
-  
-  // Pagination state for product modal
-  const [modalCurrentPage, setModalCurrentPage] = useState(1);
-  const [modalPageSize, setModalPageSize] = useState(10);
-
-  // Memoized product filtering for product modal to avoid repeated expensive filters
-  const memoizedFilteredProducts = React.useMemo(() => {
-    if (!products || products.length === 0) return [];
-    if (!productModalSearch) return products;
-    const terms = removeVietnameseTones(productModalSearch.toLowerCase()).split(/\s+/).filter(t => t);
-    return products.filter(p => {
-      const searchableText = [
-        removeVietnameseTones((p.name || '').toLowerCase()),
-        removeVietnameseTones((p.code || '').toLowerCase()),
-        removeVietnameseTones((p.barcode || '').toLowerCase()),
-        (p.importPrice || p.price || p.priceRetail || 0).toString(),
-        (p.defaultUnit || p.DefaultUnit || p.unit || p.baseUnit || '').toLowerCase()
-      ].join(' ');
-      return terms.every(term => searchableText.includes(term));
-    });
-  }, [products, productModalSearch]);
-
-  // Memoized header calculations to avoid repeated expensive filtering during renders
-  const memoizedHeaderTotals = React.useMemo(() => {
-    const validRows = headerRows.filter(row => row && row.values && (row.values.productName || row.values.productCode || row.values.barcode));
-    const totalAmount = validRows.reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
-    const totalWeight = validRows.reduce((sum, row) => sum + (parseFloat(row.values.weight) || 0), 0);
-    const totalVolume = validRows.reduce((sum, row) => sum + (parseFloat(row.values.volume) || 0), 0);
-    
-    return { 
-      validRows, 
-      totalAmount, 
-      totalWeight: totalWeight, 
-      totalVolume: totalVolume
-    };
-  }, [headerRows]);
-
-  const renderHeaderFilterTH = (colKey, label, placeholder) => {
-    // Check if this column should have product dropdown
-    const productColumns = ['productCode', 'productName', 'barcode'];
-    const warehouseColumns = ['warehouse'];
-    const numericColumns = ['quantity', 'unitPrice', 'transportCost', 'total', 'totalTransport', 'weight', 'volume', 'conversion'];
-    const textColumns = ['description'];
-    const dateColumns = ['noteDate'];
-    
-    if (productColumns.includes(colKey)) {
-      return renderProductDropdownTH(colKey, label);
-    }
-    
-    if (warehouseColumns.includes(colKey)) {
-      return renderWarehouseDropdownTH(colKey, label);
-    }
-    
-    if (dateColumns.includes(colKey)) {
-      return renderDatePickerTH(colKey, label);
-    }
-    
-    if (numericColumns.includes(colKey)) {
-      return renderNumericInputTH(colKey, label, placeholder);
-    }
-    
-    if (textColumns.includes(colKey)) {
-      return renderTextInputTH(colKey, label, placeholder);
-    }
-    
-    return (
-      <th key={colKey}>
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span>{label}</span>
-          <Popover
-            content={(
-              <div style={{minWidth:240}}>
-                <Input
-                  placeholder={placeholder}
-                  value={rightFilterPopup.column === colKey ? rightFilterPopup.term : (rightFilters[colKey] || '')}
-                  onChange={e => setRightFilterPopup(p => ({ ...p, term: e.target.value }))}
-                  onPressEnter={() => {
-                    setRightFilters(prev => ({ ...prev, [colKey]: rightFilterPopup.term }));
-                    setRightFilterPopup({ column: null, term: '' });
-                  }}
-                />
-                <div style={{display:'flex',justifyContent:'space-between',marginTop:8}}>
-                  <button className="btn btn-link" onClick={() => { setRightFilterPopup({ column: colKey, term: '' }); setRightFilters(prev => ({ ...prev, [colKey]: '' })); }}>Xem tất cả</button>
-                  <div>
-                    <button className="btn btn-secondary" onClick={() => { setRightFilterPopup({ column: null, term: '' }); }}>Đóng</button>
-                    <button className="btn btn-primary" onClick={() => { setRightFilters(prev => ({ ...prev, [colKey]: rightFilterPopup.term })); setRightFilterPopup({ column: null, term: '' }); }} style={{marginLeft:8}}>Tìm</button>
-                  </div>
-                </div>
-              </div>
-            )}
-            title={null}
-            trigger="click"
-            visible={rightFilterPopup.column===colKey}
-            onVisibleChange={vis => { if (!vis) setRightFilterPopup({column:null, term:''}); }}
-            placement="bottomRight"
-          >
-            <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={(e)=>{ e.stopPropagation(); setRightFilterPopup({column:colKey, term: rightFilters[colKey]||''}); }} />
-          </Popover>
-        </div>
-      </th>
-    );
   };
 
   // Render header with product dropdown
@@ -1375,9 +1237,94 @@ const ImportGoods = () => {
     setRightCurrentPage(1);
   }, [selectedImport]);
 
+  // Right-side columns & filters (for items table header filters)
+  const RIGHT_COLS_KEY = 'import_goods_right_cols_v1';
+  const defaultRightCols = ['barcode','productCode','productName','unit','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'];
+  const [rightVisibleCols, setRightVisibleCols] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(RIGHT_COLS_KEY));
+      const storedVisible = Array.isArray(saved) ? saved : (saved && Array.isArray(saved.visibleCols) ? saved.visibleCols : null);
+      if (storedVisible) {
+        const merged = [];
+        defaultRightCols.forEach(dc => { if (storedVisible.includes(dc)) merged.push(dc); else merged.push(dc); });
+        storedVisible.forEach(s => { if (!merged.includes(s)) merged.push(s); });
+        return merged;
+      }
+    } catch {}
+    return defaultRightCols;
+  });
+  const [rightColOrder, setRightColOrder] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(RIGHT_COLS_KEY));
+      if (saved && Array.isArray(saved.order)) {
+        const order = [...saved.order];
+        defaultRightCols.forEach(dc => { if (!order.includes(dc)) order.push(dc); });
+        return order;
+      }
+      if (Array.isArray(saved)) {
+        const order = [...saved];
+        defaultRightCols.forEach(dc => { if (!order.includes(dc)) order.push(dc); });
+        return order;
+      }
+    } catch {}
+    return defaultRightCols;
+  });
+
+  const [rightFilters, setRightFilters] = useState({});
+  const [rightFilterPopup, setRightFilterPopup] = useState({ column: null, term: '' });
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
+  const [rightCurrentPage, setRightCurrentPage] = useState(1);
+  const [rightItemsPerPage, setRightItemsPerPage] = useState(10);
+
+  // Product selection modal state
+  const [showProductModal, setShowProductModal] = useState(false);
+  const [productModalSearch, setProductModalSearch] = useState('');
+  const [selectedModalProducts, setSelectedModalProducts] = useState([]);
+  const [productModalColumn, setProductModalColumn] = useState(null);
+  const [productModalRowIndex, setProductModalRowIndex] = useState(null);
+  const [productModalScope, setProductModalScope] = useState('all'); // 'all' or 'currentImport'
+  const [highlightRowId, setHighlightRowId] = useState(null);
+
+  // Pagination state for product modal
+  const [modalCurrentPage, setModalCurrentPage] = useState(1);
+  const [modalPageSize, setModalPageSize] = useState(10);
+
+  // Memoized product filtering for product modal to avoid repeated expensive filters
+  const memoizedFilteredProducts = React.useMemo(() => {
+    if (!products || products.length === 0) return [];
+    if (!productModalSearch) return products;
+    const terms = removeVietnameseTones(productModalSearch.toLowerCase()).split(/\s+/).filter(t => t);
+    return products.filter(p => {
+      const searchableText = [
+        removeVietnameseTones((p.name || '').toLowerCase()),
+        removeVietnameseTones((p.code || '').toLowerCase()),
+        removeVietnameseTones((p.barcode || '').toLowerCase()),
+        (p.importPrice || p.price || p.priceRetail || 0).toString(),
+        (p.defaultUnit || p.DefaultUnit || p.unit || p.baseUnit || '').toLowerCase()
+      ].join(' ');
+      return terms.every(term => searchableText.includes(term));
+    });
+  }, [products, productModalSearch]);
+
+  // Memoized header calculations to avoid repeated expensive filtering during renders
+  const memoizedHeaderTotals = React.useMemo(() => {
+    const validRows = headerRows.filter(row => row && row.values && (row.values.productName || row.values.productCode || row.values.barcode));
+    const totalAmount = validRows.reduce((sum, row) => sum + (parseFloat(row.values.total) || 0), 0);
+    const totalWeight = validRows.reduce((sum, row) => sum + (parseFloat(row.values.weight) || 0), 0);
+    const totalVolume = validRows.reduce((sum, row) => sum + (parseFloat(row.values.volume) || 0), 0);
+    
+    return { 
+      validRows, 
+      totalAmount, 
+      totalWeight: totalWeight, 
+      totalVolume: totalVolume
+    };
+  }, [headerRows]);
+
   React.useEffect(() => {
-    try { localStorage.setItem(RIGHT_COLS_KEY, JSON.stringify(rightVisibleCols)); } catch {}
-  }, [rightVisibleCols]);
+    try { localStorage.setItem(RIGHT_COLS_KEY, JSON.stringify({ visibleCols: rightVisibleCols, order: rightColOrder })); } catch {}
+  }, [rightVisibleCols, rightColOrder]);
 
   // Optimized debounced sync: update totals with minimal re-renders
   React.useEffect(() => {
@@ -3076,9 +3023,7 @@ const ImportGoods = () => {
               </div>
               {/* removed manual Total / Note filters - not required */}
             </div>
-            <div className="search-panel-button">
-              <Button type="primary" style={{height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>Tìm kiếm</Button>
-            </div>
+            {/* search button removed (redundant) */}
           </div>
         </div>
         <div className="search-panel-total" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
@@ -3453,7 +3398,7 @@ const ImportGoods = () => {
 
                 {/* Second row: Số phiếu (30%) and Ghi chú (70%) */}
                 <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
-                  <div style={{flex:'0 0 30%'}}>
+                  <div style={{flex:'0 0 20%'}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Số phiếu</label>
                     <div className="input-with-status">
                       <input
@@ -3470,7 +3415,7 @@ const ImportGoods = () => {
                       <span className="status-icon">✓</span>
                     </div>
                   </div>
-                  <div style={{flex:'1 1 70%'}}>
+                  <div style={{flex:'1 1 80%'}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú PN</label>
                     <input
                       type="text"
@@ -3518,74 +3463,60 @@ const ImportGoods = () => {
                   <table className="items-table" style={{minWidth:1300}}>
                     <thead>
                       <tr>
-                        {rightVisibleCols.includes('barcode') && (
-                          <th key="barcode" style={{textAlign: 'center'}}>
-                            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-                              <span>Mã vạch</span>
-                              <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
-                                if (!ensureImportTypeSelected()) return;
-                                setProductModalColumn('barcode');
-                                setProductModalRowIndex(null);
-                                setProductModalSearch('');
-                                setModalCurrentPage(1);
-                                setSelectedModalProducts([]);
-                                setProductModalScope('currentImport');
-                                setShowProductModal(true);
-                              }} />
-                            </div>
-                          </th>
-                        )}
-                        {rightVisibleCols.includes('productCode') && (
-                          <th key="productCode" style={{textAlign: 'center'}}>
-                            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-                              <span>Mã hàng</span>
-                              <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
-                                if (!ensureImportTypeSelected()) return;
-                                setProductModalColumn('productCode');
-                                setProductModalRowIndex(null);
-                                setProductModalSearch('');
-                                setModalCurrentPage(1);
-                                setSelectedModalProducts([]);
-                                setProductModalScope('currentImport');
-                                setShowProductModal(true);
-                              }} />
-                            </div>
-                          </th>
-                        )}
-                        {rightVisibleCols.includes('productName') && (
-                          <th key="productName" style={{textAlign: 'center'}}>
-                            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-                              <span>Hàng hóa</span>
-                              <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
-                                if (!ensureImportTypeSelected()) return;
-                                setProductModalColumn('productName');
-                                setProductModalRowIndex(null);
-                                setProductModalSearch('');
-                                setModalCurrentPage(1);
-                                setSelectedModalProducts([]);
-                                setProductModalScope('currentImport');
-                                setShowProductModal(true);
-                              }} />
-                            </div>
-                          </th>
-                        )}
-                        {rightVisibleCols.includes('unit') && <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>}
-                        {rightVisibleCols.includes('quantity') && <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>}
-                        {rightVisibleCols.includes('unitPrice') && <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>}
-                        {rightVisibleCols.includes('transportCost') && <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>}
-                        {rightVisibleCols.includes('noteDate') && <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú date PN</span></th>}
-                        {rightVisibleCols.includes('total') && <th key="total" style={{textAlign: 'center'}}><span>Thành tiền</span></th>}
-                        {rightVisibleCols.includes('totalTransport') && <th key="totalTransport" style={{textAlign: 'center'}}><span>TT vận chuyển</span></th>}
-                        {rightVisibleCols.includes('weight') && <th key="weight" style={{textAlign: 'center'}}><span>Số kg</span></th>}
-                        {rightVisibleCols.includes('volume') && <th key="volume" style={{textAlign: 'center'}}><span>Số khối</span></th>}
-                        {rightVisibleCols.includes('warehouse') && <th key="warehouse" style={{textAlign: 'center'}}><span>Kho hàng</span></th>}
-                        {rightVisibleCols.includes('description') && <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>}
-                        {rightVisibleCols.includes('conversion') && <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>}
-                        {rightVisibleCols.includes('actions') && (
-                          <th key="actions" style={{textAlign: 'center', verticalAlign: 'middle'}}>
-                            <span>Thao tác</span>
-                          </th>
-                        )}
+                        {rightColOrder.map(key => {
+                          if (!rightVisibleCols.includes(key)) return null;
+                          if (key === 'barcode') return (
+                            <th key="barcode" style={{textAlign: 'center'}}>
+                              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                                <span>Mã vạch</span>
+                                <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
+                                  if (!ensureImportTypeSelected()) return;
+                                  setProductModalColumn('barcode'); setProductModalRowIndex(null); setProductModalSearch(''); setModalCurrentPage(1); setSelectedModalProducts([]); setProductModalScope('currentImport'); setShowProductModal(true);
+                                }} />
+                              </div>
+                            </th>
+                          );
+                          if (key === 'productCode') return (
+                            <th key="productCode" style={{textAlign: 'center'}}>
+                              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                                <span>Mã hàng</span>
+                                <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
+                                  if (!ensureImportTypeSelected()) return;
+                                  setProductModalColumn('productCode'); setProductModalRowIndex(null); setProductModalSearch(''); setModalCurrentPage(1); setSelectedModalProducts([]); setProductModalScope('currentImport'); setShowProductModal(true);
+                                }} />
+                              </div>
+                            </th>
+                          );
+                          if (key === 'productName') return (
+                            <th key="productName" style={{textAlign: 'center'}}>
+                              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                                <span>Hàng hóa</span>
+                                <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
+                                  if (!ensureImportTypeSelected()) return;
+                                  setProductModalColumn('productName'); setProductModalRowIndex(null); setProductModalSearch(''); setModalCurrentPage(1); setSelectedModalProducts([]); setProductModalScope('currentImport'); setShowProductModal(true);
+                                }} />
+                              </div>
+                            </th>
+                          );
+                          if (key === 'unit') return <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>;
+                          if (key === 'quantity') return <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>;
+                          if (key === 'unitPrice') return <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>;
+                          if (key === 'transportCost') return <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>;
+                          if (key === 'noteDate') return <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú date PN</span></th>;
+                          if (key === 'total') return <th key="total" style={{textAlign: 'center'}}><span>Thành tiền</span></th>;
+                          if (key === 'totalTransport') return <th key="totalTransport" style={{textAlign: 'center'}}><span>TT vận chuyển</span></th>;
+                          if (key === 'weight') return <th key="weight" style={{textAlign: 'center'}}><span>Số kg</span></th>;
+                          if (key === 'volume') return <th key="volume" style={{textAlign: 'center'}}><span>Số khối</span></th>;
+                          if (key === 'warehouse') return <th key="warehouse" style={{textAlign: 'center'}}><span>Kho hàng</span></th>;
+                          if (key === 'description') return <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>;
+                          if (key === 'conversion') return <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>;
+                          if (key === 'actions') return (
+                            <th key="actions" style={{textAlign: 'center', verticalAlign: 'middle'}}>
+                              <span>Thao tác</span>
+                            </th>
+                          );
+                          return null;
+                        })}
                       </tr>
                       {/* Additional header input rows inserted under the main header */}
                       {paginatedHeaderRows.map((row, rIdx) => (
@@ -3897,19 +3828,74 @@ const ImportGoods = () => {
                 footer={null}
               >
                 <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                  {defaultRightCols.map(colKey=>{
-                    const label = colKey==='barcode'?'Mã vạch':colKey==='productCode'?'Mã hàng':colKey==='productName'?'Hàng hóa':colKey==='description'?'Mô tả':colKey==='conversion'?'Quy đổi':colKey==='quantity'?'Số lượng':colKey==='unitPrice'?'Đơn giá':colKey==='transportCost'?'Tiền vận chuyển':colKey==='noteDate'?'Ghi chú date PN':colKey==='total'?'Thành tiền':colKey==='totalTransport'?'Thành tiền vận chuyển':colKey==='weight'?'Số kg':colKey==='volume'?'Số khối':colKey==='warehouse'?'Kho hàng':colKey==='actions'?'Thao tác':colKey;
+                  {(() => {
+                    const fixedRight = defaultRightCols.filter(c => c === 'actions');
+                    const normalCols = defaultRightCols.filter(c => c !== 'actions');
                     return (
-                      <label key={colKey} style={{display:'flex',alignItems:'center',gap:8}}>
-                        <input type="checkbox" checked={rightVisibleCols.includes(colKey)} onChange={()=>{
-                          setRightVisibleCols(prev=> prev.includes(colKey)? prev.filter(k=>k!==colKey) : [...prev, colKey]);
-                        }} />
-                        <span>{label}</span>
-                      </label>
+                      <>
+                        <div style={{fontSize:13,color:'#888',marginBottom:6}}>Chưa cố định</div>
+                        <div>
+                          {rightColOrder.filter(key => !fixedRight.includes(key)).map((key, idx) => {
+                            const label = key==='barcode'?'Mã vạch':key==='productCode'?'Mã hàng':key==='productName'?'Hàng hóa':key==='description'?'Mô tả':key==='conversion'?'Quy đổi':key==='quantity'?'Số lượng':key==='unitPrice'?'Đơn giá':key==='transportCost'?'Tiền vận chuyển':key==='noteDate'?'Ghi chú date PN':key==='total'?'Thành tiền':key==='totalTransport'?'Thành tiền vận chuyển':key==='weight'?'Số kg':key==='volume'?'Số khối':key==='warehouse'?'Kho hàng':key;
+                            const draggableEnabled = rightColOrder.filter(k => !fixedRight.includes(k)).length > 1;
+                            return (
+                              <div
+                                key={key}
+                                className={`setting-row${rightVisibleCols.includes(key) ? '' : ' hidden'}${draggedIndex === idx ? ' dragging' : ''}${dragOverIndex === idx ? ' dragover' : ''}`}
+                                draggable={draggableEnabled}
+                                onDragStart={() => setDraggedIndex(idx)}
+                                onDragOver={e => { e.preventDefault(); if (draggedIndex !== null && idx !== draggedIndex) setDragOverIndex(idx); }}
+                                onDrop={() => {
+                                  if (draggedIndex === null || dragOverIndex === null || draggedIndex === dragOverIndex) { setDraggedIndex(null); setDragOverIndex(null); return; }
+                                  const nonFixedKeys = normalCols;
+                                  const currentOrder = rightColOrder.filter(k => nonFixedKeys.includes(k));
+                                  const newOrder = [...currentOrder];
+                                  const [removed] = newOrder.splice(draggedIndex, 1);
+                                  newOrder.splice(dragOverIndex, 0, removed);
+                                  const newColOrder = [...newOrder, ...rightColOrder.filter(k => !nonFixedKeys.includes(k))];
+                                  setRightColOrder(newColOrder);
+                                  setDraggedIndex(null); setDragOverIndex(null);
+                                }}
+                                style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',cursor: draggableEnabled ? 'grab' : 'default'}}
+                              >
+                                <span className="drag-icon">⋮⋮</span>
+                                <input
+                                  type="checkbox"
+                                  checked={rightVisibleCols.includes(key)}
+                                  onChange={() => {
+                                    setRightVisibleCols(
+                                      rightVisibleCols.includes(key) ? rightVisibleCols.filter(k => k !== key) : [...rightVisibleCols, key]
+                                    );
+                                  }}
+                                />
+                                <span>{label}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div style={{fontSize:13,color:'#888',margin:'8px 0 2px 0'}}>Cố định phải</div>
+                        <div>
+                          {defaultRightCols.filter(c => c === 'actions').map(col => (
+                            <div key={col} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0'}}>
+                              <span className="drag-icon" style={{color:'#eee'}}>⋮⋮</span>
+                              <input
+                                type="checkbox"
+                                checked={rightVisibleCols.includes(col)}
+                                onChange={() => {
+                                  setRightVisibleCols(
+                                    rightVisibleCols.includes(col) ? rightVisibleCols.filter(k => k !== col) : [...rightVisibleCols, col]
+                                  );
+                                }}
+                              />
+                              <span>{col === 'actions' ? 'Thao tác' : col}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
                     );
-                  })}
+                  })()}
                   <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:12}}>
-                    <button className="btn btn-secondary" onClick={()=>setRightVisibleCols(defaultRightCols)}>Làm lại</button>
+                    <button className="btn btn-secondary" onClick={()=>{ setRightVisibleCols(defaultRightCols); setRightColOrder(defaultRightCols); }}>Làm lại</button>
                     <button className="btn btn-primary" onClick={()=>setShowRightSettings(false)}>Đóng</button>
                   </div>
                 </div>
@@ -4026,9 +4012,9 @@ const ImportGoods = () => {
                 </div>
               </div>
 
-              {/* Second row: Số phiếu (30%) and Ghi chú (70%) */}
+              {/* Second row: Số phiếu (20%) and Ghi chú (80%) */}
               <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
-                <div style={{flex:'0 0 30%'}}>
+                <div style={{flex:'0 0 20%'}}>
                   <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Số phiếu</label>
                   <div className="input-with-status">
                     <input
@@ -4041,7 +4027,7 @@ const ImportGoods = () => {
                     <span className="status-icon">✓</span>
                   </div>
                 </div>
-                <div style={{flex:'1 1 70%'}}>
+                <div style={{flex:'1 1 80%'}}>
                   <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú PN</label>
                   <input
                     type="text"
@@ -4085,26 +4071,30 @@ const ImportGoods = () => {
                 <table className="items-table" style={{minWidth:1300}}>
                   <thead>
                     <tr>
-                      {rightVisibleCols.includes('barcode') && <th key="barcode" style={{textAlign: 'center'}}><span>Mã vạch</span></th>}
-                      {rightVisibleCols.includes('productCode') && <th key="productCode" style={{textAlign: 'center'}}><span>Mã hàng</span></th>}
-                      {rightVisibleCols.includes('productName') && <th key="productName" style={{textAlign: 'center'}}><span>Hàng hóa</span></th>}
-                      {rightVisibleCols.includes('unit') && <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>}
-                      {rightVisibleCols.includes('quantity') && <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>}
-                      {rightVisibleCols.includes('unitPrice') && <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>}
-                      {rightVisibleCols.includes('transportCost') && <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>}
-                      {rightVisibleCols.includes('noteDate') && <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú date PN</span></th>}
-                      {rightVisibleCols.includes('total') && <th key="total" style={{textAlign: 'center'}}><span>Thành tiền</span></th>}
-                      {rightVisibleCols.includes('totalTransport') && <th key="totalTransport" style={{textAlign: 'center'}}><span>TT vận chuyển</span></th>}
-                      {rightVisibleCols.includes('weight') && <th key="weight" style={{textAlign: 'center'}}><span>Số kg</span></th>}
-                      {rightVisibleCols.includes('volume') && <th key="volume" style={{textAlign: 'center'}}><span>Số khối</span></th>}
-                      {rightVisibleCols.includes('warehouse') && <th key="warehouse" style={{textAlign: 'center'}}><span>Kho hàng</span></th>}
-                      {rightVisibleCols.includes('description') && <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>}
-                      {rightVisibleCols.includes('conversion') && <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>}
-                      {rightVisibleCols.includes('actions') && (
-                        <th key="actions" style={{textAlign: 'center', verticalAlign: 'middle'}}>
-                          <span>Thao tác</span>
-                        </th>
-                      )}
+                      {rightColOrder.map(key => {
+                        if (!rightVisibleCols.includes(key)) return null;
+                        if (key === 'barcode') return <th key="barcode" style={{textAlign: 'center'}}><span>Mã vạch</span></th>;
+                        if (key === 'productCode') return <th key="productCode" style={{textAlign: 'center'}}><span>Mã hàng</span></th>;
+                        if (key === 'productName') return <th key="productName" style={{textAlign: 'center'}}><span>Hàng hóa</span></th>;
+                        if (key === 'unit') return <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>;
+                        if (key === 'quantity') return <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>;
+                        if (key === 'unitPrice') return <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>;
+                        if (key === 'transportCost') return <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>;
+                        if (key === 'noteDate') return <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú date PN</span></th>;
+                        if (key === 'total') return <th key="total" style={{textAlign: 'center'}}><span>Thành tiền</span></th>;
+                        if (key === 'totalTransport') return <th key="totalTransport" style={{textAlign: 'center'}}><span>TT vận chuyển</span></th>;
+                        if (key === 'weight') return <th key="weight" style={{textAlign: 'center'}}><span>Số kg</span></th>;
+                        if (key === 'volume') return <th key="volume" style={{textAlign: 'center'}}><span>Số khối</span></th>;
+                        if (key === 'warehouse') return <th key="warehouse" style={{textAlign: 'center'}}><span>Kho hàng</span></th>;
+                        if (key === 'description') return <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>;
+                        if (key === 'conversion') return <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>;
+                        if (key === 'actions') return (
+                          <th key="actions" style={{textAlign: 'center', verticalAlign: 'middle'}}>
+                            <span>Thao tác</span>
+                          </th>
+                        );
+                        return null;
+                      })}
                     </tr>
                     {/* Header input rows for new entries */}
                     {paginatedHeaderRows.map((row, rIdx) => (

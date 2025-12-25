@@ -436,18 +436,32 @@ const ExportGoods = () => {
   const defaultRightCols = ['barcode','productCode','productName','unit','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'];
   const [rightVisibleCols, setRightVisibleCols] = useState(() => {
     try {
-      const v = JSON.parse(localStorage.getItem(RIGHT_COLS_KEY));
-      if (Array.isArray(v)) {
-        // Merge stored cols with defaults to ensure new columns (like 'unit') appear in default order
-        const stored = v;
+      const saved = JSON.parse(localStorage.getItem(RIGHT_COLS_KEY));
+      // Support both legacy array format and new object format { visibleCols, order }
+      const storedVisible = Array.isArray(saved) ? saved : (saved && Array.isArray(saved.visibleCols) ? saved.visibleCols : null);
+      if (storedVisible) {
+        // Merge stored cols with defaults to ensure defaults order stays intact
         const merged = [];
-        defaultRightCols.forEach(dc => {
-          if (stored.includes(dc)) merged.push(dc);
-          else merged.push(dc);
-        });
-        // Append any stored-only columns (custom) after defaults
-        stored.forEach(s => { if (!merged.includes(s)) merged.push(s); });
+        defaultRightCols.forEach(dc => { if (storedVisible.includes(dc)) merged.push(dc); else merged.push(dc); });
+        storedVisible.forEach(s => { if (!merged.includes(s)) merged.push(s); });
         return merged;
+      }
+    } catch {}
+    return defaultRightCols;
+  });
+  const [rightColOrder, setRightColOrder] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(RIGHT_COLS_KEY));
+      if (saved && Array.isArray(saved.order)) {
+        // Ensure new defaults appear in order if missing
+        const order = [...saved.order];
+        defaultRightCols.forEach(dc => { if (!order.includes(dc)) order.push(dc); });
+        return order;
+      }
+      if (Array.isArray(saved)) {
+        const order = [...saved];
+        defaultRightCols.forEach(dc => { if (!order.includes(dc)) order.push(dc); });
+        return order;
       }
     } catch {}
     return defaultRightCols;
@@ -455,6 +469,8 @@ const ExportGoods = () => {
 
   const [rightFilters, setRightFilters] = useState({});
   const [rightFilterPopup, setRightFilterPopup] = useState({ column: null, term: '' });
+  const [draggedIndex, setDraggedIndex] = useState(null);
+  const [dragOverIndex, setDragOverIndex] = useState(null);
   const [rightCurrentPage, setRightCurrentPage] = useState(1);
   const [rightItemsPerPage, setRightItemsPerPage] = useState(10);
 
@@ -1376,8 +1392,8 @@ const ExportGoods = () => {
   }, [selectedExport]);
 
   React.useEffect(() => {
-    try { localStorage.setItem(RIGHT_COLS_KEY, JSON.stringify(rightVisibleCols)); } catch {}
-  }, [rightVisibleCols]);
+    try { localStorage.setItem(RIGHT_COLS_KEY, JSON.stringify({ visibleCols: rightVisibleCols, order: rightColOrder })); } catch {}
+  }, [rightVisibleCols, rightColOrder]);
 
   // Optimized debounced sync: update totals with minimal re-renders
   React.useEffect(() => {
@@ -3076,9 +3092,7 @@ const ExportGoods = () => {
               </div>
               {/* removed manual Total / Note filters - not required */}
             </div>
-            <div className="search-panel-button">
-              <Button type="primary" style={{height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center'}}>Tìm kiếm</Button>
-            </div>
+            {/* search button removed (redundant) */}
           </div>
         </div>
         <div className="search-panel-total" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
@@ -3453,7 +3467,7 @@ const ExportGoods = () => {
 
                 {/* Second row: Số phiếu (30%) and Ghi chú (70%) */}
                 <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
-                  <div style={{flex:'0 0 30%'}}>
+                  <div style={{flex:'0 0 20%'}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Số phiếu</label>
                     <div className="input-with-status">
                       <input
@@ -3470,7 +3484,7 @@ const ExportGoods = () => {
                       <span className="status-icon">✓</span>
                     </div>
                   </div>
-                  <div style={{flex:'1 1 70%'}}>
+                  <div style={{flex:'1 1 80%'}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú PX</label>
                     <input
                       type="text"
@@ -3518,74 +3532,60 @@ const ExportGoods = () => {
                   <table className="items-table" style={{minWidth:1300}}>
                     <thead>
                       <tr>
-                        {rightVisibleCols.includes('barcode') && (
-                          <th key="barcode" style={{textAlign: 'center'}}>
-                            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-                              <span>Mã vạch</span>
-                              <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
-                                if (!ensureExportTypeSelected()) return;
-                                setProductModalColumn('barcode');
-                                setProductModalRowIndex(null);
-                                setProductModalSearch('');
-                                setModalCurrentPage(1);
-                                setSelectedModalProducts([]);
-                                setProductModalScope('currentExport');
-                                setShowProductModal(true);
-                              }} />
-                            </div>
-                          </th>
-                        )}
-                        {rightVisibleCols.includes('productCode') && (
-                          <th key="productCode" style={{textAlign: 'center'}}>
-                            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-                              <span>Mã hàng</span>
-                              <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
-                                if (!ensureExportTypeSelected()) return;
-                                setProductModalColumn('productCode');
-                                setProductModalRowIndex(null);
-                                setProductModalSearch('');
-                                setModalCurrentPage(1);
-                                setSelectedModalProducts([]);
-                                setProductModalScope('currentExport');
-                                setShowProductModal(true);
-                              }} />
-                            </div>
-                          </th>
-                        )}
-                        {rightVisibleCols.includes('productName') && (
-                          <th key="productName" style={{textAlign: 'center'}}>
-                            <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-                              <span>Hàng hóa</span>
-                              <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
-                                if (!ensureExportTypeSelected()) return;
-                                setProductModalColumn('productName');
-                                setProductModalRowIndex(null);
-                                setProductModalSearch('');
-                                setModalCurrentPage(1);
-                                setSelectedModalProducts([]);
-                                setProductModalScope('currentExport');
-                                setShowProductModal(true);
-                              }} />
-                            </div>
-                          </th>
-                        )}
-                        {rightVisibleCols.includes('unit') && <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>}
-                        {rightVisibleCols.includes('quantity') && <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>}
-                        {rightVisibleCols.includes('unitPrice') && <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>}
-                        {rightVisibleCols.includes('transportCost') && <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>}
-                        {rightVisibleCols.includes('noteDate') && <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú date PN</span></th>}
-                        {rightVisibleCols.includes('total') && <th key="total" style={{textAlign: 'center'}}><span>Thành tiền</span></th>}
-                        {rightVisibleCols.includes('totalTransport') && <th key="totalTransport" style={{textAlign: 'center'}}><span>TT vận chuyển</span></th>}
-                        {rightVisibleCols.includes('weight') && <th key="weight" style={{textAlign: 'center'}}><span>Số kg</span></th>}
-                        {rightVisibleCols.includes('volume') && <th key="volume" style={{textAlign: 'center'}}><span>Số khối</span></th>}
-                        {rightVisibleCols.includes('warehouse') && <th key="warehouse" style={{textAlign: 'center'}}><span>Kho hàng</span></th>}
-                        {rightVisibleCols.includes('description') && <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>}
-                        {rightVisibleCols.includes('conversion') && <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>}
-                        {rightVisibleCols.includes('actions') && (
-                          <th key="actions" style={{textAlign: 'center', verticalAlign: 'middle'}}>
-                            <span>Thao tác</span>
-                          </th>
-                        )}
+                        {rightColOrder.map(key => {
+                          if (!rightVisibleCols.includes(key)) return null;
+                          if (key === 'barcode') return (
+                            <th key="barcode" style={{textAlign: 'center'}}>
+                              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                                <span>Mã vạch</span>
+                                <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
+                                  if (!ensureExportTypeSelected()) return;
+                                  setProductModalColumn('barcode'); setProductModalRowIndex(null); setProductModalSearch(''); setModalCurrentPage(1); setSelectedModalProducts([]); setProductModalScope('currentExport'); setShowProductModal(true);
+                                }} />
+                              </div>
+                            </th>
+                          );
+                          if (key === 'productCode') return (
+                            <th key="productCode" style={{textAlign: 'center'}}>
+                              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                                <span>Mã hàng</span>
+                                <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
+                                  if (!ensureExportTypeSelected()) return;
+                                  setProductModalColumn('productCode'); setProductModalRowIndex(null); setProductModalSearch(''); setModalCurrentPage(1); setSelectedModalProducts([]); setProductModalScope('currentExport'); setShowProductModal(true);
+                                }} />
+                              </div>
+                            </th>
+                          );
+                          if (key === 'productName') return (
+                            <th key="productName" style={{textAlign: 'center'}}>
+                              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                                <span>Hàng hóa</span>
+                                <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
+                                  if (!ensureExportTypeSelected()) return;
+                                  setProductModalColumn('productName'); setProductModalRowIndex(null); setProductModalSearch(''); setModalCurrentPage(1); setSelectedModalProducts([]); setProductModalScope('currentExport'); setShowProductModal(true);
+                                }} />
+                              </div>
+                            </th>
+                          );
+                          if (key === 'unit') return <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>;
+                          if (key === 'quantity') return <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>;
+                          if (key === 'unitPrice') return <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>;
+                          if (key === 'transportCost') return <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>;
+                          if (key === 'noteDate') return <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú date PN</span></th>;
+                          if (key === 'total') return <th key="total" style={{textAlign: 'center'}}><span>Thành tiền</span></th>;
+                          if (key === 'totalTransport') return <th key="totalTransport" style={{textAlign: 'center'}}><span>TT vận chuyển</span></th>;
+                          if (key === 'weight') return <th key="weight" style={{textAlign: 'center'}}><span>Số kg</span></th>;
+                          if (key === 'volume') return <th key="volume" style={{textAlign: 'center'}}><span>Số khối</span></th>;
+                          if (key === 'warehouse') return <th key="warehouse" style={{textAlign: 'center'}}><span>Kho hàng</span></th>;
+                          if (key === 'description') return <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>;
+                          if (key === 'conversion') return <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>;
+                          if (key === 'actions') return (
+                            <th key="actions" style={{textAlign: 'center', verticalAlign: 'middle'}}>
+                              <span>Thao tác</span>
+                            </th>
+                          );
+                          return null;
+                        })}
                       </tr>
                       {/* Additional header input rows inserted under the main header */}
                       {paginatedHeaderRows.map((row, rIdx) => (
@@ -3897,19 +3897,77 @@ const ExportGoods = () => {
                 footer={null}
               >
                 <div style={{display:'flex',flexDirection:'column',gap:8}}>
-                  {defaultRightCols.map(colKey=>{
-                    const label = colKey==='barcode'?'Mã vạch':colKey==='productCode'?'Mã hàng':colKey==='productName'?'Hàng hóa':colKey==='description'?'Mô tả':colKey==='conversion'?'Quy đổi':colKey==='quantity'?'Số lượng':colKey==='unitPrice'?'Đơn giá':colKey==='transportCost'?'Tiền vận chuyển':colKey==='noteDate'?'Ghi chú date PN':colKey==='total'?'Thành tiền':colKey==='totalTransport'?'Thành tiền vận chuyển':colKey==='weight'?'Số kg':colKey==='volume'?'Số khối':colKey==='warehouse'?'Kho hàng':colKey==='actions'?'Thao tác':colKey;
+                  {/* draggable, reorderable list (non-fixed) + fixed-right group */}
+                  {(() => {
+                    const fixedRight = defaultRightCols.filter(c => c === 'actions');
+                    const normalCols = defaultRightCols.filter(c => c !== 'actions');
                     return (
-                      <label key={colKey} style={{display:'flex',alignItems:'center',gap:8}}>
-                        <input type="checkbox" checked={rightVisibleCols.includes(colKey)} onChange={()=>{
-                          setRightVisibleCols(prev=> prev.includes(colKey)? prev.filter(k=>k!==colKey) : [...prev, colKey]);
-                        }} />
-                        <span>{label}</span>
-                      </label>
+                      <>
+                        <div style={{fontSize:13,color:'#888',marginBottom:6}}>Chưa cố định</div>
+                        <div>
+                          {rightColOrder.filter(key => !fixedRight.includes(key)).map((key, idx) => {
+                            const label = key==='barcode'?'Mã vạch':key==='productCode'?'Mã hàng':key==='productName'?'Hàng hóa':key==='description'?'Mô tả':key==='conversion'?'Quy đổi':key==='quantity'?'Số lượng':key==='unitPrice'?'Đơn giá':key==='transportCost'?'Tiền vận chuyển':key==='noteDate'?'Ghi chú date PN':key==='total'?'Thành tiền':key==='totalTransport'?'Thành tiền vận chuyển':key==='weight'?'Số kg':key==='volume'?'Số khối':key==='warehouse'?'Kho hàng':key;
+                            const draggableEnabled = rightColOrder.filter(k => !fixedRight.includes(k)).length > 1;
+                            return (
+                              <div
+                                key={key}
+                                className={`setting-row${rightVisibleCols.includes(key) ? '' : ' hidden'}${draggedIndex === idx ? ' dragging' : ''}${dragOverIndex === idx ? ' dragover' : ''}`}
+                                draggable={draggableEnabled}
+                                onDragStart={() => setDraggedIndex(idx)}
+                                onDragOver={e => { e.preventDefault(); if (draggedIndex !== null && idx !== draggedIndex) setDragOverIndex(idx); }}
+                                onDrop={() => {
+                                  if (draggedIndex === null || dragOverIndex === null || draggedIndex === dragOverIndex) {
+                                    setDraggedIndex(null); setDragOverIndex(null); return;
+                                  }
+                                  const nonFixedKeys = normalCols;
+                                  const currentOrder = rightColOrder.filter(k => nonFixedKeys.includes(k));
+                                  const newOrder = [...currentOrder];
+                                  const [removed] = newOrder.splice(draggedIndex, 1);
+                                  newOrder.splice(dragOverIndex, 0, removed);
+                                  const newColOrder = [...newOrder, ...rightColOrder.filter(k => !nonFixedKeys.includes(k))];
+                                  setRightColOrder(newColOrder);
+                                  setDraggedIndex(null); setDragOverIndex(null);
+                                }}
+                                style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0',cursor: draggableEnabled ? 'grab' : 'default'}}
+                              >
+                                <span className="drag-icon">⋮⋮</span>
+                                <input
+                                  type="checkbox"
+                                  checked={rightVisibleCols.includes(key)}
+                                  onChange={() => {
+                                    setRightVisibleCols(
+                                      rightVisibleCols.includes(key) ? rightVisibleCols.filter(k => k !== key) : [...rightVisibleCols, key]
+                                    );
+                                  }}
+                                />
+                                <span>{label}</span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                        <div style={{fontSize:13,color:'#888',margin:'8px 0 2px 0'}}>Cố định phải</div>
+                        <div>
+                          {defaultRightCols.filter(c => c === 'actions').map(col => (
+                            <div key={col} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0'}}>
+                              <span className="drag-icon" style={{color:'#eee'}}>⋮⋮</span>
+                              <input
+                                type="checkbox"
+                                checked={rightVisibleCols.includes(col)}
+                                onChange={() => {
+                                  setRightVisibleCols(
+                                    rightVisibleCols.includes(col) ? rightVisibleCols.filter(k => k !== col) : [...rightVisibleCols, col]
+                                  );
+                                }}
+                              />
+                              <span>{col === 'actions' ? 'Thao tác' : col}</span>
+                            </div>
+                          ))}
+                        </div>
+                      </>
                     );
-                  })}
+                  })()}
                   <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:12}}>
-                    <button className="btn btn-secondary" onClick={()=>setRightVisibleCols(defaultRightCols)}>Làm lại</button>
+                    <button className="btn btn-secondary" onClick={()=>{ setRightVisibleCols(defaultRightCols); setRightColOrder(defaultRightCols); }}>Làm lại</button>
                     <button className="btn btn-primary" onClick={()=>setShowRightSettings(false)}>Đóng</button>
                   </div>
                 </div>
@@ -3925,11 +3983,9 @@ const ExportGoods = () => {
               />
 
               <div className="detail-actions">
-                {isEditMode && (
-                  <button className="btn btn-info" onClick={saveImport} disabled={!isEditing}>
-                    📁 Lưu lại
-                  </button>
-                )}
+                <button className="btn btn-info" onClick={saveImport} disabled={!isEditing}>
+                  📁 Lưu lại
+                </button>
                 <button className="btn btn-purple" onClick={handlePrint}>
                   🖨 In A4
                 </button>
@@ -4026,9 +4082,9 @@ const ExportGoods = () => {
                 </div>
               </div>
 
-              {/* Second row: Số phiếu (30%) and Ghi chú (70%) */}
+              {/* Second row: Số phiếu (20%) and Ghi chú (80%) */}
               <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
-                <div style={{flex:'0 0 30%'}}>
+                <div style={{flex:'0 0 20%'}}>
                   <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Số phiếu</label>
                   <div className="input-with-status">
                     <input
@@ -4041,7 +4097,7 @@ const ExportGoods = () => {
                     <span className="status-icon">✓</span>
                   </div>
                 </div>
-                <div style={{flex:'1 1 70%'}}>
+                <div style={{flex:'1 1 80%'}}>
                   <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú PX</label>
                   <input
                     type="text"
@@ -4085,50 +4141,44 @@ const ExportGoods = () => {
                 <table className="items-table" style={{minWidth:1300}}>
                   <thead>
                     <tr>
-                      {rightVisibleCols.includes('barcode') && <th key="barcode" style={{textAlign: 'center'}}><span>Mã vạch</span></th>}
-                      {rightVisibleCols.includes('productCode') && <th key="productCode" style={{textAlign: 'center'}}><span>Mã hàng</span></th>}
-                      {rightVisibleCols.includes('productName') && <th key="productName" style={{textAlign: 'center'}}><span>Hàng hóa</span></th>}
-                      {rightVisibleCols.includes('unit') && <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>}
-                      {rightVisibleCols.includes('quantity') && <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>}
-                      {rightVisibleCols.includes('unitPrice') && <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>}
-                      {rightVisibleCols.includes('transportCost') && <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>}
-                      {rightVisibleCols.includes('noteDate') && <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú date PN</span></th>}
-                      {rightVisibleCols.includes('total') && <th key="total" style={{textAlign: 'center'}}><span>Thành tiền</span></th>}
-                      {rightVisibleCols.includes('totalTransport') && <th key="totalTransport" style={{textAlign: 'center'}}><span>TT vận chuyển</span></th>}
-                      {rightVisibleCols.includes('weight') && <th key="weight" style={{textAlign: 'center'}}><span>Số kg</span></th>}
-                      {rightVisibleCols.includes('volume') && <th key="volume" style={{textAlign: 'center'}}><span>Số khối</span></th>}
-                      {rightVisibleCols.includes('warehouse') && <th key="warehouse" style={{textAlign: 'center'}}><span>Kho hàng</span></th>}
-                      {rightVisibleCols.includes('description') && <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>}
-                      {rightVisibleCols.includes('conversion') && <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>}
-                      {rightVisibleCols.includes('actions') && (
-                        <th key="actions" style={{textAlign: 'center', verticalAlign: 'middle'}}>
-                          <span>Thao tác</span>
-                        </th>
-                      )}
+                      {rightColOrder.map(key => {
+                        if (!rightVisibleCols.includes(key)) return null;
+                        if (key === 'barcode') return <th key="barcode" style={{textAlign: 'center'}}><span>Mã vạch</span></th>;
+                        if (key === 'productCode') return <th key="productCode" style={{textAlign: 'center'}}><span>Mã hàng</span></th>;
+                        if (key === 'productName') return <th key="productName" style={{textAlign: 'center'}}><span>Hàng hóa</span></th>;
+                        if (key === 'unit') return <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>;
+                        if (key === 'quantity') return <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>;
+                        if (key === 'unitPrice') return <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>;
+                        if (key === 'transportCost') return <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>;
+                        if (key === 'noteDate') return <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú date PN</span></th>;
+                        if (key === 'total') return <th key="total" style={{textAlign: 'center'}}><span>Thành tiền</span></th>;
+                        if (key === 'totalTransport') return <th key="totalTransport" style={{textAlign: 'center'}}><span>TT vận chuyển</span></th>;
+                        if (key === 'weight') return <th key="weight" style={{textAlign: 'center'}}><span>Số kg</span></th>;
+                        if (key === 'volume') return <th key="volume" style={{textAlign: 'center'}}><span>Số khối</span></th>;
+                        if (key === 'warehouse') return <th key="warehouse" style={{textAlign: 'center'}}><span>Kho hàng</span></th>;
+                        if (key === 'description') return <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>;
+                        if (key === 'conversion') return <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>;
+                        if (key === 'actions') return (
+                          <th key="actions" style={{textAlign: 'center', verticalAlign: 'middle'}}>
+                            <span>Thao tác</span>
+                          </th>
+                        );
+                        return null;
+                      })}
                     </tr>
                     {/* Header input rows for new entries */}
                     {paginatedHeaderRows.map((row, rIdx) => (
                       <tr key={row.id} className="header-input-row" style={row.id === highlightRowId ? { background: '#fff7e6', boxShadow: 'inset 0 0 0 2px #ffd666' } : {}}>
-                        {['barcode','productCode','productName','unit','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'].map(colKey => {
+                        {rightColOrder.map(colKey => {
                           if (colKey === 'actions') {
                             if (!rightVisibleCols.includes('actions')) return null;
                             return (
                               <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
                                 <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'4px'}}>
-                                  {/* Reset button removed as requested */}
-                                  {/* Show Xóa button for rows that have product data */}
                                   {(row.values.productName || row.values.productCode || row.values.barcode) && (
                                     <button 
                                       onClick={() => setHeaderRows(prev => prev.filter((_,i)=>i!==rIdx))} 
-                                      style={{
-                                        padding:'4px 8px',
-                                        fontSize:12,
-                                        backgroundColor:'#6c757d',
-                                        color:'white',
-                                        border:'none',
-                                        borderRadius:'3px',
-                                        cursor:'pointer'
-                                      }}
+                                      style={{ padding:'4px 8px', fontSize:12, backgroundColor:'#6c757d', color:'white', border:'none', borderRadius:'3px', cursor:'pointer' }}
                                     >
                                       Xóa
                                     </button>
@@ -4137,9 +4187,8 @@ const ExportGoods = () => {
                               </td>
                             );
                           }
-
+                          if (!rightVisibleCols.includes(colKey)) return null;
                           if (['productCode','productName','barcode'].includes(colKey)) {
-                            if (!rightVisibleCols.includes(colKey)) return null;
                             return (
                               <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                                 {colKey === 'productName' ? (
@@ -4154,17 +4203,7 @@ const ExportGoods = () => {
                                         setProductModalScope('all');
                                         setShowProductModal(true);
                                     }}
-                                    style={{
-                                      width: '100%',
-                                      minWidth: 120,
-                                      padding: '4px 8px',
-                                      border: '1px solid #d9d9d9',
-                                      borderRadius: '4px',
-                                      background: '#fff',
-                                      textAlign: 'left',
-                                      cursor: 'pointer',
-                                      fontSize: '12px'
-                                    }}
+                                    style={{ width: '100%', minWidth: 120, padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: '4px', background: '#fff', textAlign: 'left', cursor: 'pointer', fontSize: '12px' }}
                                   >
                                     {row.values[colKey] || `-- Chọn ${colKey} --`}
                                   </button>
@@ -4177,32 +4216,10 @@ const ExportGoods = () => {
                                     showSearch
                                     allowClear
                                     style={{ width: '100%', minWidth: 200 }}
-                                    popupStyle={{ 
-                                      maxHeight: 400, 
-                                      overflow: 'auto',
-                                      zIndex: 9999
-                                    }}
-                                    popupMatchSelectWidth={false}
-                                    classNames={{ popup: { root: 'product-select-dropdown' } }}
-                                    optionLabelProp={colKey === 'productName' ? 'children' : 'label'}
-                                    filterOption={(input, option) => {
-                                      const p = products.find(pp => pp.id.toString() === option.value);
-                                      if (!p) return false;
-                                      const txt = `${p.code||''} ${p.name||''} ${p.barcode||''}`.toLowerCase();
-                                      return txt.includes((input||'').toLowerCase());
-                                    }}
                                   >
                                     {products.map(p => (
-                                      <Select.Option 
-                                        key={p.id} 
-                                        value={p.id.toString()}
-                                        label={colKey === 'productName' ? p.name : getProductOptionLabel(p)}
-                                      >
-                                        {colKey === 'productName' ? (
-                                          <div style={{fontSize:12, fontWeight:600}}>{getProductOptionLabel(p)}</div>
-                                        ) : (
-                                          <div style={{fontSize:12, fontWeight:600}}>{getProductOptionLabel(p)}</div>
-                                        )}
+                                      <Select.Option key={p.id} value={p.id.toString()} label={colKey === 'productName' ? p.name : getProductOptionLabel(p)}>
+                                        <div style={{fontSize:12, fontWeight:600}}>{getProductOptionLabel(p)}</div>
                                       </Select.Option>
                                     ))}
                                   </Select>
@@ -4212,7 +4229,6 @@ const ExportGoods = () => {
                           }
 
                           if (colKey === 'warehouse') {
-                            if (!rightVisibleCols.includes(colKey)) return null;
                             return (
                               <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                                 <Select
@@ -4232,7 +4248,6 @@ const ExportGoods = () => {
                           }
 
                           if (colKey === 'noteDate') {
-                            if (!rightVisibleCols.includes(colKey)) return null;
                             return (
                               <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                                 <DatePicker
@@ -4250,14 +4265,12 @@ const ExportGoods = () => {
                             );
                           }
 
-                          if (!rightVisibleCols.includes(colKey)) return null;
                           return (
                             <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                               <Input
                                 value={(() => {
                                   const rawValue = row.values[colKey] || '';
                                   if (rawValue === '') return '';
-                                  
                                   if (['unitPrice', 'transportCost'].includes(colKey)) {
                                     const numValue = parseFloat(rawValue) || 0;
                                     return numValue === 0 ? '' : formatCurrency(numValue);
@@ -4265,29 +4278,15 @@ const ExportGoods = () => {
                                   if (['total', 'totalTransport'].includes(colKey)) {
                                     return formatInputDisplay(rawValue, 'currency');
                                   }
-                                  if (colKey === 'weight') {
-                                    // Số kg = số kg sản phẩm × số lượng (auto-calculated)
-                                    return formatInputDisplay(rawValue, 'weight');
-                                  }
-                                  if (colKey === 'volume') {
-                                    // Volume is auto-filled from product data, display only
-                                    return formatInputDisplay(rawValue, 'volume');
-                                  }
+                                  if (colKey === 'weight') return formatInputDisplay(rawValue, 'weight');
+                                  if (colKey === 'volume') return formatInputDisplay(rawValue, 'volume');
                                   return rawValue;
                                 })()}
                                 onChange={(e) => {
-                                  // Skip onChange for read-only fields like volume
-                                  if (['total', 'totalTransport', 'volume'].includes(colKey)) {
-                                    return;
-                                  }
-                                  
+                                  if (['total', 'totalTransport', 'volume'].includes(colKey)) return;
                                   const inputValue = e.target.value;
-                                  
-                                  // For currency fields, allow user to type freely but parse for calculation
                                   if (['unitPrice', 'transportCost'].includes(colKey)) {
-                                    // Allow only digits and comma
                                     const sanitizedValue = inputValue.replace(/[^0-9,]/g, '');
-                                    // Store the raw value (without formatting) for calculation
                                     const rawValue = sanitizedValue.replace(/,/g, '');
                                     handleHeaderRowChange(rIdx, colKey, rawValue);
                                   } else {
