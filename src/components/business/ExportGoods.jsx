@@ -66,6 +66,19 @@ const ExportGoods = () => {
     }
   }, [contextMenu.visible]);
 
+  // Load column order from localStorage
+  React.useEffect(() => {
+    try {
+      const savedColOrder = localStorage.getItem('export_leftColOrder');
+      if (savedColOrder) {
+        const parsedOrder = JSON.parse(savedColOrder);
+        setLeftColOrder(parsedOrder);
+      }
+    } catch (error) {
+      console.error('Failed to load column order:', error);
+    }
+  }, []);
+
   const [showModal, setShowModal] = useState(false);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [selectedExport, setselectedExport] = useState(null);
@@ -98,6 +111,56 @@ const ExportGoods = () => {
   const [leftPageSize, setLeftPageSize] = useState(() => {
     try { const v = parseInt(localStorage.getItem('export_left_page_size')||'10',10); return isNaN(v)?10:v; } catch { return 10; }
   });
+
+  // Drag & drop for columns
+  const [draggedColumnIndex, setDraggedColumnIndex] = useState(null);
+  const [leftColOrder, setLeftColOrder] = useState(defaultLeftCols);
+
+  // Drag & drop handlers
+  const handleColumnDragStart = (e, index) => {
+    console.log('Drag start:', index);
+    setDraggedColumnIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+    e.dataTransfer.setData('text/plain', index.toString());
+  };
+
+  const handleColumnDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleColumnDrop = (e, targetIndex) => {
+    e.preventDefault();
+    console.log('Drop:', draggedColumnIndex, '->', targetIndex);
+    
+    if (draggedColumnIndex === null || draggedColumnIndex === targetIndex) {
+      setDraggedColumnIndex(null);
+      return;
+    }
+
+    const newOrder = [...leftColOrder];
+    console.log('Old order:', newOrder);
+    
+    const draggedItem = newOrder[draggedColumnIndex];
+    newOrder.splice(draggedColumnIndex, 1);
+    newOrder.splice(targetIndex, 0, draggedItem);
+    
+    console.log('New order:', newOrder);
+    setLeftColOrder(newOrder);
+    setDraggedColumnIndex(null);
+    
+    // Save to localStorage
+    try {
+      localStorage.setItem('export_leftColOrder', JSON.stringify(newOrder));
+    } catch (error) {
+      console.error('Failed to save column order:', error);
+    }
+  };
+
+  const handleColumnDragEnd = () => {
+    console.log('Drag end');
+    setDraggedColumnIndex(null);
+  };
 
   // Core data state
   const [exports, setExports] = useState([]);
@@ -2960,17 +3023,62 @@ const ExportGoods = () => {
     setShowSearchModal(true);
   };
 
+  // Create columns with drag & drop support
+  const createDraggableColumn = (config, index) => ({
+    ...config,
+    onHeaderCell: () => ({
+      draggable: true,
+      onDragStart: (e) => {
+        e.dataTransfer.effectAllowed = 'move';
+        handleColumnDragStart(e, index);
+        e.currentTarget.classList.add('being-dragged');
+      },
+      onDragOver: (e) => {
+        e.preventDefault();
+        e.dataTransfer.dropEffect = 'move';
+        handleColumnDragOver(e);
+        e.currentTarget.classList.add('drag-over');
+      },
+      onDragEnter: (e) => {
+        e.preventDefault();
+        e.currentTarget.classList.add('drag-over');
+      },
+      onDragLeave: (e) => {
+        e.currentTarget.classList.remove('drag-over');
+      },
+      onDrop: (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        handleColumnDrop(e, index);
+        e.currentTarget.classList.remove('drag-over');
+      },
+      onDragEnd: (e) => {
+        handleColumnDragEnd(e);
+        e.currentTarget.classList.remove('being-dragged');
+        document.querySelectorAll('.ant-table-thead th').forEach(th => {
+          th.classList.remove('drag-over');
+        });
+      },
+      style: {
+        cursor: draggedColumnIndex === index ? 'grabbing' : 'grab',
+        backgroundColor: draggedColumnIndex === index ? '#f0f0f0' : 'transparent',
+        userSelect: 'none'
+      }
+    })
+  });
+
   const columns = [
-    {
+    createDraggableColumn({
       title: '',
       dataIndex: 'checkbox',
+      key: 'checkbox',
       width: 40,
       render: (_, record) => null,
-    },
-    {
+    }, 0),
+    createDraggableColumn({
       title: (
         <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span>Số phiếu</span>
+          <span>⋮⋮ Số phiếu</span>
           <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('exportNumber')} />
           {leftFilterLists.exportNumber && leftFilterLists.exportNumber.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.exportNumber.length})</span>}
         </div>
@@ -2992,11 +3100,11 @@ const ExportGoods = () => {
         </span>
       ),
       sorter: (a, b) => a.exportNumber.localeCompare(b.exportNumber),
-    },
-    {
+    }, 1),
+    createDraggableColumn({
       title: (
         <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span>Ngày xuất</span>
+          <span>⋮⋮ Ngày xuất</span>
           <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('createdDate')} />
           {leftFilterLists.createdDate && leftFilterLists.createdDate.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.createdDate.length})</span>}
         </div>
@@ -3005,11 +3113,11 @@ const ExportGoods = () => {
       key: 'createdDate',
       render: (text) => text,
       sorter: (a, b) => a.createdDate.localeCompare(b.createdDate),
-    },
-    {
+    }, 2),
+    createDraggableColumn({
       title: (
         <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span>Tổng tiền</span>
+          <span>⋮⋮ Tổng tiền</span>
           <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('total')} />
           {leftFilterLists.total && leftFilterLists.total.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.total.length})</span>}
         </div>
@@ -3027,11 +3135,11 @@ const ExportGoods = () => {
         const tb = Number(b.totalAmount !== undefined && b.totalAmount !== null ? b.totalAmount : (b.items||[]).reduce((s,it)=>s+(Number(it.total)||0),0)) || 0;
         return ta - tb;
       }
-    },
-    {
+    }, 3),
+    createDraggableColumn({
       title: (
         <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span>Ghi chú PX</span>
+          <span>⋮⋮ Ghi chú</span>
           <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('note')} />
           {leftFilterLists.note && leftFilterLists.note.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.note.length})</span>}
         </div>
@@ -3042,9 +3150,9 @@ const ExportGoods = () => {
         <span style={{maxWidth:220,overflow:'hidden',textOverflow:'ellipsis'}} title={text}>{text}</span>
       ),
       sorter: (a, b) => (a.note || '').localeCompare(b.note || ''),
-    },
-    {
-      title: (<div style={{textAlign: 'center'}}>Thao tác</div>),
+    }, 4),
+    createDraggableColumn({
+      title: (<div style={{textAlign: 'center'}}>⋮⋮ Thao tác</div>),
       key: 'actions',
       width: 100,
       render: (_, record) => (
@@ -3059,8 +3167,17 @@ const ExportGoods = () => {
           </Space>
         </div>
       )
-    }
+    }, 5)
   ];
+
+  // Apply column order and visibility
+  const orderedColumns = leftColOrder
+    .map(colKey => {
+      const columnIndex = columns.findIndex(col => col.key === colKey || col.dataIndex === colKey);
+      return columnIndex !== -1 ? columns[columnIndex] : null;
+    })
+    .filter(Boolean)
+    .filter(col => leftVisibleCols.includes(col.key || col.dataIndex));
 
   return (
     <div className="export-goods-page">
@@ -3115,7 +3232,7 @@ const ExportGoods = () => {
         <div className="table-scroll-x" style={{ position: 'relative' }}>
           <Table
             rowKey="id"
-            columns={columns.filter(c => leftVisibleCols.includes(c.dataIndex || c.key || ''))}
+            columns={orderedColumns}
             dataSource={filteredLeft}
             rowSelection={{
               type: 'checkbox',

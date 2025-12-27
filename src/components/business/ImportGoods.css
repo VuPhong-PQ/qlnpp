@@ -11,6 +11,33 @@
   margin: 0;
 }
 
+/* Drag and drop styles for column headers */
+.ant-table-thead > tr > th[draggable="true"] {
+  cursor: grab !important;
+  position: relative;
+  user-select: none;
+}
+
+.ant-table-thead > tr > th[draggable="true"]:hover {
+  background-color: #f0f0f0 !important;
+}
+
+.ant-table-thead > tr > th[draggable="true"]:active {
+  cursor: grabbing !important;
+  background-color: #e6f7ff !important;
+}
+
+.ant-table-thead > tr > th.drag-over {
+  background-color: #e6f7ff !important;
+  border-left: 2px solid #1890ff !important;
+}
+
+.ant-table-thead > tr > th.being-dragged {
+  opacity: 0.5 !important;
+  cursor: grabbing !important;
+  background-color: #f0f0f0 !important;
+}
+
 /* Increase column widths for better display */
 .items-table {
   table-layout: fixed;

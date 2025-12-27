@@ -1,5 +1,5 @@
-﻿
-.export-goods-page {
+
+.warehouse-transfer-page {
   display: flex;
   height: calc(100vh - 80px);
   background: #f7f7fa;
@@ -42,10 +42,7 @@
 .items-table {
   table-layout: fixed;
   width: 100%;
-  min-width: 1000px;
-  border-collapse: collapse;
-  /* Ensure table doesn't create new stacking context */
-  position: relative;
+  min-width: 1200px;
 }
 
 .items-table th,
@@ -61,119 +58,6 @@
   overflow-x: auto;
   -webkit-overflow-scrolling: touch;
   width: 100%;
-  position: relative;
-  /* Ensure proper stacking context for sticky columns */
-  isolation: isolate;
-}
-
-/* Sticky columns - apply to specific column classes */
-.sticky-col-barcode {
-  position: sticky !important;
-  left: 0px !important;
-  z-index: 50 !important;
-  background: #fff !important;
-  border-right: 2px solid #f0f0f0 !important;
-  box-shadow: 2px 0 5px rgba(0,0,0,0.15) !important;
-  min-width: 150px !important;
-  width: 150px !important;
-}
-
-.sticky-col-productCode {
-  position: sticky !important;
-  left: 150px !important;
-  z-index: 49 !important;
-  background: #fff !important;
-  border-right: 2px solid #f0f0f0 !important;
-  box-shadow: 2px 0 5px rgba(0,0,0,0.15) !important;
-  min-width: 150px !important;
-  width: 150px !important;
-}
-
-.sticky-col-productName {
-  position: sticky !important;
-  left: 300px !important;
-  z-index: 48 !important;
-  background: #fff !important;
-  border-right: 2px solid #f0f0f0 !important;
-  box-shadow: 2px 0 5px rgba(0,0,0,0.15) !important;
-  min-width: 200px !important;
-  width: 200px !important;
-}
-
-/* Header cells should have higher z-index than body cells */
-.items-table thead th.sticky-col-barcode {
-  z-index: 60 !important;
-  background: #fafafa !important;
-  font-weight: 600 !important;
-}
-
-.items-table thead th.sticky-col-productCode {
-  z-index: 59 !important;
-  background: #fafafa !important;
-  font-weight: 600 !important;
-}
-
-.items-table thead th.sticky-col-productName {
-  z-index: 58 !important;
-  background: #fafafa !important;
-  font-weight: 600 !important;
-}
-
-/* Ensure sticky columns content is visible */
-.sticky-col-barcode *,
-.sticky-col-productCode *,
-.sticky-col-productName * {
-  position: relative !important;
-  z-index: 1 !important;
-}
-
-/* Header input rows sticky cells */
-.header-input-row .sticky-col-barcode,
-.header-input-row .sticky-col-productCode,
-.header-input-row .sticky-col-productName {
-  background: #f8f9fa !important;
-}
-
-/* Ensure proper borders for sticky columns */
-.items-table th.sticky-col-barcode,
-.items-table td.sticky-col-barcode {
-  border-left: 1px solid #e8e8e8 !important;
-  border-top: 1px solid #e8e8e8 !important;
-  border-bottom: 1px solid #e8e8e8 !important;
-}
-
-.items-table th.sticky-col-productCode,
-.items-table td.sticky-col-productCode {
-  border-top: 1px solid #e8e8e8 !important;
-  border-bottom: 1px solid #e8e8e8 !important;
-}
-
-.items-table th.sticky-col-productName,
-.items-table td.sticky-col-productName {
-  border-top: 1px solid #e8e8e8 !important;
-  border-bottom: 1px solid #e8e8e8 !important;
-}
-
-/* Ensure text and content in sticky columns are visible */
-.sticky-col-barcode .ant-select,
-.sticky-col-productCode .ant-select,
-.sticky-col-productName .ant-select,
-.sticky-col-barcode button,
-.sticky-col-productCode button,
-.sticky-col-productName button,
-.sticky-col-barcode input,
-.sticky-col-productCode input,
-.sticky-col-productName input {
-  position: relative !important;
-  z-index: 1 !important;
-  background: inherit !important;
-}
-
-/* Override any conflicting antd styles */
-.items-table .sticky-col-barcode .ant-select-selector,
-.items-table .sticky-col-productCode .ant-select-selector,
-.items-table .sticky-col-productName .ant-select-selector {
-  background: inherit !important;
 }
 
 /* Specific width controls for warehouse and date columns */
@@ -425,220 +309,41 @@
   z-index: 9999 !important;
 }
 
-.export-goods-page .search-panel {
+.warehouse-transfer-page .search-panel {
   flex: 0 0 20%;
   max-width: 20%;
   min-width: 200px;
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  border-radius: 12px;
+  box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+  margin-right: 16px;
   display: flex;
   flex-direction: column;
-  padding: 20px;
-  overflow-y: auto;
+  padding: 16px;
+  overflow-x: auto;
 }
 
-.export-goods-page .export-detail-panel {
+.warehouse-transfer-page .import-detail-panel {
   flex: 0 0 80%;
   max-width: 80%;
   min-width: 0;
   background: #fff;
-  border-radius: 8px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  padding: 20px;
-  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.05);
+  padding: 12px 14px;
+  overflow-x: auto;
   display: flex;
   flex-direction: column;
 }
 
-/* Panel styling to match ImportGoods */
-.search-panel .panel-header {
-  margin-bottom: 20px;
-  border-bottom: 1px solid #e9ecef;
-  padding-bottom: 10px;
-}
+/* Ensure we can absolutely position child elements (action buttons) */
+.import-detail-panel { position: relative; }
 
-.search-panel .panel-header h2 {
-  margin: 0;
-  color: #495057;
-  font-size: 16px;
-  font-weight: 600;
-}
-
-.search-content {
-  padding: 0;
-  height: calc(100% - 60px);
-  display: flex;
-  flex-direction: column;
-}
-
-.search-section {
-  margin-bottom: 20px;
-}
-
-.date-range-section {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  margin-bottom: 15px;
-}
-
-.search-btn {
-  width: 100%;
-  margin-top: 10px;
-  padding: 8px 16px;
-  background-color: #007bff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.search-btn:hover {
-  background-color: #0056b3;
-}
-
-.search-stats {
-  padding: 10px 0;
-  font-size: 14px;
-  color: #6c757d;
-  border-bottom: 1px solid #e9ecef;
-  margin-bottom: 15px;
-}
-
-.search-results {
-  flex: 1;
-  overflow-y: auto;
-}
-
-.results-header {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 10px;
-  padding: 10px;
-  background: #f8f9fa;
-  border-bottom: 1px solid #e9ecef;
-  font-weight: 600;
-  font-size: 13px;
-  color: #495057;
-}
-
-.result-item {
-  display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 10px;
-  padding: 12px 10px;
-  border-bottom: 1px solid #e9ecef;
-  cursor: pointer;
-  transition: background-color 0.2s;
-  align-items: center;
-}
-
-.result-item:hover {
-  background-color: #f8f9fa;
-}
-
-.result-item.selected {
-  background-color: #e3f2fd;
-  border-left: 4px solid #2196f3;
-}
-
-.result-number {
-  font-size: 14px;
-  font-weight: 500;
-  color: #2c3e50;
-}
-
-.result-date {
-  font-size: 13px;
-  color: #6c757d;
-}
-
-.result-amount {
-  font-size: 14px;
-  font-weight: 600;
-  color: #28a745;
-}
-
-.result-actions {
-  display: flex;
-  gap: 5px;
-}
-
-.btn-icon {
-  width: 24px;
-  height: 24px;
-  border: none;
-  background: none;
-  cursor: pointer;
-  border-radius: 4px;
+.panel-header {
   display: flex;
   align-items: center;
-  justify-content: center;
-  font-size: 12px;
-  transition: background-color 0.2s;
-}
-
-.btn-icon:hover {
-  background-color: #f8f9fa;
-}
-
-.btn-edit:hover {
-  background-color: #fff3cd;
-}
-
-.btn-delete:hover {
-  background-color: #f8d7da;
-}
-
-/* Detail panel header styling */
-.export-detail-panel .detail-header {
-  display: flex;
   justify-content: space-between;
-  align-items: center;
-  margin-bottom: 20px;
-  padding-bottom: 15px;
-  border-bottom: 1px solid #e9ecef;
-}
-
-.export-detail-panel .detail-header h2 {
-  margin: 0;
-  color: #495057;
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.header-actions {
-  display: flex;
-  gap: 10px;
-}
-
-.header-actions .btn {
-  padding: 8px 16px;
-  border-radius: 4px;
-  border: 1px solid;
-  cursor: pointer;
-  font-size: 14px;
-}
-
-.btn-primary {
-  background-color: #007bff;
-  border-color: #007bff;
-  color: white;
-}
-
-.btn-success {
-  background-color: #28a745;
-  border-color: #28a745;
-  color: white;
-}
-
-.btn-primary:hover {
-  background-color: #0056b3;
-}
-
-.btn-success:hover {
-  background-color: #1e7e34;
+  margin-bottom: 8px;
 }
 
 .table-scroll-x {
@@ -648,7 +353,7 @@
   overflow-x: auto;
   width: 100%;
 }
-/* Thanh cuộn ngang cho bảng panel phải (chi tiết xuất hàng) */
+/* Thanh cuộn ngang cho bảng panel phải (chi tiết nhập hàng) */
 .items-table-container {
   width: 100%;
   overflow-x: auto;
@@ -656,6 +361,9 @@
   max-height: calc(100vh - 300px); /* Responsive height */
   -webkit-overflow-scrolling: touch;
   flex: 1;
+  position: relative;
+  /* Ensure proper stacking context for sticky columns */
+  isolation: isolate;
 }
 
 .items-table {
@@ -663,6 +371,190 @@
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
+  /* Ensure table doesn't create new stacking context */
+  position: relative;
+}
+
+/* Sticky columns - apply to specific column classes */
+.sticky-col-barcode {
+  position: sticky !important;
+  left: 0px !important;
+  z-index: 50 !important;
+  background: #fff !important;
+  border-right: 2px solid #f0f0f0 !important;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.15) !important;
+  min-width: 150px !important;
+  width: 150px !important;
+}
+
+.sticky-col-productCode {
+  position: sticky !important;
+  left: 150px !important;
+  z-index: 49 !important;
+  background: #fff !important;
+  border-right: 2px solid #f0f0f0 !important;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.15) !important;
+  min-width: 150px !important;
+  width: 150px !important;
+}
+
+.sticky-col-productName {
+  position: sticky !important;
+  left: 300px !important;
+  z-index: 48 !important;
+  background: #fff !important;
+  border-right: 2px solid #f0f0f0 !important;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.15) !important;
+  min-width: 200px !important;
+  width: 200px !important;
+}
+
+/* Header cells should have higher z-index than body cells */
+.items-table thead th.sticky-col-barcode {
+  z-index: 60 !important;
+  background: #fafafa !important;
+  font-weight: 600 !important;
+}
+
+.items-table thead th.sticky-col-productCode {
+  z-index: 59 !important;
+  background: #fafafa !important;
+  font-weight: 600 !important;
+}
+
+.items-table thead th.sticky-col-productName {
+  z-index: 58 !important;
+  background: #fafafa !important;
+  font-weight: 600 !important;
+}
+
+/* Ensure sticky columns content is visible */
+.sticky-col-barcode *,
+.sticky-col-productCode *,
+.sticky-col-productName * {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Header input rows sticky cells */
+.header-input-row .sticky-col-barcode,
+.header-input-row .sticky-col-productCode,
+.header-input-row .sticky-col-productName {
+  background: #f8f9fa !important;
+}
+
+/* Ensure proper borders for sticky columns */
+.items-table th.sticky-col-barcode,
+.items-table td.sticky-col-barcode {
+  border-left: 1px solid #e8e8e8 !important;
+  border-top: 1px solid #e8e8e8 !important;
+  border-bottom: 1px solid #e8e8e8 !important;
+}
+
+.items-table th.sticky-col-productCode,
+.items-table td.sticky-col-productCode {
+  border-top: 1px solid #e8e8e8 !important;
+  border-bottom: 1px solid #e8e8e8 !important;
+}
+
+.items-table th.sticky-col-productName,
+.items-table td.sticky-col-productName {
+  border-top: 1px solid #e8e8e8 !important;
+  border-bottom: 1px solid #e8e8e8 !important;
+}
+
+/* Ensure text and content in sticky columns are visible */
+.sticky-col-barcode .ant-select,
+.sticky-col-productCode .ant-select,
+.sticky-col-productName .ant-select,
+.sticky-col-barcode button,
+.sticky-col-productCode button,
+.sticky-col-productName button,
+.sticky-col-barcode input,
+.sticky-col-productCode input,
+.sticky-col-productName input {
+  position: relative !important;
+  z-index: 1 !important;
+  background: inherit !important;
+}
+
+/* Override any conflicting antd styles */
+.items-table .sticky-col-barcode .ant-select-selector,
+.items-table .sticky-col-productCode .ant-select-selector,
+.items-table .sticky-col-productName .ant-select-selector {
+  background: inherit !important;
+}
+
+/* Form inputs responsive styling */
+.search-panel input,
+.search-panel select {
+  width: 100%;
+  max-width: 100%;
+  box-sizing: border-box;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+/* Date input styling */
+.search-panel-date-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.search-panel-date-row input {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Select row styling */
+.search-panel-select-row {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+
+.search-panel-select-row select {
+  width: 100%;
+}
+
+/* Form section in detail panel */
+.form-section {
+  padding: 10px;
+  border-bottom: 1px solid #e9ecef;
+  overflow-x: auto;
+}
+
+.form-section .form-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  margin-bottom: 10px;
+}
+
+.form-section .form-row > * {
+  flex: 0 0 auto;
+}
+
+.form-section input,
+.form-section select {
+  min-width: 120px;
+  max-width: 200px;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  box-sizing: border-box;
+}
+
+/* Ensure form doesn't cause horizontal overflow */
+.form-section {
+  max-width: 100%;
+  overflow-x: auto;
 }
 .items-table th, .items-table td {
   padding: 8px 10px;
@@ -917,8 +809,7 @@ button[title="Cài đặt cột"] {
   width: 28px;
   height: 28px;
   font-size: 15px;
-  margin-left: 0; /* align more closely with inputs */
-  margin-right: 8px;
+  margin-left: 4px;
   cursor: pointer;
   display: flex;
   align-items: center;
@@ -962,33 +853,41 @@ button[title="Cài đặt cột"] {
   flex-direction: column;
   gap: 8px;
 }
-/* Search panel input styling (unified with ImportGoods) */
-.search-panel input[type="date"],
-.search-panel select {
-  width: 100%;
-  padding: 8px 12px;
-  border: 1px solid #ddd;
+.search-panel-button {
+  grid-column: 2 / 3;
+  grid-row: 1 / span 2;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.search-panel-date-row,
+.search-panel-select-row {
+  display: flex;
+  gap: 8px;
+}
+.search-panel-date-row input[type="date"],
+.search-panel-select-row select {
   border-radius: 4px;
-  font-size: 14px;
-  background: white;
+  border: 1px solid #e5e7eb;
+  padding: 8px 12px;
+  font-size: 15px;
+  flex: 1;
+  height: 36px;
   box-sizing: border-box;
 }
-
-.search-panel input:focus,
-.search-panel select:focus {
-  outline: none;
-  border-color: #007bff;
-  box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+.search-panel-button .ant-btn {
+  width: 100%;
+  height: 100%;
+  min-height: 72px;
 }
 
-/* Date range inputs */
-.date-input {
-  width: 100%;
-}
-
-/* Select inputs */
-.select-input {
-  width: 100%;
+/* fallback: when grid isn't supported, ensure inputs still look okay */
+.search-panel input[type="date"],
+.search-panel select {
+  border-radius: 4px;
+  border: 1px solid #e5e7eb;
+  padding: 8px 12px;
+  font-size: 15px;
 }
 
 /* Modal tìm kiếm số phiếu */
@@ -1038,7 +937,7 @@ button[title="Cài đặt cột"] {
 .product-modal .field-label.required::after { content: ' *'; color: #d00; }
 
 /* Temporary import styling */
-.temp-export {
+.temp-import {
   background: #e8f4fd !important;
   border-left: 3px solid #1677ff !important;
 }
@@ -1072,14 +971,14 @@ button[title="Cài đặt cột"] {
   background-color: #f0f8ff !important;
 }
 
-.temp-export:hover {
+.temp-import:hover {
   background-color: #e6f3ff !important;
 }
 
 /* ===== RESPONSIVE DESIGN ===== */
 
 /* Container adjustments */
-.export-goods-page {
+.warehouse-transfer-page {
   flex-direction: row;
   overflow: hidden;
   padding: 10px;
@@ -1099,7 +998,7 @@ button[title="Cài đặt cột"] {
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
 }
 
-.export-detail-panel {
+.import-detail-panel {
   flex: 1;
   min-width: 0;
   overflow: hidden;
@@ -1110,57 +1009,9 @@ button[title="Cài đặt cột"] {
   flex-direction: column;
 }
 
-/* The responsive design styles are defined later in the file to avoid duplication */
-
-/* Form section in detail panel */
-.form-section {
-  padding: 10px;
-  border-bottom: 1px solid #e9ecef;
-  overflow-x: auto;
-}
-
-.form-section .form-row {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 10px;
-  align-items: center;
-  margin-bottom: 10px;
-}
-
-.form-section .form-row > * {
-  flex: 0 0 auto;
-}
-
-.form-section input,
-.form-section select {
-  min-width: 120px;
-  max-width: 200px;
-  padding: 6px 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-size: 14px;
-  box-sizing: border-box;
-}
-
-/* Ensure form doesn't cause horizontal overflow */
-.form-section {
-  max-width: 100%;
-  overflow-x: auto;
-}
-
-/* Table container responsive */
-.items-table-container {
-  width: 100%;
-  overflow-x: auto;
-  overflow-y: auto;
-  max-height: calc(100vh - 300px);
-  -webkit-overflow-scrolling: touch;
-  flex: 1;
-}
-
 /* Desktop and large screens - handle zoom levels */
 @media (min-width: 1200px) {
-  .export-goods-page {
+  .warehouse-transfer-page {
     max-width: 100%;
     padding: 15px;
     gap: 15px;
@@ -1179,7 +1030,7 @@ button[title="Cài đặt cột"] {
 
 /* Medium desktop screens */
 @media (min-width: 992px) and (max-width: 1199px) {
-  .export-goods-page {
+  .warehouse-transfer-page {
     padding: 12px;
     gap: 12px;
     overflow: hidden;
@@ -1197,7 +1048,7 @@ button[title="Cài đặt cột"] {
 
 /* Small desktop/large tablet */
 @media (min-width: 769px) and (max-width: 991px) {
-  .export-goods-page {
+  .warehouse-transfer-page {
     padding: 10px;
     gap: 10px;
     overflow: hidden;
@@ -1215,7 +1066,7 @@ button[title="Cài đặt cột"] {
 
 /* Specific handling for 100% browser zoom */
 @media (min-resolution: 96dpi) {
-  .export-goods-page {
+  .warehouse-transfer-page {
     width: calc(100% - 20px);
     max-width: calc(100% - 20px);
   }
@@ -1225,7 +1076,7 @@ button[title="Cài đặt cột"] {
     max-width: 350px;
   }
   
-  .export-detail-panel {
+  .import-detail-panel {
     overflow: hidden;
   }
   
@@ -1237,7 +1088,7 @@ button[title="Cài đặt cột"] {
 
 /* Tablet and below (768px and below) */
 @media (max-width: 768px) {
-  .export-goods-page {
+  .warehouse-transfer-page {
     flex-direction: column !important;
     height: auto !important;
     overflow-x: visible !important;
@@ -1252,7 +1103,7 @@ button[title="Cài đặt cột"] {
     max-width: none !important;
   }
   
-  .export-detail-panel {
+  .import-detail-panel {
     flex: none !important;
     width: 100% !important;
   }
@@ -1293,23 +1144,11 @@ button[title="Cài đặt cột"] {
     font-size: 12px !important;
     padding: 2px 6px !important;
   }
-  
-  /* Mobile responsive adjustments for form */
-  .form-section {
-    flex-direction: column;
-    align-items: stretch;
-  }
-  
-  .form-section input,
-  .form-section select {
-    max-width: none;
-    width: 100%;
-  }
 }
 
 /* Small mobile (480px and below) */
 @media (max-width: 480px) {
-  .export-goods-page {
+  .warehouse-transfer-page {
     padding: 0 4px !important;
     font-size: 13px !important;
   }
