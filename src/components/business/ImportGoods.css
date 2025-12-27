@@ -334,6 +334,9 @@
   max-height: calc(100vh - 300px); /* Responsive height */
   -webkit-overflow-scrolling: touch;
   flex: 1;
+  position: relative;
+  /* Ensure proper stacking context for sticky columns */
+  isolation: isolate;
 }
 
 .items-table {
@@ -341,6 +344,118 @@
   width: 100%;
   border-collapse: collapse;
   table-layout: fixed;
+  /* Ensure table doesn't create new stacking context */
+  position: relative;
+}
+
+/* Sticky columns - apply to specific column classes */
+.sticky-col-barcode {
+  position: sticky !important;
+  left: 0px !important;
+  z-index: 50 !important;
+  background: #fff !important;
+  border-right: 2px solid #f0f0f0 !important;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.15) !important;
+  min-width: 150px !important;
+  width: 150px !important;
+}
+
+.sticky-col-productCode {
+  position: sticky !important;
+  left: 150px !important;
+  z-index: 49 !important;
+  background: #fff !important;
+  border-right: 2px solid #f0f0f0 !important;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.15) !important;
+  min-width: 150px !important;
+  width: 150px !important;
+}
+
+.sticky-col-productName {
+  position: sticky !important;
+  left: 300px !important;
+  z-index: 48 !important;
+  background: #fff !important;
+  border-right: 2px solid #f0f0f0 !important;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.15) !important;
+  min-width: 200px !important;
+  width: 200px !important;
+}
+
+/* Header cells should have higher z-index than body cells */
+.items-table thead th.sticky-col-barcode {
+  z-index: 60 !important;
+  background: #fafafa !important;
+  font-weight: 600 !important;
+}
+
+.items-table thead th.sticky-col-productCode {
+  z-index: 59 !important;
+  background: #fafafa !important;
+  font-weight: 600 !important;
+}
+
+.items-table thead th.sticky-col-productName {
+  z-index: 58 !important;
+  background: #fafafa !important;
+  font-weight: 600 !important;
+}
+
+/* Ensure sticky columns content is visible */
+.sticky-col-barcode *,
+.sticky-col-productCode *,
+.sticky-col-productName * {
+  position: relative !important;
+  z-index: 1 !important;
+}
+
+/* Header input rows sticky cells */
+.header-input-row .sticky-col-barcode,
+.header-input-row .sticky-col-productCode,
+.header-input-row .sticky-col-productName {
+  background: #f8f9fa !important;
+}
+
+/* Ensure proper borders for sticky columns */
+.items-table th.sticky-col-barcode,
+.items-table td.sticky-col-barcode {
+  border-left: 1px solid #e8e8e8 !important;
+  border-top: 1px solid #e8e8e8 !important;
+  border-bottom: 1px solid #e8e8e8 !important;
+}
+
+.items-table th.sticky-col-productCode,
+.items-table td.sticky-col-productCode {
+  border-top: 1px solid #e8e8e8 !important;
+  border-bottom: 1px solid #e8e8e8 !important;
+}
+
+.items-table th.sticky-col-productName,
+.items-table td.sticky-col-productName {
+  border-top: 1px solid #e8e8e8 !important;
+  border-bottom: 1px solid #e8e8e8 !important;
+}
+
+/* Ensure text and content in sticky columns are visible */
+.sticky-col-barcode .ant-select,
+.sticky-col-productCode .ant-select,
+.sticky-col-productName .ant-select,
+.sticky-col-barcode button,
+.sticky-col-productCode button,
+.sticky-col-productName button,
+.sticky-col-barcode input,
+.sticky-col-productCode input,
+.sticky-col-productName input {
+  position: relative !important;
+  z-index: 1 !important;
+  background: inherit !important;
+}
+
+/* Override any conflicting antd styles */
+.items-table .sticky-col-barcode .ant-select-selector,
+.items-table .sticky-col-productCode .ant-select-selector,
+.items-table .sticky-col-productName .ant-select-selector {
+  background: inherit !important;
 }
 
 /* Form inputs responsive styling */

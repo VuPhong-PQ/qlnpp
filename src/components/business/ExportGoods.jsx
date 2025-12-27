@@ -3532,10 +3532,17 @@ const ExportGoods = () => {
                   <table className="items-table" style={{minWidth:1300}}>
                     <thead>
                       <tr>
-                        {rightColOrder.map(key => {
+                        {rightColOrder.map((key, index) => {
                           if (!rightVisibleCols.includes(key)) return null;
+                          
+                          // Apply sticky classes for first 3 columns if they are the target columns
+                          let stickyClass = '';
+                          if (key === 'barcode' || key === 'productCode' || key === 'productName') {
+                            stickyClass = `sticky-col-${key}`;
+                          }
+                          
                           if (key === 'barcode') return (
-                            <th key="barcode" style={{textAlign: 'center'}}>
+                            <th key="barcode" className={stickyClass} style={{textAlign: 'center'}}>
                               <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
                                 <span>Mã vạch</span>
                                 <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
@@ -3546,7 +3553,7 @@ const ExportGoods = () => {
                             </th>
                           );
                           if (key === 'productCode') return (
-                            <th key="productCode" style={{textAlign: 'center'}}>
+                            <th key="productCode" className={stickyClass} style={{textAlign: 'center'}}>
                               <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
                                 <span>Mã hàng</span>
                                 <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
@@ -3557,7 +3564,7 @@ const ExportGoods = () => {
                             </th>
                           );
                           if (key === 'productName') return (
-                            <th key="productName" style={{textAlign: 'center'}}>
+                            <th key="productName" className={stickyClass} style={{textAlign: 'center'}}>
                               <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
                                 <span>Hàng hóa</span>
                                 <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
@@ -3590,7 +3597,13 @@ const ExportGoods = () => {
                       {/* Additional header input rows inserted under the main header */}
                       {paginatedHeaderRows.map((row, rIdx) => (
                         <tr key={row.id} className="header-input-row" style={row.id === highlightRowId ? { background: '#fff7e6', boxShadow: 'inset 0 0 0 2px #ffd666' } : {}}>
-                          {rightColOrder.map(colKey => {
+                          {rightColOrder.map((colKey, index) => {
+                            // Apply sticky classes for target columns
+                            let stickyClass = '';
+                            if (colKey === 'barcode' || colKey === 'productCode' || colKey === 'productName') {
+                              stickyClass = `sticky-col-${colKey}`;
+                            }
+                            
                             if (colKey === 'actions') {
                               if (!rightVisibleCols.includes('actions')) return null;
                               return (
@@ -3623,7 +3636,7 @@ const ExportGoods = () => {
                             if (['productCode','productName','barcode'].includes(colKey)) {
                               if (!rightVisibleCols.includes(colKey)) return null;
                               return (
-                                <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                                <td key={colKey} className={stickyClass} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                                   {colKey === 'productName' ? (
                                         <button
                                       onClick={() => {
@@ -4141,11 +4154,18 @@ const ExportGoods = () => {
                 <table className="items-table" style={{minWidth:1300}}>
                   <thead>
                     <tr>
-                      {rightColOrder.map(key => {
+                      {rightColOrder.map((key, index) => {
                         if (!rightVisibleCols.includes(key)) return null;
-                        if (key === 'barcode') return <th key="barcode" style={{textAlign: 'center'}}><span>Mã vạch</span></th>;
-                        if (key === 'productCode') return <th key="productCode" style={{textAlign: 'center'}}><span>Mã hàng</span></th>;
-                        if (key === 'productName') return <th key="productName" style={{textAlign: 'center'}}><span>Hàng hóa</span></th>;
+                        
+                        // Apply sticky classes for target columns
+                        let stickyClass = '';
+                        if (key === 'barcode' || key === 'productCode' || key === 'productName') {
+                          stickyClass = `sticky-col-${key}`;
+                        }
+                        
+                        if (key === 'barcode') return <th key="barcode" className={stickyClass} style={{textAlign: 'center'}}><span>Mã vạch</span></th>;
+                        if (key === 'productCode') return <th key="productCode" className={stickyClass} style={{textAlign: 'center'}}><span>Mã hàng</span></th>;
+                        if (key === 'productName') return <th key="productName" className={stickyClass} style={{textAlign: 'center'}}><span>Hàng hóa</span></th>;
                         if (key === 'unit') return <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>;
                         if (key === 'quantity') return <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>;
                         if (key === 'unitPrice') return <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>;
@@ -4169,7 +4189,13 @@ const ExportGoods = () => {
                     {/* Header input rows for new entries */}
                     {paginatedHeaderRows.map((row, rIdx) => (
                       <tr key={row.id} className="header-input-row" style={row.id === highlightRowId ? { background: '#fff7e6', boxShadow: 'inset 0 0 0 2px #ffd666' } : {}}>
-                        {rightColOrder.map(colKey => {
+                        {rightColOrder.map((colKey, index) => {
+                          // Apply sticky classes for target columns
+                          let stickyClass = '';
+                          if (colKey === 'barcode' || colKey === 'productCode' || colKey === 'productName') {
+                            stickyClass = `sticky-col-${colKey}`;
+                          }
+                          
                           if (colKey === 'actions') {
                             if (!rightVisibleCols.includes('actions')) return null;
                             return (
@@ -4190,7 +4216,7 @@ const ExportGoods = () => {
                           if (!rightVisibleCols.includes(colKey)) return null;
                           if (['productCode','productName','barcode'].includes(colKey)) {
                             return (
-                              <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                              <td key={colKey} className={stickyClass} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                                 {colKey === 'productName' ? (
                                   <button
                                       onClick={() => {
