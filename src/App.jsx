@@ -17,6 +17,7 @@ import Users from './components/permissions/Users';
 import AdminPage from './components/Admin/AdminPage';
 import QuotationTable from './components/business/QuotationTable';
 import ImportGoods from './components/business/ImportGoods';
+import ResizableTable from './components/business/ResizableTable';
 import WarehouseTransfer from './components/business/WarehouseTransfer';
 import ExportGoods from './components/business/ExportGoods';
 import CreateOrder from './components/business/sales/CreateOrder';
@@ -62,6 +63,7 @@ function App() {
             <Route path="/business/accounting/expense-voucher" element={<ExpenseVoucher />} />
             <Route path="/business/cost-calculation" element={<CostCalculation />} />
             <Route path="/admin/manage-data" element={<AdminPage />} />
+            <Route path="/test/resizable-table" element={<ResizableTable />} />
           </Routes>
         </main>
       </div>

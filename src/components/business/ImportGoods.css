@@ -45,12 +45,75 @@
   min-width: 1200px;
 }
 
-.items-table th,
+.items-table th {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding: 8px 4px;
+  position: relative;
+  z-index: 10; /* Ensure headers stay above data rows */
+}
+
 .items-table td {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   padding: 8px 4px;
+}
+
+/* Resizer handle for columns */
+.items-table th { position: relative; }
+.col-resizer {
+  position: absolute;
+  right: -8px; /* place half outside to be easier to grab */
+  top: 0;
+  height: 100%;
+  width: 20px; /* wider hit area for easier grabbing */
+  cursor: col-resize;
+  z-index: 99999;
+  background: rgba(0,0,0,0.02); /* light visible area to help debugging */
+  display: block;
+  pointer-events: auto;
+}
+.col-resizer:hover {
+  background: rgba(0,0,0,0.05);
+}
+.col-resizer:after {
+  content: '';
+  display: block;
+  width: 3px;
+  background: rgba(0,0,0,0.28);
+  height: 60%;
+  margin: 20% auto;
+}
+
+/* Ensure form controls inside table cells resize with their column */
+.items-table td > * {
+  box-sizing: border-box !important;
+  max-width: 100% !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+/* Specific overrides for AntD components inside cells */
+.items-table td .ant-select,
+.items-table td .ant-select .ant-select-selector,
+.items-table td .ant-picker,
+.items-table td input,
+.items-table td button,
+.items-table td .ant-input {
+  width: 100% !important;
+  min-width: 0 !important;
+  box-sizing: border-box !important;
+}
+
+/* Header input rows sometimes set minWidth inline; ensure they can shrink */
+.header-input-row input,
+.header-input-row .ant-select,
+.header-input-row .ant-picker,
+.header-input-row button {
+  min-width: 0 !important;
+  width: 100% !important;
 }
 
 /* Responsive table container */
@@ -409,6 +472,7 @@
   width: 200px !important;
 }
 
+
 /* Header cells should have higher z-index than body cells */
 .items-table thead th.sticky-col-barcode {
   z-index: 60 !important;
@@ -428,6 +492,7 @@
   font-weight: 600 !important;
 }
 
+
 /* Ensure sticky columns content is visible */
 .sticky-col-barcode *,
 .sticky-col-productCode *,
@@ -442,6 +507,8 @@
 .header-input-row .sticky-col-productName {
   background: #f8f9fa !important;
 }
+
+/* Removed unit sticky styles (columns are not fixed) */
 
 /* Ensure proper borders for sticky columns */
 .items-table th.sticky-col-barcode,

@@ -118,7 +118,7 @@ const ImportGoods = () => {
 
   // Drag & drop handlers
   const handleColumnDragStart = (e, index) => {
-    console.log('Drag start:', index);
+    // drag start
     setDraggedColumnIndex(index);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', index.toString());
@@ -131,7 +131,7 @@ const ImportGoods = () => {
 
   const handleColumnDrop = (e, targetIndex) => {
     e.preventDefault();
-    console.log('Drop:', draggedColumnIndex, '->', targetIndex);
+    // handle drop
     
     if (draggedColumnIndex === null || draggedColumnIndex === targetIndex) {
       setDraggedColumnIndex(null);
@@ -139,13 +139,13 @@ const ImportGoods = () => {
     }
 
     const newOrder = [...leftColOrder];
-    console.log('Old order:', newOrder);
+    // old order logged earlier during debugging
     
     const draggedItem = newOrder[draggedColumnIndex];
     newOrder.splice(draggedColumnIndex, 1);
     newOrder.splice(targetIndex, 0, draggedItem);
     
-    console.log('New order:', newOrder);
+    // new order saved
     setLeftColOrder(newOrder);
     setDraggedColumnIndex(null);
     
@@ -158,7 +158,7 @@ const ImportGoods = () => {
   };
 
   const handleColumnDragEnd = () => {
-    console.log('Drag end');
+    // drag ended
     setDraggedColumnIndex(null);
   };
 
@@ -234,7 +234,30 @@ const ImportGoods = () => {
     // No-op for production performance - all logging disabled
   };
 
+  // Simple resize handler that works directly on th elements
+  const handleThMouseDown = (e, colKey) => {
+    e.preventDefault();
+    e.stopPropagation();
 
+    const startX = e.clientX;
+    const startWidth = rightColWidths[colKey] || 100;
+
+    const handleMouseMove = (e) => {
+      const delta = e.clientX - startX;
+      const newWidth = Math.max(40, startWidth + delta);
+      setRightColWidths(prev => ({ ...prev, [colKey]: newWidth }));
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
 
   // Helper function to calculate totals from items
   const calculateTotals = (itemsList) => {
@@ -529,7 +552,7 @@ const ImportGoods = () => {
           <Input
             placeholder={`nhập ${label.toLowerCase()}`}
             size="small"
-            style={{ width: '100%', minWidth: '150px' }}
+            style={{ width: '100%' }}
             readOnly
           />
         </div>
@@ -754,7 +777,7 @@ const ImportGoods = () => {
           <Select 
             value={selectedProducts[colKey] || null}
             onChange={(value) => handleWarehouseSelect(colKey, value)}
-            style={{ width: '100%', minWidth: '80px' }}
+            style={{ width: '100%' }}
             size="small"
             placeholder="-- Chọn kho --"
             allowClear
@@ -1091,11 +1114,7 @@ const ImportGoods = () => {
           <DatePicker 
             value={selectedDates[colKey] ? dayjs(selectedDates[colKey]) : null}
             onChange={(date) => handleDateSelect(colKey, date)}
-            style={{
-              width: '100%',
-              minWidth: '120px',
-              fontSize: '12px'
-            }}
+            style={{ width: '100%', fontSize: '12px' }}
             format="DD/MM/YYYY"
             placeholder="DD/MM/YYYY"
             allowClear={false}
@@ -1187,7 +1206,7 @@ const ImportGoods = () => {
           <Input
             placeholder={placeholder}
             size="small"
-            style={{ width: '100%', minWidth: '100px' }}
+            style={{ width: '100%' }}
             type={['quantity', 'weight', 'volume', 'conversion'].includes(colKey) ? 'number' : 'text'}
             onPressEnter={(e) => handleDirectInput(colKey, e.target.value)}
           />
@@ -1205,7 +1224,7 @@ const ImportGoods = () => {
           <Input
             placeholder={placeholder}
             size="small"
-            style={{ width: '100%', minWidth: '250px' }}
+            style={{ width: '100%' }}
             onPressEnter={(e) => handleTextInput(colKey, e.target.value)}
           />
         </div>
@@ -1339,6 +1358,63 @@ const ImportGoods = () => {
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [rightCurrentPage, setRightCurrentPage] = useState(1);
   const [rightItemsPerPage, setRightItemsPerPage] = useState(10);
+
+  // Column resize state for right table
+  const [rightColWidths, setRightColWidths] = useState(() => {
+    try {
+      const saved = localStorage.getItem('import_right_col_widths');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    
+    const w = {};
+    defaultRightCols.forEach(c => {
+      if (c === 'description') w[c] = 300;
+      else if (c === 'productName') w[c] = 200;
+      else if (c === 'barcode' || c === 'productCode') w[c] = 180;
+      else if (c === 'unit') w[c] = 120;
+      else if (c === 'actions') w[c] = 80;
+      else w[c] = 100;
+    });
+    return w;
+  });
+  const resizingRef = useRef({ col: null, startX: 0, startWidth: 0 });
+
+  // Save column widths to localStorage when they change (debounced)
+  React.useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      try {
+        localStorage.setItem('import_right_col_widths', JSON.stringify(rightColWidths));
+      } catch (e) {}
+    }, 300); // Save after 300ms of no changes
+    return () => clearTimeout(timeoutId);
+  }, [rightColWidths]);
+
+  // Use event delegation for resize - re-attach whenever items/selectedImport change
+  React.useEffect(() => {
+    // Attach event delegation to the last .items-table (right panel)
+    const allTables = document.querySelectorAll('table');
+    const itemsTables = document.querySelectorAll('table.items-table');
+
+    const handleTableMouseDown = (e) => {
+      const th = e.target.closest('th[data-resizable]');
+      if (th) {
+        const colKey = th.getAttribute('data-col-key');
+        if (colKey) {
+          handleThMouseDown(e, colKey);
+        }
+      }
+    };
+
+    // IMPORTANT: Attach to the LAST items-table (the right panel table)
+    const targetTable = itemsTables[itemsTables.length - 1];
+    if (targetTable) {
+      targetTable.addEventListener('mousedown', handleTableMouseDown, true);
+
+      return () => {
+        targetTable.removeEventListener('mousedown', handleTableMouseDown, true);
+      };
+    }
+  }, [items, selectedImport]); // Re-run when items or selectedImport change
 
   // Product selection modal state
   const [showProductModal, setShowProductModal] = useState(false);
@@ -3577,20 +3653,34 @@ const ImportGoods = () => {
                     </div>
                   </div>
 
-                  <table className="items-table" style={{minWidth:1300}}>
+                  <table className="items-table">
+                    <colgroup>
+                      {rightColOrder.map(key => {
+                        if (!rightVisibleCols.includes(key)) return null;
+                        const w = rightColWidths[key] || 100;
+                        return <col key={key} style={{ width: w + 'px' }} data-col={key} />;
+                      })}
+                    </colgroup>
                     <thead>
                       <tr>
                         {rightColOrder.map((key, index) => {
                           if (!rightVisibleCols.includes(key)) return null;
                           
-                          // Apply sticky classes for first 3 columns if they are the target columns
-                          let stickyClass = '';
-                          if (key === 'barcode' || key === 'productCode' || key === 'productName') {
-                            stickyClass = `sticky-col-${key}`;
-                          }
+                          const isActions = key === 'actions';
+                          const resizeProps = isActions ? {} : {
+                            'data-resizable': 'true',
+                            'data-col-key': key,
+                            onMouseDown: (e) => handleThMouseDown(e, key),
+                            style: {
+                              textAlign: 'center',
+                              cursor: 'col-resize',
+                              userSelect: 'none',
+                              position: 'relative'
+                            }
+                          };
                           
                           if (key === 'barcode') return (
-                            <th key="barcode" className={stickyClass} style={{textAlign: 'center'}}>
+                            <th key="barcode" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}>
                               <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
                                 <span>Mã vạch</span>
                                 <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
@@ -3601,7 +3691,7 @@ const ImportGoods = () => {
                             </th>
                           );
                           if (key === 'productCode') return (
-                            <th key="productCode" className={stickyClass} style={{textAlign: 'center'}}>
+                            <th key="productCode" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}>
                               <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
                                 <span>Mã hàng</span>
                                 <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
@@ -3612,7 +3702,7 @@ const ImportGoods = () => {
                             </th>
                           );
                           if (key === 'productName') return (
-                            <th key="productName" className={stickyClass} style={{textAlign: 'center'}}>
+                            <th key="productName" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}>
                               <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
                                 <span>Hàng hóa</span>
                                 <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
@@ -3622,18 +3712,18 @@ const ImportGoods = () => {
                               </div>
                             </th>
                           );
-                          if (key === 'unit') return <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>;
-                          if (key === 'quantity') return <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>;
-                          if (key === 'unitPrice') return <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>;
-                          if (key === 'transportCost') return <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>;
-                          if (key === 'noteDate') return <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú date PN</span></th>;
-                          if (key === 'total') return <th key="total" style={{textAlign: 'center'}}><span>Thành tiền</span></th>;
-                          if (key === 'totalTransport') return <th key="totalTransport" style={{textAlign: 'center'}}><span>TT vận chuyển</span></th>;
-                          if (key === 'weight') return <th key="weight" style={{textAlign: 'center'}}><span>Số kg</span></th>;
-                          if (key === 'volume') return <th key="volume" style={{textAlign: 'center'}}><span>Số khối</span></th>;
-                          if (key === 'warehouse') return <th key="warehouse" style={{textAlign: 'center'}}><span>Kho hàng</span></th>;
-                          if (key === 'description') return <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>;
-                          if (key === 'conversion') return <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>;
+                          if (key === 'unit') return <th key="unit" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Đơn vị tính</span></th>;
+                          if (key === 'quantity') return <th key="quantity" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Số lượng</span></th>;
+                          if (key === 'unitPrice') return <th key="unitPrice" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Đơn giá</span></th>;
+                          if (key === 'transportCost') return <th key="transportCost" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Tiền vận chuyển</span></th>;
+                          if (key === 'noteDate') return <th key="noteDate" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Ghi chú date PN</span></th>;
+                          if (key === 'total') return <th key="total" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Thành tiền</span></th>;
+                          if (key === 'totalTransport') return <th key="totalTransport" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>TT vận chuyển</span></th>;
+                          if (key === 'weight') return <th key="weight" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Số kg</span></th>;
+                          if (key === 'volume') return <th key="volume" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Số khối</span></th>;
+                          if (key === 'warehouse') return <th key="warehouse" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Kho hàng</span></th>;
+                          if (key === 'description') return <th key="description" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Mô tả</span></th>;
+                          if (key === 'conversion') return <th key="conversion" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Quy đổi</span></th>;
                           if (key === 'actions') return (
                             <th key="actions" style={{textAlign: 'center', verticalAlign: 'middle'}}>
                               <span>Thao tác</span>
@@ -3646,11 +3736,6 @@ const ImportGoods = () => {
                       {paginatedHeaderRows.map((row, rIdx) => (
                         <tr key={row.id} className="header-input-row" style={row.id === highlightRowId ? { background: '#fff7e6', boxShadow: 'inset 0 0 0 2px #ffd666' } : {}}>
                           {rightColOrder.map((colKey, index) => {
-                            // Apply sticky classes for target columns
-                            let stickyClass = '';
-                            if (colKey === 'barcode' || colKey === 'productCode' || colKey === 'productName') {
-                              stickyClass = `sticky-col-${colKey}`;
-                            }
                             
                             if (colKey === 'actions') {
                               if (!rightVisibleCols.includes('actions')) return null;
@@ -3684,7 +3769,7 @@ const ImportGoods = () => {
                             if (['productCode','productName','barcode'].includes(colKey)) {
                               if (!rightVisibleCols.includes(colKey)) return null;
                               return (
-                                <td key={colKey} className={stickyClass} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                                <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                                   {colKey === 'productName' ? (
                                         <button
                                       onClick={() => {
@@ -3698,16 +3783,15 @@ const ImportGoods = () => {
                                         setShowProductModal(true);
                                       }}
                                       style={{
-                                        width: '100%',
-                                        minWidth: 120,
-                                        padding: '4px 8px',
-                                        border: '1px solid #d9d9d9',
-                                        borderRadius: '4px',
-                                        background: '#fff',
-                                        textAlign: 'left',
-                                        cursor: 'pointer',
-                                        fontSize: '12px'
-                                      }}
+                                          width: '100%',
+                                          padding: '4px 8px',
+                                          border: '1px solid #d9d9d9',
+                                          borderRadius: '4px',
+                                          background: '#fff',
+                                          textAlign: 'left',
+                                          cursor: 'pointer',
+                                          fontSize: '12px'
+                                        }}
                                     >
                                       {row.values[colKey] || `-- Chọn ${colKey} --`}
                                     </button>
@@ -3719,7 +3803,7 @@ const ImportGoods = () => {
                                       size="small"
                                       showSearch
                                       allowClear
-                                      style={{ width: '100%', minWidth: 200 }}
+                                      style={{ width: '100%' }}
                                       popupStyle={{ 
                                         maxHeight: 400, 
                                         overflow: 'auto',
@@ -3763,7 +3847,7 @@ const ImportGoods = () => {
                                       placeholder="-- Chọn kho --"
                                       size="small"
                                       allowClear
-                                      style={{ width: '100%', minWidth: 80 }}
+                                      style={{ width: '100%' }}
                                     >
                                       {warehouses.map(w => (
                                         <Select.Option key={w.id} value={String(w.id)}>{w.name}</Select.Option>
@@ -3782,7 +3866,7 @@ const ImportGoods = () => {
                                     format="DD/MM/YYYY"
                                     placeholder="Chọn ngày"
                                     size="small"
-                                    style={{ width: '100%', minWidth: 180 }}
+                                    style={{ width: '100%' }}
                                     showToday={true}
                                     allowClear={true}
                                     picker="date"
@@ -3796,8 +3880,8 @@ const ImportGoods = () => {
                             }
 
                             if (colKey === 'unit') {
-                              return (
-                                <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                                return (
+                                  <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                                   {(() => {
                                     try {
                                       const rowValues = row.values || {};
@@ -3828,7 +3912,7 @@ const ImportGoods = () => {
                                           placeholder="-- Chọn đơn vị --"
                                           size="small"
                                           allowClear
-                                          style={{ width: '100%', minWidth: 120 }}
+                                          style={{ width: '100%' }}
                                         >
                                           {uniq.map(u => <Select.Option key={u.name} value={u.name}>{u.name}</Select.Option>)}
                                         </Select>
@@ -3893,7 +3977,7 @@ const ImportGoods = () => {
                                     }
                                   }}
                                   size="small"
-                                  style={{ width: '100%', minWidth: colKey === 'description' ? 250 : 100 }}
+                                  style={{ width: '100%' }}
                                   readOnly={['total', 'totalTransport', 'volume', 'weight'].includes(colKey)}
                                   placeholder={['total', 'totalTransport'].includes(colKey) ? 'Tự động tính' : colKey === 'volume' ? 'Lấy từ sản phẩm' : colKey === 'weight' ? 'Số kg SP × Số lượng' : ''}
                                 />
@@ -4198,50 +4282,69 @@ const ImportGoods = () => {
                   </div>
                 </div>
 
-                <table className="items-table" style={{minWidth:1300}}>
+                <table className="items-table">
+                  <colgroup>
+                    {rightColOrder.map(key => rightVisibleCols.includes(key) ? (
+                      <col key={key} style={{ width: `${rightColWidths[key] || 100}px` }} />
+                    ) : null)}
+                  </colgroup>
                   <thead>
                     <tr>
                       {rightColOrder.map((key, index) => {
                         if (!rightVisibleCols.includes(key)) return null;
                         
-                        // Apply sticky classes for target columns
-                        let stickyClass = '';
-                        if (key === 'barcode' || key === 'productCode' || key === 'productName') {
-                          stickyClass = `sticky-col-${key}`;
-                        }
+                        // Generic resizable header for ALL columns
+                        const columnNames = {
+                          barcode: 'Mã vạch',
+                          productCode: 'Mã hàng', 
+                          productName: 'Hàng hóa',
+                          unit: 'Đơn vị tính',
+                          quantity: 'Số lượng',
+                          unitPrice: 'Đơn giá',
+                          transportCost: 'Tiền vận chuyển',
+                          noteDate: 'Ghi chú date PN',
+                          total: 'Thành tiền',
+                          totalTransport: 'TT vận chuyển',
+                          weight: 'Số kg',
+                          volume: 'Số khối',
+                          warehouse: 'Kho hàng',
+                          description: 'Mô tả',
+                          conversion: 'Quy đổi',
+                          actions: 'Thao tác'
+                        };
                         
-                        if (key === 'barcode') return <th key="barcode" className={stickyClass} style={{textAlign: 'center'}}><span>Mã vạch</span></th>;
-                        if (key === 'productCode') return <th key="productCode" className={stickyClass} style={{textAlign: 'center'}}><span>Mã hàng</span></th>;
-                        if (key === 'productName') return <th key="productName" className={stickyClass} style={{textAlign: 'center'}}><span>Hàng hóa</span></th>;
-                        if (key === 'unit') return <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>;
-                        if (key === 'quantity') return <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>;
-                        if (key === 'unitPrice') return <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>;
-                        if (key === 'transportCost') return <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>;
-                        if (key === 'noteDate') return <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú date PN</span></th>;
-                        if (key === 'total') return <th key="total" style={{textAlign: 'center'}}><span>Thành tiền</span></th>;
-                        if (key === 'totalTransport') return <th key="totalTransport" style={{textAlign: 'center'}}><span>TT vận chuyển</span></th>;
-                        if (key === 'weight') return <th key="weight" style={{textAlign: 'center'}}><span>Số kg</span></th>;
-                        if (key === 'volume') return <th key="volume" style={{textAlign: 'center'}}><span>Số khối</span></th>;
-                        if (key === 'warehouse') return <th key="warehouse" style={{textAlign: 'center'}}><span>Kho hàng</span></th>;
-                        if (key === 'description') return <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>;
-                        if (key === 'conversion') return <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>;
-                        if (key === 'actions') return (
-                          <th key="actions" style={{textAlign: 'center', verticalAlign: 'middle'}}>
-                            <span>Thao tác</span>
+                        const colName = columnNames[key] || key;
+                        const isActions = key === 'actions';
+                        
+                        return (
+                          <th key={key} 
+                              style={{
+                                width: rightColWidths[key] + 'px',
+                                minWidth: '80px',
+                                textAlign: 'center',
+                                position: 'relative',
+                                cursor: isActions ? 'default' : 'col-resize',
+                                userSelect: 'none',
+                                padding: '8px 4px',
+                                border: '1px solid #d9d9d9',
+                                background: isActions ? '#f5f5f5' : '#fafafa',
+                                fontWeight: 'bold',
+                                fontSize: '13px'
+                              }}
+                              onMouseDown={isActions ? undefined : (e) => handleThMouseDown(e, key)}
+                              data-resizable={isActions ? undefined : "true"}
+                              data-col-key={key}
+                              title={isActions ? undefined : `Click and drag to resize ${colName}`}>
+                            <span>{colName}</span>
                           </th>
                         );
-                        return null;
                       })}
                     </tr>
                     {/* Header input rows for new entries */}
                     {paginatedHeaderRows.map((row, rIdx) => (
                       <tr key={row.id} className="header-input-row" style={row.id === highlightRowId ? { background: '#fff7e6', boxShadow: 'inset 0 0 0 2px #ffd666' } : {}}>
                         {rightColOrder.map((colKey, index) => {
-                          // Apply sticky classes for target columns
-                          let stickyClass = '';
-                          if (colKey === 'barcode' || colKey === 'productCode' || colKey === 'productName') {
-                            stickyClass = `sticky-col-${colKey}`;
-                          }
+                          
                           
                           if (colKey === 'actions') {
                             if (!rightVisibleCols.includes('actions')) return null;
@@ -4274,7 +4377,7 @@ const ImportGoods = () => {
                           if (['productCode','productName','barcode'].includes(colKey)) {
                             if (!rightVisibleCols.includes(colKey)) return null;
                             return (
-                              <td key={colKey} className={stickyClass} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                              <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
                                 {colKey === 'productName' ? (
                                   <button
                                       onClick={() => {
@@ -4289,7 +4392,6 @@ const ImportGoods = () => {
                                     }}
                                     style={{
                                       width: '100%',
-                                      minWidth: 120,
                                       padding: '4px 8px',
                                       border: '1px solid #d9d9d9',
                                       borderRadius: '4px',
@@ -4309,7 +4411,7 @@ const ImportGoods = () => {
                                     size="small"
                                     showSearch
                                     allowClear
-                                    style={{ width: '100%', minWidth: 200 }}
+                                    style={{ width: '100%' }}
                                     popupStyle={{ 
                                       maxHeight: 400, 
                                       overflow: 'auto',
@@ -4354,7 +4456,7 @@ const ImportGoods = () => {
                                   placeholder="-- Chọn kho --"
                                   size="small"
                                   allowClear
-                                  style={{ width: '100%', minWidth: 80 }}
+                                  style={{ width: '100%' }}
                                 >
                                   {warehouses.map(w => (
                                     <Select.Option key={w.id} value={String(w.id)}>{w.name}</Select.Option>
@@ -4374,7 +4476,7 @@ const ImportGoods = () => {
                                   format="DD/MM/YYYY"
                                   placeholder="Chọn ngày"
                                   size="small"
-                                  style={{ width: '100%', minWidth: 180 }}
+                                  style={{ width: '100%' }}
                                   showToday={true}
                                   allowClear={true}
                                   picker="date"
@@ -4382,6 +4484,52 @@ const ImportGoods = () => {
                               </td>
                             );
                           }
+
+                            if (colKey === 'unit') {
+                              if (!rightVisibleCols.includes(colKey)) return null;
+                              return (
+                                <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                                  {(() => {
+                                    try {
+                                      const rowValues = row.values || {};
+                                      const prodId = rowValues.productName_id || rowValues.productCode_id || rowValues.barcode_id || null;
+                                      let prod = null;
+                                      if (prodId && products && products.length > 0) prod = products.find(p => String(p.id) === String(prodId));
+                                      if (!prod) {
+                                        const keyMatch = rowValues.productCode || rowValues.barcode || rowValues.productName || '';
+                                        if (keyMatch) prod = products.find(p => p.code === keyMatch || p.barcode === keyMatch || p.name === keyMatch);
+                                      }
+                                      const opts = [];
+                                      if (prod) {
+                                        const base = prod.baseUnit || prod.defaultUnit || prod.DefaultUnit || prod.unit || '';
+                                        if (base) opts.push({ name: base, conv: 1 });
+                                        if (prod.unit1) opts.push({ name: prod.unit1, conv: Number(prod.conversion1) || 1 });
+                                        if (prod.unit2) opts.push({ name: prod.unit2, conv: Number(prod.conversion2) || 1 });
+                                        if (prod.unit3) opts.push({ name: prod.unit3, conv: Number(prod.conversion3) || 1 });
+                                        if (prod.unit4) opts.push({ name: prod.unit4, conv: Number(prod.conversion4) || 1 });
+                                      }
+                                      const uniq = [];
+                                      opts.forEach(o => { if (o.name && !uniq.find(u=>u.name===o.name)) uniq.push(o); });
+
+                                      return (
+                                        <Select
+                                          value={row.values.unit || undefined}
+                                          onChange={(val) => handleHeaderRowChange(rIdx, 'unit', val ? String(val) : null)}
+                                          placeholder="-- Chọn đơn vị --"
+                                          size="small"
+                                          allowClear
+                                          style={{ width: '100%' }}
+                                        >
+                                          {uniq.map(u => <Select.Option key={u.name} value={u.name}>{u.name}</Select.Option>)}
+                                        </Select>
+                                      );
+                                    } catch (e) {
+                                      return <Input value={row.values.unit || ''} onChange={(e)=>handleHeaderRowChange(rIdx,'unit',e.target.value)} size="small" />;
+                                    }
+                                  })()}
+                                </td>
+                              );
+                            }
 
                           if (!rightVisibleCols.includes(colKey)) return null;
                           return (
@@ -4428,7 +4576,7 @@ const ImportGoods = () => {
                                   }
                                 }}
                                 size="small"
-                                style={{ width: '100%', minWidth: colKey === 'description' ? 250 : 100 }}
+                                style={{ width: '100%' }}
                                 readOnly={['total', 'totalTransport', 'volume', 'weight'].includes(colKey)}
                                 placeholder={['total', 'totalTransport'].includes(colKey) ? 'Tự động tính' : colKey === 'volume' ? 'Lấy từ sản phẩm' : colKey === 'weight' ? 'Số kg SP × Số lượng' : ''}
                               />
