@@ -1,4 +1,5 @@
 import React, { useState, useRef } from 'react';
+import ExcelJS from 'exceljs';
 import { Menu } from 'antd';
 import './BusinessPage.css';
 import './ImportGoods.css';
@@ -71,8 +72,15 @@ const ImportGoods = () => {
     try {
       const savedColOrder = localStorage.getItem('import_leftColOrder');
       if (savedColOrder) {
-        const parsedOrder = JSON.parse(savedColOrder);
-        setLeftColOrder(parsedOrder);
+        let parsedOrder = JSON.parse(savedColOrder);
+        if (Array.isArray(parsedOrder) && !parsedOrder.includes('importType')) {
+          const idx = parsedOrder.indexOf('createdDate');
+          const newOrder = [...parsedOrder];
+          newOrder.splice(idx >= 0 ? idx + 1 : 1, 0, 'importType');
+          parsedOrder = newOrder;
+          try { localStorage.setItem('import_leftColOrder', JSON.stringify(parsedOrder)); } catch {}
+        }
+        if (Array.isArray(parsedOrder)) setLeftColOrder(parsedOrder);
       }
     } catch (error) {
       console.error('Failed to load column order:', error);
@@ -93,17 +101,26 @@ const ImportGoods = () => {
 
   // Column visibility & header filters for left table
   const IMPORT_LEFT_COLS_KEY = 'import_goods_left_cols_v1';
-  const defaultLeftCols = ['checkbox','importNumber','createdDate','total','note','actions'];
+  const defaultLeftCols = ['checkbox','importNumber','createdDate','importType','total','note','actions'];
   const [leftVisibleCols, setLeftVisibleCols] = useState(() => {
     try {
       const v = JSON.parse(localStorage.getItem(IMPORT_LEFT_COLS_KEY));
-      if (Array.isArray(v)) return v;
+      if (Array.isArray(v)) {
+        if (!v.includes('importType')) {
+          const idx = v.indexOf('createdDate');
+          const newV = [...v];
+          newV.splice(idx >= 0 ? idx + 1 : 1, 0, 'importType');
+          try { localStorage.setItem(IMPORT_LEFT_COLS_KEY, JSON.stringify(newV)); } catch {}
+          return newV;
+        }
+        return v;
+      }
     } catch {}
     return defaultLeftCols;
   });
-  const [leftFilters, setLeftFilters] = useState({ importNumber: '', createdDate: '', note: '', total: '' });
+  const [leftFilters, setLeftFilters] = useState({ importNumber: '', createdDate: '', importType: '', note: '', total: '' });
   // modal-based column filters (lists of selected values)
-  const [leftFilterLists, setLeftFilterLists] = useState({ importNumber: [], createdDate: [], note: [], total: [] });
+  const [leftFilterLists, setLeftFilterLists] = useState({ importNumber: [], createdDate: [], importType: [], note: [], total: [] });
   const [activeHeaderModalColumn, setActiveHeaderModalColumn] = useState(null);
   const [modalSearchTerm, setModalSearchTerm] = useState('');
   const [modalSelections, setModalSelections] = useState([]);
@@ -115,6 +132,42 @@ const ImportGoods = () => {
   // Drag & drop for columns
   const [draggedColumnIndex, setDraggedColumnIndex] = useState(null);
   const [leftColOrder, setLeftColOrder] = useState(defaultLeftCols);
+
+  // Left table column widths (resizable)
+  const [leftColWidths, setLeftColWidths] = useState(() => {
+    try {
+      const saved = localStorage.getItem('import_left_col_widths');
+      if (saved) return JSON.parse(saved);
+    } catch (e) {}
+    return {
+      checkbox: 40,
+      importNumber: 160,
+      createdDate: 120,
+      importType: 140,
+      total: 120,
+      note: 220,
+      actions: 100
+    };
+  });
+  const resizingLeftRef = useRef({ col: null, startX: 0, startWidth: 0 });
+
+  const resetLeftSettings = () => {
+    const defaultWidths = {
+      checkbox: 40,
+      importNumber: 160,
+      createdDate: 120,
+      importType: 140,
+      total: 120,
+      note: 220,
+      actions: 100
+    };
+    setLeftVisibleCols(defaultLeftCols);
+    setLeftColOrder(defaultLeftCols);
+    setLeftColWidths(defaultWidths);
+    try { localStorage.setItem(IMPORT_LEFT_COLS_KEY, JSON.stringify(defaultLeftCols)); } catch {}
+    try { localStorage.setItem('import_leftColOrder', JSON.stringify(defaultLeftCols)); } catch {}
+    try { localStorage.setItem('import_left_col_widths', JSON.stringify(defaultWidths)); } catch {}
+  };
 
   // Drag & drop handlers
   const handleColumnDragStart = (e, index) => {
@@ -139,27 +192,14 @@ const ImportGoods = () => {
     }
 
     const newOrder = [...leftColOrder];
-    // old order logged earlier during debugging
-    
     const draggedItem = newOrder[draggedColumnIndex];
     newOrder.splice(draggedColumnIndex, 1);
     newOrder.splice(targetIndex, 0, draggedItem);
-    
-    // new order saved
     setLeftColOrder(newOrder);
     setDraggedColumnIndex(null);
-    
-    // Save to localStorage
     try {
       localStorage.setItem('import_leftColOrder', JSON.stringify(newOrder));
-    } catch (error) {
-      console.error('Failed to save column order:', error);
-    }
-  };
-
-  const handleColumnDragEnd = () => {
-    // drag ended
-    setDraggedColumnIndex(null);
+    } catch (error) {}
   };
 
   // Core data state
@@ -246,6 +286,31 @@ const ImportGoods = () => {
       const delta = e.clientX - startX;
       const newWidth = Math.max(40, startWidth + delta);
       setRightColWidths(prev => ({ ...prev, [colKey]: newWidth }));
+    };
+
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      document.body.style.cursor = '';
+    };
+
+    document.body.style.cursor = 'col-resize';
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Left table resize handler (for the left panel table)
+  const handleLeftThMouseDown = (e, colKey) => {
+    e.preventDefault();
+    e.stopPropagation();
+
+    const startX = e.clientX;
+    const startWidth = leftColWidths[colKey] || 100;
+
+    const handleMouseMove = (e) => {
+      const delta = e.clientX - startX;
+      const newWidth = Math.max(40, startWidth + delta);
+      setLeftColWidths(prev => ({ ...prev, [colKey]: newWidth }));
     };
 
     const handleMouseUp = () => {
@@ -1389,6 +1454,16 @@ const ImportGoods = () => {
     return () => clearTimeout(timeoutId);
   }, [rightColWidths]);
 
+  // Save left column widths to localStorage when they change (debounced)
+  React.useEffect(() => {
+    const timeoutId = setTimeout(() => {
+      try {
+        localStorage.setItem('import_left_col_widths', JSON.stringify(leftColWidths));
+      } catch (e) {}
+    }, 300);
+    return () => clearTimeout(timeoutId);
+  }, [leftColWidths]);
+
   // Use event delegation for resize - re-attach whenever items/selectedImport change
   React.useEffect(() => {
     // Attach event delegation to the last .items-table (right panel)
@@ -1857,6 +1932,90 @@ const ImportGoods = () => {
     } catch (err) {
       console.error('Export template error', err);
       alert('Không thể tải mẫu. Vui lòng thử lại.');
+    }
+  };
+
+  // Export selected imports (or filtered visible ones) as CSV
+  const exportSelectedImportsList = async () => {
+    try {
+      if (!selectedRowKeys || selectedRowKeys.length === 0) {
+        alert('Vui lòng chọn ít nhất 1 phiếu để xuất.');
+        return;
+      }
+
+      const rows = filteredLeft.filter(r => selectedRowKeys.includes(r.id));
+      if (!rows || rows.length === 0) {
+        alert('Không tìm thấy phiếu đã chọn trong danh sách hiện tại.');
+        return;
+      }
+
+      // Build XLSX with ExcelJS
+      const wb = new ExcelJS.Workbook();
+      wb.creator = 'QLNPP';
+      const ws = wb.addWorksheet('Danh sách PN');
+
+      // Define columns
+      ws.columns = [
+        { header: 'Số phiếu', key: 'importNumber', width: 20 },
+        { header: 'Ngày nhập', key: 'createdDate', width: 15 },
+        { header: 'Loại nhập', key: 'importType', width: 18 },
+        { header: 'Tổng tiền', key: 'total', width: 15 },
+        { header: 'Ghi chú', key: 'note', width: 30 }
+      ];
+
+      // Header styling
+      const headerRow = ws.getRow(1);
+      headerRow.font = { name: 'Times New Roman', bold: true };
+
+      // Add data rows
+      rows.forEach(r => {
+        const totalVal = (r.totalAmount !== undefined && r.totalAmount !== null)
+          ? Number(r.totalAmount)
+          : (r.items || []).reduce((s,it) => s + (Number(it.total) || 0), 0);
+
+        ws.addRow({
+          importNumber: r.importNumber,
+          createdDate: r.createdDate,
+          importType: r.importType,
+          total: totalVal,
+          note: r.note || ''
+        });
+      });
+
+      // Apply formatting: Times New Roman, borders, number format for total
+      ws.eachRow((row, rowNumber) => {
+        row.eachCell((cell, colNumber) => {
+          cell.font = { name: 'Times New Roman' };
+          cell.alignment = { vertical: 'middle', wrapText: false };
+          cell.border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+          };
+          // Apply thousand separator for total column (4th column)
+          if (colNumber === 4 && rowNumber > 1) {
+            cell.numFmt = '#,##0';
+          }
+        });
+      });
+
+      // Format date column (if needed) - keep as text if already formatted
+      // Generate buffer and trigger download
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const fileName = `danh_sach_phieu_nhap_${new Date().toISOString().slice(0,10)}.xlsx`;
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(blob);
+      link.href = url;
+      link.download = fileName;
+      document.body.appendChild(link);
+      link.click();
+      document.body.removeChild(link);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export selected imports error', err);
+      alert('Không thể xuất danh sách. Vui lòng thử lại.');
     }
   };
 
@@ -3032,7 +3191,25 @@ const ImportGoods = () => {
 
   // Create columns with drag & drop support
   const createDraggableColumn = (config, index) => ({
-    ...config,
+    ...(() => {
+      const keyName = config.key || config.dataIndex;
+      const isActions = keyName === 'actions' || keyName === 'checkbox';
+      const width = leftColWidths[keyName] || config.width;
+      const titleNode = (
+        <div style={{position: 'relative', display: 'inline-block', width: '100%'}}>
+          {config.title}
+          {!isActions && (
+            <div
+              onMouseDown={(e) => { e.stopPropagation(); handleLeftThMouseDown(e, keyName); }}
+              style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 8, cursor: 'col-resize', zIndex: 20 }}
+              aria-hidden
+            />
+          )}
+        </div>
+      );
+
+      return { ...config, title: titleNode, width };
+    })(),
     onHeaderCell: () => ({
       draggable: true,
       onDragStart: (e) => {
@@ -3124,6 +3301,19 @@ const ImportGoods = () => {
     createDraggableColumn({
       title: (
         <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <span>⋮⋮ Loại nhập</span>
+          <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('importType')} />
+          {leftFilterLists.importType && leftFilterLists.importType.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.importType.length})</span>}
+        </div>
+      ),
+      dataIndex: 'importType',
+      key: 'importType',
+      render: (text) => text,
+      sorter: (a, b) => (a.importType || '').localeCompare(b.importType || ''),
+    }, 3),
+    createDraggableColumn({
+      title: (
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
           <span>⋮⋮ Tổng tiền</span>
           <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('total')} />
           {leftFilterLists.total && leftFilterLists.total.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.total.length})</span>}
@@ -3142,7 +3332,7 @@ const ImportGoods = () => {
         const tb = Number(b.totalAmount !== undefined && b.totalAmount !== null ? b.totalAmount : (b.items||[]).reduce((s,it)=>s+(Number(it.total)||0),0)) || 0;
         return ta - tb;
       }
-    }, 3),
+    }, 4),
     createDraggableColumn({
       title: (
         <div style={{display:'flex',alignItems:'center',gap:8}}>
@@ -3157,7 +3347,7 @@ const ImportGoods = () => {
         <span style={{maxWidth:220,overflow:'hidden',textOverflow:'ellipsis'}} title={text}>{text}</span>
       ),
       sorter: (a, b) => (a.note || '').localeCompare(b.note || ''),
-    }, 4),
+    }, 5),
     createDraggableColumn({
       title: (<div style={{textAlign: 'center'}}>⋮⋮ Thao tác</div>),
       key: 'actions',
@@ -3174,7 +3364,7 @@ const ImportGoods = () => {
           </Space>
         </div>
       )
-    }, 5)
+    }, 6)
   ];
 
   // Apply column order and visibility
@@ -3222,10 +3412,8 @@ const ImportGoods = () => {
         <div className="search-panel-total" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span>Tổng {filteredLeft.length} phiếu</span>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <Button onClick={exportImportTemplate} title="Xuất mẫu">Xuất mẫu</Button>
-            <Button onClick={() => document.getElementById('template-file-input').click()} title="Nhập mẫu" style={{marginLeft:4}}>
-              Nhập mẫu
-            </Button>
+            <Button onClick={exportSelectedImportsList} title="Xuất DS PN">Xuất DS PN</Button>
+            {/* template import/export buttons moved to right detail panel */}
             <input 
               id="template-file-input"
               type="file" 
@@ -3360,7 +3548,7 @@ const ImportGoods = () => {
               );
             })}
             <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:12}}>
-              <button onClick={()=>{ setLeftVisibleCols(defaultLeftCols); }} className="btn btn-secondary">Làm lại</button>
+              <button onClick={()=>{ resetLeftSettings(); }} className="btn btn-secondary">Làm lại</button>
               <button onClick={()=>setShowLeftSettings(false)} className="btn btn-primary">Đóng</button>
             </div>
           </div>
@@ -4130,6 +4318,12 @@ const ImportGoods = () => {
                     📁 Lưu lại
                   </button>
                 )}
+                <button className="btn btn-success" onClick={exportImportTemplate} style={{marginLeft:8}}>
+                  📄 Xuất chi tiết PN
+                </button>
+                <button className="btn btn-success" onClick={() => document.getElementById('template-file-input').click()} style={{marginLeft:4}}>
+                  📁 Nhập chi tiết PN
+                </button>
                 <button className="btn btn-purple" onClick={handlePrint}>
                   🖨 In A4
                 </button>

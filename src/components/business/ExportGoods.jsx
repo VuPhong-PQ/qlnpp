@@ -3215,10 +3215,7 @@ const ExportGoods = () => {
         <div className="search-panel-total" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span>Tổng {filteredLeft.length} phiếu</span>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <Button onClick={exportImportTemplate} title="Xuất mẫu">Xuất mẫu</Button>
-            <Button onClick={() => document.getElementById('template-file-input').click()} title="Nhập mẫu" style={{marginLeft:4}}>
-              Nhập mẫu
-            </Button>
+            {/* template import/export buttons moved to right detail panel */}
             <input 
               id="template-file-input"
               type="file" 
@@ -4116,6 +4113,12 @@ const ExportGoods = () => {
                 <button className="btn btn-info" onClick={saveImport} disabled={!isEditing}>
                   📁 Lưu lại
                 </button>
+                  <button className="btn btn-success" onClick={exportImportTemplate} style={{marginLeft:8}}>
+                    📄 Xuất chi tiết PN
+                  </button>
+                  <button className="btn btn-success" onClick={() => document.getElementById('template-file-input').click()} style={{marginLeft:4}}>
+                    📁 Nhập chi tiết PN
+                  </button>
                 <button className="btn btn-purple" onClick={handlePrint}>
                   🖨 In A4
                 </button>
