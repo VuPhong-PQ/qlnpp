@@ -139,7 +139,6 @@ const ExportGoods = () => {
       a.remove();
       window.URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Export list error', err);
       alert('Không thể xuất danh sách. Vui lòng thử lại.');
     }
   };
@@ -204,7 +203,6 @@ const ExportGoods = () => {
 
   // Drag & drop handlers
   const handleColumnDragStart = (e, index) => {
-    console.log('Drag start:', index);
     setDraggedColumnIndex(index);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', index.toString());
@@ -217,7 +215,6 @@ const ExportGoods = () => {
 
   const handleColumnDrop = (e, targetIndex) => {
     e.preventDefault();
-    console.log('Drop:', draggedColumnIndex, '->', targetIndex);
     
     if (draggedColumnIndex === null || draggedColumnIndex === targetIndex) {
       setDraggedColumnIndex(null);
@@ -225,13 +222,11 @@ const ExportGoods = () => {
     }
 
     const newOrder = [...leftColOrder];
-    console.log('Old order:', newOrder);
     
     const draggedItem = newOrder[draggedColumnIndex];
     newOrder.splice(draggedColumnIndex, 1);
     newOrder.splice(targetIndex, 0, draggedItem);
     
-    console.log('New order:', newOrder);
     setLeftColOrder(newOrder);
     setDraggedColumnIndex(null);
     
@@ -244,7 +239,6 @@ const ExportGoods = () => {
   };
 
   const handleColumnDragEnd = () => {
-    console.log('Drag end');
     setDraggedColumnIndex(null);
   };
 
@@ -314,13 +308,6 @@ const ExportGoods = () => {
   const productSelectRefs = useRef({});
   const [headerRows, setHeaderRows] = useState(() => [{ id: Date.now(), values: {} }]);
   const [headerFilter, setHeaderFilter] = useState(null); // { productCode, barcode, productName } or null
-
-  // Debug logging helper (completely disabled for performance)
-  const devLog = () => {
-    // No-op for production performance - all logging disabled
-  };
-
-
 
   // Helper function to calculate totals from items
   const calculateTotals = (itemsList) => {
@@ -1816,7 +1803,6 @@ const ExportGoods = () => {
         setselectedExport(exports.length > 0 ? exports[0] : null);
       }
     } catch (err) {
-      console.error('Delete import error', err);
       alert('Xóa phiếu xuất thất bại');
     }
   };
@@ -1880,7 +1866,6 @@ const ExportGoods = () => {
     } catch (err) {
       // Silent error handling
       // fallback to existing sample data
-      console.warn('Using local sample exports as fallback');
       // keep current `exports` state as fallback
     }
   };
@@ -1992,7 +1977,6 @@ const ExportGoods = () => {
       link.remove();
       window.URL.revokeObjectURL(objectUrl);
     } catch (err) {
-      console.error('Export template error', err);
       alert('Không thể tải mẫu. Vui lòng thử lại.');
     }
   };
@@ -2041,7 +2025,6 @@ const ExportGoods = () => {
       alert('Import phiếu xuất thành công');
       await loadExports();
     } catch (err) {
-      console.error('Import template error', err);
       // If the thrown error contains server text, show it; otherwise show generic message
       const msg = (err && err.message) ? err.message : null;
       if (msg && msg.includes('Sản phẩm có mã hàng')) {
@@ -2131,7 +2114,6 @@ const ExportGoods = () => {
       
       setIsEditing(false);
     } catch (err) {
-      console.error('Load import details error', err);
       alert('Không thể tải chi tiết phiếu xuất');
     }
   };
@@ -2206,7 +2188,6 @@ const ExportGoods = () => {
       setIsEditMode(true);
       setIsEditing(true);
     } catch (err) {
-      console.error('Edit import error', err);
       alert('Không thể chỉnh sửa phiếu xuất');
     }
   };
@@ -2235,7 +2216,6 @@ const ExportGoods = () => {
       await loadImportDetails(created.id);
       setIsEditing(true);
     } catch (err) {
-      console.error('Create import error', err);
       alert('Tạo phiếu xuất mới thất bại');
     }
   };
@@ -2335,12 +2315,10 @@ const ExportGoods = () => {
 
       // VALIDATION CUỐI CÙNG
       if (totalText === null || totalText === undefined || totalText === '') {
-        console.error('CRITICAL: totalText is still null/undefined/empty!');
-        alert('Lỗi: Không thể tạo totalText. Vui lòng báo cáo lỗi này.');
+
         return;
       }
 
-      // Check if this is an update (has existing import with ID) or create new
       const isUpdate = selectedExport && selectedExport.id && selectedExport.id > 0 && !selectedExport.isTemp;
 
       if (isUpdate) {
@@ -2352,7 +2330,6 @@ const ExportGoods = () => {
             currentImport = await currentRes.json();
           }
         } catch (e) {
-          console.error('Failed to fetch current export:', e);
         }
 
         const res = await fetch(`/api/Exports/${selectedExport.id}`, {
@@ -2367,7 +2344,6 @@ const ExportGoods = () => {
         });
         if (!res.ok) {
           const errorText = await res.text();
-          console.error('PUT Error:', errorText);
           
           // Check if it's a concurrency exception
           if (errorText.includes('DbUpdateConcurrencyException') || errorText.includes('concurrency')) {
@@ -2416,15 +2392,6 @@ const ExportGoods = () => {
         
         if (!res.ok) {
           const errorText = await res.text();
-          console.error('POST Error Response:', errorText);
-          
-          // Parse error để xem chi tiết
-          try {
-            const errorJson = JSON.parse(errorText);
-            console.error('Parsed error:', errorJson);
-          } catch (e) {
-            console.error('Raw error text:', errorText);
-          }
           
           throw new Error(`Create failed: ${errorText}`);
         }
@@ -2462,7 +2429,6 @@ const ExportGoods = () => {
         alert('Lưu phiếu xuất thành công! Phiếu đã được thêm vào danh sách bên trái.');
       }
     } catch (err) {
-      console.error('Save import error', err);
       alert(`Lưu phiếu xuất thất bại: ${err.message}`);
     }
   };
@@ -2821,7 +2787,6 @@ const ExportGoods = () => {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (e) {
-      console.error('Export error', e);
       alert('Xuất Excel thất bại');
     }
   };
@@ -3041,10 +3006,9 @@ const ExportGoods = () => {
       printWindow.document.close();
       printWindow.focus();
       setTimeout(() => {
-        try { printWindow.print(); } catch (e) { console.error(e); }
+        try { printWindow.print(); } catch (e) { }
       }, 700);
     } catch (e) {
-      console.error(e);
       alert('Lỗi khi tạo bản in A4');
     }
   };
