@@ -1963,9 +1963,14 @@ const ImportGoods = () => {
         { header: 'Ghi chú', key: 'note', width: 30 }
       ];
 
+      // Header & body fonts
+      const headerFont = { name: 'Times New Roman', size: 12, bold: true };
+      const bodyFont = { name: 'Times New Roman', size: 12 };
+
       // Header styling
       const headerRow = ws.getRow(1);
-      headerRow.font = { name: 'Times New Roman', bold: true };
+      headerRow.font = headerFont;
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
 
       // Add data rows
       rows.forEach(r => {
@@ -1985,22 +1990,20 @@ const ImportGoods = () => {
       // Apply formatting: Times New Roman, borders, number format for total
       ws.eachRow((row, rowNumber) => {
         row.eachCell((cell, colNumber) => {
-          cell.font = { name: 'Times New Roman' };
-          cell.alignment = { vertical: 'middle', wrapText: false };
-          cell.border = {
-            top: { style: 'thin' },
-            left: { style: 'thin' },
-            bottom: { style: 'thin' },
-            right: { style: 'thin' }
-          };
-          // Apply thousand separator for total column (4th column)
-          if (colNumber === 4 && rowNumber > 1) {
+          cell.font = rowNumber === 1 ? headerFont : bodyFont;
+          cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+          if (rowNumber !== 1 && cell._column && cell._column.key === 'total') {
             cell.numFmt = '#,##0';
+            cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          } else {
+            cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
           }
         });
       });
 
-      // Format date column (if needed) - keep as text if already formatted
+      // Auto filter and freeze header to match exports formatting
+      ws.autoFilter = { from: 'A1', to: 'E1' };
+      ws.views = [{ state: 'frozen', ySplit: 1 }];
       // Generate buffer and trigger download
       const buf = await wb.xlsx.writeBuffer();
       const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -3412,7 +3415,7 @@ const ImportGoods = () => {
         <div className="search-panel-total" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span>Tổng {filteredLeft.length} phiếu</span>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <Button onClick={exportSelectedImportsList} title="Xuất DS PN">Xuất DS PN</Button>
+            <Button className="xuatsd-btn" size="small" onClick={exportSelectedImportsList} title="Xuất DS PN">Xuất DS PN</Button>
             {/* template import/export buttons moved to right detail panel */}
             <input 
               id="template-file-input"
@@ -4319,10 +4322,10 @@ const ImportGoods = () => {
                   </button>
                 )}
                 <button className="btn btn-success" onClick={exportImportTemplate} style={{marginLeft:8}}>
-                  📄 Xuất chi tiết PN
+                  📄 Xuất chi tiết
                 </button>
                 <button className="btn btn-success" onClick={() => document.getElementById('template-file-input').click()} style={{marginLeft:4}}>
-                  📁 Nhập chi tiết PN
+                  📁 Nhập chi tiết
                 </button>
                 <button className="btn btn-purple" onClick={handlePrint}>
                   🖨 In A4

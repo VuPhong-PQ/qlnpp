@@ -1,4 +1,5 @@
-﻿import React, { useState, useRef } from 'react';
+﻿import React, { useState, useRef, useEffect } from 'react';
+import ExcelJS from 'exceljs';
 import { Menu } from 'antd';
 import './BusinessPage.css';
 import './ExportGoods.css';
@@ -56,6 +57,91 @@ const ExportGoods = () => {
       y: event.clientY,
       record: record
     });
+  };
+
+  // Export selected left-panel exports to .xlsx with Times New Roman and borders
+  const exportSelectedList = async () => {
+    try {
+      // Determine rows to export
+      let rows = [];
+      if (selectedRowKeys && selectedRowKeys.length > 0) {
+        rows = filteredLeft.filter(r => selectedRowKeys.includes(r.id));
+      } else if (selectedExport) {
+        rows = [selectedExport];
+      } else {
+        alert('Vui lòng chọn tối thiểu 1 phiếu để xuất.');
+        return;
+      }
+
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Danh sách PX');
+
+      // Header style
+      const headerFont = { name: 'Times New Roman', size: 12, bold: true };
+      const bodyFont = { name: 'Times New Roman', size: 12 };
+
+      // Define columns
+      ws.columns = [
+        { header: 'Số phiếu', key: 'exportNumber', width: 20 },
+        { header: 'Ngày xuất', key: 'createdDate', width: 15 },
+        { header: 'Nhân viên', key: 'employee', width: 25 },
+        { header: 'Loại xuất', key: 'exportType', width: 20 },
+        { header: 'Tổng tiền', key: 'total', width: 18 },
+        { header: 'Ghi chú', key: 'note', width: 30 }
+      ];
+
+      // Apply header row styles
+      ws.getRow(1).font = headerFont;
+      ws.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // Add data rows
+      rows.forEach(r => {
+        const total = (r.items || []).reduce((s, it) => s + (Number(it.total) || 0), 0);
+        ws.addRow({
+          exportNumber: r.exportNumber || r.receiptNumber || '',
+          createdDate: r.createdDate || r.date || '',
+          employee: r.employee || '',
+          exportType: r.exportType || '',
+          total: total,
+          note: r.note || ''
+        });
+      });
+
+      // Apply font, border and number formats
+      ws.eachRow((row, rowNumber) => {
+        row.eachCell((cell) => {
+          cell.font = rowNumber === 1 ? headerFont : bodyFont;
+          cell.border = {
+            top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' }
+          };
+          if (rowNumber !== 1 && cell._column && cell._column.key === 'total') {
+            cell.numFmt = '#,##0';
+            cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          } else {
+            cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+          }
+        });
+      });
+
+      // Auto filter and freeze header
+      ws.autoFilter = { from: 'A1', to: 'F1' };
+      ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/octet-stream' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const fileName = `Danh_sach_PX_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`;
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export list error', err);
+      alert('Không thể xuất danh sách. Vui lòng thử lại.');
+    }
   };
   // Đóng menu khi click ngoài
   React.useEffect(() => {
@@ -536,6 +622,64 @@ const ExportGoods = () => {
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [rightCurrentPage, setRightCurrentPage] = useState(1);
   const [rightItemsPerPage, setRightItemsPerPage] = useState(10);
+
+  // Right table column resizing state (persisted)
+  const [rightColWidths, setRightColWidths] = useState(() => {
+    try {
+      const raw = localStorage.getItem('export_right_col_widths');
+      if (raw) return JSON.parse(raw);
+    } catch (err) {
+      // ignore
+    }
+    return {};
+  });
+  const resizingRef = useRef({ col: null, startX: 0, startWidth: 0 });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('export_right_col_widths', JSON.stringify(rightColWidths));
+    } catch (err) {
+      // ignore
+    }
+  }, [rightColWidths]);
+
+  function handleThMouseDown(e, colKey) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = rightColWidths[colKey] || 100;
+    resizingRef.current = { col: colKey, startX, startWidth };
+
+    function onMouseMove(ev) {
+      const delta = ev.clientX - resizingRef.current.startX;
+      const newWidth = Math.max(40, Math.round(resizingRef.current.startWidth + delta));
+      setRightColWidths(prev => ({ ...prev, [colKey]: newWidth }));
+    }
+
+    function onMouseUp() {
+      resizingRef.current = { col: null, startX: 0, startWidth: 0 };
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    }
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }
+
+  // Attach delegated mousedown handler to the last .items-table so saved/unsaved tables both work
+  useEffect(() => {
+    const tables = document.querySelectorAll('table.items-table');
+    if (!tables || tables.length === 0) return;
+    const tbl = tables[tables.length - 1];
+    if (!tbl) return;
+    function onMouseDown(e) {
+      const th = e.target.closest && e.target.closest('th');
+      if (th && th.dataset && th.dataset.resizable && th.dataset.colKey) {
+        handleThMouseDown(e, th.dataset.colKey);
+      }
+    }
+    tbl.addEventListener('mousedown', onMouseDown);
+    return () => tbl.removeEventListener('mousedown', onMouseDown);
+  }, [items, selectedExport]);
 
   // Product selection modal state
   const [showProductModal, setShowProductModal] = useState(false);
@@ -3215,6 +3359,7 @@ const ExportGoods = () => {
         <div className="search-panel-total" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span>Tổng {filteredLeft.length} phiếu</span>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <Button type="primary" size="small" onClick={() => exportSelectedList()} style={{background:'#1677ff',borderColor:'#1677ff'}}>Xuất DS</Button>
             {/* template import/export buttons moved to right detail panel */}
             <input 
               id="template-file-input"
@@ -3644,84 +3789,78 @@ const ExportGoods = () => {
                   </div>
 
                   <table className="items-table" style={{minWidth:1300}}>
+                    {/* colgroup for resizable columns (persisted widths) */}
+                    <colgroup>
+                      {rightColOrder.map(key => (
+                        rightVisibleCols.includes(key) ? <col key={key} style={{ width: `${rightColWidths[key] || 120}px` }} /> : null
+                      ))}
+                    </colgroup>
                     <thead>
                       <tr>
                         {rightColOrder.map((key, index) => {
                           if (!rightVisibleCols.includes(key)) return null;
-                          
-                          // Apply sticky classes for first 3 columns if they are the target columns
-                          let stickyClass = '';
+
+                          const colNameMap = {
+                            barcode: 'Mã vạch', productCode: 'Mã hàng', productName: 'Hàng hóa', unit: 'Đơn vị tính',
+                            quantity: 'Số lượng', unitPrice: 'Đơn giá', transportCost: 'Tiền vận chuyển', noteDate: 'Ghi chú date PN',
+                            total: 'Thành tiền', totalTransport: 'TT vận chuyển', weight: 'Số kg', volume: 'Số khối',
+                            warehouse: 'Kho hàng', description: 'Mô tả', conversion: 'Quy đổi', actions: 'Thao tác'
+                          };
+
+                          const isActions = key === 'actions';
+                          const style = { width: (rightColWidths[key] || 120) + 'px', minWidth: '60px', textAlign: 'center' };
+
+                          // Render product columns with search icon like before
                           if (key === 'barcode' || key === 'productCode' || key === 'productName') {
-                            stickyClass = `sticky-col-${key}`;
+                            return (
+                              <th key={key}
+                                  style={style}
+                                  data-resizable={isActions ? undefined : "true"}
+                                  data-col-key={key}
+                                  onMouseDown={isActions ? undefined : (e) => handleThMouseDown(e, key)}>
+                                <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
+                                  <span>{colNameMap[key]}</span>
+                                  <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
+                                    if (!ensureExportTypeSelected()) return;
+                                    setProductModalColumn(key); setProductModalRowIndex(null); setProductModalSearch(''); setModalCurrentPage(1); setSelectedModalProducts([]); setProductModalScope('currentExport'); setShowProductModal(true);
+                                  }} />
+                                </div>
+                              </th>
+                            );
                           }
-                          
-                          if (key === 'barcode') return (
-                            <th key="barcode" className={stickyClass} style={{textAlign: 'center'}}>
-                              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-                                <span>Mã vạch</span>
-                                <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
-                                  if (!ensureExportTypeSelected()) return;
-                                  setProductModalColumn('barcode'); setProductModalRowIndex(null); setProductModalSearch(''); setModalCurrentPage(1); setSelectedModalProducts([]); setProductModalScope('currentExport'); setShowProductModal(true);
-                                }} />
-                              </div>
+
+                          if (isActions) {
+                            return <th key="actions" style={style}><span>Thao tác</span></th>;
+                          }
+
+                          return (
+                            <th key={key}
+                                style={style}
+                                data-resizable={isActions ? undefined : "true"}
+                                data-col-key={key}
+                                onMouseDown={isActions ? undefined : (e) => handleThMouseDown(e, key)}>
+                              <span>{colNameMap[key] || key}</span>
                             </th>
                           );
-                          if (key === 'productCode') return (
-                            <th key="productCode" className={stickyClass} style={{textAlign: 'center'}}>
-                              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-                                <span>Mã hàng</span>
-                                <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
-                                  if (!ensureExportTypeSelected()) return;
-                                  setProductModalColumn('productCode'); setProductModalRowIndex(null); setProductModalSearch(''); setModalCurrentPage(1); setSelectedModalProducts([]); setProductModalScope('currentExport'); setShowProductModal(true);
-                                }} />
-                              </div>
-                            </th>
-                          );
-                          if (key === 'productName') return (
-                            <th key="productName" className={stickyClass} style={{textAlign: 'center'}}>
-                              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-                                <span>Hàng hóa</span>
-                                <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
-                                  if (!ensureExportTypeSelected()) return;
-                                  setProductModalColumn('productName'); setProductModalRowIndex(null); setProductModalSearch(''); setModalCurrentPage(1); setSelectedModalProducts([]); setProductModalScope('currentExport'); setShowProductModal(true);
-                                }} />
-                              </div>
-                            </th>
-                          );
-                          if (key === 'unit') return <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>;
-                          if (key === 'quantity') return <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>;
-                          if (key === 'unitPrice') return <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>;
-                          if (key === 'transportCost') return <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>;
-                          if (key === 'noteDate') return <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú date PN</span></th>;
-                          if (key === 'total') return <th key="total" style={{textAlign: 'center'}}><span>Thành tiền</span></th>;
-                          if (key === 'totalTransport') return <th key="totalTransport" style={{textAlign: 'center'}}><span>TT vận chuyển</span></th>;
-                          if (key === 'weight') return <th key="weight" style={{textAlign: 'center'}}><span>Số kg</span></th>;
-                          if (key === 'volume') return <th key="volume" style={{textAlign: 'center'}}><span>Số khối</span></th>;
-                          if (key === 'warehouse') return <th key="warehouse" style={{textAlign: 'center'}}><span>Kho hàng</span></th>;
-                          if (key === 'description') return <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>;
-                          if (key === 'conversion') return <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>;
-                          if (key === 'actions') return (
-                            <th key="actions" style={{textAlign: 'center', verticalAlign: 'middle'}}>
-                              <span>Thao tác</span>
-                            </th>
-                          );
-                          return null;
                         })}
                       </tr>
                       {/* Additional header input rows inserted under the main header */}
                       {paginatedHeaderRows.map((row, rIdx) => (
                         <tr key={row.id} className="header-input-row" style={row.id === highlightRowId ? { background: '#fff7e6', boxShadow: 'inset 0 0 0 2px #ffd666' } : {}}>
                           {rightColOrder.map((colKey, index) => {
-                            // Apply sticky classes for target columns
+                            // Do not apply sticky classes on exports page
                             let stickyClass = '';
-                            if (colKey === 'barcode' || colKey === 'productCode' || colKey === 'productName') {
-                              stickyClass = `sticky-col-${colKey}`;
-                            }
+                            const baseCellStyle = {
+                              paddingTop: 6,
+                              paddingBottom: 6,
+                              textAlign: 'center',
+                              width: (rightColWidths[colKey] || 120) + 'px'
+                            };
                             
                             if (colKey === 'actions') {
                               if (!rightVisibleCols.includes('actions')) return null;
                               return (
-                                <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
+                                <td key={colKey} style={baseCellStyle}>
                                   <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'4px'}}>
                                     {/* Reset button removed as requested */}
                                     {/* Show Xóa button for rows that have product data */}
@@ -3750,7 +3889,7 @@ const ExportGoods = () => {
                             if (['productCode','productName','barcode'].includes(colKey)) {
                               if (!rightVisibleCols.includes(colKey)) return null;
                               return (
-                                <td key={colKey} className={stickyClass} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                                <td key={colKey} className={stickyClass} style={baseCellStyle}>
                                   {colKey === 'productName' ? (
                                         <button
                                       onClick={() => {
@@ -3822,7 +3961,7 @@ const ExportGoods = () => {
 
                             if (colKey === 'warehouse') {
                               return (
-                                <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                                <td key={colKey} style={baseCellStyle}>
                                   <Select
                                       value={row.values[colKey] ? String(row.values[colKey]) : undefined}
                                       onChange={(val) => handleHeaderRowChange(rIdx, colKey, val ? String(val) : null)}
@@ -3841,7 +3980,7 @@ const ExportGoods = () => {
 
                             if (colKey === 'noteDate') {
                               return (
-                                <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                                <td key={colKey} style={baseCellStyle}>
                                   <DatePicker
                                     value={row.values[colKey] ? dayjs(row.values[colKey]) : null}
                                     onChange={(d) => handleHeaderRowChange(rIdx, colKey, d ? d.format('YYYY-MM-DD') : null)}
@@ -3863,7 +4002,7 @@ const ExportGoods = () => {
 
                             if (colKey === 'unit') {
                               return (
-                                <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                                <td key={colKey} style={baseCellStyle}>
                                   {(() => {
                                     try {
                                       const rowValues = row.values || {};
@@ -3909,7 +4048,7 @@ const ExportGoods = () => {
 
                             // Default: text / numeric inputs
                             return (
-                              <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                              <td key={colKey} style={baseCellStyle}>
                                 <Input
                                   value={(() => {
                                     const rawValue = row.values[colKey] || '';
@@ -4114,10 +4253,10 @@ const ExportGoods = () => {
                   📁 Lưu lại
                 </button>
                   <button className="btn btn-success" onClick={exportImportTemplate} style={{marginLeft:8}}>
-                    📄 Xuất chi tiết PN
+                    📄 Xuất chi tiết
                   </button>
                   <button className="btn btn-success" onClick={() => document.getElementById('template-file-input').click()} style={{marginLeft:4}}>
-                    📁 Nhập chi tiết PN
+                    📁 Nhập chi tiết
                   </button>
                 <button className="btn btn-purple" onClick={handlePrint}>
                   🖨 In A4
@@ -4272,38 +4411,27 @@ const ExportGoods = () => {
                 </div>
 
                 <table className="items-table" style={{minWidth:1300}}>
+                  <colgroup>
+                    {rightColOrder.map(key => rightVisibleCols.includes(key) ? (
+                      <col key={key} style={{ width: `${rightColWidths[key] || 120}px` }} />
+                    ) : null)}
+                  </colgroup>
                   <thead>
                     <tr>
                       {rightColOrder.map((key, index) => {
                         if (!rightVisibleCols.includes(key)) return null;
-                        
-                        // Apply sticky classes for target columns
-                        let stickyClass = '';
-                        if (key === 'barcode' || key === 'productCode' || key === 'productName') {
-                          stickyClass = `sticky-col-${key}`;
+                        const colNameMap = { barcode: 'Mã vạch', productCode: 'Mã hàng', productName: 'Hàng hóa', unit: 'Đơn vị tính', quantity: 'Số lượng', unitPrice: 'Đơn giá', transportCost: 'Tiền vận chuyển', noteDate: 'Ghi chú date PN', total: 'Thành tiền', totalTransport: 'TT vận chuyển', weight: 'Số kg', volume: 'Số khối', warehouse: 'Kho hàng', description: 'Mô tả', conversion: 'Quy đổi', actions: 'Thao tác' };
+                        const isActions = key === 'actions';
+                        const style = { width: (rightColWidths[key] || 120) + 'px', minWidth: '60px', textAlign: 'center' };
+                        if (['barcode','productCode','productName'].includes(key)) {
+                          return (
+                            <th key={key} style={style} data-resizable={isActions ? undefined : "true"} data-col-key={key} onMouseDown={isActions ? undefined : (e) => handleThMouseDown(e, key)}>
+                              <span>{colNameMap[key]}</span>
+                            </th>
+                          );
                         }
-                        
-                        if (key === 'barcode') return <th key="barcode" className={stickyClass} style={{textAlign: 'center'}}><span>Mã vạch</span></th>;
-                        if (key === 'productCode') return <th key="productCode" className={stickyClass} style={{textAlign: 'center'}}><span>Mã hàng</span></th>;
-                        if (key === 'productName') return <th key="productName" className={stickyClass} style={{textAlign: 'center'}}><span>Hàng hóa</span></th>;
-                        if (key === 'unit') return <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>;
-                        if (key === 'quantity') return <th key="quantity" style={{textAlign: 'center'}}><span>Số lượng</span></th>;
-                        if (key === 'unitPrice') return <th key="unitPrice" style={{textAlign: 'center'}}><span>Đơn giá</span></th>;
-                        if (key === 'transportCost') return <th key="transportCost" style={{textAlign: 'center'}}><span>Tiền vận chuyển</span></th>;
-                        if (key === 'noteDate') return <th key="noteDate" style={{textAlign: 'center'}}><span>Ghi chú date PN</span></th>;
-                        if (key === 'total') return <th key="total" style={{textAlign: 'center'}}><span>Thành tiền</span></th>;
-                        if (key === 'totalTransport') return <th key="totalTransport" style={{textAlign: 'center'}}><span>TT vận chuyển</span></th>;
-                        if (key === 'weight') return <th key="weight" style={{textAlign: 'center'}}><span>Số kg</span></th>;
-                        if (key === 'volume') return <th key="volume" style={{textAlign: 'center'}}><span>Số khối</span></th>;
-                        if (key === 'warehouse') return <th key="warehouse" style={{textAlign: 'center'}}><span>Kho hàng</span></th>;
-                        if (key === 'description') return <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>;
-                        if (key === 'conversion') return <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>;
-                        if (key === 'actions') return (
-                          <th key="actions" style={{textAlign: 'center', verticalAlign: 'middle'}}>
-                            <span>Thao tác</span>
-                          </th>
-                        );
-                        return null;
+                        if (isActions) return <th key="actions" style={style}><span>Thao tác</span></th>;
+                        return <th key={key} style={style} data-resizable={isActions ? undefined : "true"} data-col-key={key} onMouseDown={isActions ? undefined : (e) => handleThMouseDown(e, key)}><span>{colNameMap[key] || key}</span></th>;
                       })}
                     </tr>
                     {/* Header input rows for new entries */}
@@ -4311,15 +4439,14 @@ const ExportGoods = () => {
                       <tr key={row.id} className="header-input-row" style={row.id === highlightRowId ? { background: '#fff7e6', boxShadow: 'inset 0 0 0 2px #ffd666' } : {}}>
                         {rightColOrder.map((colKey, index) => {
                           // Apply sticky classes for target columns
+                          // Do not apply sticky classes on exports page
                           let stickyClass = '';
-                          if (colKey === 'barcode' || colKey === 'productCode' || colKey === 'productName') {
-                            stickyClass = `sticky-col-${colKey}`;
-                          }
+                          const baseCellStyle = { paddingTop:6, paddingBottom:6, textAlign:'center', width: (rightColWidths[colKey] || 120) + 'px' };
                           
-                          if (colKey === 'actions') {
+                            if (colKey === 'actions') {
                             if (!rightVisibleCols.includes('actions')) return null;
                             return (
-                              <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
+                              <td key={colKey} style={baseCellStyle}>
                                 <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'4px'}}>
                                   {(row.values.productName || row.values.productCode || row.values.barcode) && (
                                     <button 
@@ -4335,8 +4462,8 @@ const ExportGoods = () => {
                           }
                           if (!rightVisibleCols.includes(colKey)) return null;
                           if (['productCode','productName','barcode'].includes(colKey)) {
-                            return (
-                              <td key={colKey} className={stickyClass} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                              return (
+                                <td key={colKey} className={stickyClass} style={baseCellStyle}>
                                 {colKey === 'productName' ? (
                                   <button
                                       onClick={() => {
@@ -4374,9 +4501,9 @@ const ExportGoods = () => {
                             );
                           }
 
-                          if (colKey === 'warehouse') {
+                            if (colKey === 'warehouse') {
                             return (
-                              <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                              <td key={colKey} style={baseCellStyle}>
                                 <Select
                                   value={row.values[colKey] ? String(row.values[colKey]) : undefined}
                                   onChange={(val) => handleHeaderRowChange(rIdx, colKey, val ? String(val) : null)}
@@ -4393,9 +4520,9 @@ const ExportGoods = () => {
                             );
                           }
 
-                          if (colKey === 'noteDate') {
+                            if (colKey === 'noteDate') {
                             return (
-                              <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                              <td key={colKey} style={baseCellStyle}>
                                 <DatePicker
                                   value={row.values[colKey] ? dayjs(row.values[colKey]) : null}
                                   onChange={(d) => handleHeaderRowChange(rIdx, colKey, d ? d.format('YYYY-MM-DD') : null)}
@@ -4411,8 +4538,8 @@ const ExportGoods = () => {
                             );
                           }
 
-                          return (
-                            <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
+                            return (
+                              <td key={colKey} style={baseCellStyle}>
                               <Input
                                 value={(() => {
                                   const rawValue = row.values[colKey] || '';

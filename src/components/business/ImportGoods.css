@@ -399,6 +399,29 @@
   flex-direction: column;
 }
 
+/* Styled Export List button to match provided design */
+.xuatsd-btn {
+  background: linear-gradient(180deg,#2b9bff,#1677ff) !important;
+  border: 1px solid #1677ff !important;
+  color: #fff !important;
+  border-radius: 8px !important;
+  padding: 6px 12px !important;
+  font-size: 13px !important;
+  box-shadow: 0 6px 12px rgba(22,119,255,0.18) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 6px !important;
+}
+.xuatsd-btn:hover, .xuatsd-btn:focus {
+  background: linear-gradient(180deg,#2a85f6,#0f62d0) !important;
+  border-color: #0f62d0 !important;
+  box-shadow: 0 8px 18px rgba(15,98,208,0.22) !important;
+}
+
+.xuatsd-btn .anticon {
+  vertical-align: middle;
+}
+
 /* Ensure we can absolutely position child elements (action buttons) */
 .import-detail-panel { position: relative; }
 

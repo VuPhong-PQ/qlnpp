@@ -186,3 +186,47 @@ CREATE TABLE CompanyInfos (
 GO
 
 PRINT 'Database và các bảng đã được tạo thành công!';
+
+-- Create WarehouseTransfers table (for transfer between warehouses)
+IF OBJECT_ID('dbo.WarehouseTransfers', 'U') IS NULL
+BEGIN
+    CREATE TABLE WarehouseTransfers (
+        Id INT IDENTITY(1,1) PRIMARY KEY,
+        TransferNumber NVARCHAR(100) NOT NULL,
+        Date DATETIME NOT NULL,
+        Note NVARCHAR(1000),
+        Employee NVARCHAR(250),
+        TransferType NVARCHAR(100),
+        SourceWarehouse NVARCHAR(100),
+        DestWarehouse NVARCHAR(100),
+        Total DECIMAL(18,2) DEFAULT 0,
+        TotalWeight DECIMAL(18,2) DEFAULT 0,
+        TotalVolume DECIMAL(18,2) DEFAULT 0,
+        TotalText NVARCHAR(500)
+    );
+END
+
+IF OBJECT_ID('dbo.WarehouseTransferItems', 'U') IS NULL
+BEGIN
+    CREATE TABLE WarehouseTransferItems (
+        Id INT IDENTITY(1,1) PRIMARY KEY,
+        WarehouseTransferId INT NOT NULL,
+        Barcode NVARCHAR(200),
+        ProductCode NVARCHAR(200),
+        ProductName NVARCHAR(500),
+        Description NVARCHAR(1000),
+        Unit NVARCHAR(100),
+        Conversion DECIMAL(18,4),
+        Quantity DECIMAL(18,4),
+        UnitPrice DECIMAL(18,2),
+        Total DECIMAL(18,2),
+        Weight DECIMAL(18,2),
+        Volume DECIMAL(18,2),
+        Warehouse NVARCHAR(200),
+        Note NVARCHAR(1000),
+        NoteDate DATETIME,
+        TransportCost DECIMAL(18,2),
+        TotalTransport DECIMAL(18,2),
+        CONSTRAINT FK_WarehouseTransfer_Items FOREIGN KEY (WarehouseTransferId) REFERENCES WarehouseTransfers(Id) ON DELETE CASCADE
+    );
+END

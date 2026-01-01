@@ -1,4 +1,5 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
+import ExcelJS from 'exceljs';
 import { Menu } from 'antd';
 import './BusinessPage.css';
 import './WarehouseTransfer.css';
@@ -93,11 +94,12 @@ const WarehouseTransfer = () => {
 
   // Column visibility & header filters for left table
   const IMPORT_LEFT_COLS_KEY = 'warehouse_transfer_left_cols_v1';
-  const defaultLeftCols = ['checkbox','importNumber','createdDate','sourceWarehouse','destWarehouse','total','note','actions'];
+  const defaultLeftCols = ['checkbox','importNumber','createdDate','sourceWarehouseName','destWarehouseName','importType','exportType','total','note','actions'];
   const [leftVisibleCols, setLeftVisibleCols] = useState(() => {
     try {
       const v = JSON.parse(localStorage.getItem(IMPORT_LEFT_COLS_KEY));
-      if (Array.isArray(v)) return v;
+      // Nếu thiếu cột kho nguồn/kho đích thì reset về mặc định
+      if (Array.isArray(v) && v.includes('sourceWarehouseName') && v.includes('destWarehouseName')) return v;
     } catch {}
     return defaultLeftCols;
   });
@@ -107,7 +109,7 @@ const WarehouseTransfer = () => {
   const [leftColOrder, setLeftColOrder] = useState(defaultLeftCols);
   const [leftFilters, setLeftFilters] = useState({ importNumber: '', createdDate: '', note: '', total: '' });
   // modal-based column filters (lists of selected values)
-  const [leftFilterLists, setLeftFilterLists] = useState({ importNumber: [], createdDate: [], note: [], total: [] });
+  const [leftFilterLists, setLeftFilterLists] = useState({ importNumber: [], createdDate: [], note: [], total: [], sourceWarehouse: [], destWarehouse: [], importType: [], exportType: [] });
   const [activeHeaderModalColumn, setActiveHeaderModalColumn] = useState(null);
   const [modalSearchTerm, setModalSearchTerm] = useState('');
   const [modalSelections, setModalSelections] = useState([]);
@@ -118,7 +120,6 @@ const WarehouseTransfer = () => {
 
   // Drag handlers for column reordering
   const handleColumnDragStart = (e, index) => {
-    console.log('Drag start:', index);
     setDraggedColumnIndex(index);
     e.dataTransfer.effectAllowed = 'move';
     e.dataTransfer.setData('text/plain', index.toString());
@@ -131,7 +132,6 @@ const WarehouseTransfer = () => {
 
   const handleColumnDrop = (e, targetIndex) => {
     e.preventDefault();
-    console.log('Drop:', draggedColumnIndex, '->', targetIndex);
     
     if (draggedColumnIndex === null || draggedColumnIndex === targetIndex) {
       setDraggedColumnIndex(null);
@@ -139,13 +139,11 @@ const WarehouseTransfer = () => {
     }
 
     const newOrder = [...leftColOrder];
-    console.log('Old order:', newOrder);
     
     const draggedItem = newOrder[draggedColumnIndex];
     newOrder.splice(draggedColumnIndex, 1);
     newOrder.splice(targetIndex, 0, draggedItem);
     
-    console.log('New order:', newOrder);
     setLeftColOrder(newOrder);
     setDraggedColumnIndex(null);
     
@@ -158,7 +156,6 @@ const WarehouseTransfer = () => {
   };
 
   const handleColumnDragEnd = () => {
-    console.log('Drag end');
     setDraggedColumnIndex(null);
   };
 
@@ -179,10 +176,13 @@ const WarehouseTransfer = () => {
     const timestamp = Date.now().toString().slice(-4);
     
     return { 
-      importNumber: `PN-${day}${month}${year}-${timestamp}`, 
+      importNumber: `CK-${day}${month}${year}-${timestamp}`, 
       createdDate: new Date().toISOString().split('T')[0], 
       employee: 'admin 66', 
       importType: '', 
+      exportType: '',
+      sourceWarehouse: '',
+      destWarehouse: '',
       totalWeight: 0, 
       totalVolume: 0, 
       note: '' 
@@ -192,7 +192,9 @@ const WarehouseTransfer = () => {
   // Ensure import type is selected before product actions
   const ensureImportTypeSelected = () => {
     const it = (selectedImport && selectedImport.importType) || formData.importType;
-    if (!it || String(it).trim() === '') {
+    // If currently editing an existing saved transfer, don't block actions when importType is empty.
+    // Keep validation only for creating new transfers.
+    if ((!it || String(it).trim() === '') && !isEditing) {
       Modal.warning({ title: 'Chưa chọn loại nhập', content: 'vui lòng chọn loại nhập trước khi thao tác' });
       return false;
     }
@@ -228,13 +230,6 @@ const WarehouseTransfer = () => {
   const productSelectRefs = useRef({});
   const [headerRows, setHeaderRows] = useState(() => [{ id: Date.now(), values: {} }]);
   const [headerFilter, setHeaderFilter] = useState(null); // { productCode, barcode, productName } or null
-
-  // Debug logging helper (completely disabled for performance)
-  const devLog = () => {
-    // No-op for production performance - all logging disabled
-  };
-
-
 
   // Helper function to calculate totals from items
   const calculateTotals = (itemsList) => {
@@ -1240,14 +1235,38 @@ const WarehouseTransfer = () => {
     }
   };
 
-  // Load imports, products and warehouses from backend on mount
+  // Load data on mount: ensure warehouses and transactionContents load before imports
   React.useEffect(() => {
-    loadImports();
-    loadProducts();
-    loadWarehouses();
-    loadTransactionContents();
-    loadEmployees();
+    (async () => {
+      try {
+        await loadWarehouses();
+        await loadTransactionContents();
+        await loadProducts();
+        await loadEmployees();
+        await loadImports();
+      } catch (e) {
+        // ignore
+      }
+    })();
   }, []);
+
+  // When warehouses or transactionContents are loaded/changed, remap existing imports to include display names
+  React.useEffect(() => {
+    if ((!warehouses || warehouses.length === 0) && (!transactionContents || transactionContents.length === 0)) return;
+    setImports(prev => (prev || []).map(imp => {
+      const src = warehouses.find(w => String(w.id) === String(imp.sourceWarehouse));
+      const dst = warehouses.find(w => String(w.id) === String(imp.destWarehouse));
+      const impType = transactionContents.find(tc => String(tc.id) === String(imp.importType) || tc.code === imp.importType || tc.name === imp.importType);
+      const expType = transactionContents.find(tc => String(tc.id) === String(imp.exportType) || tc.code === imp.exportType || tc.name === imp.exportType);
+      return {
+        ...imp,
+        sourceWarehouseName: src ? src.name : '',
+        destWarehouseName: dst ? dst.name : '',
+        importTypeName: impType ? impType.name : '',
+        exportTypeName: expType ? expType.name : ''
+      };
+    }));
+  }, [warehouses, transactionContents]);
 
   React.useEffect(() => {
     if (imports.length > 0 && !selectedImport) {
@@ -1262,7 +1281,7 @@ const WarehouseTransfer = () => {
 
   // Cập nhật số phiếu sau khi imports được load (chỉ khi đang tạo mới)
   React.useEffect(() => {
-    if (imports && imports.length > 0 && !selectedImport && formData.importNumber.includes('PN-')) {
+    if (imports && imports.length > 0 && !selectedImport && formData.importNumber.includes('CK-')) {
       const newImportNumber = generateImportNumber();
       setFormData(prev => ({
         ...prev,
@@ -1315,6 +1334,58 @@ const WarehouseTransfer = () => {
   const [dragOverIndex, setDragOverIndex] = useState(null);
   const [rightCurrentPage, setRightCurrentPage] = useState(1);
   const [rightItemsPerPage, setRightItemsPerPage] = useState(10);
+
+  // Right table column resizing state (persisted)
+  const [rightColWidths, setRightColWidths] = useState(() => {
+    try {
+      const raw = localStorage.getItem('warehouse_right_col_widths');
+      if (raw) return JSON.parse(raw);
+    } catch (err) {}
+    return {};
+  });
+  const resizingRef = useRef({ col: null, startX: 0, startWidth: 0 });
+
+  useEffect(() => {
+    try { localStorage.setItem('warehouse_right_col_widths', JSON.stringify(rightColWidths)); } catch (err) {}
+  }, [rightColWidths]);
+
+  function handleThMouseDown(e, colKey) {
+    e.preventDefault();
+    const startX = e.clientX;
+    const startWidth = rightColWidths[colKey] || 120;
+    resizingRef.current = { col: colKey, startX, startWidth };
+
+    function onMouseMove(ev) {
+      const delta = ev.clientX - resizingRef.current.startX;
+      const newWidth = Math.max(40, Math.round(resizingRef.current.startWidth + delta));
+      setRightColWidths(prev => ({ ...prev, [colKey]: newWidth }));
+    }
+
+    function onMouseUp() {
+      resizingRef.current = { col: null, startX: 0, startWidth: 0 };
+      window.removeEventListener('mousemove', onMouseMove);
+      window.removeEventListener('mouseup', onMouseUp);
+    }
+
+    window.addEventListener('mousemove', onMouseMove);
+    window.addEventListener('mouseup', onMouseUp);
+  }
+
+  // Attach delegated mousedown handler to the last .items-table so saved/unsaved tables both work
+  useEffect(() => {
+    const tables = document.querySelectorAll('table.items-table');
+    if (!tables || tables.length === 0) return;
+    const tbl = tables[tables.length - 1];
+    if (!tbl) return;
+    function onMouseDown(e) {
+      const th = e.target.closest && e.target.closest('th');
+      if (th && th.dataset && th.dataset.resizable && th.dataset.colKey) {
+        handleThMouseDown(e, th.dataset.colKey);
+      }
+    }
+    tbl.addEventListener('mousedown', onMouseDown);
+    return () => tbl.removeEventListener('mousedown', onMouseDown);
+  }, [items, selectedImport]);
 
   // Product selection modal state
   const [showProductModal, setShowProductModal] = useState(false);
@@ -1571,7 +1642,7 @@ const WarehouseTransfer = () => {
     e.stopPropagation();
     if (!window.confirm('Bạn có chắc chắn muốn xóa phiếu nhập này?')) return;
     try {
-      const res = await fetch(`/api/Imports/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/WarehouseTransfers/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Xóa thất bại');
       // reload list
       await loadImports();
@@ -1579,7 +1650,6 @@ const WarehouseTransfer = () => {
         setSelectedImport(imports.length > 0 ? imports[0] : null);
       }
     } catch (err) {
-      console.error('Delete import error', err);
       alert('Xóa phiếu nhập thất bại');
     }
   };
@@ -1588,22 +1658,49 @@ const WarehouseTransfer = () => {
   // if `autoSelectFirst` is true (default) load details of the first import automatically
   const loadImports = async (autoSelectFirst = true) => {
     try {
-      const res = await fetch('/api/Imports');
+      const res = await fetch('/api/WarehouseTransfers');
       if (!res.ok) throw new Error('Failed to load imports');
       const data = await res.json();
       // normalize imports: ensure fields used by UI exist and compute totals
       const processed = (data || []).map(imp => {
         const items = imp.items || imp.Items || [];
         const total = items.reduce((s, it) => s + (Number(it.total) || 0), 0);
+        // Map id kho sang tên kho (robust: try multiple fallbacks)
+        let sourceWarehouseName = '';
+        let destWarehouseName = '';
+        if (warehouses && warehouses.length > 0) {
+          const src = warehouses.find(w => String(w.id) === String(imp.sourceWarehouse) || String(w.code) === String(imp.sourceWarehouse) || String(w.name) === String(imp.sourceWarehouse));
+          const dst = warehouses.find(w => String(w.id) === String(imp.destWarehouse) || String(w.code) === String(imp.destWarehouse) || String(w.name) === String(imp.destWarehouse));
+          sourceWarehouseName = src ? (src.name || src.Name || '') : (imp.sourceWarehouseName || imp.sourceWarehouse || '');
+          destWarehouseName = dst ? (dst.name || dst.Name || '') : (imp.destWarehouseName || imp.destWarehouse || '');
+        } else {
+          // fallback to any name present in the import object
+          sourceWarehouseName = imp.sourceWarehouseName || imp.sourceWarehouse || '';
+          destWarehouseName = imp.destWarehouseName || imp.destWarehouse || '';
+        }
+        // Map loại nhập/xuất sang tên
+        let importTypeName = '';
+        let exportTypeName = '';
+        if (transactionContents && transactionContents.length > 0) {
+          const impType = transactionContents.find(tc => String(tc.id) === String(imp.importType) || tc.code === imp.importType || tc.name === imp.importType);
+          const expType = transactionContents.find(tc => String(tc.id) === String(imp.exportType) || tc.code === imp.exportType || tc.name === imp.exportType);
+          importTypeName = impType ? impType.name : '';
+          exportTypeName = expType ? expType.name : '';
+        }
         return {
           ...imp,
-          importNumber: imp.importNumber || imp.receiptNumber || imp.importNumber || '',
+          importNumber: imp.importNumber || imp.transferNumber || imp.TransferNumber || imp.receiptNumber || imp.id || '',
           createdDate: imp.createdDate || (imp.date ? dayjs(imp.date).format('DD/MM/YYYY') : ''),
           date: imp.date || imp.createdDate || null,
           totalAmount: total,
           note: imp.note || imp.Note || '',
           employee: imp.employee || imp.Employee || '',
           importType: imp.importType || imp.ImportType || '',
+          exportType: imp.exportType || imp.ExportType || '',
+          sourceWarehouseName,
+          destWarehouseName,
+          importTypeName,
+          exportTypeName,
           items: items
         };
       });
@@ -1626,7 +1723,7 @@ const WarehouseTransfer = () => {
         if (idsToFetch.length > 0) {
           await Promise.all(idsToFetch.map(async (id) => {
             try {
-              const r = await fetch(`/api/Imports/${id}`);
+              const r = await fetch(`/api/WarehouseTransfers/${id}`);
               if (!r.ok) return;
               const d = await r.json();
               const items = d.items || d.Items || [];
@@ -1643,7 +1740,6 @@ const WarehouseTransfer = () => {
     } catch (err) {
       // Silent error handling
       // fallback to existing sample data
-      console.warn('Using local sample imports as fallback');
       // keep current `imports` state as fallback
     }
   };
@@ -1682,9 +1778,9 @@ const WarehouseTransfer = () => {
       const res = await fetch('/api/TransactionContents');
       if (!res.ok) throw new Error('Failed to load transaction contents');
       const data = await res.json();
-      // Filter only "Nhập" type
-      const importTypes = data.filter(tc => tc.type === 'Nhập' && tc.status === 'active');
-      setTransactionContents(importTypes || []);
+      // Keep all active transaction types (both xuất and nhập) so both selects can use them
+      const activeTypes = data.filter(tc => tc.status === 'active');
+      setTransactionContents(activeTypes || []);
     } catch (err) {
       // Silent error handling
       // Keep empty array as fallback
@@ -1710,7 +1806,7 @@ const WarehouseTransfer = () => {
   // Export Excel template for imports
   const exportImportTemplate = async () => {
     try {
-      let url = '/api/Imports/template?format=xlsx';
+      let url = '/api/WarehouseTransfers/template?format=xlsx';
       let fileName = 'import_template.xlsx';
       
       // Priority 1: If user has selected rows via checkboxes, export those
@@ -1755,8 +1851,82 @@ const WarehouseTransfer = () => {
       link.remove();
       window.URL.revokeObjectURL(objectUrl);
     } catch (err) {
-      console.error('Export template error', err);
       alert('Không thể tải mẫu. Vui lòng thử lại.');
+    }
+  };
+
+  // Export selected left-panel transfers to .xlsx with Times New Roman and borders
+  const exportSelectedList = async () => {
+    try {
+      let rows = [];
+      if (selectedRowKeys && selectedRowKeys.length > 0) {
+        rows = filteredLeft.filter(r => selectedRowKeys.includes(r.id));
+      } else if (selectedImport) {
+        rows = [selectedImport];
+      } else {
+        alert('Vui lòng chọn tối thiểu 1 phiếu để xuất.');
+        return;
+      }
+
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('Danh sách chuyển kho');
+
+      const headerFont = { name: 'Times New Roman', size: 12, bold: true };
+      const bodyFont = { name: 'Times New Roman', size: 12 };
+
+      ws.columns = [
+        { header: 'Số phiếu', key: 'importNumber', width: 20 },
+        { header: 'Ngày', key: 'createdDate', width: 15 },
+        { header: 'Nguồn', key: 'sourceWarehouse', width: 20 },
+        { header: 'Đích', key: 'destWarehouse', width: 20 },
+        { header: 'Tổng tiền', key: 'total', width: 18 },
+        { header: 'Ghi chú', key: 'note', width: 30 }
+      ];
+
+      ws.getRow(1).font = headerFont;
+      ws.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+      rows.forEach(r => {
+        const total = (r.items || []).reduce((s, it) => s + (Number(it.total) || 0), 0);
+        ws.addRow({
+          importNumber: r.importNumber || r.transferNumber || r.id || '',
+          createdDate: r.createdDate || r.date || '',
+          sourceWarehouse: r.sourceWarehouseName || r.sourceWarehouse || '',
+          destWarehouse: r.destWarehouseName || r.destWarehouse || '',
+          total: total,
+          note: r.note || ''
+        });
+      });
+
+      ws.eachRow((row, rowNumber) => {
+        row.eachCell((cell) => {
+          cell.font = rowNumber === 1 ? headerFont : bodyFont;
+          cell.border = { top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' } };
+          if (rowNumber !== 1 && cell._column && cell._column.key === 'total') {
+            cell.numFmt = '#,##0';
+            cell.alignment = { horizontal: 'right', vertical: 'middle' };
+          } else {
+            cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+          }
+        });
+      });
+
+      ws.autoFilter = { from: 'A1', to: 'F1' };
+      ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/octet-stream' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      const fileName = `Danh_sach_ChuyenKho_${dayjs().format('YYYYMMDD_HHmmss')}.xlsx`;
+      a.href = url;
+      a.download = fileName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      alert('Không thể xuất danh sách. Vui lòng thử lại.');
     }
   };
 
@@ -1769,7 +1939,7 @@ const WarehouseTransfer = () => {
       const fd = new FormData();
       fd.append('file', file);
       
-      let url = '/api/Imports/import-template';
+      let url = '/api/WarehouseTransfers/import-template';
       if (forceOverwrite) {
         url += '?forceOverwrite=true';
       }
@@ -1804,7 +1974,6 @@ const WarehouseTransfer = () => {
       alert('Import phiếu nhập thành công');
       await loadImports();
     } catch (err) {
-      console.error('Import template error', err);
       // If the thrown error contains server text, show it; otherwise show generic message
       const msg = (err && err.message) ? err.message : null;
       if (msg && msg.includes('Sản phẩm có mã hàng')) {
@@ -1823,7 +1992,7 @@ const WarehouseTransfer = () => {
   const loadImportDetails = async (id) => {
     try {
       // Simple cache buster for fresh data
-      const res = await fetch(`/api/Imports/${id}?_=${Date.now()}`);
+      const res = await fetch(`/api/WarehouseTransfers/${id}?_=${Date.now()}`);
       if (!res.ok) throw new Error('Failed to load import details');
       const data = await res.json();
       // normalize to frontend shape
@@ -1831,15 +2000,29 @@ const WarehouseTransfer = () => {
         ...data,
         items: (data.items || data.Items || []).map(it => ({ ...it }))
       };
+      // Map warehouse/type display names for detail
+      try {
+        const src = (warehouses || []).find(w => String(w.id) === String(detail.sourceWarehouse) || String(w.code) === String(detail.sourceWarehouse) || String(w.name) === String(detail.sourceWarehouse));
+        const dst = (warehouses || []).find(w => String(w.id) === String(detail.destWarehouse) || String(w.code) === String(detail.destWarehouse) || String(w.name) === String(detail.destWarehouse));
+        detail.sourceWarehouseName = src ? (src.name || src.Name || '') : (detail.sourceWarehouseName || detail.sourceWarehouse || '');
+        detail.destWarehouseName = dst ? (dst.name || dst.Name || '') : (detail.destWarehouseName || detail.destWarehouse || '');
+        const impType = (transactionContents || []).find(tc => String(tc.id) === String(detail.importType) || tc.code === detail.importType || tc.name === detail.importType);
+        const expType = (transactionContents || []).find(tc => String(tc.id) === String(detail.exportType) || tc.code === detail.exportType || tc.name === detail.exportType);
+        detail.importTypeName = impType ? impType.name : (detail.importTypeName || detail.importType || '');
+        detail.exportTypeName = expType ? expType.name : (detail.exportTypeName || detail.exportType || '');
+      } catch (e) {
+        // ignore mapping errors
+      }
       // if employee missing, keep current formData.employee
       setSelectedImport(detail);
       // show right layout when loading details for edit/view
       setShowRightContent(true);
       setFormData({
-        importNumber: detail.importNumber || detail.ImportNumber || generateImportNumber(),
+        importNumber: detail.importNumber || detail.transferNumber || detail.TransferNumber || detail.ImportNumber || generateImportNumber(),
         createdDate: detail.date ? dayjs(detail.date).format('YYYY-MM-DD') : (detail.createdDate || new Date().toISOString().split('T')[0]),
         employee: detail.employee || detail.Employee || formData.employee,
         importType: detail.importType || detail.ImportType || '',
+        exportType: detail.exportType || detail.ExportType || '',
         totalWeight: detail.totalWeight || 0,
         totalVolume: detail.totalVolume || 0,
         note: detail.note || detail.Note || ''
@@ -1894,7 +2077,6 @@ const WarehouseTransfer = () => {
       
       setIsEditing(false);
     } catch (err) {
-      console.error('Load import details error', err);
       alert('Không thể tải chi tiết phiếu nhập');
     }
   };
@@ -1905,7 +2087,7 @@ const WarehouseTransfer = () => {
     
     try {
       // Force fresh load from server to avoid stale data
-      const res = await fetch(`/api/Imports/${importItem.id}?_=${Date.now()}`);
+      const res = await fetch(`/api/WarehouseTransfers/${importItem.id}?_=${Date.now()}`);
       if (!res.ok) throw new Error('Failed to load import details');
       const data = await res.json();
       
@@ -1920,10 +2102,13 @@ const WarehouseTransfer = () => {
       
       // Update form data
       setFormData({
-        importNumber: detail.importNumber || detail.ImportNumber || generateImportNumber(),
+        importNumber: detail.importNumber || detail.transferNumber || detail.TransferNumber || detail.ImportNumber || generateImportNumber(),
         createdDate: detail.date ? dayjs(detail.date).format('YYYY-MM-DD') : (detail.createdDate || new Date().toISOString().split('T')[0]),
         employee: detail.employee || detail.Employee || formData.employee,
         importType: detail.importType || detail.ImportType || '',
+        exportType: detail.exportType || detail.ExportType || '',
+        sourceWarehouse: detail.sourceWarehouse ? String(detail.sourceWarehouse) : '',
+        destWarehouse: detail.destWarehouse ? String(detail.destWarehouse) : '',
         totalWeight: detail.totalWeight || 0,
         totalVolume: detail.totalVolume || 0,
         note: detail.note || detail.Note || ''
@@ -1969,7 +2154,6 @@ const WarehouseTransfer = () => {
       setIsEditMode(true);
       setIsEditing(true);
     } catch (err) {
-      console.error('Edit import error', err);
       alert('Không thể chỉnh sửa phiếu nhập');
     }
   };
@@ -1977,14 +2161,17 @@ const WarehouseTransfer = () => {
   const createNewImport = async () => {
     try {
       const payload = {
-        importNumber: generateImportNumber(),
+        transferNumber: generateImportNumber(),
         date: new Date().toISOString(),
         note: '',
         employee: formData.employee || '',
+        exportType: formData.exportType || '',
+        sourceWarehouse: formData.sourceWarehouse || '',
+        destWarehouse: formData.destWarehouse || '',
         total: 0,
         items: []
       };
-      const res = await fetch('/api/Imports', {
+      const res = await fetch('/api/WarehouseTransfers', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -1998,14 +2185,14 @@ const WarehouseTransfer = () => {
       await loadImportDetails(created.id);
       setIsEditing(true);
     } catch (err) {
-      console.error('Create import error', err);
       alert('Tạo phiếu nhập mới thất bại');
     }
   };
 
   const saveImport = async () => {
     try {
-      // Validation
+      const isUpdate = selectedImport && selectedImport.id && selectedImport.id > 0 && !selectedImport.isTemp;
+        // Validation
       if (!formData.createdDate) {
         alert('Vui lòng chọn ngày lập');
         return;
@@ -2014,21 +2201,8 @@ const WarehouseTransfer = () => {
         alert('Vui lòng chọn nhân viên lập');
         return;
       }
-      if (!formData.importType) {
-        alert('Vui lòng chọn loại nhập');
-        return;
-      }
-
-      // Validation
-      if (!formData.createdDate) {
-        alert('Vui lòng chọn ngày lập');
-        return;
-      }
-      if (!formData.employee) {
-        alert('Vui lòng chọn nhân viên lập');
-        return;
-      }
-      if (!formData.importType) {
+      // Only require importType when creating a new transfer
+      if (!isUpdate && !formData.importType) {
         alert('Vui lòng chọn loại nhập');
         return;
       }
@@ -2078,11 +2252,14 @@ const WarehouseTransfer = () => {
       Object.freeze(totalText);
 
       const payload = {
-        importNumber: formData.importNumber || generateImportNumber(),
+        transferNumber: formData.importNumber || generateImportNumber(),
         date: formData.createdDate ? new Date(formData.createdDate).toISOString() : new Date().toISOString(),
         note: formData.note || '',
         employee: formData.employee || 'admin 66',
         importType: formData.importType,
+        exportType: formData.exportType,
+        sourceWarehouse: formData.sourceWarehouse || '',
+        destWarehouse: formData.destWarehouse || '',
         supplier: formData.supplier || '',
         invoice: formData.invoice || '',
         invoiceDate: formData.invoiceDate ? new Date(formData.invoiceDate).toISOString() : new Date().toISOString(),
@@ -2096,41 +2273,33 @@ const WarehouseTransfer = () => {
 
       // Final validation only
 
-      // VALIDATION CUỐI CÙNG
       if (totalText === null || totalText === undefined || totalText === '') {
-        console.error('CRITICAL: totalText is still null/undefined/empty!');
         alert('Lỗi: Không thể tạo totalText. Vui lòng báo cáo lỗi này.');
         return;
       }
-
-      // Check if this is an update (has existing import with ID) or create new
-      const isUpdate = selectedImport && selectedImport.id && selectedImport.id > 0 && !selectedImport.isTemp;
 
       if (isUpdate) {
         // Ensure we have the most current data by refetching before update
         let currentImport;
         try {
-          const currentRes = await fetch(`/api/Imports/${selectedImport.id}`);
+          const currentRes = await fetch(`/api/WarehouseTransfers/${selectedImport.id}`);
           if (currentRes.ok) {
             currentImport = await currentRes.json();
           }
         } catch (e) {
-          console.error('Failed to fetch current import:', e);
         }
 
-        const res = await fetch(`/api/Imports/${selectedImport.id}`, {
+        const res = await fetch(`/api/WarehouseTransfers/${selectedImport.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
             id: selectedImport.id, 
-            // Include any version/timestamp fields if they exist
             ...(currentImport || {}),
             ...payload 
           })
         });
         if (!res.ok) {
           const errorText = await res.text();
-          console.error('PUT Error:', errorText);
           
           // Check if it's a concurrency exception
           if (errorText.includes('DbUpdateConcurrencyException') || errorText.includes('concurrency')) {
@@ -2144,7 +2313,7 @@ const WarehouseTransfer = () => {
         }
         // Fetch updated import and update local imports list so it appears on left
         try {
-          const updatedRes = await fetch(`/api/Imports/${selectedImport.id}`);
+          const updatedRes = await fetch(`/api/WarehouseTransfers/${selectedImport.id}`);
           if (updatedRes.ok) {
             const updatedImport = await updatedRes.json();
             // suppress auto-select before mutating imports state
@@ -2171,7 +2340,7 @@ const WarehouseTransfer = () => {
 
         alert('Lưu phiếu nhập thành công! Phiếu đã được cập nhật.');
       } else {
-        const res = await fetch('/api/Imports', {
+        const res = await fetch('/api/WarehouseTransfers', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -2179,15 +2348,6 @@ const WarehouseTransfer = () => {
         
         if (!res.ok) {
           const errorText = await res.text();
-          console.error('POST Error Response:', errorText);
-          
-          // Parse error để xem chi tiết
-          try {
-            const errorJson = JSON.parse(errorText);
-            console.error('Parsed error:', errorJson);
-          } catch (e) {
-            console.error('Raw error text:', errorText);
-          }
           
           throw new Error(`Create failed: ${errorText}`);
         }
@@ -2225,7 +2385,6 @@ const WarehouseTransfer = () => {
         alert('Lưu phiếu nhập thành công! Phiếu đã được thêm vào danh sách bên trái.');
       }
     } catch (err) {
-      console.error('Save import error', err);
       alert(`Lưu phiếu nhập thất bại: ${err.message}`);
     }
   };
@@ -2381,7 +2540,19 @@ const WarehouseTransfer = () => {
     const totalMatch = leftFilterLists.total && leftFilterLists.total.length > 0
       ? leftFilterLists.total.includes(totalValue)
       : true;
-    return importMatch && dateMatch && totalMatch;
+    const sourceMatch = leftFilterLists.sourceWarehouse && leftFilterLists.sourceWarehouse.length > 0
+      ? leftFilterLists.sourceWarehouse.includes(i.sourceWarehouseName || i.sourceWarehouse || '')
+      : true;
+    const destMatch = leftFilterLists.destWarehouse && leftFilterLists.destWarehouse.length > 0
+      ? leftFilterLists.destWarehouse.includes(i.destWarehouseName || i.destWarehouse || '')
+      : true;
+    const importTypeMatch = leftFilterLists.importType && leftFilterLists.importType.length > 0
+      ? leftFilterLists.importType.includes(i.importTypeName || i.importType || '')
+      : true;
+    const exportTypeMatch = leftFilterLists.exportType && leftFilterLists.exportType.length > 0
+      ? leftFilterLists.exportType.includes(i.exportTypeName || i.exportType || '')
+      : true;
+    return importMatch && dateMatch && totalMatch && sourceMatch && destMatch && importTypeMatch && exportTypeMatch;
   });
 
   React.useEffect(() => {
@@ -2584,7 +2755,6 @@ const WarehouseTransfer = () => {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (e) {
-      console.error('Export error', e);
       alert('Xuất Excel thất bại');
     }
   };
@@ -2804,10 +2974,9 @@ const WarehouseTransfer = () => {
       printWindow.document.close();
       printWindow.focus();
       setTimeout(() => {
-        try { printWindow.print(); } catch (e) { console.error(e); }
+        try { printWindow.print(); } catch (e) { }
       }, 700);
     } catch (e) {
-      console.error(e);
       alert('Lỗi khi tạo bản in A4');
     }
   };
@@ -2841,6 +3010,7 @@ const WarehouseTransfer = () => {
       supplierName: 'Chưa chọn',
       employee: 'admin 66',
       importType: '',
+      exportType: '',
       note: '',
       isTemp: true, // Mark as temporary
       items: []
@@ -2850,6 +3020,9 @@ const WarehouseTransfer = () => {
       createdDate: dayjs().format('YYYY-MM-DD'),
       employee: 'admin 66',
       importType: '',
+      exportType: '',
+      sourceWarehouse: '',
+      destWarehouse: '',
       importNumber: newImportNumber,
       supplier: '',
       invoice: '',
@@ -2891,12 +3064,9 @@ const WarehouseTransfer = () => {
     const month = (today.getMonth() + 1).toString().padStart(2, '0');
     const year = today.getFullYear();
     
-    // Sử dụng timestamp + random để đảm bảo unique
-    const timestamp = Date.now().toString().slice(-4);
-    const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
-    const uniqueId = timestamp + random.slice(-1); // 4 digits unique
-    
-    return `PN-${day}${month}${year}-${uniqueId}`;
+    // Sử dụng timestamp 4 chữ số để đảm bảo unique
+    const uniqueId = Date.now().toString().slice(-4);
+    return `CK-${day}${month}${year}-${uniqueId}`;
   };
 
   // Table row selection
@@ -2926,6 +3096,10 @@ const WarehouseTransfer = () => {
     else if (colKey === 'createdDate') items = Array.from(new Set(filteredImports.map(i => i.createdDate)));
     else if (colKey === 'note') items = Array.from(new Set(filteredImports.map(i => i.note || '')));
     else if (colKey === 'total') items = Array.from(new Set(filteredImports.map(i => String((i.items||[]).reduce((s,it)=>s+(it.total||0),0)))));
+    else if (colKey === 'sourceWarehouse') items = Array.from(new Set(filteredImports.map(i => i.sourceWarehouseName || i.sourceWarehouse || '')));
+    else if (colKey === 'destWarehouse') items = Array.from(new Set(filteredImports.map(i => i.destWarehouseName || i.destWarehouse || '')));
+    else if (colKey === 'importType') items = Array.from(new Set(filteredImports.map(i => i.importTypeName || i.importType || '')));
+    else if (colKey === 'exportType') items = Array.from(new Set(filteredImports.map(i => i.exportTypeName || i.exportType || '')));
     setModalAvailableItems(items);
     setShowSearchModal(true);
   };
@@ -3029,10 +3203,18 @@ const WarehouseTransfer = () => {
           {leftFilterLists.sourceWarehouse && leftFilterLists.sourceWarehouse.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.sourceWarehouse.length})</span>}
         </div>
       ),
-      dataIndex: 'sourceWarehouse',
-      key: 'sourceWarehouse',
-      render: (text) => text || '-',
-      sorter: (a, b) => (a.sourceWarehouse || '').localeCompare(b.sourceWarehouse || ''),
+      dataIndex: 'sourceWarehouseName',
+      key: 'sourceWarehouseName',
+      render: (text, record) => {
+        // Luôn map từ sourceWarehouse id sang tên kho
+        const whId = record.sourceWarehouse || '';
+        if (whId && warehouses && warehouses.length > 0) {
+          const found = warehouses.find(w => String(w.id) === String(whId));
+          if (found) return found.name || found.Name || '';
+        }
+        return text || record.sourceWarehouseName || '-';
+      },
+      sorter: (a, b) => (a.sourceWarehouseName || '').localeCompare(b.sourceWarehouseName || ''),
     }, 3),
     createDraggableColumn({
       title: (
@@ -3042,15 +3224,67 @@ const WarehouseTransfer = () => {
           {leftFilterLists.destWarehouse && leftFilterLists.destWarehouse.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.destWarehouse.length})</span>}
         </div>
       ),
-      dataIndex: 'destWarehouse',
-      key: 'destWarehouse',
-      render: (text) => text || '-',
-      sorter: (a, b) => (a.destWarehouse || '').localeCompare(b.destWarehouse || ''),
+      dataIndex: 'destWarehouseName',
+      key: 'destWarehouseName',
+      render: (text, record) => {
+        // Luôn map từ destWarehouse id sang tên kho
+        const whId = record.destWarehouse || '';
+        if (whId && warehouses && warehouses.length > 0) {
+          const found = warehouses.find(w => String(w.id) === String(whId));
+          if (found) return found.name || found.Name || '';
+        }
+        return text || record.destWarehouseName || '-';
+      },
+      sorter: (a, b) => (a.destWarehouseName || '').localeCompare(b.destWarehouseName || ''),
     }, 4),
     createDraggableColumn({
       title: (
         <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span>⋮⋮ Tổng số lượng</span>
+          <span>⋮⋮ Loại nhập</span>
+          <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('importType')} />
+          {leftFilterLists.importType && leftFilterLists.importType.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.importType.length})</span>}
+        </div>
+      ),
+      dataIndex: 'importTypeName',
+      key: 'importType',
+      render: (text, record) => {
+        try {
+          const it = record.importType || record.ImportType || '';
+          if (it && transactionContents && transactionContents.length > 0) {
+            const found = transactionContents.find(tc => String(tc.id) === String(it) || tc.code === it || tc.name === it);
+            if (found) return found.name || text || '';
+          }
+        } catch (e) {}
+        return text || record.importTypeName || record.importType || '-';
+      },
+      sorter: (a, b) => (a.importTypeName || '').localeCompare(b.importTypeName || ''),
+    }, 7),
+    createDraggableColumn({
+      title: (
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <span>⋮⋮ Loại xuất</span>
+          <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('exportType')} />
+          {leftFilterLists.exportType && leftFilterLists.exportType.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.exportType.length})</span>}
+        </div>
+      ),
+      dataIndex: 'exportTypeName',
+      key: 'exportType',
+      render: (text, record) => {
+        try {
+          const et = record.exportType || record.ExportType || '';
+          if (et && transactionContents && transactionContents.length > 0) {
+            const found = transactionContents.find(tc => String(tc.id) === String(et) || tc.code === et || tc.name === et);
+            if (found) return found.name || text || '';
+          }
+        } catch (e) {}
+        return text || record.exportTypeName || record.exportType || '-';
+      },
+      sorter: (a, b) => (a.exportTypeName || '').localeCompare(b.exportTypeName || ''),
+    }, 8),
+    createDraggableColumn({
+      title: (
+        <div style={{display:'flex',alignItems:'center',gap:8}}>
+          <span>⋮⋮ Tổng tiền</span>
           <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('total')} />
           {leftFilterLists.total && leftFilterLists.total.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.total.length})</span>}
         </div>
@@ -3100,7 +3334,7 @@ const WarehouseTransfer = () => {
           </Space>
         </div>
       )
-    }, 7)
+    }, 9)
   ];
 
   // Apply column order and visibility
@@ -3148,6 +3382,7 @@ const WarehouseTransfer = () => {
         <div className="search-panel-total" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span>Tổng {filteredLeft.length} phiếu</span>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
+            <Button type="primary" size="small" onClick={() => exportSelectedList()} style={{background:'#1677ff',borderColor:'#1677ff'}}>Xuất DS</Button>
             {/* template import/export buttons moved to right detail panel */}
             <input 
               id="template-file-input"
@@ -3272,7 +3507,17 @@ const WarehouseTransfer = () => {
         >
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {defaultLeftCols.map(colKey=>{
-              const label = colKey==='checkbox'?'':(colKey==='importNumber'?'Số phiếu':colKey==='createdDate'?'Ngày chuyển':colKey==='sourceWarehouse'?'Kho nguồn':colKey==='destWarehouse'?'Kho đích':colKey==='note'?'Ghi chú PC':colKey==='total'?'Tổng tiền':colKey==='actions'?'Thao tác':colKey);
+              const label = colKey==='checkbox' ? '' : (
+                colKey==='importNumber' ? 'Số phiếu' :
+                colKey==='createdDate' ? 'Ngày chuyển' :
+                colKey==='sourceWarehouse' || colKey==='sourceWarehouseName' ? 'Kho nguồn' :
+                colKey==='destWarehouse' || colKey==='destWarehouseName' ? 'Kho đích' :
+                colKey==='importType' ? 'Loại nhập' :
+                colKey==='exportType' ? 'Loại xuất' :
+                colKey==='note' ? 'Ghi chú PC' :
+                colKey==='total' ? 'Tổng tiền' :
+                colKey==='actions' ? 'Thao tác' : colKey
+              );
               return (
                 <label key={colKey} style={{display:'flex',alignItems:'center',gap:8}}>
                   <input type="checkbox" checked={leftVisibleCols.includes(colKey)} onChange={()=>{
@@ -3318,7 +3563,7 @@ const WarehouseTransfer = () => {
                       onChange={(e) => {
                         if (!isEditMode) return;
                         const v = e.target.value;
-                        setFormData(fd => ({ ...fd, createdDate: v }));
+                        setFormData(prev => ({ ...prev, createdDate: v }));
                         setSelectedImport(si => si ? ({ ...si, createdDate: v }) : si);
                         setIsEditing(true);
                       }}
@@ -3333,7 +3578,7 @@ const WarehouseTransfer = () => {
                       onChange={(e) => {
                         if (!isEditMode) return;
                         const v = e.target.value;
-                        setFormData(fd => ({ ...fd, sourceWarehouse: v }));
+                        setFormData(prev => ({ ...prev, sourceWarehouse: v }));
                         setSelectedImport(si => si ? ({ ...si, sourceWarehouse: v }) : si);
                         setIsEditing(true);
                       }}
@@ -3353,7 +3598,7 @@ const WarehouseTransfer = () => {
                       onChange={(e) => {
                         if (!isEditMode) return;
                         const v = e.target.value;
-                        setFormData(fd => ({ ...fd, exportType: v }));
+                        setFormData(prev => ({ ...prev, exportType: v }));
                         setSelectedImport(si => si ? ({ ...si, exportType: v }) : si);
                         setIsEditing(true);
                       }}
@@ -3378,7 +3623,7 @@ const WarehouseTransfer = () => {
                         value={formData.importNumber || generateImportNumber()}
                         onChange={(e) => {
                           if (!isEditMode) return;
-                          setFormData(fd => ({ ...fd, importNumber: e.target.value }));
+                          setFormData(prev => ({ ...prev, importNumber: e.target.value }));
                         }}
                         style={{width:'100%'}}
                         placeholder="Tự động tạo"
@@ -3394,7 +3639,7 @@ const WarehouseTransfer = () => {
                       onChange={(e) => {
                         if (!isEditMode) return;
                         const v = e.target.value;
-                        setFormData(fd => ({ ...fd, destWarehouse: v }));
+                        setFormData(prev => ({ ...prev, destWarehouse: v }));
                         setSelectedImport(si => si ? ({ ...si, destWarehouse: v }) : si);
                         setIsEditing(true);
                       }}
@@ -3414,7 +3659,7 @@ const WarehouseTransfer = () => {
                       onChange={(e) => {
                         if (!isEditMode) return;
                         const v = e.target.value;
-                        setFormData(fd => ({ ...fd, importType: v }));
+                        setFormData(prev => ({ ...prev, importType: v }));
                         setSelectedImport(si => si ? ({ ...si, importType: v }) : si);
                         setIsEditing(true);
                       }}
@@ -3436,7 +3681,7 @@ const WarehouseTransfer = () => {
                     <select style={{width:'100%'}} value={formData.employee || selectedImport?.employee || ''} onChange={(e)=>{
                       if (!isEditMode) return;
                       const v = e.target.value;
-                      setFormData(fd => ({ ...fd, employee: v }));
+                      setFormData(prev => ({ ...prev, employee: v }));
                       setSelectedImport(si => si ? ({ ...si, employee: v }) : si);
                       setIsEditing(true);
                     }} disabled={!isEditMode}>
@@ -3454,7 +3699,7 @@ const WarehouseTransfer = () => {
                       onChange={(e) => {
                         if (!isEditMode) return;
                         const v = e.target.value;
-                        setFormData(fd => ({ ...fd, note: v }));
+                        setFormData(prev => ({ ...prev, note: v }));
                         setIsEditing(true);
                       }}
                       style={{width:'100%'}}
@@ -3492,19 +3737,21 @@ const WarehouseTransfer = () => {
                   </div>
 
                   <table className="items-table" style={{minWidth:1300}}>
+                    <colgroup>
+                      {rightColOrder.filter(k => rightVisibleCols.includes(k)).map(key => (
+                        <col key={key} style={{ width: `${rightColWidths[key] || 120}px` }} />
+                      ))}
+                    </colgroup>
                     <thead>
                       <tr>
                         {rightColOrder.map((key, index) => {
                           if (!rightVisibleCols.includes(key)) return null;
                           
-                          // Apply sticky classes for first 3 columns if they are the target columns
+                          // No sticky columns on warehouse-transfer page
                           let stickyClass = '';
-                          if (key === 'barcode' || key === 'productCode' || key === 'productName') {
-                            stickyClass = `sticky-col-${key}`;
-                          }
                           
                           if (key === 'barcode') return (
-                            <th key="barcode" className={stickyClass} style={{textAlign: 'center'}}>
+                            <th key="barcode" className={stickyClass} data-resizable="true" data-col-key={"barcode"} style={{textAlign: 'center'}}>
                               <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
                                 <span>Mã vạch</span>
                                 <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
@@ -3515,7 +3762,7 @@ const WarehouseTransfer = () => {
                             </th>
                           );
                           if (key === 'productCode') return (
-                            <th key="productCode" className={stickyClass} style={{textAlign: 'center'}}>
+                            <th key="productCode" className={stickyClass} data-resizable="true" data-col-key={"productCode"} style={{textAlign: 'center'}}>
                               <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
                                 <span>Mã hàng</span>
                                 <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
@@ -3526,7 +3773,7 @@ const WarehouseTransfer = () => {
                             </th>
                           );
                           if (key === 'productName') return (
-                            <th key="productName" className={stickyClass} style={{textAlign: 'center'}}>
+                            <th key="productName" className={stickyClass} data-resizable="true" data-col-key={"productName"} style={{textAlign: 'center'}}>
                               <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
                                 <span>Hàng hóa</span>
                                 <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
@@ -3554,11 +3801,8 @@ const WarehouseTransfer = () => {
                       {paginatedHeaderRows.map((row, rIdx) => (
                         <tr key={row.id} className="header-input-row" style={row.id === highlightRowId ? { background: '#fff7e6', boxShadow: 'inset 0 0 0 2px #ffd666' } : {}}>
                           {rightColOrder.map((colKey, index) => {
-                            // Apply sticky classes for target columns
+                            // No sticky columns on warehouse-transfer page
                             let stickyClass = '';
-                            if (colKey === 'barcode' || colKey === 'productCode' || colKey === 'productName') {
-                              stickyClass = `sticky-col-${colKey}`;
-                            }
                             
                             if (colKey === 'actions') {
                               if (!rightVisibleCols.includes('actions')) return null;
@@ -3939,10 +4183,10 @@ const WarehouseTransfer = () => {
                   </button>
                 )}
                 <button className="btn btn-success" onClick={exportImportTemplate} style={{marginLeft:8}}>
-                  📄 Xuất chi tiết PN
+                  📄 Xuất chi tiết
                 </button>
                 <button className="btn btn-success" onClick={() => document.getElementById('template-file-input').click()} style={{marginLeft:4}}>
-                  📁 Nhập chi tiết PN
+                  📁 Nhập chi tiết
                 </button>
                 <button className="btn btn-purple" onClick={handlePrint}>
                   🖨 In A4
@@ -4097,20 +4341,22 @@ const WarehouseTransfer = () => {
                 </div>
 
                 <table className="items-table" style={{minWidth:1300}}>
+                  <colgroup>
+                    {rightColOrder.filter(k => rightVisibleCols.includes(k)).map(key => (
+                      <col key={key} style={{ width: `${rightColWidths[key] || 120}px` }} />
+                    ))}
+                  </colgroup>
                   <thead>
                     <tr>
                       {rightColOrder.map((key, index) => {
                         if (!rightVisibleCols.includes(key)) return null;
                         
-                        // Apply sticky classes for target columns
+                        // No sticky columns on warehouse-transfer page
                         let stickyClass = '';
-                        if (key === 'barcode' || key === 'productCode' || key === 'productName') {
-                          stickyClass = `sticky-col-${key}`;
-                        }
                         
-                        if (key === 'barcode') return <th key="barcode" className={stickyClass} style={{textAlign: 'center'}}><span>Mã vạch</span></th>;
-                        if (key === 'productCode') return <th key="productCode" className={stickyClass} style={{textAlign: 'center'}}><span>Mã hàng</span></th>;
-                        if (key === 'productName') return <th key="productName" className={stickyClass} style={{textAlign: 'center'}}><span>Hàng hóa</span></th>;
+                        if (key === 'barcode') return <th key="barcode" className={stickyClass} data-resizable="true" data-col-key={"barcode"} style={{textAlign: 'center'}}><span>Mã vạch</span></th>;
+                        if (key === 'productCode') return <th key="productCode" className={stickyClass} data-resizable="true" data-col-key={"productCode"} style={{textAlign: 'center'}}><span>Mã hàng</span></th>;
+                        if (key === 'productName') return <th key="productName" className={stickyClass} data-resizable="true" data-col-key={"productName"} style={{textAlign: 'center'}}><span>Hàng hóa</span></th>;
                         if (key === 'unit') return <th key="unit" style={{textAlign: 'center'}}><span>Đơn vị tính</span></th>;
                         if (key === 'description') return <th key="description" style={{textAlign: 'center'}}><span>Mô tả</span></th>;
                         if (key === 'conversion') return <th key="conversion" style={{textAlign: 'center'}}><span>Quy đổi</span></th>;
@@ -4129,11 +4375,8 @@ const WarehouseTransfer = () => {
                     {paginatedHeaderRows.map((row, rIdx) => (
                       <tr key={row.id} className="header-input-row" style={row.id === highlightRowId ? { background: '#fff7e6', boxShadow: 'inset 0 0 0 2px #ffd666' } : {}}>
                         {rightColOrder.map((colKey, index) => {
-                          // Apply sticky classes for target columns
-                          let stickyClass = '';
-                          if (colKey === 'barcode' || colKey === 'productCode' || colKey === 'productName') {
-                            stickyClass = `sticky-col-${colKey}`;
-                          }
+                            // No sticky columns on warehouse-transfer page
+                            let stickyClass = '';
                           
                           if (colKey === 'actions') {
                             if (!rightVisibleCols.includes('actions')) return null;

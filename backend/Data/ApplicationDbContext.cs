@@ -30,6 +30,8 @@ namespace QlnppApi.Data
         public DbSet<QuotationItem> QuotationItems { get; set; }
         public DbSet<Import> Imports { get; set; }
         public DbSet<ImportItem> ImportItems { get; set; }
+        public DbSet<WarehouseTransfer> WarehouseTransfers { get; set; }
+        public DbSet<WarehouseTransferItem> WarehouseTransferItems { get; set; }
         public DbSet<Export> Exports { get; set; }
         public DbSet<ExportItem> ExportItems { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -268,6 +270,35 @@ namespace QlnppApi.Data
 
             // Import header precision
             modelBuilder.Entity<Import>()
+                .Property(i => i.Total)
+                .HasPrecision(18, 2);
+
+            // WarehouseTransfer precision - mirror Import configuration
+            modelBuilder.Entity<WarehouseTransferItem>()
+                .Property(i => i.UnitPrice)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<WarehouseTransferItem>()
+                .Property(i => i.Total)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<WarehouseTransferItem>()
+                .Property(i => i.Weight)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<WarehouseTransferItem>()
+                .Property(i => i.Volume)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<WarehouseTransferItem>()
+                .Property(i => i.TransportCost)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<WarehouseTransferItem>()
+                .Property(i => i.TotalTransport)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<WarehouseTransfer>()
                 .Property(i => i.Total)
                 .HasPrecision(18, 2);
 

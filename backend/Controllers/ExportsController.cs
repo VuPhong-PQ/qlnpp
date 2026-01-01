@@ -35,7 +35,7 @@ namespace QlnppApi.Controllers
 
         // GET: api/Exports/template
         [HttpGet("template")]
-        public IActionResult GetTemplate([FromQuery] int? sampleFromId = null, [FromQuery] bool exportAll = false, [FromQuery] string ids = null, [FromQuery] string format = "csv")
+        public IActionResult GetTemplate([FromQuery] int? sampleFromId = null, [FromQuery] bool exportAll = false, [FromQuery] string? ids = null, [FromQuery] string? format = "csv")
         {
             var headers = new[] {
                 "ExportNumber","Date(DD/MM/YYYY)","Employee","ExportType","Customer","Invoice","InvoiceDate(DD/MM/YYYY)","Total","TotalWeight","TotalVolume",

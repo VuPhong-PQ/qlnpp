@@ -37,7 +37,7 @@ namespace QlnppApi.Controllers
         // GET: api/Imports/template
         // Returns a CSV template for imports that users can fill and re-import
         [HttpGet("template")]
-        public IActionResult GetTemplate([FromQuery] int? sampleFromId = null, [FromQuery] bool exportAll = false, [FromQuery] string ids = null, [FromQuery] string format = "csv")
+        public IActionResult GetTemplate([FromQuery] int? sampleFromId = null, [FromQuery] bool exportAll = false, [FromQuery] string? ids = null, [FromQuery] string? format = "csv")
         {
             var headers = new[] {
                 "ImportNumber","Date(DD/MM/YYYY)","Employee","ImportType","Supplier","Invoice","InvoiceDate(DD/MM/YYYY)","Total","TotalWeight","TotalVolume",
