@@ -665,9 +665,7 @@ const getInitialRightCols = () => {
         setSelectedQuotation(null);
       }
     } catch (err) {
-      console.error('Load quotations error', err);
       // Fallback to local dummy data when backend is unavailable (dev convenience)
-      console.warn('Using local sample quotations as fallback');
       setQuotations(initialQuotations);
       // fallback: our sample uses naive ISO strings, assume they are UTC
       setTreatNaiveIsoAsUtc(true);
@@ -709,7 +707,7 @@ const getInitialRightCols = () => {
       
       setSelectedQuotation(data);
     } catch (err) {
-      console.error('Load quotation details error', err);
+      // Silent error for loading details
     }
   };
 
@@ -752,7 +750,6 @@ const getInitialRightCols = () => {
       await loadQuotationDetails(created.id);
       setIsEditing(true);
     } catch (err) {
-      console.error('Create quotation error', err);
       alert('Tạo báo giá mới thất bại: ' + (err.message || err));
     }
   };
@@ -765,7 +762,6 @@ const getInitialRightCols = () => {
       const data = await res.json();
       setProductList(data || []);
     } catch (err) {
-      console.error('Load products error', err);
       setProductList([]);
     }
   };
@@ -783,10 +779,13 @@ const getInitialRightCols = () => {
   const addSelectedProductsToQuotation = () => {
     if (!selectedQuotation) return;
     const picked = productList.filter(p => selectedProductIds.includes(p.id));
-    console.log('Selected products for quotation:', picked);
+    
+    if (picked.length === 0) {
+      alert('Vui lòng chọn ít nhất 1 sản phẩm');
+      return;
+    }
+    
     const items = picked.map(p => {
-      console.log('Product fields:', Object.keys(p));
-      console.log('Conversion1 value:', p.Conversion1, 'conversion1:', p.conversion1);
       return {
         // Use lowercase/camelCase names returned by the Products API
         itemType: p.Category || p.category || 'Hàng hóa',
@@ -804,7 +803,7 @@ const getInitialRightCols = () => {
         vat: 10 // Default VAT 10% for new items
       };
     });
-    console.log('Created quotation items:', items);
+    
     const existing = selectedQuotation.items || selectedQuotation.Items || [];
     const merged = [...existing, ...items];
     // Do not aggregate product notes into quotation-level note.
@@ -818,7 +817,7 @@ const getInitialRightCols = () => {
     try {
       if (!selectedQuotation || !selectedQuotation.id) throw new Error('No quotation selected');
       const payload = { ...selectedQuotation };
-      console.log('Saving quotation payload:', payload);
+      
       // send PUT to update
       const res = await fetch(`/api/Quotations/${selectedQuotation.id}`, {
         method: 'PUT',
@@ -835,7 +834,6 @@ const getInitialRightCols = () => {
       setIsEditing(false);
       alert('Lưu báo giá thành công');
     } catch (err) {
-      console.error('Save quotation error', err);
       alert('Lưu báo giá thất bại: ' + (err.message || err));
     }
   };
@@ -1057,7 +1055,6 @@ const getInitialRightCols = () => {
       if (Array.isArray(data) && data.length > 0) return data[0];
       return data || null;
     } catch (err) {
-      console.error('Load company info error', err);
       return null;
     }
   };
@@ -1068,7 +1065,6 @@ const getInitialRightCols = () => {
       return;
     }
     const company = await fetchCompanyInfo();
-    console.log('Print debug - company and quotation employee:', { company, employee: selectedQuotation?.employee });
     const html = buildA4Html(selectedQuotation, company);
     const w = window.open('', '_blank');
     if (!w) {
@@ -1087,7 +1083,6 @@ const getInitialRightCols = () => {
       w.document.title = '';
     } catch (err) {
       // ignore if the browser prevents it
-      console.warn('Could not replace print window history/title', err);
     }
     // give browser a moment to render styles, then print
     setTimeout(() => { w.focus(); w.print(); }, 500);
@@ -1117,12 +1112,6 @@ const getInitialRightCols = () => {
     };
 
     const rows = items.map((it, idx) => {
-      console.log('Excel export - processing item:', {
-        itemCode: it.itemCode || it.ItemCode,
-        conversion1: it.conversion1,
-        Conversion1: it.Conversion1,
-        allFields: Object.keys(it)
-      });
       return {
         stt: idx + 1,
         barcode: getItemField(it, 'barcode') || '',
@@ -1139,11 +1128,6 @@ const getInitialRightCols = () => {
         note: getItemField(it, 'note') || it.note || it.Note || ''  // Use per-item note
       };
     });
-
-    try { console.log('exportQuotationExcel - rows JSON:', JSON.stringify(rows, null, 2)); } catch (e) {}
-
-    // Debug: log items and rows to help diagnose missing notes
-    try { console.log('exportQuotationExcel - quotation, items, rows:', { quotation, items, rows }); } catch (e) {}
 
     // Build HTML table similar to sample: company header, title, metadata, then items table
     const html = `<!doctype html>
@@ -1209,7 +1193,6 @@ const getInitialRightCols = () => {
       a.remove();
       URL.revokeObjectURL(url);
     } catch (err) {
-      console.error('Export excel failed', err);
       alert('Xuất Excel thất bại');
     }
   };
@@ -1259,7 +1242,6 @@ const getInitialRightCols = () => {
                     setQuotations(prev => prev.filter(x => x.id !== q.id));
                     if (selectedQuotation?.id === q.id) setSelectedQuotation(null);
                   } catch (err) {
-                    console.error('Delete quotation failed', err);
                     alert('Xóa báo giá thất bại');
                   }
                   setContextMenu({ visible: false, x:0, y:0, quotation: null });
@@ -1338,7 +1320,6 @@ const getInitialRightCols = () => {
                                   setQuotations(prev => prev.filter(x => x.id !== q.id));
                                   if (selectedQuotation?.id === q.id) setSelectedQuotation(null);
                                 } catch (err) {
-                                  console.error('Delete quotation failed', err);
                                   alert('Xóa thất bại');
                                 }
                               }}
