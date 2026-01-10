@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../BusinessPage.css';
 import { API_ENDPOINTS, api } from '../../../config/api';
+import OpenStreetMapModal from '../../OpenStreetMapModal';
 
 const CreateOrderForm = () => {
   const navigate = useNavigate();
@@ -60,6 +61,14 @@ const CreateOrderForm = () => {
   ]);
 
   const [positions, setPositions] = useState([]);
+  const [customers, setCustomers] = useState([]);
+  const [customerGroups, setCustomerGroups] = useState([]);
+  const [products, setProducts] = useState([]);
+  const [warehouses, setWarehouses] = useState([]);
+  const [units, setUnits] = useState([]);
+  const [showMapModal, setShowMapModal] = useState(false);
+  const [selectedCustomerForMap, setSelectedCustomerForMap] = useState(null);
+  const isCustomerSelected = Boolean(orderForm.customer);
   const initialColWidths = [120, 120, 220, 120, 80, 90, 110, 80, 120, 120, 120, 100, 180, 100, 140, 90, 90, 100, 100, 120];
   const [colWidths, setColWidths] = useState(initialColWidths);
   const resizerState = useRef({ isResizing: false, startX: 0, colIndex: null, startWidth: 0 });
@@ -77,9 +86,9 @@ const CreateOrderForm = () => {
     { key: 'priceAfterCK', label: 'Giá sau CK', visible: true },
     { key: 'totalAfterCK', label: 'Ttien sau CK', visible: true },
     { key: 'totalAfterDiscount', label: 'Ttien sau giảm %', visible: true },
-    { key: 'nvSales', label: 'Mô tả', visible: true },
-    { key: 'description', label: 'Quy đổi', visible: true },
-    { key: 'conversion', label: 'Thành tiền', visible: true },
+    { key: 'nvSales', label: 'NV Sales', visible: true },
+    { key: 'description', label: 'Mô tả chi tiết', visible: true },
+    { key: 'conversion', label: 'Quy đổi', visible: true },
     { key: 'weight', label: 'Số kg', visible: true },
     { key: 'volume', label: 'Số khối', visible: true },
     { key: 'exportType', label: 'Loại xuất', visible: true },
@@ -223,11 +232,44 @@ const CreateOrderForm = () => {
       .then(data => {
         if (!mounted) return;
         if (Array.isArray(data)) {
-          const pos = Array.from(new Set(data.map(c => (c.Position || c.position || '').toString().trim()).filter(Boolean)));
+          // Save full customers list for dropdown and compute positions
+          setCustomers(data);
+          const pos = Array.from(new Set(data.map(c => (c.Position || c.position || c.positionName || '').toString().trim()).filter(Boolean)));
           setPositions(pos);
         }
       })
       .catch(err => console.warn('Failed to load customers for positions', err));
+    // load customer groups for Nhóm khách hàng select
+    api.get(API_ENDPOINTS.customerGroups)
+      .then(gdata => {
+        if (!mounted) return;
+        if (Array.isArray(gdata)) setCustomerGroups(gdata);
+      })
+      .catch(err => console.warn('Failed to load customer groups', err));
+
+    // load products for product selection
+    api.get(API_ENDPOINTS.products)
+      .then(pdata => {
+        if (!mounted) return;
+        if (Array.isArray(pdata)) setProducts(pdata);
+      })
+      .catch(err => console.warn('Failed to load products', err));
+
+    // load warehouses for warehouse select
+    api.get(API_ENDPOINTS.warehouses)
+      .then(wdata => {
+        if (!mounted) return;
+        if (Array.isArray(wdata)) setWarehouses(wdata);
+      })
+      .catch(err => console.warn('Failed to load warehouses', err));
+
+    // load units for unit select
+    api.get(API_ENDPOINTS.units)
+      .then(udata => {
+        if (!mounted) return;
+        if (Array.isArray(udata)) setUnits(udata);
+      })
+      .catch(err => console.warn('Failed to load units', err));
     return () => { mounted = false; };
   }, []);
 
@@ -359,13 +401,40 @@ const CreateOrderForm = () => {
             <label className="required">Khách hàng</label>
             <select
               value={orderForm.customer}
-              onChange={(e) => handleOrderFormChange('customer', e.target.value)}
+              onChange={(e) => {
+                const val = e.target.value;
+                handleOrderFormChange('customer', val);
+                const sel = customers.find(c => String(c.id) === String(val) || String(c.code) === String(val));
+                if (sel) {
+                  handleOrderFormChange('customerName', sel.name || '');
+                  handleOrderFormChange('phone', sel.phone || sel.Phone || '');
+                  handleOrderFormChange('customerGroup', sel.customerGroup || sel.group || sel.customerGroupName || '');
+                  handleOrderFormChange('address', sel.address || sel.vatAddress || sel.Address || '');
+                  // position/vehicle mapping
+                  handleOrderFormChange('vehicle', sel.position || sel.Position || sel.vehicle || '');
+                  // print order (STT in)
+                  const printVal = sel.printIn !== undefined && sel.printIn !== null ? parseInt(sel.printIn, 10) || 0 : 0;
+                  handleOrderFormChange('printOrder', printVal);
+                  // sales schedule
+                  handleOrderFormChange('salesSchedule', sel.salesSchedule || sel.salesScheduleName || sel.sales || '');
+                } else {
+                  handleOrderFormChange('customerName', '');
+                  handleOrderFormChange('phone', '');
+                  handleOrderFormChange('customerGroup', '');
+                  handleOrderFormChange('address', '');
+                  handleOrderFormChange('vehicle', '');
+                  handleOrderFormChange('printOrder', 0);
+                  handleOrderFormChange('salesSchedule', '');
+                }
+              }}
               className="order-form-select"
             >
               <option value="">Chọn khách hàng</option>
-              <option value="KH001">Nguyễn Văn A</option>
-              <option value="KH002">Công ty ABC</option>
-              <option value="KH003">Trần Thị B</option>
+              {customers.map(c => (
+                <option key={c.id || c.code} value={c.id || c.code}>
+                  {`${c.code ? c.code + ' - ' : ''}${c.name || ''}${c.phone ? ' (' + c.phone + ')' : ''}${c.customerGroup ? ' - ' + c.customerGroup : ''}`}
+                </option>
+              ))}
             </select>
           </div>
         </div>
@@ -392,6 +461,7 @@ const CreateOrderForm = () => {
               onChange={(e) => handleOrderFormChange('customerName', e.target.value)}
               className="order-form-input"
               placeholder=""
+              readOnly={isCustomerSelected}
             />
           </div>
           <div className="order-form-group">
@@ -402,6 +472,7 @@ const CreateOrderForm = () => {
               onChange={(e) => handleOrderFormChange('phone', e.target.value)}
               className="order-form-input"
               placeholder=""
+              readOnly={isCustomerSelected}
             />
           </div>
         </div>
@@ -431,14 +502,18 @@ const CreateOrderForm = () => {
               onChange={(e) => handleOrderFormChange('address', e.target.value)}
               className="order-form-input"
               placeholder=""
+              readOnly={isCustomerSelected}
             />
           </div>
           <div className="order-form-group">
             <label>Vị trí</label>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
             <select
               value={orderForm.vehicle}
               onChange={(e) => handleOrderFormChange('vehicle', e.target.value)}
               className="order-form-select"
+              style={{ flex: 1 }}
+              disabled={isCustomerSelected}
             >
               <option value="">Chọn vị trí</option>
               {positions.length === 0 && (
@@ -450,6 +525,29 @@ const CreateOrderForm = () => {
                 <option key={idx} value={p}>{p}</option>
               ))}
             </select>
+            {/* Clickable icon to open map modal for the selected position */}
+            <button
+              type="button"
+              onClick={() => {
+                // Try to find original customer by selected customer id/code
+                const sel = customers.find(c => String(c.id) === String(orderForm.customer) || String(c.code) === String(orderForm.customer));
+                if (sel && sel.position) {
+                  setSelectedCustomerForMap(sel);
+                  setShowMapModal(true);
+                } else if (orderForm.vehicle) {
+                  // Construct a small object compatible with OpenStreetMapModal
+                  setSelectedCustomerForMap({ name: orderForm.customerName || 'Khách hàng', code: orderForm.customer || '', position: orderForm.vehicle, address: orderForm.address, phone: orderForm.phone });
+                  setShowMapModal(true);
+                } else {
+                  alert('Không có vị trí để hiển thị. Vui lòng chọn khách hàng hoặc vị trí.');
+                }
+              }}
+              title="Xem vị trí"
+              style={{ padding: '6px 10px', cursor: 'pointer' }}
+            >
+              📍
+            </button>
+            </div>
           </div>
         </div>
 
@@ -461,11 +559,15 @@ const CreateOrderForm = () => {
               value={orderForm.customerGroup}
               onChange={(e) => handleOrderFormChange('customerGroup', e.target.value)}
               className="order-form-select"
+              disabled={isCustomerSelected}
             >
               <option value="">Chọn nhóm khách hàng</option>
-              <option value="retail">Khách lẻ</option>
-              <option value="wholesale">Khách sỉ</option>
-              <option value="vip">Khách VIP</option>
+              {customerGroups.length === 0 && (
+                <option value="">(Không có nhóm)</option>
+              )}
+              {customerGroups.map(g => (
+                <option key={g.id} value={g.code}>{g.code} - {g.name}</option>
+              ))}
             </select>
           </div>
           <div className="order-form-group">
@@ -476,6 +578,7 @@ const CreateOrderForm = () => {
               onChange={(e) => handleOrderFormChange('salesSchedule', e.target.value)}
               className="order-form-input"
               placeholder=""
+              readOnly={isCustomerSelected}
             />
           </div>
           <div className="order-form-group small">
@@ -486,6 +589,7 @@ const CreateOrderForm = () => {
               onChange={(e) => handleOrderFormChange('printOrder', e.target.value)}
               className="order-form-input highlight-red"
               placeholder="0"
+              readOnly={isCustomerSelected}
             />
           </div>
           <div className="order-form-group">
@@ -606,19 +710,139 @@ const CreateOrderForm = () => {
                               );
                             case 'productName':
                               return (
-                                <select value={item.productName} onChange={(e) => handleOrderItemChange(rowIndex, 'productName', e.target.value)} className="item-select">
+                                <select
+                                  value={item.productName}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    // set the displayed productName
+                                    handleOrderItemChange(rowIndex, 'productName', val);
+                                    // find product by id or code
+                                    const sel = products.find(p => String(p.id) === String(val) || String(p.code) === String(val) || String(p.barcode) === String(val) || (p.name === val));
+                                    if (sel) {
+                                      // set related fields: barcode, productCode, unitPrice, stock, unit
+                                      handleOrderItemChange(rowIndex, 'barcode', sel.barcode || sel.Barcode || '');
+                                      handleOrderItemChange(rowIndex, 'productCode', sel.code || sel.productCode || '');
+                                      // choose common price fields
+                                      const price = sel.retailPrice || sel.price || sel.retailPrice1 || sel.sellPrice || 0;
+                                      handleOrderItemChange(rowIndex, 'unitPrice', parseFloat(price) || 0);
+                                      // stock fallbacks
+                                      const stockVal = sel.stock || sel.quantity || sel.available || sel.onHand || sel.tonkho || sel.tongton || 0;
+                                      handleOrderItemChange(rowIndex, 'stock', parseFloat(stockVal) || 0);
+                                      // unit: try to map to a known unit code
+                                      const preferredUnit = sel.baseUnit || sel.defaultUnit || sel.unit || '';
+                                      let unitCode = preferredUnit;
+                                      if (preferredUnit) {
+                                        const found = units.find(u => (u.code && String(u.code) === String(preferredUnit)) || (u.name && String(u.name) === String(preferredUnit)));
+                                        if (found) unitCode = found.code || found.name;
+                                      }
+                                      handleOrderItemChange(rowIndex, 'unit', unitCode || '');
+                                      // Prepare unit options limited to this product's units (baseUnit, unit1, unit2, unit3)
+                                      const unitCandidates = [sel.baseUnit, sel.unit1, sel.unit2, sel.unit3].filter(Boolean);
+                                      const unitConversions = [sel.baseConversion, sel.conversion1, sel.conversion2, sel.conversion3];
+                                      const unitOptions = unitCandidates.map((u, idx) => {
+                                        const conv = unitConversions[idx] !== undefined && unitConversions[idx] !== null ? unitConversions[idx] : (idx === 0 ? (sel.baseConversion || 1) : 0);
+                                        const found = units.find(x => (x.code && String(x.code) === String(u)) || (x.name && String(x.name) === String(u)));
+                                        return { value: found ? (found.code || found.name) : u, label: found ? (found.name || found.code) : u, conversion: conv };
+                                      });
+                                      // If no explicit candidates, fall back to preferredUnit only
+                                      if (unitOptions.length === 0 && preferredUnit) {
+                                        const found = units.find(x => (x.code && String(x.code) === String(preferredUnit)) || (x.name && String(x.name) === String(preferredUnit)));
+                                        unitOptions.push({ value: found ? (found.code||found.name) : preferredUnit, label: found ? (found.name||found.code) : preferredUnit, conversion: sel.baseConversion || 1 });
+                                      }
+                                      handleOrderItemChange(rowIndex, 'unitOptions', unitOptions);
+                                      // set conversion based on selected unit (unitCode)
+                                      const selectedUnitOption = unitOptions.find(uo => String(uo.value) === String(unitCode));
+                                      if (selectedUnitOption) {
+                                        handleOrderItemChange(rowIndex, 'conversion', selectedUnitOption.conversion || 0);
+                                      } else {
+                                        // fallback to baseConversion
+                                        handleOrderItemChange(rowIndex, 'conversion', sel.baseConversion || 1);
+                                      }
+                                      // warehouse: prefer product's default, otherwise first warehouse
+                                      const defaultWh = sel.defaultWarehouseId || sel.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '');
+                                      if (defaultWh) handleOrderItemChange(rowIndex, 'warehouse', String(defaultWh));
+                                      // description, NV sales, conversion, volume (m3), weight (kg)
+                                      handleOrderItemChange(rowIndex, 'description', sel.description || sel.note || '');
+                                      handleOrderItemChange(rowIndex, 'nvSales', sel.nvSales || '');
+                                      const vol = sel.volume || sel.m3 || sel.cbm || sel.volume_m3 || 0;
+                                      handleOrderItemChange(rowIndex, 'volume', parseFloat(vol) || 0);
+                                      const wt = sel.weight || sel.kg || sel.weightKg || sel.weight_kg || 0;
+                                      handleOrderItemChange(rowIndex, 'weight', parseFloat(wt) || 0);
+                                      // If this was the last row, append a new empty row for next selection
+                                      setTimeout(() => {
+                                        // Use current orderItems length to decide
+                                        setOrderItems(prev => {
+                                          if (rowIndex === prev.length - 1) {
+                                            return [...prev, {
+                                              id: prev.length + 1,
+                                              productCode: '',
+                                              barcode: '',
+                                              productName: '',
+                                              warehouse: '',
+                                              unit: '',
+                                              quantity: 0,
+                                              unitPrice: 0,
+                                              discountPercent: 0,
+                                              priceAfterCK: 0,
+                                              totalAfterCK: 0,
+                                              totalAfterDiscount: 0,
+                                              nvSales: '',
+                                              description: '',
+                                              conversion: '',
+                                              total: 0,
+                                              weight: 0,
+                                              volume: 0,
+                                              exportType: '',
+                                              stock: 0
+                                            }];
+                                          }
+                                          return prev;
+                                        });
+                                      }, 50);
+                                    }
+                                  }}
+                                  className="item-select"
+                                >
                                   <option value="">nhập tên hàng</option>
+                                  {products.map(p => (
+                                    <option key={p.id || p.code || p.barcode} value={p.id || p.code}>
+                                      {`${p.barcode ? p.barcode + ' - ' : ''}${p.name || p.vatName || ''} - ${((p.retailPrice||p.price||p.retailPrice1||0)).toLocaleString()} - ${((p.stock||p.quantity||p.available||0))}`}
+                                    </option>
+                                  ))}
                                 </select>
                               );
                             case 'warehouse':
-                              return <input type="text" value={item.warehouse} onChange={(e) => handleOrderItemChange(rowIndex, 'warehouse', e.target.value)} className="item-input" placeholder="kho hàng" />;
-                            case 'unit':
                               return (
-                                <select value={item.unit} onChange={(e) => handleOrderItemChange(rowIndex, 'unit', e.target.value)} className="item-select small">
+                                <select value={item.warehouse} onChange={(e) => handleOrderItemChange(rowIndex, 'warehouse', e.target.value)} className="item-select">
+                                  <option value="">Chọn kho</option>
+                                  {warehouses.map(w => (
+                                    <option key={w.id} value={w.id}>{`${w.name}${w.code ? ' ('+w.code+')' : ''}${item.stock ? ' ('+item.stock+')' : ''}`}</option>
+                                  ))}
+                                </select>
+                              );
+                            case 'unit':
+                              // Render unit options limited to the product's own units if provided
+                              const opts = item.unitOptions && Array.isArray(item.unitOptions) && item.unitOptions.length > 0
+                                ? item.unitOptions
+                                : units.map(u => ({ value: u.code || u.name, label: u.name || u.code }));
+                              return (
+                                <select
+                                  value={item.unit}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    handleOrderItemChange(rowIndex, 'unit', v);
+                                    const opt = opts.find(o => String(o.value) === String(v));
+                                    if (opt) {
+                                      handleOrderItemChange(rowIndex, 'conversion', opt.conversion || 0);
+                                      // optionally update unitPrice based on conversion? skipped for now
+                                    }
+                                  }}
+                                  className="item-select small"
+                                >
                                   <option value="">Chọn đvt</option>
-                                  <option value="Cái">Cái</option>
-                                  <option value="Thùng">Thùng</option>
-                                  <option value="Kg">Kg</option>
+                                  {opts.map(o => (
+                                    <option key={o.value} value={o.value}>{o.label}</option>
+                                  ))}
                                 </select>
                               );
                             case 'quantity':
@@ -641,9 +865,31 @@ const CreateOrderForm = () => {
                               return <input type="text" value={item.conversion} onChange={(e) => handleOrderItemChange(rowIndex, 'conversion', e.target.value)} className="item-input" />;
                             // 'total' column removed from defaults; keep logic elsewhere if needed
                             case 'weight':
-                              return <input type="number" value={item.weight} onChange={(e) => handleOrderItemChange(rowIndex, 'weight', parseFloat(e.target.value) || 0)} className="item-input number" />;
+                              return (
+                                <input
+                                  type="number"
+                                  value={item.weight !== undefined && item.weight !== null && item.weight !== '' ? Number(item.weight).toFixed(2) : ''}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    handleOrderItemChange(rowIndex, 'weight', v === '' ? '' : parseFloat(v) || 0);
+                                  }}
+                                  className="item-input number"
+                                  step="0.01"
+                                />
+                              );
                             case 'volume':
-                              return <input type="number" value={item.volume} onChange={(e) => handleOrderItemChange(rowIndex, 'volume', parseFloat(e.target.value) || 0)} className="item-input number" />;
+                              return (
+                                <input
+                                  type="number"
+                                  value={item.volume !== undefined && item.volume !== null && item.volume !== '' ? Number(item.volume).toFixed(2) : ''}
+                                  onChange={(e) => {
+                                    const v = e.target.value;
+                                    handleOrderItemChange(rowIndex, 'volume', v === '' ? '' : parseFloat(v) || 0);
+                                  }}
+                                  className="item-input number"
+                                  step="0.01"
+                                />
+                              );
                             case 'exportType':
                               return <input type="text" value={item.exportType} onChange={(e) => handleOrderItemChange(rowIndex, 'exportType', e.target.value)} className="item-input" />;
                             case 'stock':
@@ -776,6 +1022,11 @@ const CreateOrderForm = () => {
           ✓ Duyệt
         </button>
       </div>
+      <OpenStreetMapModal
+        isOpen={showMapModal}
+        onClose={() => setShowMapModal(false)}
+        customer={selectedCustomerForMap}
+      />
     </div>
   );
 };
