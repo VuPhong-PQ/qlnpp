@@ -267,8 +267,10 @@
 .detail-content {
   padding: 20px;
   overflow-y: auto;
-  height: calc(100vh - 160px);
+  /* Use flex-based sizing so content adapts to header height and zoom
+     Avoid fixed vh-based heights which change with zoom and break layout */
   flex: 1;
+  overflow-y: auto;
   min-height: 0;
 }
 
@@ -1035,12 +1037,10 @@
 /* Import Goods Page Layout */
 .import-goods-page {
   display: flex;
-  height: calc(100vh - 80px);
   gap: 10px;
   background-color: #f5f5f5;
   padding: 10px;
   max-width: 100%;
-  overflow: hidden;
   box-sizing: border-box;
 }
 
@@ -1849,12 +1849,10 @@
 /* Export Goods Page Layout */
 .export-goods-page {
   display: flex;
-  height: calc(100vh - 80px);
   gap: 10px;
   background-color: #f5f5f5;
   padding: 10px;
   max-width: 100%;
-  overflow: hidden;
   box-sizing: border-box;
 }
 
@@ -1940,11 +1938,9 @@
 /* Warehouse Transfer Page Layout */
 .transfer-page {
   display: flex;
-  height: calc(100vh - 80px);
   gap: 10px;
   background-color: #f5f5f5;
   padding: 10px;
-  overflow: hidden;
   box-sizing: border-box;
 }
 
@@ -1973,9 +1969,9 @@
 
 .transfer-detail-panel .detail-content {
   padding: 20px;
-  overflow-y: auto;
-  height: calc(100vh - 160px);
+  /* Flex-based scrolling container so header/zoom changes don't break layout */
   flex: 1;
+  overflow-y: auto;
   min-height: 0;
 }
 
@@ -2065,7 +2061,9 @@
 .create-order-page {
   padding: 20px;
   background-color: #f8f9fa;
-  min-height: calc(100vh - 80px);
+  /* Respect header height when computing full-page min-height */
+  min-height: calc(100vh - var(--global-header-height, 80px));
+  position: relative;
 }
 
 @media (max-width: 700px) {
@@ -2091,22 +2089,28 @@
 .create-order-page .search-section {
   background: white;
   border-radius: 8px;
-  padding: 20px;
-  margin-bottom: 20px;
+  padding: 12px 20px 8px; /* reduce bottom padding */
+  margin-bottom: 12px; /* tighten gap to next section */
   box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  position: relative;
+  display: grid;
+  grid-template-columns: 1fr; /* remove reserved right column */
+  grid-template-rows: auto;
+  gap: 8px; /* smaller vertical gap */
 }
 
 .create-order-page .search-form-grid {
   display: flex;
   flex-direction: column;
-  gap: 15px;
+  gap: 8px;
 }
 
 .create-order-page .form-row {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
-  gap: 15px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 12px;
   align-items: center;
+  margin-bottom: 8px; /* reduce row spacing */
 }
 
 .create-order-page .form-group {
@@ -2374,10 +2378,24 @@
   border-color: #357abd;
 }
 
-/* Search Button Container */
+/* Search Button Container: no longer used (button moved to action toolbar) */
 .create-order-page .search-btn-container {
-  display: flex;
-  justify-content: flex-end;
+  display: none;
+}
+
+/* On small screens, restore normal flow */
+@media (max-width: 768px) {
+  .create-order-page .search-btn-container {
+    position: static;
+    transform: none;
+    right: auto;
+    top: auto;
+    justify-content: flex-end;
+    margin-top: 6px;
+  }
+  .create-order-page .search-section {
+    padding-right: 20px;
+  }
 }
 
 /* Status Select Special Styling */
@@ -2388,7 +2406,7 @@
 
 /* Empty Space for Alignment */
 .create-order-page .empty-space {
-  min-height: 42px;
+  min-height: 0; /* remove forced blank space */
 }
 
 /* Search Button Enhanced */
@@ -2410,27 +2428,118 @@
   min-width: 120px;
 }
 
-.create-order-page .search-btn:hover {
-  background: #357abd;
-}
-
-.create-order-page .search-icon {
-  font-size: 16px;
-}
-
-/* Action Toolbar */
-.create-order-page .action-toolbar {
+.create-order-page .search-btn-container {
+  grid-column: 2 / 3;
+  grid-row: 1 / 3; /* span both rows */
   display: flex;
-  justify-content: space-between;
   align-items: center;
-  background: white;
-  padding: 15px 20px;
-  border-radius: 8px;
-  margin-bottom: 10px;
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  justify-content: center;
 }
 
+/* Fixed action toolbar: move whole group to top-right and fix position */
+.create-order-page .action-toolbar {
+  position: static; /* flow with toolbar-row */
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-right: 0;
+}
+
+.create-order-page .toolbar-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 8px 0;
+  padding: 0;
+  width: 100%;
+}
+
+/* Position left-info at the far left edge */
 .create-order-page .left-info {
+  flex: 0 0 auto;
+  padding-left: 0;
+  margin-left: 0;
+}
+
+/* Position action-buttons at the far right edge */
+.create-order-page .action-buttons {
+  display: flex;
+  gap: 8px;
+  margin-left: auto;
+  margin-right: 0;
+  padding-right: 0;
+}
+
+.create-order-page .action-toolbar .search-btn {
+  min-width: 140px;
+  width: auto;
+  height: 40px;
+  padding: 8px 14px;
+  border-radius: 6px;
+  background: #4a90e2;
+  color: #fff;
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: visible;
+}
+
+/* Keep other icon action buttons compact while allowing the search button to size by content */
+.create-order-page .action-buttons .action-btn:not(.search-btn) {
+  width: 40px;
+  height: 40px;
+}
+
+/* Ensure action buttons area doesn't clip expanded search button */
+.create-order-page .action-buttons {
+  overflow: visible;
+  align-items: center;
+}
+
+/* Make sure the search button background fully covers its label */
+.create-order-page .search-btn {
+  position: relative;
+  z-index: 1300;
+  background: #4a90e2;
+  color: #fff;
+  padding: 8px 18px !important;
+  min-width: 140px !important;
+  box-shadow: none;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* Slight spacing for import button so it doesn't touch search button */
+.create-order-page .import-btn {
+  margin-left: 8px;
+}
+
+.create-order-page .action-toolbar .search-label {
+  display: inline-block;
+}
+
+/* On small screens, restore normal flow */
+@media (max-width: 768px) {
+  .create-order-page .search-section {
+    display: block;
+  }
+  .create-order-page .search-form-grid {
+    grid-column: auto;
+  }
+  .create-order-page .search-btn-container {
+    grid-column: auto;
+    grid-row: auto;
+    display: flex;
+    justify-content: flex-end;
+    margin-top: 6px;
+  }
+}
   font-size: 14px;
   color: #666;
 }
@@ -2460,6 +2569,15 @@
 .create-order-page .blue-btn {
   background: #4a90e2;
   color: white;
+}
+
+/* Ensure search button shows full label despite generic .action-btn sizing */
+.create-order-page .action-toolbar .search-btn {
+  width: auto !important;
+  min-width: 140px !important;
+  padding: 8px 14px !important;
+  display: inline-flex !important;
+  justify-content: center !important;
 }
 
 .create-order-page .blue-btn:hover {
@@ -2727,6 +2845,19 @@
   }
 }
 
+/* Make the results table scrollable both horizontally and vertically */
+.create-order-page .table-container {
+  /* Leave table container to flow; allow horizontal scroll but avoid fixed vh-based max-height */
+  max-height: none;
+  overflow-x: auto;
+  overflow-y: visible;
+}
+
+.create-order-page .results-table {
+  min-width: 1400px;
+  width: max-content;
+}
+
 @media (max-width: 768px) {
   .create-order-page {
     padding: 10px;
@@ -2755,6 +2886,9 @@
     flex-direction: column;
     align-items: stretch;
     gap: 15px;
+    position: static;
+    top: auto;
+    right: auto;
   }
   
   .create-order-page .left-info {
@@ -2904,11 +3038,1444 @@
 
 /* Prevent body scroll when date picker is open on mobile */
 .create-order-page.date-picker-open {
+  .create-order-page .action-buttons .action-btn.search-btn,
+  .create-order-page .action-btn.search-btn {
+    width: auto !important;
+    min-width: 160px !important;
+    padding: 8px 18px !important;
+    display: inline-flex !important;
+    justify-content: center !important;
+    height: 40px !important;
+    box-sizing: border-box !important;
+  }
+}
+
+/* Strong override to ensure the TÌM KIẾM button background fully covers its text */
+.create-order-page .action-toolbar .action-buttons .action-btn.search-btn,
+.create-order-page .action-buttons .action-btn.search-btn,
+.create-order-page .action-btn.search-btn {
+  width: auto !important;
+  min-width: 200px !important;
+  padding: 8px 20px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  height: 40px !important;
+  line-height: 1 !important;
+  box-sizing: border-box !important;
+  white-space: nowrap !important;
+  overflow: visible !important;
+  background: #4a90e2 !important;
+  color: #fff !important;
+  border-radius: 6px !important;
+}
+
+.create-order-page .action-toolbar .search-label,
+.create-order-page .search-label {
+  display: inline-block !important;
+  padding: 0 6px !important;
+  white-space: nowrap !important;
+}
+
+/* ========================================
+   ORDER CREATION MODAL STYLES
+   ======================================== */
+
+.order-modal {
+  background: #fff;
+  width: 95%;
+  max-width: 1400px;
+  max-height: 95vh;
+  border-radius: 8px;
+  box-shadow: 0 10px 50px rgba(0,0,0,0.3);
+  display: flex;
+  flex-direction: column;
   overflow: hidden;
 }
 
+.order-modal-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 16px 24px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.order-modal-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.btn-create-new {
+  background: #17a2b8;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+
+.btn-create-new:hover {
+  background: #138496;
+}
+
+.order-modal-body {
+  flex: 1;
+  overflow-y: auto;
+  padding: 20px 24px;
+}
+
+/* Form Rows */
+.order-form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
+.order-form-row.three-cols {
+  grid-template-columns: 1fr 2fr 1fr;
+}
+
+.order-form-row.four-cols {
+  grid-template-columns: 1fr 1fr 80px 1fr;
+}
+
+/* Align first-column widths across create-order form so
+   'Ngày lập' and 'Nhóm khách hàng' match 'Số phiếu'/'Nhân viên lập' */
+.create-order-form-page .order-form-row {
+  grid-template-columns: 360px 1fr;
+}
+
+.create-order-form-page .order-form-row.three-cols {
+  grid-template-columns: 360px 1fr 1fr;
+}
+
+.create-order-form-page .order-form-row.four-cols {
+  grid-template-columns: 360px 1fr 80px 1fr;
+}
+
+.order-form-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.order-form-group.wide {
+  grid-column: span 1;
+}
+
+.order-form-group.small {
+  max-width: 100px;
+}
+
+.order-form-group label {
+  font-size: 13px;
+  color: #495057;
+  margin-bottom: 4px;
+  font-weight: 500;
+}
+
+.order-form-group label.required::before {
+  content: '* ';
+  color: #dc3545;
+}
+
+.order-form-input,
+.order-form-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  background: white;
+  transition: border-color 0.2s;
+}
+
+.order-form-input:focus,
+.order-form-select:focus {
+  outline: none;
+  border-color: #4a90e2;
+}
+
+.order-form-input.highlight-red {
+  color: #dc3545;
+  text-align: right;
+}
+
+.input-with-icon {
+  position: relative;
+}
+
+.input-with-icon .input-icon {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: 14px;
+}
+
+.input-with-icon .input-icon.success {
+  color: #28a745;
+}
+
+/* Price Type Toggle */
+.price-type-toggle {
+  display: flex;
+  gap: 0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+  width: fit-content;
+}
+
+.price-type-toggle .toggle-btn {
+  padding: 8px 16px;
+  border: none;
+  background: #f8f9fa;
+  cursor: pointer;
+  font-size: 14px;
+  transition: all 0.2s;
+}
+
+.price-type-toggle .toggle-btn.active {
+  background: #4a90e2;
+  color: white;
+}
+
+.price-type-toggle .toggle-btn:first-child {
+  border-right: 1px solid #ddd;
+}
+
+/* Order Tabs */
+.order-tabs {
+  display: flex;
+  gap: 0;
+  margin-bottom: 10px;
+  border-bottom: 2px solid #e9ecef;
+}
+
+.order-tabs .tab-btn {
+  padding: 10px 20px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 14px;
+  color: #6c757d;
+  border-bottom: 2px solid transparent;
+  margin-bottom: -2px;
+  transition: all 0.2s;
+}
+
+.order-tabs .tab-btn.active {
+  color: #4a90e2;
+  border-bottom-color: #4a90e2;
+}
+
+.order-tabs .tab-btn:hover {
+  color: #4a90e2;
+}
+
+/* Order Items Section */
+.order-items-section {
+  background: #f8f9fa;
+  border-radius: 6px;
+  padding: 10px;
+  margin-bottom: 12px;
+}
+
+.order-items-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+
+.items-total {
+  font-weight: 600;
+  color: #2c3e50;
+}
+
+.items-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.item-action-btn {
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  transition: opacity 0.2s;
+}
+
+.item-action-btn:hover {
+  opacity: 0.85;
+}
+
+.item-action-btn.blue { background: #4a90e2; color: white; }
+.item-action-btn.green { background: #28a745; color: white; }
+.item-action-btn.red { background: #dc3545; color: white; }
+.item-action-btn.gray { background: #6c757d; color: white; }
+
+/* Order Items Table */
+.order-items-table-container {
+  overflow-x: auto;
+  background: white;
+  border-radius: 6px;
+  border: 1px solid #e9ecef;
+}
+
+.order-items-table {
+  width: 100%;
+  border-collapse: collapse;
+  min-width: 900px;
+  table-layout: fixed;
+}
+
+.order-items-table th,
+.order-items-table td {
+  padding: 10px 8px;
+  text-align: left;
+  border-bottom: 1px solid #e9ecef;
+  font-size: 13px;
+}
+
+.order-items-table th,
+.order-items-table td {
+  border-right: 1px solid #e9ecef;
+}
+
+.order-items-table th:last-child,
+.order-items-table td:last-child {
+  border-right: none;
+}
+
+/* Columns settings modal */
+.columns-settings-modal {
+  position: fixed;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0,0,0,0.35);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1200;
+}
+.columns-settings-panel {
+  background: #fff;
+  padding: 16px;
+  border-radius: 8px;
+  width: 420px;
+  max-width: 95%;
+  box-shadow: 0 6px 24px rgba(0,0,0,0.15);
+}
+.columns-settings-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+}
+.columns-settings-list {
+  max-height: 320px;
+  overflow: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.columns-settings-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+}
+.columns-settings-row .col-move button {
+  margin-right: 4px;
+}
+.columns-settings-row[draggable="true"] {
+  cursor: grab;
+}
+.columns-settings-row.dragging {
+  opacity: 0.5;
+}
+.columns-settings-row .col-handle {
+  width: 28px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 6px;
+  background: #f1f3f5;
+  color: #495057;
+  margin-right: 8px;
+}
+.columns-settings-row .col-label {
+  flex: 1;
+}
+
+/* Draggable table header styles */
+.order-items-table th[draggable="true"] {
+  cursor: grab;
+}
+.order-items-table th.dragging {
+  opacity: 0.6;
+}
+.order-items-table th.drag-over {
+  outline: 2px dashed rgba(74,144,226,0.4);
+}
+
+/* When the columns settings modal is open, hide the table column resizers
+   so users cannot accidentally resize columns while interacting with modal. */
+.columns-settings-modal + .order-items-table-container .col-resizer,
+.columns-settings-modal + .order-items-table-container .col-resizer * {
+  display: none !important;
+  pointer-events: none !important;
+}
+
+
+.order-items-table th {
+  background: #f8f9fa;
+  font-weight: 600;
+  color: #495057;
+  white-space: nowrap;
+}
+
+.order-items-table th {
+  position: relative;
+}
+
+.col-resizer {
+  position: absolute;
+  right: 0;
+  top: 0;
+  width: 10px; /* clickable area */
+  height: 100%;
+  cursor: col-resize;
+  z-index: 5;
+  background: transparent;
+  transition: background 0.12s ease;
+}
+
+.col-resizer::after {
+  /* hide visible guide line but keep resizer clickable */
+  display: none;
+}
+.col-resizer:hover::after {
+  display: none;
+}
+
+.order-items-table th .sort-icon {
+  font-size: 10px;
+  margin-left: 4px;
+  opacity: 0.5;
+}
+
+.item-select,
+.item-input {
+  width: 100%;
+  padding: 6px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+  background: white;
+}
+
+.item-select.small {
+  min-width: 80px;
+}
+
+.item-input.number {
+  text-align: right;
+  width: 100%;
+  min-width: 40px;
+  max-width: none;
+  box-sizing: border-box;
+}
+
+.total-cell {
+  text-align: right;
+  font-weight: 500;
+}
+
+.item-actions {
+  display: flex;
+  gap: 4px;
+  justify-content: center;
+}
+
+/* Action column: hide stray numeric text and center the buttons visibly */
+.order-items-table td:has(.item-actions) {
+  /* Hide any stray text nodes and center the action buttons */
+  color: transparent !important;
+  padding: 6px 8px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+}
+.order-items-table td:has(.item-actions) .item-actions {
+  color: initial !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+}
+.order-items-table td:has(.item-actions) .item-btn {
+  color: initial !important;
+}
+
+.item-btn {
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: opacity 0.2s;
+}
+
+.item-btn.delete { background: #dc3545; color: white; }
+.item-btn.add { background: #28a745; color: white; }
+
+.item-btn:hover {
+  opacity: 0.85;
+}
+
+/* Items Pagination */
+.items-pagination {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 0 0;
+  font-size: 13px;
+  color: #6c757d;
+}
+
+.items-page-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.page-btn {
+  width: 28px;
+  height: 28px;
+  border: 1px solid #ddd;
+  background: white;
+  border-radius: 4px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.page-btn:hover {
+  background: #f8f9fa;
+}
+
+.page-number {
+  padding: 4px 12px;
+  border: 1px solid #4a90e2;
+  border-radius: 4px;
+  background: white;
+  color: #4a90e2;
+}
+
+.page-size-select {
+  padding: 4px 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 13px;
+}
+
+/* Summary Section */
+.order-summary-section {
+  background: #fff;
+  border: 1px solid #e9ecef;
+  border-radius: 6px;
+  padding: 12px;
+}
+
+.summary-row {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 10px;
+  align-items: flex-end;
+}
+
+.summary-row.five-cols {
+  display: grid;
+  grid-template-columns: 120px 120px 1fr 150px 150px;
+}
+
+.summary-row.two-cols {
+  display: grid;
+  grid-template-columns: 200px 1fr;
+}
+
+.summary-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.summary-group label {
+  font-size: 14px;
+}
+
+.summary-group strong {
+  font-size: 16px;
+  color: #2c3e50;
+}
+
+.summary-note {
+  color: #6c757d;
+  font-size: 13px;
+}
+
+.summary-field {
+  display: flex;
+  flex-direction: column;
+}
+
+.summary-field.wide {
+  flex: 1;
+}
+
+.summary-field.full {
+  width: 100%;
+}
+
+.summary-field label {
+  font-size: 13px;
+  color: #495057;
+  margin-bottom: 4px;
+}
+
+.summary-input,
+.summary-select {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+}
+
+.summary-input.highlight-red {
+  color: #dc3545;
+  text-align: right;
+}
+
+.summary-textarea {
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  resize: vertical;
+  width: 100%;
+}
+
+/* Modal Footer */
+.order-modal-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 16px 24px;
+  background: #f8f9fa;
+  border-top: 1px solid #e9ecef;
+  flex-wrap: wrap;
+}
+
+.modal-btn {
+  padding: 10px 16px;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: all 0.2s;
+}
+
+.modal-btn:hover {
+  transform: translateY(-1px);
+}
+
+.modal-btn.back {
+  background: #dc3545;
+  color: white;
+}
+
+.modal-btn.save {
+  background: #17a2b8;
+  color: white;
+}
+
+.modal-btn.excel {
+  background: #28a745;
+  color: white;
+}
+
+.modal-btn.copy {
+  background: #6c757d;
+  color: white;
+}
+
+.modal-btn.cancel {
+  background: #f8f9fa;
+  color: #495057;
+  border: 1px solid #ddd;
+}
+
+.modal-btn.approve {
+  background: #f8f9fa;
+  color: #495057;
+  border: 1px solid #ddd;
+}
+
+/* Responsive for Order Modal */
+@media (max-width: 1200px) {
+  .order-form-row.three-cols {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  
+  .order-form-row.four-cols {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .summary-row.five-cols {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+}
+
 @media (max-width: 768px) {
-  body.date-picker-open {
-    overflow: hidden;
+  .order-modal {
+    width: 100%;
+    max-height: 100vh;
+    border-radius: 0;
+  }
+  
+  .order-form-row,
+  .order-form-row.three-cols,
+  .order-form-row.four-cols {
+    grid-template-columns: 1fr;
+  }
+  
+  .summary-row.five-cols,
+  .summary-row.two-cols {
+    grid-template-columns: 1fr;
+  }
+  
+  .order-modal-footer {
+    flex-direction: column;
+  }
+  
+  .modal-btn {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+/* ========================================
+   CREATE ORDER FORM PAGE (STANDALONE)
+   ======================================== */
+
+.create-order-form-page {
+  background: #fff;
+  /* Use single global header height variable so content always sits below header */
+  padding: 20px;
+  padding-top: calc(var(--global-header-height, 72px) + 16px);
+  min-height: calc(100vh - var(--global-header-height, 72px));
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  position: relative;
+  box-sizing: border-box;
+}
+
+@media (max-width: 700px) {
+  .create-order-form-page {
+    padding-top: calc(var(--global-header-height, 72px) + 8px);
+  }
+}
+
+.order-form-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 16px;
+  background: #f8f9fa;
+  border-bottom: 1px solid #e9ecef;
+  flex-wrap: nowrap;
+  gap: 10px;
+  /* Use same approach as create-order page - no fixed positioning */
+  position: relative;
+  margin-bottom: 20px;
+  min-height: 50px;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.order-form-header h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #2c3e50;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.btn-create-new {
+  background: #17a2b8;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.2s;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+
+.order-form-top {
+  /* Return top rows to normal flow (no fixed positioning) so they
+     scroll with the page. Keep modest spacing below the block. */
+  position: relative;
+  background: transparent;
+  padding: 0 0 12px 0;
+  margin-bottom: 8px;
+  box-shadow: none;
+  border-bottom: none;
+}
+
+.order-form-body {
+  flex: 1;
+  overflow-y: auto;
+  /* Normal padding since header is not fixed */
+  padding-top: 16px;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.order-form-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding: 10px 16px;
+  background: #f8f9fa;
+  border-top: 1px solid #e9ecef;
+  flex-wrap: wrap;
+}
+
+/* ========================================
+   RESPONSIVE FOR CREATE ORDER FORM PAGE
+   ======================================== */
+
+/* Extra Large screens (1400px+) */
+@media (min-width: 1400px) {
+  .create-order-form-page .order-form-body {
+    width: 100%;
+    padding: 16px;
+  }
+}
+
+/* Large screens (1200px - 1399px) */
+@media (max-width: 1399px) {
+  .create-order-form-page .order-form-body {
+    padding: 16px;
+  }
+  
+  .create-order-form-page .order-form-row.three-cols {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  
+  .create-order-form-page .order-form-row.four-cols {
+    grid-template-columns: 1fr 1fr 1fr 1fr;
+  }
+  
+  .create-order-form-page .summary-row.five-cols {
+    grid-template-columns: 1fr 1fr 1fr 1fr 1fr;
+  }
+}
+
+/* Medium-Large screens (992px - 1199px) */
+@media (max-width: 1199px) {
+  .create-order-form-page .order-form-body {
+    padding: 14px;
+  }
+  
+  .create-order-form-page .order-form-row.three-cols {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  
+  .create-order-form-page .order-form-row.four-cols {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .create-order-form-page .summary-row.five-cols {
+    grid-template-columns: 1fr 1fr 1fr;
+  }
+  
+  .create-order-form-page .order-items-table {
+    min-width: 800px;
+  }
+}
+
+/* Tablets (768px - 991px) */
+@media (max-width: 991px) {
+  .create-order-form-page .order-form-body {
+    padding: 14px 20px;
+  }
+  
+  .create-order-form-page .order-form-header {
+    padding: 14px 20px;
+  }
+  
+  .create-order-form-page .order-form-footer {
+    padding: 14px 20px;
+  }
+  
+  .create-order-form-page .order-form-row {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .create-order-form-page .order-form-row.three-cols {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .create-order-form-page .order-form-row.four-cols {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .create-order-form-page .summary-row.five-cols {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .create-order-form-page .summary-row.two-cols {
+    grid-template-columns: 1fr 1fr;
+  }
+  
+  .create-order-form-page .order-items-table {
+    min-width: 700px;
+  }
+  
+  .create-order-form-page .order-items-table th,
+  .create-order-form-page .order-items-table td {
+    padding: 8px 6px;
+    font-size: 12px;
+  }
+  
+  .create-order-form-page .item-select,
+  .create-order-form-page .item-input {
+    padding: 5px 6px;
+    font-size: 12px;
+  }
+  
+  .create-order-form-page .item-input.number {
+    width: 100%;
+    min-width: 40px;
+    max-width: 140px;
+    box-sizing: border-box;
+  }
+}
+
+/* Small Tablets / Large Phones (576px - 767px) */
+@media (max-width: 767px) {
+  .create-order-form-page .order-form-body {
+    padding: 12px 16px;
+  }
+  
+  .create-order-form-page .order-form-header {
+    padding: 8px 12px;
+    flex-wrap: nowrap;
+    min-height: 44px;
+  }
+  
+  .create-order-form-page .order-form-header h2 {
+    font-size: 14px;
+  }
+  
+  .create-order-form-page .btn-create-new {
+    padding: 6px 12px;
+    font-size: 12px;
+    min-width: 70px;
+  }
+  
+  .create-order-form-page .order-form-footer {
+    padding: 12px 16px;
+  }
+  
+  .create-order-form-page .order-form-row,
+  .create-order-form-page .order-form-row.three-cols,
+  .create-order-form-page .order-form-row.four-cols {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  
+  .create-order-form-page .summary-row.five-cols,
+  .create-order-form-page .summary-row.two-cols {
+    grid-template-columns: 1fr;
+  }
+  
+  .create-order-form-page .order-form-input,
+  .create-order-form-page .order-form-select {
+    padding: 10px 12px;
+    font-size: 14px;
+  }
+  
+  .create-order-form-page .order-form-group label {
+    font-size: 13px;
+    margin-bottom: 6px;
+  }
+  
+  .create-order-form-page .price-type-toggle {
+    width: 100%;
+  }
+  
+  .create-order-form-page .price-type-toggle .toggle-btn {
+    flex: 1;
+    padding: 10px 12px;
+  }
+  
+  .create-order-form-page .order-tabs {
+    overflow-x: auto;
+  }
+  
+  .create-order-form-page .order-tabs .tab-btn {
+    padding: 10px 16px;
+    font-size: 13px;
+    white-space: nowrap;
+  }
+  
+  .create-order-form-page .order-items-section {
+    padding: 12px;
+  }
+  
+  .create-order-form-page .order-items-header {
+    flex-wrap: wrap;
+    gap: 10px;
+  }
+  
+  .create-order-form-page .items-actions {
+    gap: 6px;
+  }
+  
+  .create-order-form-page .item-action-btn {
+    width: 36px;
+    height: 36px;
+    font-size: 16px;
+  }
+  
+  .create-order-form-page .order-items-table-container {
+    margin: 0 -12px;
+    border-radius: 0;
+    border-left: none;
+    border-right: none;
+  }
+  
+  .create-order-form-page .order-items-table {
+    min-width: 600px;
+  }
+  
+  .create-order-form-page .items-pagination {
+    flex-direction: column;
+    gap: 10px;
+    align-items: flex-start;
+  }
+  
+/* Ensure all value cells in the order-items table show clear borders
+   This forces visible borders for inputs/selects/textarea inside table cells
+   so no column appears to have missing cell borders. */
+.order-items-table td .item-input,
+.order-items-table td input,
+.order-items-table td select,
+.order-items-table td textarea,
+.order-items-table td .item-select {
+  border: 1px solid #d8dee5 !important;
+  background: #fff !important;
+  box-shadow: none !important;
+  border-radius: 4px !important;
+  padding: 6px 8px !important;
+  box-sizing: border-box !important;
+}
+
+.order-items-table td .item-input.number,
+.order-items-table td input[type="number"] {
+  text-align: right;
+  padding: 6px 8px !important;
+  min-width: 40px;
+}
+
+.order-items-table td .item-input:focus,
+.order-items-table td select:focus,
+.order-items-table td textarea:focus {
+  outline: none !important;
+  border-color: #4a90e2 !important;
+  box-shadow: 0 0 0 2px rgba(74,144,226,0.12) !important;
+}
+
+/* If any cells used transparent backgrounds, ensure the cell still shows a divider
+   by keeping the td border in place (more robust for varying input styles). */
+.order-items-table td {
+  border-right: 1px solid #e9ecef;
+}
+.order-items-table td:last-child {
+  border-right: none;
+}
+
+/* Ensure summary/value cells (plain text totals) display as boxed values
+   Use inset box-shadow so the visual border is preserved even with
+   table border-collapse styles. Center content like inputs. */
+.order-items-table td.total-cell {
+  background: #fff !important;
+  padding: 6px 8px !important;
+  box-sizing: border-box;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 34px;
+  box-shadow: inset 0 0 0 1px #d8dee5 !important;
+  border-radius: 4px;
+}
+
+/* Ensure inline content doesn't overflow the visual box */
+.order-items-table td.total-cell * {
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Draw a clear inner box for total/text cells using a pseudo-element
+   This is robust against table border-collapse and makes the box visible
+   even when the cell content is plain text (no input element). */
+.order-items-table td.total-cell {
+  position: relative;
+}
+.order-items-table td.total-cell::after {
+  content: '';
+  position: absolute;
+  top: 6px;
+  bottom: 6px;
+  left: 6px;
+  right: 6px;
+  border: 1px solid #d8dee5;
+  border-radius: 4px;
+  pointer-events: none;
+  box-sizing: border-box;
+}
+
+/* Ensure weight/number inputs keep visible borders */
+.order-items-table td .item-input.number,
+.order-items-table td input[type="number"] {
+  border: 1px solid #d8dee5 !important;
+}
+
+/* Target specific columns by index to ensure visible vertical borders
+   (column indexes based on table header order in CreateOrderForm.jsx) */
+.order-items-table tbody tr td:nth-child(9),
+.order-items-table tbody tr td:nth-child(11),
+.order-items-table tbody tr td:nth-child(15) {
+  border-left: 1px solid #e9ecef !important;
+  border-right: 1px solid #e9ecef !important;
+  background: #fff !important;
+}
+  .create-order-form-page .items-page-controls {
+    width: 100%;
+    justify-content: space-between;
+  }
+  
+  .create-order-form-page .order-summary-section {
+    padding: 14px;
+  }
+  
+  .create-order-form-page .summary-row {
+    flex-direction: column;
+    gap: 12px;
+  }
+  
+  .create-order-form-page .summary-group {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 4px;
+  }
+  
+  .create-order-form-page .summary-input,
+  .create-order-form-page .summary-select {
+    width: 100%;
+    padding: 10px 12px;
+  }
+  
+  .create-order-form-page .summary-textarea {
+    padding: 10px 12px;
+  }
+  
+  .order-form-footer {
+    flex-direction: column;
+    gap: 8px;
+  }
+  
+  .order-form-footer .modal-btn {
+    width: 100%;
+    justify-content: center;
+    padding: 12px 16px;
+  }
+}
+
+/* Mobile Phones (up to 575px) */
+@media (max-width: 575px) {
+  .create-order-form-page .order-form-body {
+    padding: 10px 12px;
+  }
+  
+  .create-order-form-page .order-form-header {
+    padding: 8px 10px;
+    flex-wrap: nowrap;
+    align-items: center;
+    min-height: 42px;
+  }
+  
+  .create-order-form-page .order-form-header h2 {
+    font-size: 13px;
+    margin-bottom: 0;
+  }
+  
+  .create-order-form-page .btn-create-new {
+    width: auto;
+    justify-content: center;
+    padding: 6px 10px;
+    font-size: 11px;
+    min-width: 60px;
+  }
+  
+  .create-order-form-page .order-form-footer {
+    padding: 10px 12px;
+  }
+  
+  .create-order-form-page .order-form-row {
+    gap: 10px;
+    margin-bottom: 12px;
+  }
+  
+  .create-order-form-page .order-form-group.small {
+    max-width: none;
+  }
+  
+  .create-order-form-page .input-with-icon .input-icon {
+    right: 8px;
+  }
+  
+  .create-order-form-page .order-tabs {
+    margin-bottom: 12px;
+    gap: 0;
+  }
+  
+  .create-order-form-page .order-tabs .tab-btn {
+    flex: 1;
+    padding: 10px 8px;
+    font-size: 12px;
+  }
+  
+  .create-order-form-page .order-items-section {
+    padding: 10px;
+    margin-bottom: 12px;
+  }
+  
+  .create-order-form-page .items-total {
+    font-size: 14px;
+  }
+  
+  .create-order-form-page .item-action-btn {
+    width: 32px;
+    height: 32px;
+    font-size: 14px;
+  }
+  
+  .create-order-form-page .order-items-table-container {
+    margin: 0 -10px;
+  }
+  
+  .create-order-form-page .order-items-table {
+    min-width: 550px;
+    font-size: 11px;
+  }
+  
+  .create-order-form-page .order-items-table th,
+  .create-order-form-page .order-items-table td {
+    padding: 6px 4px;
+    font-size: 11px;
+  }
+  
+  .create-order-form-page .item-select,
+  .create-order-form-page .item-input {
+    padding: 4px 5px;
+    font-size: 11px;
+  }
+  
+  .create-order-form-page .item-input.number {
+    width: 100%;
+    min-width: 36px;
+    max-width: none;
+    box-sizing: border-box;
+  }
+  
+  .create-order-form-page .item-btn {
+    width: 24px;
+    height: 24px;
+    font-size: 10px;
+  }
+  
+  .create-order-form-page .items-pagination {
+    font-size: 12px;
+    padding-top: 10px;
+  }
+  
+  .create-order-form-page .page-btn {
+    width: 26px;
+    height: 26px;
+  }
+  
+  .create-order-form-page .page-size-select {
+    font-size: 11px;
+    padding: 3px 6px;
+  }
+  
+  .create-order-form-page .order-summary-section {
+    padding: 12px;
+  }
+  
+  .create-order-form-page .summary-field label {
+    font-size: 12px;
+  }
+  
+  .create-order-form-page .summary-group label {
+    font-size: 13px;
+  }
+  
+  .create-order-form-page .summary-group strong {
+    font-size: 15px;
+  }
+  
+  .order-form-footer .modal-btn {
+    padding: 10px 14px;
+    font-size: 13px;
+  }
+}
+
+/* Extra Small Mobile (up to 375px) */
+@media (max-width: 375px) {
+  .create-order-form-page .order-form-body {
+    padding: 60px 10px 10px 10px;
+  }
+  
+  .create-order-form-page .order-form-header {
+    padding: 6px 8px;
+    min-height: 40px;
+  }
+  
+  .create-order-form-page .order-form-header h2 {
+    font-size: 12px;
+  }
+  
+  .create-order-form-page .btn-create-new {
+    padding: 5px 8px;
+    font-size: 10px;
+    min-width: 50px;
+  }
+  
+  .create-order-form-page .order-form-footer {
+    padding: 8px 10px;
+  }
+  
+  .create-order-form-page .order-form-input,
+  .create-order-form-page .order-form-select {
+    padding: 8px 10px;
+    font-size: 13px;
+  }
+  
+  .create-order-form-page .order-form-group label {
+    font-size: 12px;
+  }
+  
+  .create-order-form-page .order-tabs .tab-btn {
+    padding: 8px 6px;
+    font-size: 11px;
+  }
+  
+  .create-order-form-page .order-items-table {
+    min-width: 480px;
+  }
+  
+  .create-order-form-page .order-items-table th,
+  .create-order-form-page .order-items-table td {
+    padding: 5px 3px;
+    font-size: 10px;
+  }
+  
+  .create-order-form-page .item-select,
+  .create-order-form-page .item-input {
+    padding: 3px 4px;
+    font-size: 10px;
+  }
+  
+  .create-order-form-page .item-input.number {
+    width: 100%;
+    min-width: 32px;
+    max-width: none;
+    box-sizing: border-box;
+  }
+  
+  .create-order-form-page .order-summary-section {
+    padding: 10px;
+  }
+  
+  .order-form-footer .modal-btn {
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+}
+
+/* Landscape mode on mobile */
+@media (max-height: 500px) and (orientation: landscape) {
+  .create-order-form-page .order-form-body {
+    /* Avoid vh-based max-height; allow body to scroll naturally in tight landscape view */
+    max-height: none;
+  }
+  
+  .create-order-form-page .order-form-header {
+    padding: 8px 16px;
+  }
+  
+  .create-order-form-page .order-form-header h2 {
+    font-size: 14px;
+  }
+  
+  .create-order-form-page .order-form-footer {
+    padding: 8px 16px;
+    flex-direction: row;
+    flex-wrap: wrap;
+  }
+  
+  .order-form-footer .modal-btn {
+    width: auto;
+    flex: 1;
+    min-width: 100px;
   }
 }

@@ -13,6 +13,7 @@ namespace QlnppApi.Data
         public DbSet<Product> Products { get; set; }
         public DbSet<Customer> Customers { get; set; }
         public DbSet<Order> Orders { get; set; }
+        public DbSet<OrderItem> OrderItems { get; set; }
         public DbSet<Supplier> Suppliers { get; set; }
         public DbSet<Warehouse> Warehouses { get; set; }
         public DbSet<CustomerGroup> CustomerGroups { get; set; }
@@ -73,6 +74,15 @@ namespace QlnppApi.Data
 
             modelBuilder.Entity<Order>()
                 .Property(o => o.TotalAfterDiscount)
+                .HasPrecision(18, 2);
+
+            // OrderItem precision
+            modelBuilder.Entity<OrderItem>()
+                .Property(i => i.UnitPrice)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<OrderItem>()
+                .Property(i => i.TotalAfterDiscount)
                 .HasPrecision(18, 2);
 
             modelBuilder.Entity<Supplier>()

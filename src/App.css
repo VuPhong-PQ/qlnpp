@@ -1,4 +1,8 @@
 /* App Layout */
+:root {
+  --global-header-height: 72px;
+}
+
 * {
   margin: 0;
   padding: 0;
@@ -23,6 +27,11 @@ body {
 .main-content {
   flex: 1;
   overflow-x: hidden;
+  /* Ensure content is below fixed header. Use the runtime-updated CSS variable
+     so the content is always offset by the actual header height. Add a small
+     extra gap (offset) so elements like the page header are not flush under
+     the global header. */
+  padding-top: calc(var(--global-header-height, 72px) + 12px);
 }
 
 /* Scrollbar Styling */

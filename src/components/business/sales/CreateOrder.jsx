@@ -1,12 +1,15 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import '../BusinessPage.css';
 
 const CreateOrder = () => {
+  const navigate = useNavigate();
+
   const [searchData, setSearchData] = useState({
     orderNumber: '',
     dateRange: '01/01/2026 - 02/01/2026',
     customerGroup: '',
-    salesSchedule: '',
+    productType: '',
     customer: '',
     createdBy: '',
     salesStaff: '',
@@ -21,6 +24,19 @@ const CreateOrder = () => {
   const [orders, setOrders] = useState([
     // Sample data - empty for now as shown in the image
   ]);
+
+  const pageOptions = [10, 20, 50, 100, 200, 500, 1000, 5000, 'All'];
+  const [pageSize, setPageSize] = useState(10);
+  const [currentPage, setCurrentPage] = useState(1);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [pageSize, orders.length]);
+
+  const totalPages = pageSize === 'All' ? 1 : Math.max(1, Math.ceil(orders.length / pageSize));
+  const paginatedOrders = pageSize === 'All'
+    ? orders
+    : orders.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   // Close date picker when clicking outside
   useEffect(() => {
@@ -268,23 +284,18 @@ const CreateOrder = () => {
             
             <div className="form-group">
               <select
-                value={searchData.salesSchedule}
-                onChange={(e) => handleInputChange('salesSchedule', e.target.value)}
+                value={searchData.productType}
+                onChange={(e) => handleInputChange('productType', e.target.value)}
                 className="form-select"
               >
-                <option value="">Lịch bán hàng</option>
-                <option value="Lịch hàng ngày">Lịch hàng ngày</option>
-                <option value="Lịch hàng tuần">Lịch hàng tuần</option>
-                <option value="Lịch hàng tháng">Lịch hàng tháng</option>
+                <option value="">Loại hàng</option>
+                <option value="Nước giải khát">Nước giải khát</option>
+                <option value="Bánh kẹo">Bánh kẹo</option>
+                <option value="Thực phẩm">Thực phẩm</option>
               </select>
             </div>
             
-            <div className="form-group search-btn-container">
-              <button className="search-btn" onClick={handleSearch}>
-                <i className="search-icon">🔍</i>
-                TÌM KIẾM
-              </button>
-            </div>
+            {/* search button moved to right column for vertical centering */}
           </div>
 
           {/* Second Row */}
@@ -305,7 +316,7 @@ const CreateOrder = () => {
             <div className="form-group">
               <input
                 type="text"
-                placeholder="admin 66"
+                placeholder="Nhân viên lập"
                 value={searchData.createdBy}
                 onChange={(e) => handleInputChange('createdBy', e.target.value)}
                 className="form-input"
@@ -344,20 +355,28 @@ const CreateOrder = () => {
             </div>
           </div>
         </div>
+
+        {/* Right column: (search button moved to action toolbar) */}
+        
       </div>
 
-      {/* Action Buttons */}
-      <div className="action-toolbar">
+      {/* Toolbar row: total count on left, action buttons on right */}
+      <div className="toolbar-row">
         <div className="left-info">
           <span className="total-count">Tổng {orders.length}</span>
         </div>
-        
+
+{/* Action Buttons directly in toolbar-row */}
         <div className="action-buttons">
-          <button className="action-btn blue-btn" title="Thêm mới">
+          <button className="search-btn action-btn" onClick={handleSearch} title="Tìm kiếm">
+            <span className="search-label">TÌM KIẾM</span>
+          </button>
+
+          <button className="action-btn blue-btn" title="Thêm mới" onClick={() => navigate('/business/sales/create-order-form')}>
             <i className="icon">📄</i>
           </button>
-          <button className="action-btn purple-btn" title="Tùy chỉnh">
-            <i className="icon">🔧</i>
+          <button className="action-btn purple-btn import-btn" title="Import">
+            <i className="icon">📥</i>
           </button>
           <button className="action-btn pink-btn" title="Export">
             <i className="icon">📊</i>
@@ -365,7 +384,8 @@ const CreateOrder = () => {
           <button className="action-btn gray-btn" title="Cài đặt">
             <i className="icon">⚙️</i>
           </button>
-        </div>
+      </div>
+
       </div>
 
       {/* Results Table */}
@@ -375,24 +395,37 @@ const CreateOrder = () => {
             <tr>
               <th>Ngày lập <i className="sort-icon">🔍</i></th>
               <th>Số phiếu <i className="sort-icon">🔍</i></th>
+              <th>Khách hàng <i className="sort-icon">🔍</i></th>
+              <th>Tổng tiền sau giảm <i className="sort-icon">🔍</i></th>
+              <th>Trạng thái <i className="sort-icon">🔍</i></th>
+              <th>Ghi chú đơn hàng <i className="sort-icon">🔍</i></th>
+              <th>Nhân viên lập <i className="sort-icon">🔍</i></th>
+              <th>Loại hàng <i className="sort-icon">🔍</i></th>
+              <th>Thuế suất <i className="sort-icon">🔍</i></th>
+              <th>Nhân viên sale <i className="sort-icon">🔍</i></th>
               <th>Gộp từ đơn <i className="sort-icon">🔍</i></th>
               <th>Gộp vào đơn <i className="sort-icon">🔍</i></th>
               <th>Nhóm khách hàng <i className="sort-icon">🔍</i></th>
               <th>Lịch bán hàng <i className="sort-icon">🔍</i></th>
-              <th>Khách hàng <i className="sort-icon">🔍</i></th>
+              <th>Tổng tiền <i className="sort-icon">🔍</i></th>
+              <th>Tổng số kg <i className="sort-icon">🔍</i></th>
+              <th>Tổng số khối <i className="sort-icon">🔍</i></th>
+              <th>Số thứ tự in <i className="sort-icon">🔍</i></th>
+              <th>Địa chỉ <i className="sort-icon">🔍</i></th>
+              <th>Đã thanh toán <i className="sort-icon">🔍</i></th>
+              <th>Nhân viên giao <i className="sort-icon">🔍</i></th>
+              <th>Tài xế <i className="sort-icon">🔍</i></th>
               <th>Xe <i className="sort-icon">🔍</i></th>
-              <th>Xe giao hàng <i className="sort-icon">🔍</i></th>
-              <th>STT in <i className="sort-icon">🔍</i></th>
-              <th>Nhân viên lập <i className="sort-icon">🔍</i></th>
-              <th>Nhân viên sale <i className="sort-icon">🔍</i></th>
-              <th>Loại hàng <i className="sort-icon">🔍</i></th>
+              <th>Giao thành công <i className="sort-icon">🔍</i></th>
+              <th>Xuất VAT <i className="sort-icon">🔍</i></th>
+              <th>Vị trí <i className="sort-icon">🔍</i></th>
               <th>Thao tác</th>
             </tr>
           </thead>
           <tbody>
             {orders.length === 0 ? (
               <tr>
-                <td colSpan="14" className="no-data">
+                <td colSpan="27" className="no-data">
                   <div className="empty-state">
                     <div className="empty-icon">📄</div>
                     <div className="empty-text">Trống</div>
@@ -400,21 +433,34 @@ const CreateOrder = () => {
                 </td>
               </tr>
             ) : (
-              orders.map((order, index) => (
+              paginatedOrders.map((order, index) => (
                 <tr key={index}>
                   <td>{order.createdDate}</td>
                   <td>{order.orderNumber}</td>
+                  <td>{order.customer || '-'}</td>
+                  <td>{order.totalAfterDiscount != null ? order.totalAfterDiscount : order.total || '-'}</td>
+                  <td>{order.status || '-'}</td>
+                  <td>{order.notes || '-'}</td>
+                  <td>{order.createdBy || '-'}</td>
+                  <td>{order.productType || '-'}</td>
+                  <td>{order.taxRate != null ? order.taxRate : '-'}</td>
+                  <td>{order.salesStaff || '-'}</td>
                   <td>{order.mergeFrom || '-'}</td>
                   <td>{order.mergeTo || '-'}</td>
-                  <td>{order.customerGroup}</td>
-                  <td>{order.salesSchedule}</td>
-                  <td>{order.customer}</td>
-                  <td>{order.vehicle}</td>
-                  <td>{order.deliveryVehicle}</td>
-                  <td>{order.printOrder}</td>
-                  <td>{order.createdBy}</td>
-                  <td>{order.salesStaff}</td>
-                  <td>{order.productType}</td>
+                  <td>{order.customerGroup || '-'}</td>
+                  <td>{order.salesSchedule || '-'}</td>
+                  <td>{order.total != null ? order.total : '-'}</td>
+                  <td>{order.totalKg != null ? order.totalKg : '-'}</td>
+                  <td>{order.totalM3 != null ? order.totalM3 : '-'}</td>
+                  <td>{order.printOrder || '-'}</td>
+                  <td>{order.address || '-'}</td>
+                  <td>{order.paid ? 'Có' : (order.paid === false ? 'Chưa' : '-')}</td>
+                  <td>{order.deliveryStaff || '-'}</td>
+                  <td>{order.driver || '-'}</td>
+                  <td>{order.vehicle || '-'}</td>
+                  <td>{order.deliverySuccessful ? 'Có' : (order.deliverySuccessful === false ? 'Chưa' : '-')}</td>
+                  <td>{order.vatExport ? 'Có' : (order.vatExport === false ? 'Chưa' : '-')}</td>
+                  <td>{order.location || order.position || '-'}</td>
                   <td>
                     <div className="action-cell">
                       <button className="edit-btn" title="Sửa">✏️</button>
@@ -430,17 +476,33 @@ const CreateOrder = () => {
 
       {/* Pagination */}
       <div className="pagination-container">
-        <div className="pagination-info">
-          <span className="total-display">{orders.length}</span>
+        <div className="pagination-left">
+          <label>Hiển thị:</label>
+          <select
+            value={pageSize}
+            onChange={(e) => setPageSize(e.target.value === 'All' ? 'All' : Number(e.target.value))}
+          >
+            {pageOptions.map((opt) => (
+              <option key={String(opt)} value={opt}>{opt}</option>
+            ))}
+          </select>
         </div>
+
+        <div className="pagination-center">
+          <span>Trang {currentPage} / {totalPages}</span>
+        </div>
+
         <div className="pagination-controls">
-          <button className="pagination-btn">‹</button>
-          <div className="pagination-slider">
-            <div className="slider-track">
-              <div className="slider-handle"></div>
-            </div>
-          </div>
-          <button className="pagination-btn">›</button>
+          <button
+            className="pagination-btn"
+            onClick={() => setCurrentPage((p) => Math.max(1, p - 1))}
+            disabled={currentPage <= 1}
+          >‹</button>
+          <button
+            className="pagination-btn"
+            onClick={() => setCurrentPage((p) => Math.min(totalPages, p + 1))}
+            disabled={currentPage >= totalPages}
+          >›</button>
         </div>
       </div>
     </div>

@@ -20,12 +20,16 @@ namespace QlnppApi.Controllers
         [HttpGet]
         public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
         {
-            return await _context.Orders.ToListAsync();
+            var orders = await _context.Orders
+                .AsNoTracking()
+                .ToListAsync();
+
+            return orders;
         }
 
-        // GET: api/Orders/5
+        // GET: api/Orders/5 (includes items)
         [HttpGet("{id}")]
-        public async Task<ActionResult<Order>> GetOrder(int id)
+        public async Task<ActionResult> GetOrder(int id)
         {
             var order = await _context.Orders.FindAsync(id);
 
@@ -34,15 +38,24 @@ namespace QlnppApi.Controllers
                 return NotFound();
             }
 
-            return order;
+            var items = await _context.OrderItems.Where(i => i.OrderId == id).ToListAsync();
+
+            return Ok(new { order, items });
         }
 
         // POST: api/Orders
         [HttpPost]
-        public async Task<ActionResult<Order>> PostOrder(Order order)
+        public async Task<ActionResult> PostOrder([FromBody] Order order)
         {
+            if (order == null)
+                return BadRequest();
+
+            // Save header first
             _context.Orders.Add(order);
             await _context.SaveChangesAsync();
+
+            // If incoming JSON included items under property "items", try to bind and save them
+            // This endpoint accepts only Order in body. To create items separately, call api/OrderItems.
 
             return CreatedAtAction(nameof(GetOrder), new { id = order.Id }, order);
         }
@@ -52,9 +65,7 @@ namespace QlnppApi.Controllers
         public async Task<IActionResult> PutOrder(int id, Order order)
         {
             if (id != order.Id)
-            {
                 return BadRequest();
-            }
 
             _context.Entry(order).State = EntityState.Modified;
 
@@ -64,14 +75,9 @@ namespace QlnppApi.Controllers
             }
             catch (DbUpdateConcurrencyException)
             {
-                if (!OrderExists(id))
-                {
+                if (!_context.Orders.Any(e => e.Id == id))
                     return NotFound();
-                }
-                else
-                {
-                    throw;
-                }
+                throw;
             }
 
             return NoContent();
@@ -83,19 +89,17 @@ namespace QlnppApi.Controllers
         {
             var order = await _context.Orders.FindAsync(id);
             if (order == null)
-            {
                 return NotFound();
-            }
+
+            // delete items first
+            var items = _context.OrderItems.Where(i => i.OrderId == id);
+            _context.OrderItems.RemoveRange(items);
 
             _context.Orders.Remove(order);
             await _context.SaveChangesAsync();
 
             return NoContent();
         }
-
-        private bool OrderExists(int id)
-        {
-            return _context.Orders.Any(e => e.Id == id);
-        }
     }
 }
+

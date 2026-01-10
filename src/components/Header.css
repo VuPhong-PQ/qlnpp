@@ -6,7 +6,7 @@
   align-items: center;
   justify-content: space-between;
   padding: 0 20px;
-  height: 60px;
+  height: var(--global-header-height, 72px);
   box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
   position: fixed;
   z-index: 2000;
@@ -15,14 +15,7 @@
   width: 100%;
   /* Always visible on top */
 }
-body {
-  padding-top: 60px;
-}
-@media (max-width: 768px) {
-  body {
-    padding-top: 50px;
-  }
-}
+/* Content spacing is handled by .main-content padding-top in App.css */
 
 /* Brand Section */
 .header-brand {
@@ -572,6 +565,36 @@ body {
   .dropdown-item-header {
     padding: 8px 12px;
     font-size: 12px;
+  }
+
+  /* Ensure dropdowns are usable on small screens: render them fixed below the header
+     so they're not clipped by nav scroll containers and remain interactive. */
+  .dropdown-menu {
+    position: fixed;
+    top: 50px;
+    left: 8px;
+    right: 8px;
+    z-index: 9999;
+    margin: 0;
+    border-radius: 8px;
+    /* use most of the viewport height but leave a small gap */
+    max-height: calc(100vh - 60px);
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .dropdown-item {
+    white-space: normal;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  /* Slightly increase spacing so items are easy to tap */
+  .dropdown-item,
+  .dropdown-item-header,
+  .submenu-item {
+    padding-top: 12px;
+    padding-bottom: 12px;
   }
   
   .user-name {

@@ -14,6 +14,46 @@ const Header = () => {
   const location = useLocation();
   const navigate = useNavigate();
 
+  // Ensure global CSS variable for header size is set so page content can offset correctly
+  useEffect(() => {
+    function setHeaderSize() {
+      try {
+        const el = document.querySelector('.header');
+        if (el) {
+          const rect = el.getBoundingClientRect();
+          document.documentElement.style.setProperty('--global-header-height', `${rect.height}px`);
+          document.documentElement.style.setProperty('--global-header-bottom', `${rect.bottom}px`);
+        } else {
+          document.documentElement.style.setProperty('--global-header-height', '60px');
+          document.documentElement.style.setProperty('--global-header-bottom', '60px');
+        }
+      } catch (e) {
+        // ignore
+      }
+    }
+
+    setHeaderSize();
+    window.addEventListener('resize', setHeaderSize);
+    const t = setTimeout(setHeaderSize, 300);
+    // Use ResizeObserver to detect header size changes (helps when user zooms)
+    let ro;
+    try {
+      const el = document.querySelector('.header');
+      if (el && window.ResizeObserver) {
+        ro = new ResizeObserver(() => setHeaderSize());
+        ro.observe(el);
+      }
+    } catch (e) {
+      // ignore
+    }
+
+    return () => {
+      window.removeEventListener('resize', setHeaderSize);
+      clearTimeout(t);
+      try { if (ro && ro.disconnect) ro.disconnect(); } catch (e) {}
+    };
+  }, []);
+
   // Load all products khi component mount
   useEffect(() => {
     const fetchProducts = async () => {

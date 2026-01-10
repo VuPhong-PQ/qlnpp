@@ -25,5 +25,9 @@ namespace QlnppApi.Models
         public string Status { get; set; } = string.Empty;
         public string Note { get; set; } = string.Empty;
         public string DeliveryNote { get; set; } = string.Empty;
+        // New fields added to support frontend columns
+        public bool? DeliverySuccessful { get; set; }
+        public bool? VatExport { get; set; }
+        public string Location { get; set; } = string.Empty;
     }
 }
