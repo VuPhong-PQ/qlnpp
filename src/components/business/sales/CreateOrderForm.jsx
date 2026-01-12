@@ -8,6 +8,21 @@ const CreateOrderForm = () => {
   const navigate = useNavigate();
   const containerRef = useRef(null);
 
+  // Vietnamese text normalization utility
+  const removeVietnameseTones = (str) => {
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .toLowerCase();
+  };
+
+  // Customer search state
+  const [customerSearch, setCustomerSearch] = useState('');
+  const [showCustomerDropdown, setShowCustomerDropdown] = useState(false);
+  const [filteredCustomers, setFilteredCustomers] = useState([]);
+
   const addDaysSkippingSunday = (date, daysToAdd) => {
     const d = new Date(date);
     let added = 0;
@@ -85,7 +100,7 @@ const CreateOrderForm = () => {
 
   const [orderForm, setOrderForm] = useState({
     orderDate: defaultOrderDate,
-    orderNumber: formatOrderNumber(new Date(), peekNextSerialForYear(new Date().getFullYear())),
+    orderNumber: formatOrderNumber(defaultOrderDate, peekNextSerialForYear(new Date(defaultOrderDate).getFullYear())),
     customer: '',
     customerName: '',
     phone: '',
@@ -109,7 +124,7 @@ const CreateOrderForm = () => {
   });
 
   const [orderItems, setOrderItems] = useState([
-    { id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0 }
+    { id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0 }
   ]);
 
   const [positions, setPositions] = useState([]);
@@ -128,6 +143,7 @@ const CreateOrderForm = () => {
   const [canChooseSales, setCanChooseSales] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [discountNoteEdited, setDiscountNoteEdited] = useState(false);
+  const [orderNumberEdited, setOrderNumberEdited] = useState(false);
   // count only rows that contain actual data (not empty placeholder rows)
   const nonEmptyCount = orderItems.filter(item => {
     const hasText = (item.productCode && String(item.productCode).trim()) || (item.barcode && String(item.barcode).trim()) || (item.productName && String(item.productName).trim());
@@ -159,6 +175,7 @@ const CreateOrderForm = () => {
     { key: 'nvSales', label: 'NV Sales', visible: true },
     { key: 'description', label: 'Mô tả chi tiết', visible: true },
     { key: 'conversion', label: 'Quy đổi', visible: true },
+    { key: 'amount', label: 'Thành tiền', visible: true },
     { key: 'weight', label: 'Số kg', visible: true },
     { key: 'volume', label: 'Số khối', visible: true },
     { key: 'exportType', label: 'Loại xuất', visible: true },
@@ -167,6 +184,22 @@ const CreateOrderForm = () => {
   ];
   const [columns, setColumns] = useState(defaultColumns);
   const [showColumnsSettings, setShowColumnsSettings] = useState(false);
+
+  // Ensure 'amount' column is positioned immediately after 'conversion' on first load
+  const _ensureAmountPosRef = useRef(false);
+  useEffect(() => {
+    if (_ensureAmountPosRef.current) return;
+    _ensureAmountPosRef.current = true;
+    const convIdx = columns.findIndex(c => c.key === 'conversion');
+    const amtIdx = columns.findIndex(c => c.key === 'amount');
+    if (convIdx >= 0 && amtIdx >= 0 && amtIdx !== convIdx + 1) {
+      const colCopy = [...columns];
+      const [amtCol] = colCopy.splice(amtIdx, 1);
+      colCopy.splice(convIdx + 1, 0, amtCol);
+      skipColumnsRef.current = true;
+      setColumns(colCopy);
+    }
+  }, [columns]);
 
   // Persist column order and widths across page refreshes.
   // Save a compact spec (order array + visibility map) to avoid serializing non-serializable values.
@@ -330,6 +363,8 @@ const CreateOrderForm = () => {
       const item = updated[index];
       const qty = parseFloat(item.quantity) || 0;
       const price = parseFloat(item.unitPrice) || 0;
+      // Thành tiền = số lượng * đơn giá
+      item.amount = Number((qty * price).toFixed(2));
       const disc = parseFloat(item.discountPercent) || 0;
       const priceAfter = price * (1 - disc / 100);
       const totalAfter = qty * priceAfter;
@@ -372,6 +407,7 @@ const CreateOrderForm = () => {
       nvSales: canChooseSales ? '' : (currentUser ? (currentUser.name || currentUser.username || currentUser.displayName || '') : ''),
       description: '',
       conversion: '',
+      amount: 0,
       total: 0,
       weight: 0,
       volume: 0,
@@ -420,6 +456,19 @@ const CreateOrderForm = () => {
     const note = `Giảm ${pctDisplay}%`;
     setOrderForm(prev => ({ ...prev, discountNote: note }));
   }, [orderForm.discountAmount, orderForm.discountPercent, discountNoteEdited]);
+
+  // Auto-update order number when order date changes, unless user manually edited order number
+  useEffect(() => {
+    if (orderNumberEdited) return;
+    try {
+      const d = new Date(orderForm.orderDate);
+      if (isNaN(d)) return;
+      const year = d.getFullYear();
+      const serial = peekNextSerialForYear(year);
+      const newNum = formatOrderNumber(d, serial);
+      setOrderForm(prev => ({ ...prev, orderNumber: newNum }));
+    } catch (e) {}
+  }, [orderForm.orderDate, orderNumberEdited]);
 
   const threeDigitsToWords = (num) => {
     const ones = ['không','một','hai','ba','bốn','năm','sáu','bảy','tám','chín'];
@@ -480,7 +529,7 @@ const CreateOrderForm = () => {
   const handleCreateNew = () => {
     setOrderForm({
       orderDate: defaultOrderDate,
-      orderNumber: formatOrderNumber(new Date(), peekNextSerialForYear(new Date().getFullYear())),
+      orderNumber: formatOrderNumber(defaultOrderDate, peekNextSerialForYear(new Date(defaultOrderDate).getFullYear())),
       customer: '',
       customerName: '',
       phone: '',
@@ -502,8 +551,9 @@ const CreateOrderForm = () => {
       accountFund: '',
       notes: ''
     });
-    setOrderItems([{ id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0 }]);
+    setOrderItems([{ id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0 }]);
     setDiscountNoteEdited(false);
+    setOrderNumberEdited(false);
   };
 
   const handleGoBack = () => {
@@ -512,27 +562,60 @@ const CreateOrderForm = () => {
 
   // Use same simple approach as CreateOrder page - no measurement needed
 
+  // Filter customers based on search text
+  useEffect(() => {
+    if (!customerSearch.trim()) {
+      setFilteredCustomers(customers);
+      return;
+    }
+
+    const searchNormalized = removeVietnameseTones(customerSearch);
+    const filtered = customers.filter(c => {
+      const customerText = `${c.name || ''} ${c.phone || ''} ${c.customerGroup || ''}`;
+      const customerNormalized = removeVietnameseTones(customerText);
+      return customerNormalized.includes(searchNormalized);
+    });
+    
+    setFilteredCustomers(filtered);
+  }, [customerSearch, customers]);
+
   useEffect(() => {
     // Load customers and extract unique position values for 'Vị trí' dropdown
     let mounted = true;
-    api.get(API_ENDPOINTS.customers)
-      .then(data => {
-        if (!mounted) return;
-        if (Array.isArray(data)) {
-          // Save full customers list for dropdown and compute positions
-          setCustomers(data);
-          const pos = Array.from(new Set(data.map(c => (c.Position || c.position || c.positionName || '').toString().trim()).filter(Boolean)));
-          setPositions(pos);
-        }
-      })
-      .catch(err => console.warn('Failed to load customers for positions', err));
-    // load customer groups for Nhóm khách hàng select
-    api.get(API_ENDPOINTS.customerGroups)
-      .then(gdata => {
-        if (!mounted) return;
-        if (Array.isArray(gdata)) setCustomerGroups(gdata);
-      })
-      .catch(err => console.warn('Failed to load customer groups', err));
+    
+    // Load both customers and customer groups
+    Promise.all([
+      api.get(API_ENDPOINTS.customers),
+      api.get(API_ENDPOINTS.customerGroups)
+    ])
+    .then(([customersData, groupsData]) => {
+      if (!mounted) return;
+      
+      if (Array.isArray(customersData) && Array.isArray(groupsData)) {
+        // Apply salesSchedule mapping from customer groups
+        const groupMap = {};
+        groupsData.forEach(g => {
+          const key = g.code || g.id || g.name;
+          const note = g.note || g.ghiChu || g.description || '';
+          if (key) groupMap[key] = note;
+        });
+        
+        const mappedCustomers = customersData.map(c => ({
+          ...c,
+          salesSchedule: groupMap[c.customerGroup] || groupMap[c.customerGroup?.toString()] || c.salesSchedule || ''
+        }));
+        
+        console.log('Loaded customers with salesSchedule mapping:', mappedCustomers);
+        setCustomers(mappedCustomers);
+        setFilteredCustomers(mappedCustomers);
+        
+        const pos = Array.from(new Set(mappedCustomers.map(c => (c.Position || c.position || c.positionName || '').toString().trim()).filter(Boolean)));
+        setPositions(pos);
+        
+        setCustomerGroups(groupsData);
+      }
+    })
+    .catch(err => console.warn('Failed to load data:', err));
 
     // load products for product selection
     api.get(API_ENDPOINTS.products)
@@ -574,6 +657,20 @@ const CreateOrderForm = () => {
       })
       .catch(err => console.warn('Failed to load users', err));
     return () => { mounted = false; };
+  }, []);
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (containerRef.current && !containerRef.current.contains(event.target)) {
+        setShowCustomerDropdown(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
   }, []);
 
   useEffect(() => {
@@ -819,45 +916,79 @@ const CreateOrderForm = () => {
               className="order-form-input"
             />
           </div>
-          <div className="order-form-group">
+          <div className="order-form-group" style={{ position: 'relative' }}>
             <label className="required">Khách hàng</label>
-            <select
-              value={orderForm.customer}
+            <input
+              type="text"
+              value={customerSearch}
               onChange={(e) => {
-                const val = e.target.value;
-                handleOrderFormChange('customer', val);
-                const sel = customers.find(c => String(c.id) === String(val) || String(c.code) === String(val));
-                if (sel) {
-                  handleOrderFormChange('customerName', sel.name || '');
-                  handleOrderFormChange('phone', sel.phone || sel.Phone || '');
-                  handleOrderFormChange('customerGroup', sel.customerGroup || sel.group || sel.customerGroupName || '');
-                  handleOrderFormChange('address', sel.address || sel.vatAddress || sel.Address || '');
-                  // position/vehicle mapping
-                  handleOrderFormChange('vehicle', sel.position || sel.Position || sel.vehicle || '');
-                  // print order (STT in)
-                  const printVal = sel.printIn !== undefined && sel.printIn !== null ? parseInt(sel.printIn, 10) || 0 : 0;
-                  handleOrderFormChange('printOrder', printVal);
-                  // sales schedule
-                  handleOrderFormChange('salesSchedule', sel.salesSchedule || sel.salesScheduleName || sel.sales || '');
-                } else {
-                  handleOrderFormChange('customerName', '');
-                  handleOrderFormChange('phone', '');
-                  handleOrderFormChange('customerGroup', '');
-                  handleOrderFormChange('address', '');
-                  handleOrderFormChange('vehicle', '');
-                  handleOrderFormChange('printOrder', 0);
-                  handleOrderFormChange('salesSchedule', '');
-                }
+                setCustomerSearch(e.target.value);
+                setShowCustomerDropdown(true);
               }}
-              className="order-form-select"
-            >
-              <option value="">Chọn khách hàng</option>
-              {customers.map(c => (
-                <option key={c.id || c.code} value={c.id || c.code}>
-                  {`${c.code ? c.code + ' - ' : ''}${c.name || ''}${c.phone ? ' (' + c.phone + ')' : ''}${c.customerGroup ? ' - ' + c.customerGroup : ''}`}
-                </option>
-              ))}
-            </select>
+              onFocus={() => setShowCustomerDropdown(true)}
+              placeholder="Tìm kiếm khách hàng..."
+              className="order-form-input"
+            />
+            
+            {showCustomerDropdown && (
+              <div className="dropdown-list" style={{
+                position: 'absolute',
+                top: '100%',
+                left: 0,
+                right: 0,
+                backgroundColor: 'white',
+                border: '1px solid #ccc',
+                borderTop: 'none',
+                maxHeight: '200px',
+                overflowY: 'auto',
+                zIndex: 1000
+              }}>
+                {filteredCustomers.length > 0 ? (
+                  filteredCustomers.slice(0, 10).map(c => {
+                    const group = customerGroups.find(g => g.code === c.customerGroup);
+                    const groupName = group ? group.name : c.customerGroup;
+                    
+                    return (
+                      <div
+                        key={c.id || c.code}
+                        onClick={() => {
+                          const val = c.id || c.code;
+                          handleOrderFormChange('customer', val);
+                          setCustomerSearch(`${c.name || ''}${c.phone ? ' (' + c.phone + ')' : ''}${groupName ? ' - ' + groupName : ''}`);
+                          setShowCustomerDropdown(false);
+                          
+                          console.log('Selected customer:', c);
+                          console.log('Customer salesSchedule:', c.salesSchedule);
+                          handleOrderFormChange('customerName', c.name || '');
+                          handleOrderFormChange('phone', c.phone || c.Phone || '');
+                          handleOrderFormChange('customerGroup', c.customerGroup || c.group || c.customerGroupName || '');
+                          handleOrderFormChange('address', c.address || c.vatAddress || c.Address || '');
+                          handleOrderFormChange('vehicle', c.position || c.Position || c.vehicle || '');
+                          const printVal = c.printIn !== undefined && c.printIn !== null ? parseInt(c.printIn, 10) || 0 : 0;
+                          handleOrderFormChange('printOrder', printVal);
+                          const salesScheduleValue = c.salesSchedule || c.salesScheduleName || c.sales || '';
+                          console.log('Setting salesSchedule to:', salesScheduleValue);
+                          handleOrderFormChange('salesSchedule', salesScheduleValue);
+                        }}
+                        style={{
+                          padding: '8px 12px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #eee'
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f0f0f0'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = 'white'}
+                      >
+                        {`${c.name || ''}${c.phone ? ' (' + c.phone + ')' : ''}${groupName ? ' - ' + groupName : ''}`}
+                      </div>
+                    );
+                  })
+                ) : (
+                  <div style={{ padding: '8px 12px', color: '#999' }}>
+                    Không tìm thấy khách hàng
+                  </div>
+                )}
+              </div>
+            )}
           </div>
         </div>
 
@@ -869,7 +1000,7 @@ const CreateOrderForm = () => {
               <input
                 type="text"
                 value={orderForm.orderNumber}
-                onChange={(e) => handleOrderFormChange('orderNumber', e.target.value)}
+                onChange={(e) => { setOrderNumberEdited(true); handleOrderFormChange('orderNumber', e.target.value); }}
                 className="order-form-input"
               />
               <span className="input-icon success">✓</span>
@@ -997,10 +1128,9 @@ const CreateOrderForm = () => {
             <input
               type="text"
               value={orderForm.salesSchedule}
-              onChange={(e) => handleOrderFormChange('salesSchedule', e.target.value)}
+              readOnly
               className="order-form-input"
-              placeholder=""
-              readOnly={isCustomerSelected}
+              placeholder="Chọn khách hàng để hiển thị lịch bán hàng"
             />
           </div>
           <div className="order-form-group small">
@@ -1253,7 +1383,7 @@ const CreateOrderForm = () => {
                                     }}
                                   className="item-select small"
                                 >
-                                  <option value="">Chọn đvt</option>
+                                  <option value="" disabled hidden></option>
                                   {opts.map(o => (
                                     <option key={o.value} value={o.value}>{o.label}</option>
                                   ))}
@@ -1328,6 +1458,8 @@ const CreateOrderForm = () => {
                               return <input type="text" value={item.description} onChange={(e) => handleOrderItemChange(rowIndex, 'description', e.target.value)} className="item-input" />;
                             case 'conversion':
                               return <input type="text" value={item.conversion} onChange={(e) => handleOrderItemChange(rowIndex, 'conversion', e.target.value)} className="item-input" />;
+                            case 'amount':
+                              return (item.amount || 0).toLocaleString();
                             // 'total' column removed from defaults; keep logic elsewhere if needed
                             case 'weight':
                               return (

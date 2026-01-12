@@ -15,6 +15,8 @@ const Customers = () => {
 
   const [customers, setCustomers] = useState([]);
   const [customerGroups, setCustomerGroups] = useState([]);
+  const [customersLoaded, setCustomersLoaded] = useState(false);
+  const [groupsLoaded, setGroupsLoaded] = useState(false);
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
@@ -39,11 +41,20 @@ const Customers = () => {
     loadCustomerGroups();
   }, []);
 
+  // Apply salesSchedule mapping when both customers and groups are loaded
+  useEffect(() => {
+    if (customersLoaded && groupsLoaded && customers.length > 0 && customerGroups.length > 0) {
+      const mapped = applySalesSchedule(customers, customerGroups);
+      setCustomers(mapped);
+    }
+  }, [customersLoaded, groupsLoaded, customerGroups]);
+
   const loadCustomers = async () => {
     try {
       setLoading(true);
       const data = await api.get(API_ENDPOINTS.customers);
       setCustomers(data);
+      setCustomersLoaded(true);
     } catch (error) {
       console.error('Error loading customers:', error);
       alert('Không thể tải danh sách khách hàng');
@@ -56,10 +67,40 @@ const Customers = () => {
     try {
       const data = await api.get(API_ENDPOINTS.customerGroups);
       setCustomerGroups(data);
+      setGroupsLoaded(true);
     } catch (error) {
       console.error('Error loading customer groups:', error);
       alert('Không thể tải danh sách nhóm khách hàng');
     }
+  };
+
+  // Helper to derive salesSchedule from customer group note (Ghi chú)
+  const applySalesSchedule = (customersList, groupsList) => {
+    if (!customersList || customersList.length === 0) return customersList || [];
+    if (!groupsList || groupsList.length === 0) return customersList;
+    
+    console.log('applySalesSchedule called with:', { customersList: customersList.length, groupsList: groupsList.length });
+    console.log('Customer groups:', groupsList.map(g => ({ code: g.code, note: g.note, ghiChu: g.ghiChu })));
+    
+    const map = {};
+    groupsList.forEach(g => {
+      const key = g.code || g.id || g.name;
+      const note = g.note || g.ghiChu || g.description || '';
+      if (key) {
+        map[key] = note;
+        console.log(`Mapping ${key} -> ${note}`);
+      }
+    });
+    
+    return customersList.map(c => {
+      const oldSchedule = c.salesSchedule;
+      const newSchedule = map[c.customerGroup] || map[c.customerGroup?.toString()] || c.salesSchedule || '';
+      console.log(`Customer ${c.name}: group=${c.customerGroup}, old schedule=${oldSchedule}, new schedule=${newSchedule}`);
+      return {
+        ...c,
+        salesSchedule: newSchedule
+      };
+    });
   };
 
   const [formData, setFormData] = useState({
@@ -93,6 +134,16 @@ const Customers = () => {
 
   const handleInputChange = (e) => {
     const { name, value } = e.target;
+    if (name === 'customerGroup') {
+      const grp = customerGroups.find(g => g.code === value || g.id === value || g.name === value);
+      const note = grp?.note || grp?.ghiChu || grp?.description || '';
+      setFormData({
+        ...formData,
+        customerGroup: value,
+        salesSchedule: note
+      });
+      return;
+    }
     setFormData({
       ...formData,
       [name]: value
@@ -929,7 +980,7 @@ const Customers = () => {
                       type="text"
                       name="salesSchedule"
                       value={formData.salesSchedule}
-                      onChange={handleInputChange}
+                      readOnly
                     />
                   </div>
                 </div>
