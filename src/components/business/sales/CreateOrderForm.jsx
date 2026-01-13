@@ -104,7 +104,7 @@ const CreateOrderForm = () => {
     customer: '',
     customerName: '',
     phone: '',
-    createdBy: 'admin 66',
+    createdBy: '',
     address: '',
     vehicle: '',
     customerGroup: '',
@@ -140,6 +140,7 @@ const CreateOrderForm = () => {
   const productInputRefs = useRef([]);
   const [suggestionCoords, setSuggestionCoords] = useState(null);
   const [salesUsers, setSalesUsers] = useState([]);
+  const [users, setUsers] = useState([]);
   const [canChooseSales, setCanChooseSales] = useState(false);
   const [currentUser, setCurrentUser] = useState(null);
   const [discountNoteEdited, setDiscountNoteEdited] = useState(false);
@@ -470,6 +471,13 @@ const CreateOrderForm = () => {
     } catch (e) {}
   }, [orderForm.orderDate, orderNumberEdited]);
 
+  // Recalculate total kg and total m3 from order items
+  useEffect(() => {
+    const totalKg = orderItems.reduce((s, it) => s + (parseFloat(it.weight) || 0), 0);
+    const totalM3 = orderItems.reduce((s, it) => s + (parseFloat(it.volume) || 0), 0);
+    setOrderForm(prev => ({ ...prev, totalKg: Number(totalKg.toFixed(2)), totalM3: Number(totalM3.toFixed(3)) }));
+  }, [orderItems]);
+
   const threeDigitsToWords = (num) => {
     const ones = ['không','một','hai','ba','bốn','năm','sáu','bảy','tám','chín'];
     const hundred = Math.floor(num / 100);
@@ -495,11 +503,17 @@ const CreateOrderForm = () => {
   };
 
   const numberToVietnamese = (n) => {
-    let num = Math.round(Math.abs(Number(n) || 0));
-    if (num === 0) return 'Không';
+    const raw = Number(n) || 0;
+    const sign = raw < 0 ? 'âm ' : '';
+    const abs = Math.abs(raw);
+    const intPart = Math.floor(abs);
+    const frac = +(abs - intPart).toFixed(6); // keep up to 6 decimals safely
+
     const scales = ['', 'nghìn', 'triệu', 'tỷ', 'nghìn tỷ'];
     const parts = [];
+    let num = intPart;
     let scaleIdx = 0;
+    if (num === 0) parts.push('không');
     while (num > 0) {
       const segment = num % 1000;
       if (segment > 0) {
@@ -509,8 +523,19 @@ const CreateOrderForm = () => {
       num = Math.floor(num / 1000);
       scaleIdx += 1;
     }
-    const joined = parts.join(' ').replace(/\s+/g, ' ').trim();
-    return joined.charAt(0).toUpperCase() + joined.slice(1);
+    const intWords = parts.join(' ').replace(/\s+/g, ' ').trim();
+    let result = (intWords ? intWords.charAt(0).toUpperCase() + intWords.slice(1) : 'Không');
+
+    if (frac > 0) {
+      // Convert fractional part to string without trailing zeros
+      const fracStr = frac.toString().replace(/^0\./, '');
+      const fracDigits = fracStr.split('');
+      const digitWords = ['không','một','hai','ba','bốn','năm','sáu','bảy','tám','chín'];
+      const fracWords = fracDigits.map(d => digitWords[parseInt(d, 10)]).join(' ');
+      result = result + ' phẩy ' + fracWords;
+    }
+
+    return sign + result;
   };
 
   const totalInWords = (amount) => {
@@ -521,7 +546,6 @@ const CreateOrderForm = () => {
   const handleSaveOrder = () => {
     // commit serial from order number so next generated will be higher
     try { commitSerialFromOrderNumber(orderForm.orderNumber); } catch(e) {}
-    console.log('Saving order:', orderForm, orderItems);
     // Add save logic here (POST to API)
     alert('Đơn hàng đã được lưu!');
   };
@@ -533,7 +557,7 @@ const CreateOrderForm = () => {
       customer: '',
       customerName: '',
       phone: '',
-      createdBy: 'admin 66',
+      createdBy: '',
       address: '',
       vehicle: '',
       customerGroup: '',
@@ -605,7 +629,6 @@ const CreateOrderForm = () => {
           salesSchedule: groupMap[c.customerGroup] || groupMap[c.customerGroup?.toString()] || c.salesSchedule || ''
         }));
         
-        console.log('Loaded customers with salesSchedule mapping:', mappedCustomers);
         setCustomers(mappedCustomers);
         setFilteredCustomers(mappedCustomers);
         
@@ -653,7 +676,56 @@ const CreateOrderForm = () => {
     api.get(API_ENDPOINTS.users)
       .then(udata => {
         if (!mounted) return;
-        if (Array.isArray(udata)) setSalesUsers(udata);
+        if (Array.isArray(udata)) {
+          setSalesUsers(udata);
+          setUsers(udata);
+          
+          // Get current logged in user
+          const loggedInUser = localStorage.getItem('currentUser') || localStorage.getItem('username') || '';
+          // current logged in user (from localStorage)
+          
+          let defaultUser = '';
+          
+          if (loggedInUser) {
+            // Find user by username/name
+            const currentUserObj = udata.find(u => 
+              u.username === loggedInUser || 
+              u.name === loggedInUser ||
+              u.displayName === loggedInUser ||
+              u.tenNhanVien === loggedInUser
+            );
+            if (currentUserObj) {
+              defaultUser = currentUserObj.tenNhanVien || currentUserObj.name || currentUserObj.username || '';
+              setCurrentUser(defaultUser);
+            }
+          }
+          
+          // If no current user found, use default "tên nhân viên"
+          if (!defaultUser) {
+            const defaultUserObj = udata.find(u => 
+              u.tenNhanVien === 'tên nhân viên' ||
+              u.name === 'tên nhân viên' ||
+              u.username === 'tên nhân viên'
+            );
+            if (defaultUserObj) {
+              defaultUser = defaultUserObj.tenNhanVien || defaultUserObj.name || defaultUserObj.username || '';
+            } else if (udata.length > 0) {
+              // If no "tên nhân viên" found, use first user
+              defaultUser = udata[0].tenNhanVien || udata[0].name || udata[0].username || '';
+            }
+            setCurrentUser(defaultUser);
+          }
+          
+          // Set default createdBy
+          if (defaultUser) {
+            setOrderForm(prev => ({
+              ...prev,
+              createdBy: defaultUser
+            }));
+          }
+          
+          // default createdBy set
+        }
       })
       .catch(err => console.warn('Failed to load users', err));
     return () => { mounted = false; };
@@ -956,9 +1028,7 @@ const CreateOrderForm = () => {
                           handleOrderFormChange('customer', val);
                           setCustomerSearch(`${c.name || ''}${c.phone ? ' (' + c.phone + ')' : ''}${groupName ? ' - ' + groupName : ''}`);
                           setShowCustomerDropdown(false);
-                          
-                          console.log('Selected customer:', c);
-                          console.log('Customer salesSchedule:', c.salesSchedule);
+                    
                           handleOrderFormChange('customerName', c.name || '');
                           handleOrderFormChange('phone', c.phone || c.Phone || '');
                           handleOrderFormChange('customerGroup', c.customerGroup || c.group || c.customerGroupName || '');
@@ -967,7 +1037,6 @@ const CreateOrderForm = () => {
                           const printVal = c.printIn !== undefined && c.printIn !== null ? parseInt(c.printIn, 10) || 0 : 0;
                           handleOrderFormChange('printOrder', printVal);
                           const salesScheduleValue = c.salesSchedule || c.salesScheduleName || c.sales || '';
-                          console.log('Setting salesSchedule to:', salesScheduleValue);
                           handleOrderFormChange('salesSchedule', salesScheduleValue);
                         }}
                         style={{
@@ -1041,8 +1110,15 @@ const CreateOrderForm = () => {
                 onChange={(e) => handleOrderFormChange('createdBy', e.target.value)}
                 className="order-form-select"
               >
-                <option value="admin 66">admin 66</option>
-                <option value="admin 01">admin 01</option>
+                <option value="">Chọn nhân viên</option>
+                {users.map(user => {
+                  const displayName = user.tenNhanVien || user.name || user.username || '';
+                  return (
+                    <option key={user.id || user.username} value={displayName}>
+                      {displayName}
+                    </option>
+                  );
+                })}
               </select>
               <span className="input-icon success">✓</span>
             </div>

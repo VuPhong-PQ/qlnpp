@@ -82,7 +82,9 @@ body {
   }
   
   .main-content {
-    padding: 0 10px;
+    padding-top: calc(var(--global-header-height, 72px) + 12px);
+    padding-left: 10px;
+    padding-right: 10px;
   }
   
   .mb-20 {
@@ -100,7 +102,9 @@ body {
   }
   
   .main-content {
-    padding: 0 8px;
+    padding-top: calc(var(--global-header-height, 72px) + 12px);
+    padding-left: 8px;
+    padding-right: 8px;
   }
   
   .mb-20 {

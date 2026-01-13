@@ -79,8 +79,7 @@ const Customers = () => {
     if (!customersList || customersList.length === 0) return customersList || [];
     if (!groupsList || groupsList.length === 0) return customersList;
     
-    console.log('applySalesSchedule called with:', { customersList: customersList.length, groupsList: groupsList.length });
-    console.log('Customer groups:', groupsList.map(g => ({ code: g.code, note: g.note, ghiChu: g.ghiChu })));
+    // mapping customer groups to sales schedule notes
     
     const map = {};
     groupsList.forEach(g => {
@@ -88,14 +87,11 @@ const Customers = () => {
       const note = g.note || g.ghiChu || g.description || '';
       if (key) {
         map[key] = note;
-        console.log(`Mapping ${key} -> ${note}`);
       }
     });
     
     return customersList.map(c => {
-      const oldSchedule = c.salesSchedule;
       const newSchedule = map[c.customerGroup] || map[c.customerGroup?.toString()] || c.salesSchedule || '';
-      console.log(`Customer ${c.name}: group=${c.customerGroup}, old schedule=${oldSchedule}, new schedule=${newSchedule}`);
       return {
         ...c,
         salesSchedule: newSchedule
