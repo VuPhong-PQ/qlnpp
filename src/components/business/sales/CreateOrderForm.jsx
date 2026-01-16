@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
 import '../BusinessPage.css';
-import { API_ENDPOINTS, api } from '../../../config/api';
+import { API_ENDPOINTS, API_BASE_URL, api } from '../../../config/api';
 import OpenStreetMapModal from '../../OpenStreetMapModal';
 
 const CreateOrderForm = () => {
@@ -16,6 +16,40 @@ const CreateOrderForm = () => {
       .replace(/đ/g, 'd')
       .replace(/Đ/g, 'D')
       .toLowerCase();
+  };
+
+  // Date formatting utility for dd/mm/yyyy display
+  const formatDisplayDate = (dateStr) => {
+    if (!dateStr) return '';
+    const date = new Date(dateStr);
+    if (isNaN(date)) return dateStr;
+    
+    const day = String(date.getDate()).padStart(2, '0');
+    const month = String(date.getMonth() + 1).padStart(2, '0');
+    const year = date.getFullYear();
+    
+    return `${day}/${month}/${year}`;
+  };
+
+  // Parse dd/mm/yyyy input to yyyy-mm-dd format
+  const parseDateInput = (dateStr) => {
+    if (!dateStr) return '';
+    
+    // Handle dd/mm/yyyy format
+    const ddmmyyyy = dateStr.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+    if (ddmmyyyy) {
+      const day = ddmmyyyy[1].padStart(2, '0');
+      const month = ddmmyyyy[2].padStart(2, '0');
+      const year = ddmmyyyy[3];
+      return `${year}-${month}-${day}`;
+    }
+    
+    // Handle existing yyyy-mm-dd format
+    if (dateStr.match(/^\d{4}-\d{2}-\d{2}$/)) {
+      return dateStr;
+    }
+    
+    return '';
   };
 
   // Customer search state
@@ -124,7 +158,7 @@ const CreateOrderForm = () => {
   });
 
   const [orderItems, setOrderItems] = useState([
-    { id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0 }
+    { id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }
   ]);
 
   const [positions, setPositions] = useState([]);
@@ -155,8 +189,13 @@ const CreateOrderForm = () => {
   
   const [showMapModal, setShowMapModal] = useState(false);
   const [selectedCustomerForMap, setSelectedCustomerForMap] = useState(null);
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searchResults, setSearchResults] = useState([]);
+  const [savedOrders, setSavedOrders] = useState([]); // Danh sách orders từ DB
+  const [showOrdersList, setShowOrdersList] = useState(false); // Hiển thị danh sách orders
   const isCustomerSelected = Boolean(orderForm.customer);
-  const initialColWidths = [120, 120, 220, 120, 80, 90, 110, 80, 120, 120, 120, 100, 180, 100, 140, 90, 90, 100, 100, 120];
+  const initialColWidths = [120, 120, 220, 120, 80, 90, 110, 100, 80, 120, 120, 90, 120, 100, 180, 140, 90, 90, 100, 100, 120, 100, 130, 120];
   const [colWidths, setColWidths] = useState(initialColWidths);
   const resizerState = useRef({ isResizing: false, startX: 0, colIndex: null, startWidth: 0 });
   
@@ -169,34 +208,38 @@ const CreateOrderForm = () => {
     { key: 'unit', label: 'ĐVT', visible: true },
     { key: 'quantity', label: 'Số lượng', visible: true },
     { key: 'unitPrice', label: 'Đơn giá', visible: true },
+    { key: 'amount', label: 'Thành tiền', visible: true },
     { key: 'discountPercent', label: '% CK', visible: true },
     { key: 'priceAfterCK', label: 'Giá sau CK', visible: true },
     { key: 'totalAfterCK', label: 'Ttien sau CK', visible: true },
+    { key: 'discountPercentGlobal', label: 'Giảm %', visible: true },
     { key: 'totalAfterDiscount', label: 'Ttien sau giảm %', visible: true },
     { key: 'nvSales', label: 'NV Sales', visible: true },
     { key: 'description', label: 'Mô tả chi tiết', visible: true },
     { key: 'conversion', label: 'Quy đổi', visible: true },
-    { key: 'amount', label: 'Thành tiền', visible: true },
     { key: 'weight', label: 'Số kg', visible: true },
     { key: 'volume', label: 'Số khối', visible: true },
     { key: 'exportType', label: 'Loại xuất', visible: true },
     { key: 'stock', label: 'Tồn kho', visible: true },
+    { key: 'tax', label: 'Thuế', visible: true },
+    { key: 'priceExcludeVAT', label: 'Giá bán (-VAT)', visible: true },
+    { key: 'totalExcludeVAT', label: 'TT (-VAT)', visible: true },
     { key: 'actions', label: 'Thao tác', visible: true }
   ];
   const [columns, setColumns] = useState(defaultColumns);
   const [showColumnsSettings, setShowColumnsSettings] = useState(false);
 
-  // Ensure 'amount' column is positioned immediately after 'conversion' on first load
+  // Ensure 'amount' column is positioned immediately after 'unitPrice' on first load
   const _ensureAmountPosRef = useRef(false);
   useEffect(() => {
     if (_ensureAmountPosRef.current) return;
     _ensureAmountPosRef.current = true;
-    const convIdx = columns.findIndex(c => c.key === 'conversion');
+    const unitPriceIdx = columns.findIndex(c => c.key === 'unitPrice');
     const amtIdx = columns.findIndex(c => c.key === 'amount');
-    if (convIdx >= 0 && amtIdx >= 0 && amtIdx !== convIdx + 1) {
+    if (unitPriceIdx >= 0 && amtIdx >= 0 && amtIdx !== unitPriceIdx + 1) {
       const colCopy = [...columns];
       const [amtCol] = colCopy.splice(amtIdx, 1);
-      colCopy.splice(convIdx + 1, 0, amtCol);
+      colCopy.splice(unitPriceIdx + 1, 0, amtCol);
       skipColumnsRef.current = true;
       setColumns(colCopy);
     }
@@ -324,6 +367,107 @@ const CreateOrderForm = () => {
     setSuggestionCoords({ left: rect.left, width: rect.width, bottom });
   }, [colWidths, suggestionRow]);
 
+  // Fetch orders from database
+  const fetchOrders = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/Orders`);
+      if (response.ok) {
+        const orders = await response.json();
+        setSavedOrders(orders);
+      } else {
+        console.error('Failed to fetch orders:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    }
+  };
+
+  // Load order detail with items
+  const loadOrderDetail = async (orderId) => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/Orders/${orderId}`);
+      if (response.ok) {
+        const data = await response.json();
+        
+        // Map order data to form
+        setOrderForm({
+          orderDate: data.order.orderDate ? data.order.orderDate.split('T')[0] : defaultOrderDate,
+          orderNumber: data.order.orderNumber || '',
+          customer: data.order.customer || '',
+          customerName: data.order.customerName || '',
+          phone: data.order.phone || '',
+          createdBy: data.order.createdBy || '',
+          address: data.order.address || '',
+          vehicle: data.order.vehicle || '',
+          customerGroup: data.order.customerGroup || '',
+          salesSchedule: data.order.salesSchedule || '',
+          printOrder: data.order.printOrder || 0,
+          deliveryVehicle: data.order.deliveryVehicle || '',
+          priceType: data.order.priceType || 'retail',
+          activeTab: 'products',
+          discountPercent: data.order.discountPercent || 0,
+          discountAmount: data.order.discountAmount || 0,
+          discountNote: data.order.discountNote || '',
+          totalKg: data.order.totalKg || 0,
+          totalM3: data.order.totalM3 || 0,
+          payment: data.order.payment || 0,
+          accountFund: data.order.accountFund || '',
+          notes: data.order.notes || ''
+        });
+        
+        // Map order items
+        if (data.items && data.items.length > 0) {
+          setOrderItems(data.items.map((item, index) => ({
+            id: index + 1,
+            productCode: item.productCode || '',
+            barcode: item.barcode || '',
+            productName: item.productName || '',
+            warehouse: item.warehouse || '',
+            unit: item.unit || '',
+            quantity: item.quantity || 0,
+            unitPrice: item.unitPrice || 0,
+            discountPercent: item.discountPercent || 0,
+            priceAfterCK: item.priceAfterCK || 0,
+            totalAfterCK: item.totalAfterCK || 0,
+            totalAfterDiscount: item.totalAfterDiscount || 0,
+            nvSales: item.nvSales || '',
+            description: item.description || '',
+            conversion: item.conversion || '',
+            amount: item.amount || 0,
+            total: item.total || 0,
+            weight: item.weight || 0,
+            volume: item.volume || 0,
+            baseWeight: item.baseWeight || 0,
+            baseVolume: item.baseVolume || 0,
+            exportType: item.exportType || 'xuất bán',
+            stock: item.stock || 0,
+            tax: item.tax || 'KCT',
+            priceExcludeVAT: item.priceExcludeVAT || 0,
+            totalExcludeVAT: item.totalExcludeVAT || 0
+          })));
+        }
+        
+        // Update customer search if customer is selected
+        if (data.order.customerName) {
+          setCustomerSearch(`${data.order.customerName}${data.order.phone ? ' (' + data.order.phone + ')' : ''}`);
+        }
+        
+        setShowOrdersList(false);
+        alert('Đã tải đơn hàng thành công!');
+      } else {
+        alert('Không thể tải đơn hàng: ' + response.statusText);
+      }
+    } catch (error) {
+      console.error('Error loading order:', error);
+      alert('Lỗi khi tải đơn hàng: ' + error.message);
+    }
+  };
+
+  // Load orders when component mounts
+  useEffect(() => {
+    fetchOrders();
+  }, []);
+
   // Drag state for column reordering
   const onDragStartCol = (e, idx) => {
     e.dataTransfer.effectAllowed = 'move';
@@ -415,7 +559,10 @@ const CreateOrderForm = () => {
       baseWeight: 0,
       baseVolume: 0,
       exportType: 'xuất bán',
-      stock: 0
+      stock: 0,
+      tax: 'KCT',
+      priceExcludeVAT: 0,
+      totalExcludeVAT: 0
     }]);
   };
 
@@ -543,11 +690,219 @@ const CreateOrderForm = () => {
     return w + ' đồng';
   };
 
-  const handleSaveOrder = () => {
-    // commit serial from order number so next generated will be higher
-    try { commitSerialFromOrderNumber(orderForm.orderNumber); } catch(e) {}
-    // Add save logic here (POST to API)
-    alert('Đơn hàng đã được lưu!');
+  const handleSaveOrder = async () => {
+    try {
+      // Commit serial from order number so next generated will be higher
+      try { commitSerialFromOrderNumber(orderForm.orderNumber); } catch(e) {}
+      
+      // Prepare order data with proper field mapping for backend
+      const orderData = {
+        OrderDate: orderForm.orderDate || new Date().toISOString().split('T')[0],
+        OrderNumber: String(orderForm.orderNumber || ''),
+        Customer: String(orderForm.customer || ''),
+        CustomerName: String(orderForm.customerName || ''),
+        Phone: String(orderForm.phone || ''),
+        CreatedBy: String(orderForm.createdBy || ''),
+        Address: String(orderForm.address || ''),
+        Vehicle: String(orderForm.vehicle || ''),
+        CustomerGroup: String(orderForm.customerGroup || ''),
+        SalesSchedule: String(orderForm.salesSchedule || ''),
+        PrintOrder: Number(orderForm.printOrder || 0),
+        DeliveryVehicle: String(orderForm.deliveryVehicle || ''),
+        PriceType: String(orderForm.priceType || 'retail'),
+        ActiveTab: String(orderForm.activeTab || 'products'),
+        DiscountPercent: Number(orderForm.discountPercent || 0),
+        DiscountAmount: Number(orderForm.discountAmount || 0),
+        DiscountNote: String(orderForm.discountNote || ''),
+        TotalKg: Number(orderForm.totalKg || 0),
+        TotalM3: Number(orderForm.totalM3 || 0),
+        Payment: Number(orderForm.payment || 0),
+        AccountFund: String(orderForm.accountFund || ''),
+        Notes: String(orderForm.notes || ''),
+        TotalAmount: calculateTotals(),
+        TotalAfterDiscount: calculateTotals()
+      };
+      
+      // Filter out empty order items and map to backend format
+      const validOrderItems = orderItems.filter(item => {
+        const hasText = (item.productCode && String(item.productCode).trim()) || 
+                       (item.barcode && String(item.barcode).trim()) || 
+                       (item.productName && String(item.productName).trim());
+        const hasNumbers = (item.quantity && Number(item.quantity) > 0) || 
+                          (item.unitPrice && Number(item.unitPrice) > 0);
+        return Boolean(hasText) || Boolean(hasNumbers);
+      }).map(item => ({
+        ProductCode: String(item.productCode || ''),
+        Barcode: String(item.barcode || ''),
+        ProductName: String(item.productName || ''),
+        Warehouse: String(item.warehouse || ''),
+        Unit: String(item.unit || ''),
+        Quantity: Number(item.quantity || 0),
+        UnitPrice: Number(item.unitPrice || 0),
+        DiscountPercent: Number(item.discountPercent || 0),
+        PriceAfterCK: Number(item.priceAfterCK || 0),
+        TotalAfterCK: Number(item.totalAfterCK || 0),
+        TotalAfterDiscount: Number(item.totalAfterDiscount || 0),
+        NvSales: String(item.nvSales || ''),
+        Description: String(item.description || ''),
+        Conversion: Number(item.conversion || 1),
+        Amount: Number(item.amount || 0),
+        Total: Number(item.total || 0),
+        Weight: Number(item.weight || 0),
+        Volume: Number(item.volume || 0),
+        BaseWeight: Number(item.baseWeight || 0),
+        BaseVolume: Number(item.baseVolume || 0),
+        ExportType: String(item.exportType || 'xuất bán'),
+        Stock: Number(item.stock || 0),
+        Tax: String(item.tax || 'KCT'),
+        PriceExcludeVAT: Number(item.priceExcludeVAT || 0),
+        TotalExcludeVAT: Number(item.totalExcludeVAT || 0)
+      }));
+      
+      // Prepare request payload with backend expected structure
+      const requestPayload = {
+        Order: orderData,
+        OrderItems: validOrderItems
+      };
+      
+      console.log('Sending data to API:', requestPayload);
+      console.log('Order data:', orderData);
+      console.log('Valid order items:', validOrderItems);
+      
+      // Call API to create order with items
+      const response = await api.post(`${API_ENDPOINTS.orders}/create-with-items`, requestPayload);
+      
+      if (response) {
+        alert('Đơn hàng đã được lưu thành công!');
+        // Optionally reset form or navigate away
+        // handleCreateNew(); // Uncomment to reset form after save
+        fetchOrders(); // Refresh orders list after successful save
+      }
+    } catch (error) {
+      console.error('Full error details:', error);
+      console.error('Error message:', error.message);
+      console.error('Error response:', error.response);
+      
+      let errorMsg = 'Vui lòng thử lại';
+      if (error.message) {
+        errorMsg = error.message;
+      }
+      if (error.response && error.response.data) {
+        errorMsg = error.response.data.message || error.response.data || errorMsg;
+      }
+      
+      alert(`Lỗi khi lưu đơn hàng: ${errorMsg}`);
+    }
+  };
+
+  const handleCopyOrder = async () => {
+    try {
+      // Generate new order number for the copy
+      const currentDate = new Date();
+      const year = currentDate.getFullYear();
+      const newSerial = reserveNextSerialForYear(year);
+      const newOrderNumber = formatOrderNumber(currentDate, newSerial);
+      
+      // Prepare order data with new order number but same other data
+      const orderData = {
+        OrderDate: orderForm.orderDate || new Date().toISOString().split('T')[0],
+        OrderNumber: newOrderNumber, // New order number for copy
+        Customer: String(orderForm.customer || ''),
+        CustomerName: String(orderForm.customerName || ''),
+        Phone: String(orderForm.phone || ''),
+        CreatedBy: String(orderForm.createdBy || ''),
+        Address: String(orderForm.address || ''),
+        Vehicle: String(orderForm.vehicle || ''),
+        CustomerGroup: String(orderForm.customerGroup || ''),
+        SalesSchedule: String(orderForm.salesSchedule || ''),
+        PrintOrder: Number(orderForm.printOrder || 0),
+        DeliveryVehicle: String(orderForm.deliveryVehicle || ''),
+        PriceType: String(orderForm.priceType || 'retail'),
+        ActiveTab: String(orderForm.activeTab || 'products'),
+        DiscountPercent: Number(orderForm.discountPercent || 0),
+        DiscountAmount: Number(orderForm.discountAmount || 0),
+        DiscountNote: String(orderForm.discountNote || ''),
+        TotalKg: Number(orderForm.totalKg || 0),
+        TotalM3: Number(orderForm.totalM3 || 0),
+        Payment: Number(orderForm.payment || 0),
+        AccountFund: String(orderForm.accountFund || ''),
+        Notes: String(orderForm.notes || ''),
+        TotalAmount: calculateTotals(),
+        TotalAfterDiscount: calculateTotals()
+      };
+      
+      // Use same order items as current form
+      const validOrderItems = orderItems.filter(item => {
+        const hasText = (item.productCode && String(item.productCode).trim()) || 
+                       (item.barcode && String(item.barcode).trim()) || 
+                       (item.productName && String(item.productName).trim());
+        const hasNumbers = (item.quantity && Number(item.quantity) > 0) || 
+                          (item.unitPrice && Number(item.unitPrice) > 0);
+        return Boolean(hasText) || Boolean(hasNumbers);
+      }).map(item => ({
+        ProductCode: String(item.productCode || ''),
+        Barcode: String(item.barcode || ''),
+        ProductName: String(item.productName || ''),
+        Warehouse: String(item.warehouse || ''),
+        Unit: String(item.unit || ''),
+        Quantity: Number(item.quantity || 0),
+        UnitPrice: Number(item.unitPrice || 0),
+        DiscountPercent: Number(item.discountPercent || 0),
+        PriceAfterCK: Number(item.priceAfterCK || 0),
+        TotalAfterCK: Number(item.totalAfterCK || 0),
+        TotalAfterDiscount: Number(item.totalAfterDiscount || 0),
+        NvSales: String(item.nvSales || ''),
+        Description: String(item.description || ''),
+        Conversion: Number(item.conversion || 1),
+        Amount: Number(item.amount || 0),
+        Total: Number(item.total || 0),
+        Weight: Number(item.weight || 0),
+        Volume: Number(item.volume || 0),
+        BaseWeight: Number(item.baseWeight || 0),
+        BaseVolume: Number(item.baseVolume || 0),
+        ExportType: String(item.exportType || 'xuất bán'),
+        Stock: Number(item.stock || 0),
+        Tax: String(item.tax || 'KCT'),
+        PriceExcludeVAT: Number(item.priceExcludeVAT || 0),
+        TotalExcludeVAT: Number(item.totalExcludeVAT || 0)
+      }));
+      
+      // Prepare request payload
+      const requestPayload = {
+        Order: orderData,
+        OrderItems: validOrderItems
+      };
+      
+      console.log('Copying order with data:', requestPayload);
+      
+      // Call API to create copy of order
+      const response = await api.post(`${API_ENDPOINTS.orders}/create-with-items`, requestPayload);
+      
+      if (response) {
+        alert(`Đơn hàng đã được sao chép thành công! Số phiếu mới: ${newOrderNumber}`);
+        
+        // Update form with new order number to reflect the copy
+        setOrderForm(prev => ({ 
+          ...prev, 
+          orderNumber: newOrderNumber 
+        }));
+        setOrderNumberEdited(true); // Prevent auto-generation of order number
+      }
+    } catch (error) {
+      console.error('Full error details:', error);
+      console.error('Error message:', error.message);
+      console.error('Error response:', error.response);
+      
+      let errorMsg = 'Vui lòng thử lại';
+      if (error.message) {
+        errorMsg = error.message;
+      }
+      if (error.response && error.response.data) {
+        errorMsg = error.response.data.message || error.response.data || errorMsg;
+      }
+      
+      alert(`Lỗi khi sao chép đơn hàng: ${errorMsg}`);
+    }
   };
 
   const handleCreateNew = () => {
@@ -575,13 +930,95 @@ const CreateOrderForm = () => {
       accountFund: '',
       notes: ''
     });
-    setOrderItems([{ id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0 }]);
+    setOrderItems([{ id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }]);
     setDiscountNoteEdited(false);
     setOrderNumberEdited(false);
+    // Reset customer selection
+    setCustomerSearch('');
+    setShowCustomerDropdown(false);
+    setSelectedCustomerForMap(null);
+    
+    // Refresh orders list
+    fetchOrders();
   };
 
   const handleGoBack = () => {
     navigate('/business/sales/create-order');
+  };
+
+  const handleSearchInOrderItems = () => {
+    setShowSearchModal(true);
+    setSearchQuery('');
+    // Hiển thị tất cả sản phẩm đã chọn ban đầu
+    const allItems = orderItems.map((item, index) => ({
+      ...item,
+      rowIndex: index
+    })).filter(item => {
+      // Chỉ hiển thị những item có dữ liệu
+      return (item.productCode && String(item.productCode).trim()) || 
+             (item.barcode && String(item.barcode).trim()) || 
+             (item.productName && String(item.productName).trim());
+    });
+    setSearchResults(allItems);
+  };
+
+  const handleSearchQueryChange = (e) => {
+    const query = e.target.value;
+    setSearchQuery(query);
+    
+    // Nếu không có query, hiển thị tất cả items đã chọn
+    if (!query.trim()) {
+      const allItems = orderItems.map((item, index) => ({
+        ...item,
+        rowIndex: index
+      })).filter(item => {
+        return (item.productCode && String(item.productCode).trim()) || 
+               (item.barcode && String(item.barcode).trim()) || 
+               (item.productName && String(item.productName).trim());
+      });
+      setSearchResults(allItems);
+      return;
+    }
+
+    // Tìm kiếm trong các order items hiện tại với hỗ trợ tiếng Việt không dấu
+    const queryNormalized = removeVietnameseTones(query.toLowerCase());
+    const results = orderItems.filter((item, index) => {
+      // Chỉ tìm những item có dữ liệu
+      const hasData = (item.productCode && String(item.productCode).trim()) || 
+                     (item.barcode && String(item.barcode).trim()) || 
+                     (item.productName && String(item.productName).trim());
+      
+      if (!hasData) return false;
+
+      const searchText = `${item.barcode || ''} ${item.productCode || ''} ${item.productName || ''} ${item.description || ''}`.toLowerCase();
+      const searchTextNormalized = removeVietnameseTones(searchText);
+      
+      return searchTextNormalized.includes(queryNormalized);
+    }).map((item, originalIndex) => ({
+      ...item,
+      rowIndex: orderItems.indexOf(item) // Lưu index gốc để highlight
+    }));
+
+    setSearchResults(results);
+  };
+
+  const handleSelectSearchResult = (result) => {
+    setShowSearchModal(false);
+    
+    // Scroll đến dòng được chọn và highlight
+    const table = document.querySelector('.order-items-table tbody');
+    if (table) {
+      const targetRow = table.children[result.rowIndex];
+      if (targetRow) {
+        targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Highlight dòng được chọn
+        targetRow.style.backgroundColor = '#fffacd';
+        setTimeout(() => {
+          targetRow.style.backgroundColor = '';
+        }, 3000);
+      }
+    }
   };
 
   // Use same simple approach as CreateOrder page - no measurement needed
@@ -616,12 +1053,12 @@ const CreateOrderForm = () => {
       if (!mounted) return;
       
       if (Array.isArray(customersData) && Array.isArray(groupsData)) {
-        // Apply salesSchedule mapping from customer groups
+        // Apply salesSchedule mapping from customer groups salesSchedule field
         const groupMap = {};
         groupsData.forEach(g => {
           const key = g.code || g.id || g.name;
-          const note = g.note || g.ghiChu || g.description || '';
-          if (key) groupMap[key] = note;
+          const schedule = g.salesSchedule || '';
+          if (key) groupMap[key] = schedule;
         });
         
         const mappedCustomers = customersData.map(c => ({
@@ -845,6 +1282,9 @@ const CreateOrderForm = () => {
     if (defaultWh) handleOrderItemChange(rowIndex, 'warehouse', String(defaultWh));
     handleOrderItemChange(rowIndex, 'description', sel.description || sel.note || '');
     handleOrderItemChange(rowIndex, 'nvSales', sel.nvSales || '');
+    // Set VAT % from product, show "KCT" if null/empty
+    const vatPercent = sel.vatPercent || sel.VAT_Percent || sel.vat || sel.taxRate || '';
+    handleOrderItemChange(rowIndex, 'tax', vatPercent || 'KCT');
     const vol = sel.volume || sel.m3 || sel.cbm || sel.volume_m3 || 0;
     const wt = sel.weight || sel.kg || sel.weightKg || sel.weight_kg || 0;
     // Store base weight and volume for calculation
@@ -969,9 +1409,14 @@ const CreateOrderForm = () => {
       {/* Header */}
       <div className="order-form-header">
         <h2>THÔNG TIN ĐƠN HÀNG</h2>
-        <button className="btn-create-new" onClick={handleCreateNew}>
-          + Tạo mới
-        </button>
+        <div className="header-buttons">
+          <button className="btn-view-orders" onClick={() => setShowOrdersList(true)}>
+            📋 Xem đơn hàng đã lưu ({savedOrders.length})
+          </button>
+          <button className="btn-create-new" onClick={handleCreateNew}>
+            + Tạo mới
+          </button>
+        </div>
       </div>
 
       {/* Form Body */}
@@ -981,12 +1426,63 @@ const CreateOrderForm = () => {
         <div className="order-form-row">
           <div className="order-form-group">
             <label className="required">Ngày lập</label>
-            <input
-              type="date"
-              value={orderForm.orderDate}
-              onChange={(e) => handleOrderFormChange('orderDate', e.target.value)}
-              className="order-form-input"
-            />
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+              <input
+                type="text"
+                value={formatDisplayDate(orderForm.orderDate)}
+                onChange={(e) => {
+                  const parsed = parseDateInput(e.target.value);
+                  if (parsed) {
+                    handleOrderFormChange('orderDate', parsed);
+                  }
+                }}
+                onBlur={(e) => {
+                  const parsed = parseDateInput(e.target.value);
+                  if (parsed) {
+                    handleOrderFormChange('orderDate', parsed);
+                  } else if (e.target.value.trim()) {
+                    // If invalid format, revert to current valid date
+                    e.target.value = formatDisplayDate(orderForm.orderDate);
+                  }
+                }}
+                className="order-form-input"
+                placeholder="dd/mm/yyyy"
+                style={{ paddingRight: '35px' }}
+              />
+              <input
+                type="date"
+                ref={(el) => {
+                  if (el) {
+                    // Hidden date picker input
+                    el.style.position = 'absolute';
+                    el.style.right = '5px';
+                    el.style.top = '50%';
+                    el.style.transform = 'translateY(-50%)';
+                    el.style.width = '25px';
+                    el.style.height = '25px';
+                    el.style.opacity = '0';
+                    el.style.cursor = 'pointer';
+                  }
+                }}
+                value={orderForm.orderDate}
+                onChange={(e) => handleOrderFormChange('orderDate', e.target.value)}
+                title="Chọn ngày"
+              />
+              <span 
+                style={{
+                  position: 'absolute',
+                  right: '8px',
+                  top: '50%',
+                  transform: 'translateY(-50%)',
+                  cursor: 'pointer',
+                  fontSize: '16px',
+                  color: '#666',
+                  pointerEvents: 'none'
+                }}
+              >
+                📅
+              </span>
+            </div>
           </div>
           <div className="order-form-group" style={{ position: 'relative' }}>
             <label className="required">Khách hàng</label>
@@ -1258,7 +1754,6 @@ const CreateOrderForm = () => {
             <div className="order-items-header">
             <span className="items-total">Tổng {nonEmptyCount}</span>
             <div className="items-actions">
-              <button className="item-action-btn blue" onClick={addOrderItem} title="Thêm">➕</button>
               <button className="item-action-btn green" title="Làm mới">🔄</button>
               <button className="item-action-btn red" title="Import">📥</button>
               <button className="item-action-btn gray" title="Cài đặt" onClick={() => setShowColumnsSettings(true)}>⚙️</button>
@@ -1298,7 +1793,15 @@ const CreateOrderForm = () => {
           )}
 
           <div className="order-items-table-container">
-            <table className="order-items-table">
+            <table 
+              className="order-items-table"
+              style={{
+                width: columns.reduce((sum, c, i) => 
+                  sum + (c.visible ? (colWidths[i] || 120) : 0), 0) + 'px',
+                minWidth: columns.reduce((sum, c, i) => 
+                  sum + (c.visible ? (colWidths[i] || 120) : 0), 0) + 'px'
+              }}
+            >
               <colgroup>
                 {columns.map((c, i) => (
                   <col key={c.key} style={{ width: (colWidths[i] || 120) + 'px', display: c.visible ? undefined : 'none' }} />
@@ -1314,7 +1817,7 @@ const CreateOrderForm = () => {
                         onDrop={(e) => onDropHeader(e, i)}
                         onDragEnd={onDragEndHeader}
                     >
-                      {c.label} {c.key === 'barcode' || c.key === 'productCode' || c.key === 'productName' ? <i className="sort-icon">🔍</i> : null}
+                      {c.label} {c.key === 'barcode' || c.key === 'productCode' || c.key === 'productName' ? <i className="sort-icon" onClick={handleSearchInOrderItems} style={{cursor: 'pointer'}} title="Tìm kiếm trong đơn hàng">🔍</i> : null}
                       <div className="col-resizer" onMouseDown={startResize} />
                     </th>
                   ))}
@@ -1324,7 +1827,7 @@ const CreateOrderForm = () => {
                 {orderItems.map((item, rowIndex) => (
                   <tr key={item.id}>
                     {columns.map((c, colIndex) => c.visible && (
-                      <td key={c.key} className={['priceAfterCK','totalAfterCK','totalAfterDiscount','stock'].includes(c.key) ? 'total-cell' : ''}>
+                      <td key={c.key} className={['priceAfterCK','totalAfterCK','discountPercentGlobal','totalAfterDiscount','stock'].includes(c.key) ? 'total-cell' : ''}>
                         {(() => {
                           switch (c.key) {
                             case 'barcode':
@@ -1513,6 +2016,12 @@ const CreateOrderForm = () => {
                               return (item.priceAfterCK || 0).toLocaleString();
                             case 'totalAfterCK':
                               return (item.totalAfterCK || 0).toLocaleString();
+                            case 'discountPercentGlobal':
+                              return (
+                                <div className="global-discount-display">
+                                  {orderForm.discountPercent || 0}%
+                                </div>
+                              );
                             case 'totalAfterDiscount':
                               return (item.totalAfterDiscount || 0).toLocaleString();
                             case 'nvSales':
@@ -1579,11 +2088,49 @@ const CreateOrderForm = () => {
                               );
                             case 'stock':
                               return (item.stock || 0).toLocaleString();
+                            case 'tax':
+                              return (
+                                <span className="tax-display">
+                                  {item.tax === 'KCT' ? 'KCT' : `${item.tax || '0'} %`}
+                                </span>
+                              );
+                            case 'priceExcludeVAT':
+                              const basePrice = (parseFloat(item.quantity) || 0) > 0 
+                                ? ((parseFloat(item.totalAfterDiscount) || 0) / (parseFloat(item.quantity) || 1))
+                                : 0;
+                              const taxRate = item.tax === 'KCT' || !item.tax ? 0 : (parseFloat(item.tax) || 0);
+                              const calculatedPriceExVAT = taxRate > 0 
+                                ? basePrice / (1 + (taxRate / 100))
+                                : basePrice;
+                              return (
+                                <span className="price-exclude-vat-display">
+                                  {calculatedPriceExVAT.toLocaleString('vi-VN', {
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 2
+                                  })}
+                                </span>
+                              );
+                            case 'totalExcludeVAT':
+                              const basePriceForTotal = (parseFloat(item.quantity) || 0) > 0 
+                                ? ((parseFloat(item.totalAfterDiscount) || 0) / (parseFloat(item.quantity) || 1))
+                                : 0;
+                              const taxRateForTotal = item.tax === 'KCT' || !item.tax ? 0 : (parseFloat(item.tax) || 0);
+                              const priceExVATForTotal = taxRateForTotal > 0 
+                                ? basePriceForTotal / (1 + (taxRateForTotal / 100))
+                                : basePriceForTotal;
+                              const calculatedTotalExVAT = priceExVATForTotal * (parseFloat(item.quantity) || 0);
+                              return (
+                                <span className="total-exclude-vat-display">
+                                  {calculatedTotalExVAT.toLocaleString('vi-VN', {
+                                    minimumFractionDigits: 0,
+                                    maximumFractionDigits: 2
+                                  })}
+                                </span>
+                              );
                             case 'actions':
                               return (
                                 <div className="item-actions">
                                   <button className="item-btn delete" onClick={() => removeOrderItem(rowIndex)}>🗑️</button>
-                                  <button className="item-btn add" onClick={addOrderItem}>➕</button>
                                 </div>
                               );
                             default:
@@ -1697,7 +2244,7 @@ const CreateOrderForm = () => {
         <button className="modal-btn excel">
           📊 Xuất Excel
         </button>
-        <button className="modal-btn copy">
+        <button className="modal-btn copy" onClick={handleCopyOrder}>
           📋 Copy
         </button>
         <button className="modal-btn cancel">
@@ -1707,6 +2254,97 @@ const CreateOrderForm = () => {
           ✓ Duyệt
         </button>
       </div>
+      
+      {/* Search Modal */}
+      {showSearchModal && (
+        <div className="search-modal-overlay" onClick={() => setShowSearchModal(false)}>
+          <div className="search-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="search-modal-header">
+              <h3 className="search-modal-title">🔍 Tìm kiếm sản phẩm trong đơn hàng</h3>
+              <button className="search-modal-close" onClick={() => setShowSearchModal(false)}>×</button>
+            </div>
+            
+            <div className="search-modal-search-box">
+              <div className="search-input-wrapper">
+                <input
+                  type="text"
+                  className="search-modal-input"
+                  placeholder="Tìm sản phẩm (có thể gõ không dấu): tên, mã, đơn vị..."
+                  value={searchQuery}
+                  onChange={handleSearchQueryChange}
+                  autoFocus
+                />
+                <span className="search-input-icon">🔍</span>
+              </div>
+            </div>
+            
+            <div className="search-modal-body">
+              <div className="search-results-container">
+                {searchResults.length === 0 ? (
+                  <div className="search-results-empty">
+                    {orderItems.filter(item => 
+                      (item.productCode && String(item.productCode).trim()) || 
+                      (item.barcode && String(item.barcode).trim()) || 
+                      (item.productName && String(item.productName).trim())
+                    ).length === 0 ? 'Chưa có sản phẩm nào trong đơn hàng' : 
+                     searchQuery ? 'Không tìm thấy sản phẩm nào' : 'Nhập từ khóa để tìm kiếm'}
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ marginBottom: '10px', fontSize: '12px', color: '#6c757d', textAlign: 'center' }}>
+                      Tìm thấy {searchResults.length} sản phẩm{searchQuery && ` cho "${searchQuery}"`}
+                    </div>
+                    {searchResults.map((result, index) => (
+                      <div 
+                        key={index}
+                        className="search-results-item"
+                        onClick={() => handleSelectSearchResult(result)}
+                      >
+                        <div className="search-results-item-name">{result.productName || result.productCode || result.barcode || 'Không có tên'}</div>
+                        <div className="search-results-item-details">
+                          {result.productCode && (
+                            <div className="search-results-item-detail">
+                              <span>Mã:</span> <span>{result.productCode}</span>
+                            </div>
+                          )}
+                          {result.barcode && (
+                            <div className="search-results-item-detail">
+                              <span>Mã vạch:</span> <span>{result.barcode}</span>
+                            </div>
+                          )}
+                          {result.unit && (
+                            <div className="search-results-item-detail">
+                              <span>ĐVT:</span> <span>{result.unit}</span>
+                            </div>
+                          )}
+                          <div className="search-results-item-detail">
+                            <span>SL:</span> <span>{result.quantity || 0}</span>
+                          </div>
+                          <div className="search-results-item-detail">
+                            <span>Đơn giá:</span> <span>{(result.unitPrice || 0).toLocaleString()} ₫</span>
+                          </div>
+                          <div className="search-results-item-detail">
+                            <span>Thành tiền:</span> <span>{(result.amount || ((result.quantity || 0) * (result.unitPrice || 0))).toLocaleString()} ₫</span>
+                          </div>
+                          <div className="search-results-item-detail">
+                            <span>Vị trí:</span> <span>Dòng {result.rowIndex + 1}</span>
+                          </div>
+                        </div>
+                        {result.description && (
+                          <div className="search-results-item-description" style={{marginTop: '5px', fontSize: '11px', color: '#888'}}>
+                            {result.description}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       <OpenStreetMapModal
         isOpen={showMapModal}
         onClose={() => setShowMapModal(false)}
@@ -1740,6 +2378,75 @@ const CreateOrderForm = () => {
             </li>
           ))}
         </ul>
+      )}
+
+      {/* Orders List Modal */}
+      {showOrdersList && (
+        <div className="search-modal-overlay" onClick={() => setShowOrdersList(false)}>
+          <div className="search-modal-content orders-list-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="search-modal-header">
+              <h3 className="search-modal-title">📋 Danh sách đơn hàng đã lưu</h3>
+              <button className="search-modal-close" onClick={() => setShowOrdersList(false)}>×</button>
+            </div>
+            
+            <div className="search-modal-body">
+              <div className="orders-list-container">
+                {savedOrders.length === 0 ? (
+                  <div className="search-results-empty">
+                    Chưa có đơn hàng nào được lưu
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ marginBottom: '10px', fontSize: '12px', color: '#6c757d', textAlign: 'center' }}>
+                      Tổng cộng {savedOrders.length} đơn hàng
+                    </div>
+                    {savedOrders.map((order, index) => (
+                      <div 
+                        key={order.id}
+                        className="search-results-item"
+                        onClick={() => loadOrderDetail(order.id)}
+                      >
+                        <div className="search-results-item-name">
+                          {order.orderNumber} - {order.customerName || 'Khách hàng không xác định'}
+                        </div>
+                        <div className="search-results-item-details">
+                          <div className="search-results-item-detail">
+                            <span>Ngày:</span> <span>{new Date(order.orderDate).toLocaleDateString('vi-VN')}</span>
+                          </div>
+                          <div className="search-results-item-detail">
+                            <span>SĐT:</span> <span>{order.phone || 'N/A'}</span>
+                          </div>
+                          <div className="search-results-item-detail">
+                            <span>Nhóm KH:</span> <span>{order.customerGroup || 'N/A'}</span>
+                          </div>
+                          <div className="search-results-item-detail">
+                            <span>Tổng KG:</span> <span>{(order.totalKg || 0).toLocaleString()}</span>
+                          </div>
+                          <div className="search-results-item-detail">
+                            <span>Tổng M3:</span> <span>{(order.totalM3 || 0).toLocaleString()}</span>
+                          </div>
+                          <div className="search-results-item-detail">
+                            <span>Thanh toán:</span> <span>{(order.payment || 0).toLocaleString()} ₫</span>
+                          </div>
+                        </div>
+                        {order.address && (
+                          <div className="search-results-item-description" style={{marginTop: '5px', fontSize: '11px', color: '#888'}}>
+                            📍 {order.address}
+                          </div>
+                        )}
+                        {order.notes && (
+                          <div className="search-results-item-description" style={{marginTop: '5px', fontSize: '11px', color: '#888'}}>
+                            📝 {order.notes}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );

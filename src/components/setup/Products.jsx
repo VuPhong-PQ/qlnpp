@@ -100,7 +100,6 @@ const Products = () => {
   const fetchUnits = async () => {
     try {
       const data = await api.get(API_ENDPOINTS.units);
-      console.log('Loaded units:', data);
       setUnits(data);
     } catch (error) {
       console.error('Error fetching units:', error);
@@ -265,8 +264,15 @@ const Products = () => {
 
   const handleInputChange = (e) => {
     const { name, value, type } = e.target;
-    // update value and recalc any dependent fields (conversion -> retailPriceN)
-    const parsed = type === 'number' ? parseFloat(value) || 0 : value;
+    // Special handling for vatPercent - allow null when empty
+    let parsed;
+    if (name === 'vatPercent') {
+      // If text input is empty or only whitespace, set to null
+      // Otherwise try to parse as decimal
+      parsed = value.trim() === '' ? null : (type === 'number' ? parseFloat(value) : value);
+    } else {
+      parsed = type === 'number' ? parseFloat(value) || 0 : value;
+    }
     const newForm = { ...formData, [name]: parsed };
 
     // If a conversion field changed, recalc corresponding retailPrice and weights
@@ -589,7 +595,6 @@ const Products = () => {
           alert('Thêm sản phẩm thành công!');
         }
       } catch (err) {
-        console.warn('Lỗi khi kiểm tra trùng trước khi lưu:', err);
         alert('Có lỗi khi kiểm tra trùng. Vui lòng thử lại.');
         setLoading(false);
         return;
@@ -632,7 +637,6 @@ const Products = () => {
           return;
         }
       } catch (err) {
-        console.warn('Lỗi khi kiểm tra trùng trước khi lưu copy:', err);
         alert('Có lỗi khi kiểm tra dữ liệu trùng. Vui lòng thử lại.');
         return;
       }
@@ -718,35 +722,10 @@ const Products = () => {
   };
 
   const handleEdit = (item) => {
-    console.log('=== EDITING ITEM DEBUG ===');
-    console.log('Original item:', item);
-    console.log('item.category:', item.category);
-    console.log('item.baseUnit:', item.baseUnit);
-    console.log('item.unit2 VALUE:', `"${item.unit2}"`);
-    console.log('item.unit2 type:', typeof item.unit2);
-    console.log('item.unit2 === undefined:', item.unit2 === undefined);
-    console.log('item.unit2 === null:', item.unit2 === null);
-    console.log('item.defaultUnit:', item.defaultUnit);
-    console.log('Available categories:', categories);
-    console.log('Available units:', units);
-    console.log('Units with "Lốc":', units.filter(u => u.name.includes('Lốc') || u.name.includes('lốc')));
-    
-    // Check if unit2 value exists in units list
-    if (item.unit2) {
-      const matchingUnit = units.find(u => u.name === item.unit2);
-      console.log(`Unit2 "${item.unit2}" exists in units list:`, !!matchingUnit);
-      if (matchingUnit) {
-        console.log('Matching unit:', matchingUnit);
-      }
-    }
-    
-    console.log('==========================');
-    
     setEditingItem(item);
     
     // Use exact original data without any modifications
     const formDataCopy = {...item};
-    console.log('Setting formData.unit2 to:', `"${formDataCopy.unit2}"`);
     
     setFormData(formDataCopy);
     setShowModal(true);
@@ -795,7 +774,7 @@ const Products = () => {
           await api.delete(API_ENDPOINTS.products, p.id);
           deleted += 1;
         } catch (err) {
-          console.warn(`Lỗi khi xóa sản phẩm id=${p.id}`, err);
+          // Silent fail - continue with other products
         }
       }
 
@@ -906,21 +885,14 @@ const Products = () => {
         setGlobalOverwriteChoice,
         setGlobalIdenticalChoice
       } = globalChoices;
-      console.log('=== IMPORT DEBUG START ===');
-      console.log('Raw import data:', data);
-      console.log('Data keys:', Object.keys(data));
-      console.log('unit2 from Excel:', data.unit2);
-      console.log('============================');
       
       // AUTO-CREATE MISSING UNITS AND CATEGORIES FIRST (before any product operations)
       
       // Auto-create missing units
       const unitFields = ['baseUnit', 'unit1', 'unit2', 'unit3', 'unit4', 'defaultUnit'];
-      console.log('Processing unit fields:', unitFields);
       
       for (const field of unitFields) {
         if (data[field]) {
-          console.log(`Processing ${field}: "${data[field]}"`);
           try {
             const unitsResponse = await api.get(API_ENDPOINTS.units);
             const unitName = String(data[field]).trim();
@@ -941,31 +913,21 @@ const Products = () => {
                 note: 'Tự động tạo khi import sản phẩm',
                 status: 'active'
               };
-
-              console.log(`🔍 Creating new unit:`, newUnit);
-              console.log(`🔍 Input unitName: "${unitName}"`);
-              console.log(`🔍 Generated unitCode: "${unitCode}"`);
               
               const createdUnit = await api.post(API_ENDPOINTS.units, newUnit);
-              console.log(`✓ API Response - Created unit:`, createdUnit);
-              console.log(`✓ API returned unit name: "${createdUnit.name}"`);
-              console.log(`✓ API returned unit code: "${createdUnit.code}"`);
               
               // CRITICAL FIX: Refresh units list sau khi tạo mới
               await fetchUnits();
-              console.log('✓ Refreshed units list after creating new unit');
               
               // CRITICAL: Always use the exact name, not code
               const finalUnitName = createdUnit.name || unitName;
               data[field] = finalUnitName;
-              console.log(`✓ Final ${field} value set to: "${finalUnitName}"`);
             } else {
               // Use existing unit's exact name to ensure consistency
               data[field] = existingUnit.name;
-              console.log(`Using existing ${field}: "${data[field]}"`);
             }
           } catch (error) {
-            console.warn(`Lỗi khi kiểm tra/tạo unit '${data[field]}':`, error);
+            // Skip unit creation errors
           }
         }
       }
@@ -996,13 +958,12 @@ const Products = () => {
             };
 
             await api.post(API_ENDPOINTS.productCategories, newCategory);
-            console.log(`✓ Đã tạo loại hàng mới: ${data.category} (${categoryCode})`);
             
             // CRITICAL FIX: Refresh categories list sau khi tạo mới
             await fetchCategories();
           }
         } catch (error) {
-          console.warn('Lỗi khi kiểm tra/tạo category:', error);
+          // Skip category creation errors
         }
       }
       
@@ -1044,18 +1005,12 @@ const Products = () => {
         const totalFieldsToCompare = importantFields.filter(field => String(data[field] || '').trim() !== '').length;
         const isCompletelyIdentical = identicalCount === totalFieldsToCompare && differentFields.length === 0;
         
-        console.log(`🔍 Conflict Analysis for ${data.code}:`);
-        console.log(`- Identical fields: ${identicalCount}/${totalFieldsToCompare}`);
-        console.log(`- Different fields: [${differentFields.join(', ')}]`);
-        console.log(`- Is completely identical: ${isCompletelyIdentical}`);
-        
         if (isCompletelyIdentical) {
           // CASE 2: Hoàn toàn trùng khớp - hỏi bỏ qua hay ghi đè
           let userChoice;
           
           if (globalIdenticalChoice) {
             userChoice = globalIdenticalChoice === 'overwrite';
-            console.log(`🔄 Sử dụng lựa chọn toàn cục (identical): ${globalIdenticalChoice}`);
           } else {
             // Tạo custom dialog với 4 options
             const dialogResult = await new Promise((resolve) => {
@@ -1097,7 +1052,6 @@ const Products = () => {
           }
           
           if (!userChoice) {
-            console.log(`⏭️ Bỏ qua sản phẩm trùng lặp: ${data.code}`);
             return { action: 'skipped', product: existing, reason: 'Người dùng chọn bỏ qua sản phẩm trùng lặp' };
           }
         } else {
@@ -1106,7 +1060,6 @@ const Products = () => {
           
           if (globalOverwriteChoice) {
             userChoice = globalOverwriteChoice === 'overwrite';
-            console.log(`🔄 Sử dụng lựa chọn toàn cục (overwrite): ${globalOverwriteChoice}`);
           } else {
             const conflictInfo = conflictFields.length > 0 ? `trùng ${conflictFields.join(', ')}` : 'có thông tin tương tự';
             
@@ -1152,13 +1105,11 @@ const Products = () => {
           }
           
           if (!userChoice) {
-            console.log(`⏭️ Bỏ qua ghi đè sản phẩm: ${data.code}`);
             return { action: 'skipped', product: existing, reason: 'Người dùng từ chối ghi đè sản phẩm có conflict' };
           }
         }
         
         // Thực hiện update nếu user đồng ý
-        console.log(`⚠️ Cập nhật sản phẩm tồn tại (${conflictFields.join(', ')}): ${data.code || data.name}`);
         
         try {
           // Merge: giữ các trường hiện có, ghi đè bằng data nếu data có giá trị
@@ -1169,11 +1120,8 @@ const Products = () => {
               merged[k] = v;
             }
           });
-
-          console.log('About to PUT to API:', JSON.stringify(merged, null, 2));
           
           const updatedProduct = await api.put(API_ENDPOINTS.products, existing.id, merged);
-          console.log('Updated product from API response:', updatedProduct);
           
           return { action: 'updated', product: updatedProduct };
         } catch (err) {
@@ -1182,13 +1130,8 @@ const Products = () => {
       }
 
       // CASE 3: Sản phẩm hoàn toàn mới - tạo mới bình thường
-      console.log(`✨ Tạo sản phẩm mới: ${data.code || data.name}`);
-      console.log('About to POST to API:', JSON.stringify(data, null, 2));
       
       const newProduct = await api.post(API_ENDPOINTS.products, data);
-      console.log(`✅ Đã tạo sản phẩm mới thành công: ${data.code || data.name}`);
-      console.log('Created product from API response:', newProduct);
-      console.log('=== IMPORT DEBUG END ===');
       
       return { action: 'created', product: newProduct };
     },
@@ -1458,7 +1401,7 @@ const Products = () => {
         return [mergedVisible, correctedOrder];
       }
     } catch (err) {
-      console.warn('Error reading product cols from localStorage', err);
+      // Silent fail - use defaults
     }
     return [defaultProductVisible, defaultProductOrder];
   };
@@ -2437,12 +2380,11 @@ const Products = () => {
                 <div>
                   <label style={{ display: 'block', marginBottom: '6px', fontSize: '13px', fontWeight: '500', color: '#333' }}>VAT %</label>
                   <input
-                    type="number"
-                    step="0.01"
+                    type="text"
                     name="vatPercent"
-                    value={formData.vatPercent}
+                    value={formData.vatPercent || ''}
                     onChange={handleInputChange}
-                    placeholder="0"
+                    placeholder="Nhập VAT % hoặc để trống"
                     style={{ width: '100%', padding: '8px', fontSize: '13px', border: '1px solid #d9d9d9', borderRadius: '4px' }}
                   />
                 </div>

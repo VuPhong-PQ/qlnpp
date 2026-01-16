@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { API_BASE_URL } from '../../../config/api';
 import '../BusinessPage.css';
 
 const CreateOrder = () => {
@@ -21,9 +22,12 @@ const CreateOrder = () => {
   const [selectedEndDate, setSelectedEndDate] = useState(new Date(2026, 0, 2));
   const datePickerRef = useRef(null);
 
-  const [orders, setOrders] = useState([
-    // Sample data - empty for now as shown in the image
-  ]);
+  const [orders, setOrders] = useState([]);
+  const [filteredOrders, setFilteredOrders] = useState([]);
+  const [loading, setLoading] = useState(false);
+  const [customers, setCustomers] = useState([]);
+  const [customerGroups, setCustomerGroups] = useState([]);
+  const [users, setUsers] = useState([]);
 
   const pageOptions = [10, 20, 50, 100, 200, 500, 1000, 5000, 'All'];
   const [pageSize, setPageSize] = useState(10);
@@ -31,12 +35,12 @@ const CreateOrder = () => {
 
   useEffect(() => {
     setCurrentPage(1);
-  }, [pageSize, orders.length]);
+  }, [pageSize, filteredOrders.length]);
 
-  const totalPages = pageSize === 'All' ? 1 : Math.max(1, Math.ceil(orders.length / pageSize));
+  const totalPages = pageSize === 'All' ? 1 : Math.max(1, Math.ceil(filteredOrders.length / pageSize));
   const paginatedOrders = pageSize === 'All'
-    ? orders
-    : orders.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+    ? filteredOrders
+    : filteredOrders.slice((currentPage - 1) * pageSize, currentPage * pageSize);
 
   // Close date picker when clicking outside
   useEffect(() => {
@@ -63,9 +67,137 @@ const CreateOrder = () => {
     };
   }, [showDatePicker]);
 
+  // Fetch orders from database
+  const fetchOrders = async () => {
+    setLoading(true);
+    try {
+      const response = await fetch(`${API_BASE_URL}/Orders`);
+      if (response.ok) {
+        const ordersData = await response.json();
+        setOrders(ordersData);
+        setFilteredOrders(ordersData);
+      } else {
+        console.error('Failed to fetch orders:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error fetching orders:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  // Fetch customers for dropdown
+  const fetchCustomers = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/Customers`);
+      if (response.ok) {
+        const customersData = await response.json();
+        setCustomers(customersData);
+      }
+    } catch (error) {
+      console.error('Error fetching customers:', error);
+    }
+  };
+
+  // Fetch customer groups for dropdown
+  const fetchCustomerGroups = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/CustomerGroups`);
+      if (response.ok) {
+        const groupsData = await response.json();
+        setCustomerGroups(groupsData);
+      }
+    } catch (error) {
+      console.error('Error fetching customer groups:', error);
+    }
+  };
+
+  // Fetch users for dropdown
+  const fetchUsers = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/Users`);
+      if (response.ok) {
+        const usersData = await response.json();
+        setUsers(usersData);
+      }
+    } catch (error) {
+      console.error('Error fetching users:', error);
+    }
+  };
+
+  // Load initial data
+  useEffect(() => {
+    fetchOrders();
+    fetchCustomers();
+    fetchCustomerGroups();
+    fetchUsers();
+  }, []);
+
   const handleSearch = () => {
     console.log('Tìm kiếm với dữ liệu:', searchData);
-    // Add search logic here
+    
+    let filtered = [...orders];
+    
+    // Filter by order number
+    if (searchData.orderNumber.trim()) {
+      filtered = filtered.filter(order => 
+        order.orderNumber && order.orderNumber.toLowerCase().includes(searchData.orderNumber.toLowerCase())
+      );
+    }
+    
+    // Filter by date range
+    if (searchData.dateRange && searchData.dateRange.includes(' - ')) {
+      const [startStr, endStr] = searchData.dateRange.split(' - ');
+      const startDate = parseDate(startStr.trim());
+      const endDate = parseDate(endStr.trim());
+      
+      if (startDate && endDate) {
+        endDate.setHours(23, 59, 59, 999); // End of day
+        filtered = filtered.filter(order => {
+          if (!order.orderDate) return false;
+          const orderDate = new Date(order.orderDate);
+          return orderDate >= startDate && orderDate <= endDate;
+        });
+      }
+    }
+    
+    // Filter by customer group
+    if (searchData.customerGroup && searchData.customerGroup !== 'Nhóm khách hàng') {
+      filtered = filtered.filter(order => 
+        order.customerGroup && order.customerGroup === searchData.customerGroup
+      );
+    }
+    
+    // Filter by customer
+    if (searchData.customer && searchData.customer !== 'Khách hàng') {
+      filtered = filtered.filter(order => 
+        order.customer && order.customer === searchData.customer
+      );
+    }
+    
+    // Filter by created by
+    if (searchData.createdBy && searchData.createdBy.trim()) {
+      filtered = filtered.filter(order => 
+        order.createdBy && order.createdBy.toLowerCase().includes(searchData.createdBy.toLowerCase())
+      );
+    }
+    
+    setFilteredOrders(filtered);
+  };
+
+  // Helper function to parse date string
+  const parseDate = (dateStr) => {
+    if (!dateStr) return null;
+    const parts = dateStr.split('/');
+    if (parts.length !== 3) return null;
+    return new Date(parseInt(parts[2]), parseInt(parts[1]) - 1, parseInt(parts[0]));
+  };
+
+  // Helper function to get customer group name from code
+  const getCustomerGroupName = (code) => {
+    if (!code) return '-';
+    const group = customerGroups.find(g => g.code === code);
+    return group ? group.name : code; // fallback to code if not found
   };
 
   const handleInputChange = (field, value) => {
@@ -276,9 +408,11 @@ const CreateOrder = () => {
                 className="form-select"
               >
                 <option value="">Nhóm khách hàng</option>
-                <option value="Khách lẻ">Khách lẻ</option>
-                <option value="Khách sỉ">Khách sỉ</option>
-                <option value="Khách VIP">Khách VIP</option>
+                {customerGroups.map(group => (
+                  <option key={group.id} value={group.code}>
+                    {group.name}
+                  </option>
+                ))}
               </select>
             </div>
             
@@ -307,9 +441,11 @@ const CreateOrder = () => {
                 className="form-select"
               >
                 <option value="">Khách hàng</option>
-                <option value="Nguyễn Văn A">Nguyễn Văn A</option>
-                <option value="Công ty ABC">Công ty ABC</option>
-                <option value="Trần Thị B">Trần Thị B</option>
+                {customers.map(customer => (
+                  <option key={customer.id || customer.code} value={customer.code || customer.id}>
+                    {customer.name}{customer.phone ? ` (${customer.phone})` : ''}
+                  </option>
+                ))}
               </select>
             </div>
             
@@ -363,7 +499,7 @@ const CreateOrder = () => {
       {/* Toolbar row: total count on left, action buttons on right */}
       <div className="toolbar-row">
         <div className="left-info">
-          <span className="total-count">Tổng {orders.length}</span>
+          <span className="total-count">Tổng {filteredOrders.length}</span>
         </div>
 
 {/* Action Buttons directly in toolbar-row */}
@@ -423,47 +559,64 @@ const CreateOrder = () => {
             </tr>
           </thead>
           <tbody>
-            {orders.length === 0 ? (
+            {loading ? (
+              <tr>
+                <td colSpan="27" className="no-data">
+                  <div className="empty-state">
+                    <div className="empty-icon">⏳</div>
+                    <div className="empty-text">Đang tải dữ liệu...</div>
+                  </div>
+                </td>
+              </tr>
+            ) : filteredOrders.length === 0 ? (
               <tr>
                 <td colSpan="27" className="no-data">
                   <div className="empty-state">
                     <div className="empty-icon">📄</div>
-                    <div className="empty-text">Trống</div>
+                    <div className="empty-text">
+                      {orders.length === 0 ? 'Chưa có đơn hàng nào' : 'Không tìm thấy đơn hàng phù hợp'}
+                    </div>
                   </div>
                 </td>
               </tr>
             ) : (
               paginatedOrders.map((order, index) => (
-                <tr key={index}>
-                  <td>{order.createdDate}</td>
-                  <td>{order.orderNumber}</td>
-                  <td>{order.customer || '-'}</td>
-                  <td>{order.totalAfterDiscount != null ? order.totalAfterDiscount : order.total || '-'}</td>
-                  <td>{order.status || '-'}</td>
+                <tr key={order.id || index}>
+                  <td>{order.orderDate ? new Date(order.orderDate).toLocaleDateString('vi-VN') : '-'}</td>
+                  <td>{order.orderNumber || '-'}</td>
+                  <td>{order.customerName || '-'}</td>
+                  <td>{order.payment ? order.payment.toLocaleString() + ' ₫' : '-'}</td>
+                  <td>{order.status || 'Chưa duyệt'}</td>
                   <td>{order.notes || '-'}</td>
                   <td>{order.createdBy || '-'}</td>
                   <td>{order.productType || '-'}</td>
-                  <td>{order.taxRate != null ? order.taxRate : '-'}</td>
+                  <td>{order.taxRate != null ? order.taxRate + '%' : '-'}</td>
                   <td>{order.salesStaff || '-'}</td>
                   <td>{order.mergeFrom || '-'}</td>
                   <td>{order.mergeTo || '-'}</td>
-                  <td>{order.customerGroup || '-'}</td>
+                  <td>{getCustomerGroupName(order.customerGroup)}</td>
                   <td>{order.salesSchedule || '-'}</td>
-                  <td>{order.total != null ? order.total : '-'}</td>
-                  <td>{order.totalKg != null ? order.totalKg : '-'}</td>
-                  <td>{order.totalM3 != null ? order.totalM3 : '-'}</td>
+                  <td>{order.payment ? order.payment.toLocaleString() + ' ₫' : '-'}</td>
+                  <td>{order.totalKg != null ? order.totalKg.toLocaleString() : '-'}</td>
+                  <td>{order.totalM3 != null ? order.totalM3.toLocaleString() : '-'}</td>
                   <td>{order.printOrder || '-'}</td>
                   <td>{order.address || '-'}</td>
-                  <td>{order.paid ? 'Có' : (order.paid === false ? 'Chưa' : '-')}</td>
+                  <td>{order.paid ? 'Đã thanh toán' : 'Chưa thanh toán'}</td>
                   <td>{order.deliveryStaff || '-'}</td>
                   <td>{order.driver || '-'}</td>
                   <td>{order.vehicle || '-'}</td>
-                  <td>{order.deliverySuccessful ? 'Có' : (order.deliverySuccessful === false ? 'Chưa' : '-')}</td>
-                  <td>{order.vatExport ? 'Có' : (order.vatExport === false ? 'Chưa' : '-')}</td>
-                  <td>{order.location || order.position || '-'}</td>
+                  <td>{order.deliverySuccessful ? 'Có' : 'Chưa'}</td>
+                  <td>{order.vatExport ? 'Có' : 'Chưa'}</td>
+                  <td>{order.vehicle || '-'}</td>
                   <td>
                     <div className="action-cell">
-                      <button className="edit-btn" title="Sửa">✏️</button>
+                      <button 
+                        className="edit-btn" 
+                        title="Sửa"
+                        onClick={() => navigate(`/business/sales/create-order-form?id=${order.id}`)}
+                      >
+                        ✏️
+                      </button>
                       <button className="delete-btn" title="Xóa">🗑️</button>
                     </div>
                   </td>

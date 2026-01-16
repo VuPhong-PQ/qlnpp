@@ -9,7 +9,7 @@ namespace QlnppApi.Models
         public string Name { get; set; } = string.Empty;
         public string VatName { get; set; } = string.Empty;
         public string Description { get; set; } = string.Empty;
-        public decimal VatPercent { get; set; }
+        public decimal? VatPercent { get; set; }
         public string VatText { get; set; } = string.Empty;
         public double ShelfLife { get; set; }
         

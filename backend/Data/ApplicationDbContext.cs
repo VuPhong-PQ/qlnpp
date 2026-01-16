@@ -76,13 +76,90 @@ namespace QlnppApi.Data
                 .Property(o => o.TotalAfterDiscount)
                 .HasPrecision(18, 2);
 
+            // Order precision
+            modelBuilder.Entity<Order>()
+                .Property(o => o.DiscountPercent)
+                .HasPrecision(5, 2);
+
+            modelBuilder.Entity<Order>()
+                .Property(o => o.DiscountAmount)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Order>()
+                .Property(o => o.TotalKg)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<Order>()
+                .Property(o => o.TotalM3)
+                .HasPrecision(18, 3);
+
+            modelBuilder.Entity<Order>()
+                .Property(o => o.Payment)
+                .HasPrecision(18, 2);
+
             // OrderItem precision
+            modelBuilder.Entity<OrderItem>()
+                .Property(i => i.Quantity)
+                .HasPrecision(18, 3);
+
             modelBuilder.Entity<OrderItem>()
                 .Property(i => i.UnitPrice)
                 .HasPrecision(18, 2);
 
             modelBuilder.Entity<OrderItem>()
+                .Property(i => i.DiscountPercent)
+                .HasPrecision(5, 2);
+
+            modelBuilder.Entity<OrderItem>()
+                .Property(i => i.PriceAfterCK)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<OrderItem>()
+                .Property(i => i.TotalAfterCK)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<OrderItem>()
                 .Property(i => i.TotalAfterDiscount)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<OrderItem>()
+                .Property(i => i.Conversion)
+                .HasPrecision(18, 3);
+
+            modelBuilder.Entity<OrderItem>()
+                .Property(i => i.Amount)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<OrderItem>()
+                .Property(i => i.Total)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<OrderItem>()
+                .Property(i => i.Weight)
+                .HasPrecision(18, 3);
+
+            modelBuilder.Entity<OrderItem>()
+                .Property(i => i.Volume)
+                .HasPrecision(18, 3);
+
+            modelBuilder.Entity<OrderItem>()
+                .Property(i => i.BaseWeight)
+                .HasPrecision(18, 3);
+
+            modelBuilder.Entity<OrderItem>()
+                .Property(i => i.BaseVolume)
+                .HasPrecision(18, 3);
+
+            modelBuilder.Entity<OrderItem>()
+                .Property(i => i.Stock)
+                .HasPrecision(18, 3);
+
+            modelBuilder.Entity<OrderItem>()
+                .Property(i => i.PriceExcludeVAT)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<OrderItem>()
+                .Property(i => i.TotalExcludeVAT)
                 .HasPrecision(18, 2);
 
             modelBuilder.Entity<Supplier>()

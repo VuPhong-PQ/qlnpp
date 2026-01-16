@@ -1,5 +1,5 @@
 // API Base URL
-const API_BASE_URL = 'http://localhost:5238/api';
+export const API_BASE_URL = 'http://localhost:5238/api';
 
 // API Endpoints
 export const API_ENDPOINTS = {
@@ -49,9 +49,21 @@ export const api = {
         },
         body: JSON.stringify(data),
       });
+      
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        let errorMessage = `HTTP error! status: ${response.status}`;
+        try {
+          const errorData = await response.text();
+          if (errorData) {
+            console.error('Server error response:', errorData);
+            errorMessage = errorData;
+          }
+        } catch (e) {
+          // If we can't parse error response, use status
+        }
+        throw new Error(errorMessage);
       }
+      
       return await response.json();
     } catch (error) {
       console.error('API POST Error:', error);

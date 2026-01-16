@@ -74,19 +74,19 @@ const Customers = () => {
     }
   };
 
-  // Helper to derive salesSchedule from customer group note (Ghi chú)
+  // Helper to derive salesSchedule from customer group salesSchedule field
   const applySalesSchedule = (customersList, groupsList) => {
     if (!customersList || customersList.length === 0) return customersList || [];
     if (!groupsList || groupsList.length === 0) return customersList;
     
-    // mapping customer groups to sales schedule notes
+    // mapping customer groups to their salesSchedule field
     
     const map = {};
     groupsList.forEach(g => {
       const key = g.code || g.id || g.name;
-      const note = g.note || g.ghiChu || g.description || '';
+      const schedule = g.salesSchedule || '';
       if (key) {
-        map[key] = note;
+        map[key] = schedule;
       }
     });
     
@@ -132,11 +132,11 @@ const Customers = () => {
     const { name, value } = e.target;
     if (name === 'customerGroup') {
       const grp = customerGroups.find(g => g.code === value || g.id === value || g.name === value);
-      const note = grp?.note || grp?.ghiChu || grp?.description || '';
+      const schedule = grp?.salesSchedule || '';
       setFormData({
         ...formData,
         customerGroup: value,
-        salesSchedule: note
+        salesSchedule: schedule
       });
       return;
     }
