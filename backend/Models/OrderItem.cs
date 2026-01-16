@@ -14,6 +14,7 @@ namespace QlnppApi.Models
         public string ProductCode { get; set; } = string.Empty;
         public string Barcode { get; set; } = string.Empty;
         public string ProductName { get; set; } = string.Empty;
+        public string ProductType { get; set; } = string.Empty;
         public string Warehouse { get; set; } = string.Empty;
         public string Unit { get; set; } = string.Empty;
 

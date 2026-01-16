@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import '../BusinessPage.css';
 import { API_ENDPOINTS, API_BASE_URL, api } from '../../../config/api';
 import OpenStreetMapModal from '../../OpenStreetMapModal';
 
 const CreateOrderForm = () => {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const containerRef = useRef(null);
 
   // Vietnamese text normalization utility
@@ -154,7 +155,8 @@ const CreateOrderForm = () => {
     totalM3: 0,
     payment: 0,
     accountFund: '',
-    notes: ''
+    notes: '',
+    productType: ''
   });
 
   const [orderItems, setOrderItems] = useState([
@@ -165,6 +167,7 @@ const CreateOrderForm = () => {
   const [customers, setCustomers] = useState([]);
   const [customerGroups, setCustomerGroups] = useState([]);
   const [products, setProducts] = useState([]);
+  const [productCategories, setProductCategories] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
   const [units, setUnits] = useState([]);
   const [exportTypes, setExportTypes] = useState([]);
@@ -194,6 +197,7 @@ const CreateOrderForm = () => {
   const [searchResults, setSearchResults] = useState([]);
   const [savedOrders, setSavedOrders] = useState([]); // Danh sách orders từ DB
   const [showOrdersList, setShowOrdersList] = useState(false); // Hiển thị danh sách orders
+  const [editingOrderId, setEditingOrderId] = useState(null); // ID của order đang sửa
   const isCustomerSelected = Boolean(orderForm.customer);
   const initialColWidths = [120, 120, 220, 120, 80, 90, 110, 100, 80, 120, 120, 90, 120, 100, 180, 140, 90, 90, 100, 100, 120, 100, 130, 120];
   const [colWidths, setColWidths] = useState(initialColWidths);
@@ -204,6 +208,7 @@ const CreateOrderForm = () => {
     { key: 'barcode', label: 'Mã vạch', visible: true },
     { key: 'productCode', label: 'Mã hàng', visible: true },
     { key: 'productName', label: 'Tên hàng', visible: true },
+    { key: 'productType', label: 'Loại hàng', visible: true },
     { key: 'warehouse', label: 'Kho hàng', visible: true },
     { key: 'unit', label: 'ĐVT', visible: true },
     { key: 'quantity', label: 'Số lượng', visible: true },
@@ -422,6 +427,7 @@ const CreateOrderForm = () => {
             productCode: item.productCode || '',
             barcode: item.barcode || '',
             productName: item.productName || '',
+            productType: item.productType || '',
             warehouse: item.warehouse || '',
             unit: item.unit || '',
             quantity: item.quantity || 0,
@@ -447,13 +453,15 @@ const CreateOrderForm = () => {
           })));
         }
         
+        // Set editing mode with order ID
+        setEditingOrderId(orderId);
+        
         // Update customer search if customer is selected
         if (data.order.customerName) {
           setCustomerSearch(`${data.order.customerName}${data.order.phone ? ' (' + data.order.phone + ')' : ''}`);
         }
         
         setShowOrdersList(false);
-        alert('Đã tải đơn hàng thành công!');
       } else {
         alert('Không thể tải đơn hàng: ' + response.statusText);
       }
@@ -466,6 +474,32 @@ const CreateOrderForm = () => {
   // Load orders when component mounts
   useEffect(() => {
     fetchOrders();
+  }, []);
+
+  // Load order from URL param if present (edit mode)
+  useEffect(() => {
+    const orderId = searchParams.get('id');
+    if (orderId) {
+      loadOrderDetail(parseInt(orderId));
+    }
+  }, [searchParams]);
+
+  // Fetch product categories
+  const fetchProductCategories = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/ProductCategories`);
+      if (response.ok) {
+        const data = await response.json();
+        setProductCategories(data);
+      }
+    } catch (error) {
+      console.error('Error fetching product categories:', error);
+    }
+  };
+
+  // Load initial data
+  useEffect(() => {
+    fetchProductCategories();
   }, []);
 
   // Drag state for column reordering
@@ -541,6 +575,7 @@ const CreateOrderForm = () => {
       productCode: '',
       barcode: '',
       productName: '',
+      productType: '',
       warehouse: '',
       unit: '',
       quantity: 0,
@@ -570,6 +605,45 @@ const CreateOrderForm = () => {
     if (orderItems.length > 1) {
       setOrderItems(prev => prev.filter((_, i) => i !== index));
     }
+  };
+
+  // Add a new order item after a specific index
+  const addOrderItemAfter = (index) => {
+    const newItem = {
+      id: Date.now(),
+      productCode: '',
+      barcode: '',
+      productName: '',
+      productType: '',
+      warehouse: '',
+      unit: '',
+      quantity: 0,
+      unitPrice: 0,
+      discountPercent: 0,
+      priceAfterCK: 0,
+      totalAfterCK: 0,
+      totalAfterDiscount: 0,
+      nvSales: '',
+      description: '',
+      conversion: 1,
+      amount: 0,
+      total: 0,
+      weight: 0,
+      volume: 0,
+      baseWeight: 0,
+      baseVolume: 0,
+      exportType: 'xuất bán',
+      stock: 0,
+      tax: 'KCT',
+      priceExcludeVAT: 0,
+      totalExcludeVAT: 0
+    };
+    
+    setOrderItems(prev => {
+      const newItems = [...prev];
+      newItems.splice(index + 1, 0, newItem);
+      return newItems;
+    });
   };
 
   const calculateTotals = () => {
@@ -695,35 +769,7 @@ const CreateOrderForm = () => {
       // Commit serial from order number so next generated will be higher
       try { commitSerialFromOrderNumber(orderForm.orderNumber); } catch(e) {}
       
-      // Prepare order data with proper field mapping for backend
-      const orderData = {
-        OrderDate: orderForm.orderDate || new Date().toISOString().split('T')[0],
-        OrderNumber: String(orderForm.orderNumber || ''),
-        Customer: String(orderForm.customer || ''),
-        CustomerName: String(orderForm.customerName || ''),
-        Phone: String(orderForm.phone || ''),
-        CreatedBy: String(orderForm.createdBy || ''),
-        Address: String(orderForm.address || ''),
-        Vehicle: String(orderForm.vehicle || ''),
-        CustomerGroup: String(orderForm.customerGroup || ''),
-        SalesSchedule: String(orderForm.salesSchedule || ''),
-        PrintOrder: Number(orderForm.printOrder || 0),
-        DeliveryVehicle: String(orderForm.deliveryVehicle || ''),
-        PriceType: String(orderForm.priceType || 'retail'),
-        ActiveTab: String(orderForm.activeTab || 'products'),
-        DiscountPercent: Number(orderForm.discountPercent || 0),
-        DiscountAmount: Number(orderForm.discountAmount || 0),
-        DiscountNote: String(orderForm.discountNote || ''),
-        TotalKg: Number(orderForm.totalKg || 0),
-        TotalM3: Number(orderForm.totalM3 || 0),
-        Payment: Number(orderForm.payment || 0),
-        AccountFund: String(orderForm.accountFund || ''),
-        Notes: String(orderForm.notes || ''),
-        TotalAmount: calculateTotals(),
-        TotalAfterDiscount: calculateTotals()
-      };
-      
-      // Filter out empty order items and map to backend format
+// Filter out empty order items and map to backend format
       const validOrderItems = orderItems.filter(item => {
         const hasText = (item.productCode && String(item.productCode).trim()) || 
                        (item.barcode && String(item.barcode).trim()) || 
@@ -735,6 +781,7 @@ const CreateOrderForm = () => {
         ProductCode: String(item.productCode || ''),
         Barcode: String(item.barcode || ''),
         ProductName: String(item.productName || ''),
+        ProductType: String(item.productType || ''),
         Warehouse: String(item.warehouse || ''),
         Unit: String(item.unit || ''),
         Quantity: Number(item.quantity || 0),
@@ -758,25 +805,77 @@ const CreateOrderForm = () => {
         PriceExcludeVAT: Number(item.priceExcludeVAT || 0),
         TotalExcludeVAT: Number(item.totalExcludeVAT || 0)
       }));
+
+      // Auto-set order ProductType based on items
+      const orderProductTypes = validOrderItems.map(item => item.ProductType).filter(pt => pt);
+      const mostCommonProductType = orderProductTypes.length > 0 ? orderProductTypes[0] : '';
       
-      // Prepare request payload with backend expected structure
-      const requestPayload = {
-        Order: orderData,
-        OrderItems: validOrderItems
+      // Prepare order data with proper field mapping for backend (after validOrderItems)
+      const orderData = {
+        OrderDate: orderForm.orderDate || new Date().toISOString().split('T')[0],
+        OrderNumber: String(orderForm.orderNumber || ''),
+        Customer: String(orderForm.customer || ''),
+        CustomerName: String(orderForm.customerName || ''),
+        Phone: String(orderForm.phone || ''),
+        CreatedBy: String(orderForm.createdBy || ''),
+        Address: String(orderForm.address || ''),
+        Vehicle: String(orderForm.vehicle || ''),
+        CustomerGroup: String(orderForm.customerGroup || ''),
+        SalesSchedule: String(orderForm.salesSchedule || ''),
+        PrintOrder: Number(orderForm.printOrder || 0),
+        DeliveryVehicle: String(orderForm.deliveryVehicle || ''),
+        PriceType: String(orderForm.priceType || 'retail'),
+        ActiveTab: String(orderForm.activeTab || 'products'),
+        DiscountPercent: Number(orderForm.discountPercent || 0),
+        DiscountAmount: Number(orderForm.discountAmount || 0),
+        DiscountNote: String(orderForm.discountNote || ''),
+        TotalKg: Number(orderForm.totalKg || 0),
+        TotalM3: Number(orderForm.totalM3 || 0),
+        Payment: Number(orderForm.payment || 0),
+        AccountFund: String(orderForm.accountFund || ''),
+        Notes: String(orderForm.notes || ''),
+        ProductType: mostCommonProductType,
+        TotalAmount: calculateTotals(),
+        TotalAfterDiscount: calculateTotals()
       };
       
-      console.log('Sending data to API:', requestPayload);
-      console.log('Order data:', orderData);
-      console.log('Valid order items:', validOrderItems);
+      let response;
       
-      // Call API to create order with items
-      const response = await api.post(`${API_ENDPOINTS.orders}/create-with-items`, requestPayload);
-      
-      if (response) {
-        alert('Đơn hàng đã được lưu thành công!');
-        // Optionally reset form or navigate away
-        // handleCreateNew(); // Uncomment to reset form after save
-        fetchOrders(); // Refresh orders list after successful save
+      if (editingOrderId) {
+        // Update existing order - include ID in orderData
+        const updatePayload = {
+          Order: { ...orderData, Id: editingOrderId },
+          OrderItems: validOrderItems
+        };
+        
+        response = await fetch(`${API_BASE_URL}/Orders/${editingOrderId}/update-with-items`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(updatePayload)
+        });
+        
+        if (response.ok) {
+          alert('Đơn hàng đã được cập nhật thành công!');
+          fetchOrders(); // Refresh orders list
+        } else {
+          const errorData = await response.text();
+          throw new Error(`Lỗi cập nhật: ${errorData}`);
+        }
+      } else {
+        // Create new order
+        const createPayload = {
+          Order: orderData,
+          OrderItems: validOrderItems
+        };
+        
+        response = await api.post(`${API_ENDPOINTS.orders}/create-with-items`, createPayload);
+        
+        if (response) {
+          alert('Đơn hàng đã được tạo thành công!');
+          fetchOrders(); // Refresh orders list after successful save
+        }
       }
     } catch (error) {
       console.error('Full error details:', error);
@@ -930,7 +1029,7 @@ const CreateOrderForm = () => {
       accountFund: '',
       notes: ''
     });
-    setOrderItems([{ id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }]);
+    setOrderItems([{ id: 1, productCode: '', barcode: '', productName: '', productType: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }]);
     setDiscountNoteEdited(false);
     setOrderNumberEdited(false);
     // Reset customer selection
@@ -1248,6 +1347,21 @@ const CreateOrderForm = () => {
     if (!sel) return;
     handleOrderItemChange(rowIndex, 'barcode', sel.barcode || sel.Barcode || '');
     handleOrderItemChange(rowIndex, 'productCode', sel.code || sel.productCode || '');
+    
+    // Auto-set ProductType from product category if available
+    if (sel.category) {
+      // Find the ProductCategory by code/id and get its name
+      const category = productCategories.find(cat => 
+        cat.code === sel.category || cat.id === sel.category || cat.name === sel.category
+      );
+      if (category) {
+        handleOrderItemChange(rowIndex, 'productType', category.name);
+      } else {
+        // If category not found in productCategories but exists in product, use it directly
+        handleOrderItemChange(rowIndex, 'productType', sel.category);
+      }
+    }
+    
     const price = sel.retailPrice || sel.price || sel.retailPrice1 || sel.sellPrice || 0;
     const rawPrice = parseFloat(price) || 0;
     const stockVal = sel.stock || sel.quantity || sel.available || sel.onHand || sel.tonkho || sel.tongton || 0;
@@ -1306,6 +1420,7 @@ const CreateOrderForm = () => {
             productCode: '',
             barcode: '',
             productName: '',
+            productType: '',
             warehouse: '',
             unit: '',
             quantity: 0,
@@ -1923,6 +2038,21 @@ const CreateOrderForm = () => {
                                   { /* suggestions rendered in fixed-position container at end of component */ }
                                 </div>
                               );
+                            case 'productType':
+                              return (
+                                <select
+                                  value={item.productType || ''}
+                                  onChange={(e) => handleOrderItemChange(rowIndex, 'productType', e.target.value)}
+                                  className="item-select"
+                                >
+                                  <option value="">Chọn loại hàng</option>
+                                  {productCategories.map(category => (
+                                    <option key={category.id} value={category.name}>
+                                      {category.name}
+                                    </option>
+                                  ))}
+                                </select>
+                              );
                             case 'warehouse':
                               return (
                                 <select value={item.warehouse} onChange={(e) => handleOrderItemChange(rowIndex, 'warehouse', e.target.value)} className="item-select">
@@ -2129,8 +2259,31 @@ const CreateOrderForm = () => {
                               );
                             case 'actions':
                               return (
-                                <div className="item-actions">
-                                  <button className="item-btn delete" onClick={() => removeOrderItem(rowIndex)}>🗑️</button>
+                                <div className="item-actions" style={{ display: 'flex', gap: '4px' }}>
+                                  <button 
+                                    className="item-btn delete" 
+                                    onClick={() => removeOrderItem(rowIndex)}
+                                    title="Xóa dòng"
+                                  >
+                                    🗑️
+                                  </button>
+                                  <button 
+                                    className="item-btn add" 
+                                    onClick={() => addOrderItemAfter(rowIndex)}
+                                    title="Thêm dòng mới"
+                                    style={{
+                                      backgroundColor: '#28a745',
+                                      color: 'white',
+                                      border: 'none',
+                                      borderRadius: '4px',
+                                      padding: '4px 8px',
+                                      cursor: 'pointer',
+                                      fontWeight: 'bold',
+                                      fontSize: '14px'
+                                    }}
+                                  >
+                                    +
+                                  </button>
                                 </div>
                               );
                             default:

@@ -4937,3 +4937,262 @@
     justify-content: center;
   }
 }
+
+/* Table drag & drop and resize styles */
+.results-table th {
+  position: relative;
+  user-select: none;
+}
+
+.results-table th.dragging {
+  opacity: 0.5;
+  background: #e3f2fd;
+}
+
+.resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  background: transparent;
+  z-index: 10;
+  border-right: 2px solid transparent;
+  transition: border-color 0.2s;
+}
+
+.resize-handle:hover {
+  border-right: 2px solid #007bff;
+  background: rgba(0, 123, 255, 0.1);
+}
+
+.resize-handle:active {
+  border-right: 2px solid #0056b3;
+  background: rgba(0, 123, 255, 0.2);
+}
+
+.results-table th:hover .resize-handle {
+  border-right: 2px solid rgba(0, 123, 255, 0.5);
+}
+
+/* Better visual feedback for resizable columns */
+.results-table th {
+  position: relative;
+  user-select: none;
+  border-right: 1px solid #dee2e6;
+}
+
+.results-table th:hover {
+  background: #f8f9fa;
+}
+
+/* Drag cursor styles */
+.results-table th[draggable="true"] {
+  cursor: grab;
+}
+
+.results-table th[draggable="true"]:active {
+  cursor: grabbing;
+}
+
+.results-table th[draggable="true"]:hover {
+  background: #f8f9fa;
+}
+
+/* Column drag visual feedback */
+.results-table th.drag-over {
+  border-left: 3px solid #007bff;
+}
+
+/* Prevent text selection during drag */
+.results-table th.dragging,
+.results-table th.dragging * {
+  user-select: none;
+  -webkit-user-select: none;
+  -moz-user-select: none;
+  -ms-user-select: none;
+}
+
+/* Column Settings Modal */
+.column-settings-modal {
+  background: white;
+  border-radius: 12px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.3);
+  max-width: 600px;
+  width: 90%;
+  max-height: 80vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  animation: searchModalAppear 0.2s ease-out;
+}
+
+.column-settings-body {
+  padding: 0;
+  overflow-y: auto;
+  flex: 1;
+  min-height: 0;
+}
+
+.column-settings-actions {
+  padding: 20px 25px 15px;
+  border-bottom: 1px solid #e9ecef;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #f8f9fa;
+}
+
+.reset-columns-btn {
+  background: #dc3545;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.reset-columns-btn:hover {
+  background: #c82333;
+  transform: translateY(-1px);
+}
+
+.column-count {
+  font-size: 14px;
+  color: #6c757d;
+  font-weight: 500;
+}
+
+.column-settings-help {
+  padding: 15px 25px 10px;
+  font-size: 12px;
+  color: #6c757d;
+  background: #fff3cd;
+  border-bottom: 1px solid #ffeaa7;
+  text-align: center;
+}
+
+.column-settings-list {
+  padding: 10px 0;
+}
+
+.column-settings-item {
+  padding: 12px 25px;
+  border-bottom: 1px solid #f1f3f4;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  cursor: move;
+  transition: all 0.2s;
+  background: white;
+}
+
+.column-settings-item:hover {
+  background: #f8f9fa;
+}
+
+.column-settings-item.dragging {
+  opacity: 0.6;
+  background: #e3f2fd;
+  transform: scale(1.02);
+}
+
+.column-drag-handle {
+  color: #6c757d;
+  font-size: 16px;
+  cursor: grab;
+  user-select: none;
+  padding: 4px;
+  border-radius: 4px;
+  transition: all 0.2s;
+}
+
+.column-drag-handle:hover {
+  background: #e9ecef;
+  color: #495057;
+}
+
+.column-drag-handle:active {
+  cursor: grabbing;
+}
+
+.column-checkbox-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+  cursor: pointer;
+  font-size: 14px;
+}
+
+.column-checkbox {
+  width: 16px;
+  height: 16px;
+  cursor: pointer;
+}
+
+.column-name {
+  font-weight: 500;
+  color: #2c3e50;
+}
+
+.column-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.column-width {
+  font-size: 12px;
+  color: #6c757d;
+  background: #e9ecef;
+  padding: 2px 6px;
+  border-radius: 3px;
+  min-width: 45px;
+  text-align: center;
+}
+
+.column-hidden-badge {
+  font-size: 10px;
+  background: #dc3545;
+  color: white;
+  padding: 2px 6px;
+  border-radius: 10px;
+  font-weight: bold;
+  text-transform: uppercase;
+}
+
+.column-settings-footer {
+  padding: 15px 25px;
+  border-top: 1px solid #e9ecef;
+  background: #f8f9fa;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.apply-settings-btn {
+  background: #28a745;
+  color: white;
+  border: none;
+  padding: 10px 20px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  transition: all 0.2s;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.apply-settings-btn:hover {
+  background: #218838;
+  transform: translateY(-1px);
+}

@@ -1,7 +1,31 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../../config/api';
 import '../BusinessPage.css';
+
+// Constants for localStorage
+const COLUMN_SETTINGS_KEY = 'createOrderColumnSettings';
+
+// Helper functions for localStorage
+const saveColumnSettings = (columns) => {
+  try {
+    localStorage.setItem(COLUMN_SETTINGS_KEY, JSON.stringify(columns));
+  } catch (error) {
+    console.error('Error saving column settings:', error);
+  }
+};
+
+const loadColumnSettings = () => {
+  try {
+    const savedSettings = localStorage.getItem(COLUMN_SETTINGS_KEY);
+    if (savedSettings) {
+      return JSON.parse(savedSettings);
+    }
+  } catch (error) {
+    console.error('Error loading column settings:', error);
+  }
+  return null;
+};
 
 const CreateOrder = () => {
   const navigate = useNavigate();
@@ -28,10 +52,53 @@ const CreateOrder = () => {
   const [customers, setCustomers] = useState([]);
   const [customerGroups, setCustomerGroups] = useState([]);
   const [users, setUsers] = useState([]);
+  const [productCategories, setProductCategories] = useState([]);
+
+  // Default column configuration
+  const defaultColumns = [
+    { id: 'orderDate', label: 'Ngày lập', width: 120, visible: true },
+    { id: 'orderNumber', label: 'Số phiếu', width: 130, visible: true },
+    { id: 'customerName', label: 'Khách hàng', width: 150, visible: true },
+    { id: 'productType', label: 'Loại hàng', width: 120, visible: true },
+    { id: 'payment', label: 'Tổng tiền sau giảm', width: 140, visible: true },
+    { id: 'status', label: 'Trạng thái', width: 100, visible: true },
+    { id: 'notes', label: 'Ghi chú đơn hàng', width: 150, visible: true },
+    { id: 'createdBy', label: 'Nhân viên lập', width: 120, visible: true },
+    { id: 'taxRate', label: 'Thuế suất', width: 90, visible: true },
+    { id: 'salesStaff', label: 'Nhân viên sale', width: 120, visible: true },
+    { id: 'mergeFrom', label: 'Gộp từ đơn', width: 110, visible: true },
+    { id: 'mergeTo', label: 'Gộp vào đơn', width: 110, visible: true },
+    { id: 'customerGroup', label: 'Nhóm khách hàng', width: 150, visible: true },
+    { id: 'salesSchedule', label: 'Lịch bán hàng', width: 130, visible: true },
+    { id: 'totalAmount', label: 'Tổng tiền', width: 120, visible: true },
+    { id: 'totalKg', label: 'Tổng số kg', width: 100, visible: true },
+    { id: 'totalM3', label: 'Tổng số khối', width: 110, visible: true },
+    { id: 'printOrder', label: 'Số thứ tự in', width: 100, visible: true },
+    { id: 'address', label: 'Địa chỉ', width: 150, visible: true },
+    { id: 'paid', label: 'Đã thanh toán', width: 110, visible: true },
+    { id: 'deliveryStaff', label: 'Nhân viên giao', width: 120, visible: true },
+    { id: 'driver', label: 'Tài xế', width: 80, visible: true },
+    { id: 'vehicle', label: 'Xe', width: 80, visible: true },
+    { id: 'deliverySuccessful', label: 'Giao thành công', width: 120, visible: true },
+    { id: 'vatExport', label: 'Xuất VAT', width: 90, visible: true },
+    { id: 'position', label: 'Vị trí', width: 150, visible: true },
+    { id: 'actions', label: 'Thao tác', width: 100, visible: true }
+  ];
+
+  // Column management state with localStorage integration
+  const [columns, setColumns] = useState(() => {
+    const savedColumns = loadColumnSettings();
+    return savedColumns && savedColumns.length > 0 ? savedColumns : defaultColumns;
+  });
+  const [dragColumn, setDragColumn] = useState(null);
+  const [resizing, setResizing] = useState(null);
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
+  const [settingsDragItem, setSettingsDragItem] = useState(null);
 
   const pageOptions = [10, 20, 50, 100, 200, 500, 1000, 5000, 'All'];
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
+  const [selectedOrders, setSelectedOrders] = useState(new Set()); // For delete functionality
 
   useEffect(() => {
     setCurrentPage(1);
@@ -41,6 +108,9 @@ const CreateOrder = () => {
   const paginatedOrders = pageSize === 'All'
     ? filteredOrders
     : filteredOrders.slice((currentPage - 1) * pageSize, currentPage * pageSize);
+  
+  // Current page orders for checkbox logic
+  const currentPageOrders = paginatedOrders;
 
   // Close date picker when clicking outside
   useEffect(() => {
@@ -125,12 +195,39 @@ const CreateOrder = () => {
     }
   };
 
+  // Fetch product categories for dropdown
+  const fetchProductCategories = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/ProductCategories`);
+      if (response.ok) {
+        const categoriesData = await response.json();
+        setProductCategories(categoriesData);
+      }
+    } catch (error) {
+      console.error('Error fetching product categories:', error);
+    }
+  };
+
   // Load initial data
   useEffect(() => {
     fetchOrders();
     fetchCustomers();
     fetchCustomerGroups();
     fetchUsers();
+    fetchProductCategories();
+  }, []);
+
+  // Save column settings to localStorage whenever columns change
+  useEffect(() => {
+    saveColumnSettings(columns);
+  }, [columns]);
+
+  // Cleanup resize event listeners
+  useEffect(() => {
+    return () => {
+      document.removeEventListener('mousemove', handleResizeMove);
+      document.removeEventListener('mouseup', handleResizeEnd);
+    };
   }, []);
 
   const handleSearch = () => {
@@ -175,6 +272,13 @@ const CreateOrder = () => {
       );
     }
     
+    // Filter by product type
+    if (searchData.productType && searchData.productType !== 'Loại hàng') {
+      filtered = filtered.filter(order => 
+        order.productType && order.productType === searchData.productType
+      );
+    }
+    
     // Filter by created by
     if (searchData.createdBy && searchData.createdBy.trim()) {
       filtered = filtered.filter(order => 
@@ -183,6 +287,68 @@ const CreateOrder = () => {
     }
     
     setFilteredOrders(filtered);
+  };
+
+  // Handle delete selected orders
+  const handleDeleteSelected = async () => {
+    if (selectedOrders.size === 0) {
+      alert('Vui lòng chọn đơn hàng cần xóa!');
+      return;
+    }
+
+    const confirmed = confirm(`Bạn có chắc muốn xóa ${selectedOrders.size} đơn hàng đã chọn?`);
+    if (!confirmed) return;
+
+    try {
+      // Delete each selected order
+      for (const orderId of selectedOrders) {
+        const response = await fetch(`${API_BASE_URL}/Orders/${orderId}`, {
+          method: 'DELETE'
+        });
+        if (!response.ok) {
+          console.error(`Failed to delete order ${orderId}:`, response.statusText);
+        }
+      }
+
+      // Refresh orders list and clear selection
+      await fetchOrders();
+      setSelectedOrders(new Set());
+      alert('Đã xóa thành công các đơn hàng đã chọn!');
+    } catch (error) {
+      console.error('Error deleting orders:', error);
+      alert('Có lỗi khi xóa đơn hàng!');
+    }
+  };
+
+  // Handle individual order selection
+  const handleOrderSelect = (orderId) => {
+    const newSelected = new Set(selectedOrders);
+    if (newSelected.has(orderId)) {
+      newSelected.delete(orderId);
+    } else {
+      newSelected.add(orderId);
+    }
+    setSelectedOrders(newSelected);
+  };
+
+  // Handle location click - open maps with coordinates
+  const handleLocationClick = (lat, lng, title) => {
+    // Open Google Maps with coordinates and directions
+    const googleMapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}&travelmode=driving`;
+    window.open(googleMapsUrl, '_blank');
+  };
+
+  // Handle address click - search address on maps
+  const handleAddressClick = (address, title) => {
+    // Open Google Maps with address search
+    const encodedAddress = encodeURIComponent(address);
+    const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
+    window.open(googleMapsUrl, '_blank');
+  };
+
+  // Handle edit order - navigate to edit form
+  const handleEditOrder = (orderId) => {
+    navigate(`/business/sales/create-order-form?id=${orderId}`);
   };
 
   // Helper function to parse date string
@@ -198,6 +364,240 @@ const CreateOrder = () => {
     if (!code) return '-';
     const group = customerGroups.find(g => g.code === code);
     return group ? group.name : code; // fallback to code if not found
+  };
+
+  // Column drag & drop handlers
+  const handleColumnDragStart = (e, columnId) => {
+    setDragColumn(columnId);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleColumnDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleColumnDrop = (e, targetColumnId) => {
+    e.preventDefault();
+    if (!dragColumn || dragColumn === targetColumnId) return;
+
+    const dragIndex = columns.findIndex(col => col.id === dragColumn);
+    const targetIndex = columns.findIndex(col => col.id === targetColumnId);
+
+    if (dragIndex === -1 || targetIndex === -1) return;
+
+    const newColumns = [...columns];
+    const [movedColumn] = newColumns.splice(dragIndex, 1);
+    newColumns.splice(targetIndex, 0, movedColumn);
+
+    setColumns(newColumns);
+    setDragColumn(null);
+  };
+
+  const handleColumnDragEnd = () => {
+    setDragColumn(null);
+  };
+
+  // Column resize handlers
+  const handleResizeStart = useCallback((e, columnId) => {
+    e.preventDefault();
+    e.stopPropagation();
+    
+    const startX = e.clientX;
+    const currentColumn = columns.find(col => col.id === columnId);
+    const startWidth = currentColumn ? currentColumn.width : 100;
+    
+    const handleMouseMove = (moveEvent) => {
+      const diff = moveEvent.clientX - startX;
+      const newWidth = Math.max(50, startWidth + diff);
+      
+      setColumns(prev => prev.map(col => 
+        col.id === columnId ? { ...col, width: newWidth } : col
+      ));
+    };
+    
+    const handleMouseUp = () => {
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+      setResizing(null);
+    };
+    
+    setResizing({ columnId, startX, startWidth });
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  }, [columns]);
+
+  const handleResizeMove = (e) => {
+    // This function is now handled inline above
+  };
+
+  const handleResizeEnd = () => {
+    // This function is now handled inline above
+  };
+
+  // Get cell value for a column
+  const getCellValue = (order, columnId) => {
+    switch (columnId) {
+      case 'orderDate': return order.orderDate ? new Date(order.orderDate).toLocaleDateString('vi-VN') : '-';
+      case 'orderNumber': 
+        return (
+          <span 
+            style={{ 
+              color: '#0066cc', 
+              cursor: 'pointer', 
+              textDecoration: 'underline',
+              fontWeight: '500'
+            }}
+            onClick={(e) => {
+              e.preventDefault();
+              e.stopPropagation();
+              handleEditOrder(order.id);
+            }}
+            title="Click để sửa đơn hàng"
+          >
+            {order.orderNumber || '-'}
+          </span>
+        );
+      case 'customerName': return order.customerName || '-';
+      case 'payment': 
+        // "Tổng tiền sau giảm" - calculate from totalAmount - discountAmount
+        const totalAfterDiscount = (order.totalAmount || 0) - (order.discountAmount || 0);
+        return totalAfterDiscount > 0 ? totalAfterDiscount.toLocaleString() + ' ₫' : '-';
+      case 'status': return order.status || 'Chưa duyệt';
+      case 'notes': return order.notes || '-';
+      case 'createdBy': return order.createdBy || '-';
+      case 'productType': return order.productType || '-';
+      case 'taxRate': 
+        return order.discountPercent != null ? order.discountPercent + '%' : 
+               order.vatExport ? '10%' : '-';
+      case 'salesStaff': return order.salesStaff || '-';
+      case 'mergeFrom': return order.mergeFromOrder || '-';
+      case 'mergeTo': return order.mergeToOrder || '-';
+      case 'customerGroup': return getCustomerGroupName(order.customerGroup);
+      case 'salesSchedule': return order.salesSchedule || '-';
+      case 'totalAmount': return order.totalAmount ? order.totalAmount.toLocaleString() + ' ₫' : '-';
+      case 'totalAfterDiscount': 
+        return order.totalAfterDiscount ? order.totalAfterDiscount.toLocaleString() + ' ₫' : '-';
+      case 'totalKg': return order.totalKg != null ? order.totalKg.toLocaleString() : '-';
+      case 'totalM3': return order.totalM3 != null ? order.totalM3.toLocaleString() : '-';
+      case 'printOrder': return order.printOrder || '-';
+      case 'address': return order.address || '-';
+      case 'paid': return order.paid ? 'Đã thanh toán' : 'Chưa thanh toán';
+      case 'deliveryStaff': return order.deliveryStaff || '-';
+      case 'driver': return order.driver || '-';
+      case 'vehicle': return order.vehicle || '-';
+      case 'deliverySuccessful': return order.deliverySuccessful ? 'Có' : 'Chưa';
+      case 'vatExport': return order.vatExport ? 'Có' : 'Chưa';
+      case 'position': 
+        // Handle coordinates display and click to open maps
+        const location = order.location || order.address;
+        if (!location) return '-';
+        
+        // Try to detect if it's coordinates (lat,lng format)
+        const coordsPattern = /^-?\d+\.?\d*,-?\d+\.?\d*$/;
+        const isCoords = coordsPattern.test(location.trim());
+        
+        if (isCoords) {
+          const [lat, lng] = location.split(',').map(x => parseFloat(x.trim()));
+          return (
+            <span 
+              className="location-link"
+              style={{ 
+                color: '#0066cc', 
+                cursor: 'pointer', 
+                textDecoration: 'underline',
+                fontSize: '12px'
+              }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleLocationClick(lat, lng, order.customerName || 'Vị trí đơn hàng');
+              }}
+              title="Click để xem bản đồ và chỉ đường"
+            >
+              📍 {lat.toFixed(4)}, {lng.toFixed(4)}
+            </span>
+          );
+        } else {
+          // Display as address with click to search
+          return (
+            <span 
+              className="location-link"
+              style={{ 
+                color: '#0066cc', 
+                cursor: 'pointer', 
+                textDecoration: 'underline',
+                fontSize: '12px'
+              }}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                handleAddressClick(location, order.customerName || 'Địa chỉ đơn hàng');
+              }}
+              title="Click để xem bản đồ"
+            >
+              📍 {location.length > 20 ? location.substring(0, 20) + '...' : location}
+            </span>
+          );
+        }
+      case 'actions': return (
+        <div className="action-cell">
+          <button 
+            className="edit-btn" 
+            title="Sửa"
+            onClick={() => navigate(`/business/sales/create-order-form?id=${order.id}`)}
+          >
+            ✏️
+          </button>
+          <button className="delete-btn" title="Xóa">🗑️</button>
+        </div>
+      );
+      default: return '-';
+    }
+  };
+
+  // Column settings handlers
+  const toggleColumnVisibility = (columnId) => {
+    setColumns(prev => prev.map(col => 
+      col.id === columnId ? { ...col, visible: !col.visible } : col
+    ));
+  };
+
+  const resetColumns = () => {
+    setColumns([...defaultColumns]);
+    // Clear saved settings from localStorage
+    try {
+      localStorage.removeItem(COLUMN_SETTINGS_KEY);
+    } catch (error) {
+      console.error('Error clearing column settings:', error);
+    }
+  };
+
+  // Settings modal drag & drop
+  const handleSettingsDragStart = (e, index) => {
+    setSettingsDragItem(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleSettingsDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleSettingsDrop = (e, targetIndex) => {
+    e.preventDefault();
+    if (settingsDragItem === null || settingsDragItem === targetIndex) return;
+
+    const newColumns = [...columns];
+    const [movedItem] = newColumns.splice(settingsDragItem, 1);
+    newColumns.splice(targetIndex, 0, movedItem);
+
+    setColumns(newColumns);
+    setSettingsDragItem(null);
+  };
+
+  const handleSettingsDragEnd = () => {
+    setSettingsDragItem(null);
   };
 
   const handleInputChange = (field, value) => {
@@ -423,9 +823,11 @@ const CreateOrder = () => {
                 className="form-select"
               >
                 <option value="">Loại hàng</option>
-                <option value="Nước giải khát">Nước giải khát</option>
-                <option value="Bánh kẹo">Bánh kẹo</option>
-                <option value="Thực phẩm">Thực phẩm</option>
+                {productCategories.map(category => (
+                  <option key={category.id} value={category.name}>
+                    {category.name}
+                  </option>
+                ))}
               </select>
             </div>
             
@@ -511,13 +913,16 @@ const CreateOrder = () => {
           <button className="action-btn blue-btn" title="Thêm mới" onClick={() => navigate('/business/sales/create-order-form')}>
             <i className="icon">📄</i>
           </button>
+          <button className="action-btn red-btn" title="Xóa đơn hàng" onClick={handleDeleteSelected}>
+            <span style={{fontSize: '12px'}}>Xóa ĐH</span>
+          </button>
           <button className="action-btn purple-btn import-btn" title="Import">
             <i className="icon">📥</i>
           </button>
           <button className="action-btn pink-btn" title="Export">
             <i className="icon">📊</i>
           </button>
-          <button className="action-btn gray-btn" title="Cài đặt">
+          <button className="action-btn gray-btn" title="Cài đặt" onClick={() => setShowColumnSettings(true)}>
             <i className="icon">⚙️</i>
           </button>
       </div>
@@ -529,39 +934,69 @@ const CreateOrder = () => {
         <table className="results-table">
           <thead>
             <tr>
-              <th>Ngày lập <i className="sort-icon">🔍</i></th>
-              <th>Số phiếu <i className="sort-icon">🔍</i></th>
-              <th>Khách hàng <i className="sort-icon">🔍</i></th>
-              <th>Tổng tiền sau giảm <i className="sort-icon">🔍</i></th>
-              <th>Trạng thái <i className="sort-icon">🔍</i></th>
-              <th>Ghi chú đơn hàng <i className="sort-icon">🔍</i></th>
-              <th>Nhân viên lập <i className="sort-icon">🔍</i></th>
-              <th>Loại hàng <i className="sort-icon">🔍</i></th>
-              <th>Thuế suất <i className="sort-icon">🔍</i></th>
-              <th>Nhân viên sale <i className="sort-icon">🔍</i></th>
-              <th>Gộp từ đơn <i className="sort-icon">🔍</i></th>
-              <th>Gộp vào đơn <i className="sort-icon">🔍</i></th>
-              <th>Nhóm khách hàng <i className="sort-icon">🔍</i></th>
-              <th>Lịch bán hàng <i className="sort-icon">🔍</i></th>
-              <th>Tổng tiền <i className="sort-icon">🔍</i></th>
-              <th>Tổng số kg <i className="sort-icon">🔍</i></th>
-              <th>Tổng số khối <i className="sort-icon">🔍</i></th>
-              <th>Số thứ tự in <i className="sort-icon">🔍</i></th>
-              <th>Địa chỉ <i className="sort-icon">🔍</i></th>
-              <th>Đã thanh toán <i className="sort-icon">🔍</i></th>
-              <th>Nhân viên giao <i className="sort-icon">🔍</i></th>
-              <th>Tài xế <i className="sort-icon">🔍</i></th>
-              <th>Xe <i className="sort-icon">🔍</i></th>
-              <th>Giao thành công <i className="sort-icon">🔍</i></th>
-              <th>Xuất VAT <i className="sort-icon">🔍</i></th>
-              <th>Vị trí <i className="sort-icon">🔍</i></th>
-              <th>Thao tác</th>
+              <th style={{ width: '40px', minWidth: '40px' }}>
+                <input 
+                  type="checkbox" 
+                  onChange={(e) => {
+                    if (e.target.checked) {
+                      const allIds = new Set(currentPageOrders.map(order => order.id));
+                      setSelectedOrders(allIds);
+                    } else {
+                      setSelectedOrders(new Set());
+                    }
+                  }}
+                  checked={currentPageOrders.length > 0 && currentPageOrders.every(order => selectedOrders.has(order.id))}
+                />
+              </th>
+              {columns.filter(col => col.visible).map((column) => (
+                <th 
+                  key={column.id}
+                  style={{ 
+                    width: column.width + 'px',
+                    minWidth: column.width + 'px',
+                    position: 'relative',
+                    cursor: dragColumn === column.id ? 'grabbing' : 'grab'
+                  }}
+                  draggable={column.id !== 'actions'}
+                  onDragStart={(e) => handleColumnDragStart(e, column.id)}
+                  onDragOver={handleColumnDragOver}
+                  onDrop={(e) => handleColumnDrop(e, column.id)}
+                  onDragEnd={handleColumnDragEnd}
+                  className={dragColumn === column.id ? 'dragging' : ''}
+                >
+                  {column.label} <i className="sort-icon">🔍</i>
+                  {/* Resize handle */}
+                  {column.id !== 'actions' && (
+                    <div 
+                      className="resize-handle"
+                      onMouseDown={(e) => handleResizeStart(e, column.id)}
+                      style={{
+                        position: 'absolute',
+                        right: '-2px',
+                        top: '0',
+                        bottom: '0',
+                        width: '4px',
+                        cursor: 'col-resize',
+                        backgroundColor: 'transparent',
+                        zIndex: 10,
+                        borderRight: '2px solid transparent'
+                      }}
+                      onMouseEnter={(e) => {
+                        e.target.style.borderRight = '2px solid #007bff';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.target.style.borderRight = '2px solid transparent';
+                      }}
+                    />
+                  )}
+                </th>
+              ))}
             </tr>
           </thead>
           <tbody>
             {loading ? (
               <tr>
-                <td colSpan="27" className="no-data">
+                <td colSpan={columns.filter(col => col.visible).length + 1} className="no-data">
                   <div className="empty-state">
                     <div className="empty-icon">⏳</div>
                     <div className="empty-text">Đang tải dữ liệu...</div>
@@ -570,7 +1005,7 @@ const CreateOrder = () => {
               </tr>
             ) : filteredOrders.length === 0 ? (
               <tr>
-                <td colSpan="27" className="no-data">
+                <td colSpan={columns.filter(col => col.visible).length + 1} className="no-data">
                   <div className="empty-state">
                     <div className="empty-icon">📄</div>
                     <div className="empty-text">
@@ -582,44 +1017,18 @@ const CreateOrder = () => {
             ) : (
               paginatedOrders.map((order, index) => (
                 <tr key={order.id || index}>
-                  <td>{order.orderDate ? new Date(order.orderDate).toLocaleDateString('vi-VN') : '-'}</td>
-                  <td>{order.orderNumber || '-'}</td>
-                  <td>{order.customerName || '-'}</td>
-                  <td>{order.payment ? order.payment.toLocaleString() + ' ₫' : '-'}</td>
-                  <td>{order.status || 'Chưa duyệt'}</td>
-                  <td>{order.notes || '-'}</td>
-                  <td>{order.createdBy || '-'}</td>
-                  <td>{order.productType || '-'}</td>
-                  <td>{order.taxRate != null ? order.taxRate + '%' : '-'}</td>
-                  <td>{order.salesStaff || '-'}</td>
-                  <td>{order.mergeFrom || '-'}</td>
-                  <td>{order.mergeTo || '-'}</td>
-                  <td>{getCustomerGroupName(order.customerGroup)}</td>
-                  <td>{order.salesSchedule || '-'}</td>
-                  <td>{order.payment ? order.payment.toLocaleString() + ' ₫' : '-'}</td>
-                  <td>{order.totalKg != null ? order.totalKg.toLocaleString() : '-'}</td>
-                  <td>{order.totalM3 != null ? order.totalM3.toLocaleString() : '-'}</td>
-                  <td>{order.printOrder || '-'}</td>
-                  <td>{order.address || '-'}</td>
-                  <td>{order.paid ? 'Đã thanh toán' : 'Chưa thanh toán'}</td>
-                  <td>{order.deliveryStaff || '-'}</td>
-                  <td>{order.driver || '-'}</td>
-                  <td>{order.vehicle || '-'}</td>
-                  <td>{order.deliverySuccessful ? 'Có' : 'Chưa'}</td>
-                  <td>{order.vatExport ? 'Có' : 'Chưa'}</td>
-                  <td>{order.vehicle || '-'}</td>
-                  <td>
-                    <div className="action-cell">
-                      <button 
-                        className="edit-btn" 
-                        title="Sửa"
-                        onClick={() => navigate(`/business/sales/create-order-form?id=${order.id}`)}
-                      >
-                        ✏️
-                      </button>
-                      <button className="delete-btn" title="Xóa">🗑️</button>
-                    </div>
+                  <td style={{ width: '40px', textAlign: 'center' }}>
+                    <input 
+                      type="checkbox" 
+                      checked={selectedOrders.has(order.id)}
+                      onChange={() => handleOrderSelect(order.id)}
+                    />
                   </td>
+                  {columns.filter(col => col.visible).map((column) => (
+                    <td key={column.id} style={{ width: column.width + 'px' }}>
+                      {getCellValue(order, column.id)}
+                    </td>
+                  ))}
                 </tr>
               ))
             )}
@@ -658,6 +1067,83 @@ const CreateOrder = () => {
           >›</button>
         </div>
       </div>
+
+      {/* Column Settings Modal */}
+      {showColumnSettings && (
+        <div className="search-modal-overlay" onClick={() => setShowColumnSettings(false)}>
+          <div className="column-settings-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="search-modal-header">
+              <h3 className="search-modal-title">⚙️ Cài đặt hiển thị cột</h3>
+              <button className="search-modal-close" onClick={() => setShowColumnSettings(false)}>×</button>
+            </div>
+            
+            <div className="column-settings-body">
+              <div className="column-settings-actions">
+                <button 
+                  className="reset-columns-btn"
+                  onClick={resetColumns}
+                  title="Khôi phục cài đặt mặc định"
+                >
+                  🔄 Reset về mặc định
+                </button>
+                <div className="column-count">
+                  Hiển thị {columns.filter(col => col.visible).length}/{columns.length} cột
+                </div>
+              </div>
+              
+              <div className="column-settings-list">
+                <div className="column-settings-help">
+                  💡 Kéo thả để sắp xếp, tick/untick để ẩn/hiện cột
+                </div>
+                
+                {columns.map((column, index) => (
+                  <div
+                    key={column.id}
+                    className={`column-settings-item ${settingsDragItem === index ? 'dragging' : ''}`}
+                    draggable={true}
+                    onDragStart={(e) => handleSettingsDragStart(e, index)}
+                    onDragOver={handleSettingsDragOver}
+                    onDrop={(e) => handleSettingsDrop(e, index)}
+                    onDragEnd={handleSettingsDragEnd}
+                  >
+                    <div className="column-drag-handle" title="Kéo để sắp xếp">
+                      ⋮⋮
+                    </div>
+                    
+                    <label className="column-checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={column.visible}
+                        onChange={() => toggleColumnVisibility(column.id)}
+                        className="column-checkbox"
+                      />
+                      <span className="column-name">{column.label}</span>
+                    </label>
+                    
+                    <div className="column-info">
+                      <span className="column-width" title="Độ rộng hiện tại">
+                        {column.width}px
+                      </span>
+                      {!column.visible && (
+                        <span className="column-hidden-badge">Ẩn</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="column-settings-footer">
+                <button 
+                  className="apply-settings-btn"
+                  onClick={() => setShowColumnSettings(false)}
+                >
+                  ✓ Áp dụng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
