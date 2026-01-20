@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../../config/api';
+import ExcelJS from 'exceljs';
 import '../BusinessPage.css';
 
 // Constants for localStorage
-const COLUMN_SETTINGS_KEY = 'createOrderColumnSettings';
+const COLUMN_SETTINGS_KEY = 'saleManagementColumnSettings';
 
 // Helper functions for localStorage
 const saveColumnSettings = (columns) => {
@@ -27,7 +28,7 @@ const loadColumnSettings = () => {
   return null;
 };
 
-const CreateOrder = () => {
+const SaleManagement = () => {
   const navigate = useNavigate();
 
   const [searchData, setSearchData] = useState({
@@ -95,6 +96,11 @@ const CreateOrder = () => {
   const [showColumnSettings, setShowColumnSettings] = useState(false);
   const [settingsDragItem, setSettingsDragItem] = useState(null);
 
+  // Column search modal state
+  const [showSearchModal, setShowSearchModal] = useState(false);
+  const [searchColumn, setSearchColumn] = useState(null);
+  const [columnSearchQuery, setColumnSearchQuery] = useState('');
+
   const pageOptions = [10, 20, 50, 100, 200, 500, 1000, 5000, 'All'];
   const [pageSize, setPageSize] = useState(10);
   const [currentPage, setCurrentPage] = useState(1);
@@ -137,13 +143,14 @@ const CreateOrder = () => {
     };
   }, [showDatePicker]);
 
-  // Fetch orders from database
+  // Fetch orders from database - all orders for admin
   const fetchOrders = async () => {
     setLoading(true);
     try {
       const response = await fetch(`${API_BASE_URL}/Orders`);
       if (response.ok) {
         const ordersData = await response.json();
+        // Show all orders for admin
         setOrders(ordersData);
         setFilteredOrders(ordersData);
       } else {
@@ -331,6 +338,98 @@ const CreateOrder = () => {
     setSelectedOrders(newSelected);
   };
 
+  // Handle cancel selected orders (change status to "đã hủy")
+  const handleCancelSelected = async () => {
+    if (selectedOrders.size === 0) {
+      alert('Vui lòng chọn đơn hàng cần hủy!');
+      return;
+    }
+
+    const confirmed = confirm(`Bạn có chắc muốn HỦY ${selectedOrders.size} đơn hàng đã chọn?`);
+    if (!confirmed) return;
+
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const orderId of selectedOrders) {
+        const response = await fetch(`${API_BASE_URL}/Orders/${orderId}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ status: 'đã hủy' })
+        });
+        
+        if (response.ok) {
+          successCount++;
+        } else {
+          failCount++;
+          console.error(`Failed to cancel order ${orderId}:`, response.statusText);
+        }
+      }
+
+      // Refresh orders list and clear selection
+      await fetchOrders();
+      setSelectedOrders(new Set());
+      
+      if (failCount === 0) {
+        alert(`Đã hủy thành công ${successCount} đơn hàng!`);
+      } else {
+        alert(`Hủy thành công ${successCount} đơn hàng, thất bại ${failCount} đơn hàng.`);
+      }
+    } catch (error) {
+      console.error('Error canceling orders:', error);
+      alert('Có lỗi khi hủy đơn hàng!');
+    }
+  };
+
+  // Handle approve selected orders (change status to "đã duyệt")
+  const handleApproveSelected = async () => {
+    if (selectedOrders.size === 0) {
+      alert('Vui lòng chọn đơn hàng cần duyệt!');
+      return;
+    }
+
+    const confirmed = confirm(`Bạn có chắc muốn DUYỆT ${selectedOrders.size} đơn hàng đã chọn?`);
+    if (!confirmed) return;
+
+    try {
+      let successCount = 0;
+      let failCount = 0;
+      
+      for (const orderId of selectedOrders) {
+        const response = await fetch(`${API_BASE_URL}/Orders/${orderId}/status`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ status: 'đã duyệt' })
+        });
+        
+        if (response.ok) {
+          successCount++;
+        } else {
+          failCount++;
+          console.error(`Failed to approve order ${orderId}:`, response.statusText);
+        }
+      }
+
+      // Refresh orders list and clear selection
+      await fetchOrders();
+      setSelectedOrders(new Set());
+      
+      if (failCount === 0) {
+        alert(`Đã duyệt thành công ${successCount} đơn hàng!`);
+      } else {
+        alert(`Duyệt thành công ${successCount} đơn hàng, thất bại ${failCount} đơn hàng.`);
+      }
+    } catch (error) {
+      console.error('Error approving orders:', error);
+      alert('Có lỗi khi duyệt đơn hàng!');
+    }
+  };
+
   // Handle location click - open maps with coordinates
   const handleLocationClick = (lat, lng, title) => {
     // Open Google Maps with coordinates and directions
@@ -344,6 +443,260 @@ const CreateOrder = () => {
     const encodedAddress = encodeURIComponent(address);
     const googleMapsUrl = `https://www.google.com/maps/search/?api=1&query=${encodedAddress}`;
     window.open(googleMapsUrl, '_blank');
+  };
+
+  // Ref for hidden file input
+  const fileInputRef = useRef(null);
+
+  // Handle Export to Excel
+  const handleExport = async () => {
+    // Determine which orders to export: selected ones or all filtered
+    const ordersToExport = selectedOrders.size > 0 
+      ? filteredOrders.filter(order => selectedOrders.has(order.id))
+      : filteredOrders;
+    
+    if (ordersToExport.length === 0) {
+      alert('Không có đơn hàng nào để xuất!');
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Quản Lý Nhà Phân Phối';
+      workbook.created = new Date();
+      
+      const worksheet = workbook.addWorksheet('Đơn hàng');
+
+      // Define columns
+      worksheet.columns = [
+        { header: 'STT', key: 'stt', width: 6 },
+        { header: 'Số phiếu', key: 'orderNumber', width: 18 },
+        { header: 'Ngày lập', key: 'orderDate', width: 12 },
+        { header: 'Khách hàng', key: 'customerName', width: 25 },
+        { header: 'Nhóm KH', key: 'customerGroup', width: 18 },
+        { header: 'Loại hàng', key: 'productType', width: 18 },
+        { header: 'Tổng tiền', key: 'totalAmount', width: 15 },
+        { header: 'Tổng tiền sau giảm', key: 'payment', width: 18 },
+        { header: 'Trạng thái', key: 'status', width: 12 },
+        { header: 'Ghi chú', key: 'notes', width: 30 },
+        { header: 'Nhân viên lập', key: 'createdBy', width: 15 },
+        { header: 'Nhân viên sale', key: 'salesStaff', width: 15 },
+        { header: 'Thuế suất', key: 'taxRate', width: 10 },
+        { header: 'Địa chỉ', key: 'address', width: 35 },
+        { header: 'Lịch bán hàng', key: 'salesSchedule', width: 15 },
+        { header: 'Tổng kg', key: 'totalKg', width: 10 },
+        { header: 'Tổng khối', key: 'totalM3', width: 10 }
+      ];
+
+      // Style header row
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4A90E2' }
+      };
+      worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // Add data rows
+      ordersToExport.forEach((order, index) => {
+        const orderDate = order.orderDate ? new Date(order.orderDate).toLocaleDateString('vi-VN') : '';
+        // Calculate payment (total after discount)
+        const totalAfterDiscount = (order.totalAmount || 0) - (order.discountAmount || 0);
+        
+        worksheet.addRow({
+          stt: index + 1,
+          orderNumber: order.orderNumber || '',
+          orderDate: orderDate,
+          customerName: order.customerName || '',
+          customerGroup: order.customerGroup || '',
+          productType: order.productType || '',
+          totalAmount: order.totalAmount || 0,
+          payment: totalAfterDiscount > 0 ? totalAfterDiscount : (order.totalAmount || 0),
+          status: order.status || 'chưa duyệt',
+          notes: order.notes || '',
+          createdBy: order.createdBy || '',
+          salesStaff: order.salesStaff || '',
+          taxRate: order.discountPercent ? `${order.discountPercent}%` : '',
+          address: order.address || '',
+          salesSchedule: order.salesSchedule || '',
+          totalKg: order.totalKg || 0,
+          totalM3: order.totalM3 || 0
+        });
+      });
+
+      // Format number columns
+      worksheet.getColumn('totalAmount').numFmt = '#,##0';
+      worksheet.getColumn('payment').numFmt = '#,##0';
+
+      // Add borders to all cells
+      worksheet.eachRow((row, rowNumber) => {
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+          };
+        });
+      });
+
+      // Generate file and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const fileName = `DonHang_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      link.download = fileName;
+      link.click();
+      window.URL.revokeObjectURL(url);
+
+      alert(`Đã xuất ${ordersToExport.length} đơn hàng ra file Excel!`);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Có lỗi khi xuất file Excel!');
+    }
+  };
+
+  // Handle Import from Excel
+  const handleImport = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleFileChange = async (event) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const buffer = await file.arrayBuffer();
+      await workbook.xlsx.load(buffer);
+      
+      const worksheet = workbook.getWorksheet(1);
+      if (!worksheet) {
+        alert('Không tìm thấy sheet dữ liệu trong file!');
+        return;
+      }
+
+      const importedOrders = [];
+      let headerRow = null;
+
+      // Find header row and map columns
+      worksheet.eachRow((row, rowNumber) => {
+        if (rowNumber === 1) {
+          headerRow = row.values;
+          return;
+        }
+
+        const rowData = row.values;
+        if (!rowData || rowData.length < 3) return;
+
+        // Map columns based on header position
+        const getColumnIndex = (name) => {
+          if (!headerRow) return -1;
+          return headerRow.findIndex(h => h && h.toString().toLowerCase().includes(name.toLowerCase()));
+        };
+
+        const orderNumberIdx = getColumnIndex('số phiếu');
+        const customerNameIdx = getColumnIndex('khách hàng');
+        const productTypeIdx = getColumnIndex('loại hàng');
+        const totalAmountIdx = getColumnIndex('tổng tiền');
+        const paymentIdx = getColumnIndex('sau giảm');
+        const notesIdx = getColumnIndex('ghi chú');
+        const salesStaffIdx = getColumnIndex('sale');
+        const addressIdx = getColumnIndex('địa chỉ');
+
+        const order = {
+          orderNumber: orderNumberIdx > 0 ? rowData[orderNumberIdx] : '',
+          customerName: customerNameIdx > 0 ? rowData[customerNameIdx] : '',
+          productType: productTypeIdx > 0 ? rowData[productTypeIdx] : '',
+          totalAmount: totalAmountIdx > 0 ? parseFloat(rowData[totalAmountIdx]) || 0 : 0,
+          payment: paymentIdx > 0 ? parseFloat(rowData[paymentIdx]) || 0 : 0,
+          notes: notesIdx > 0 ? rowData[notesIdx] : '',
+          salesStaff: salesStaffIdx > 0 ? rowData[salesStaffIdx] : '',
+          address: addressIdx > 0 ? rowData[addressIdx] : '',
+          status: 'chưa duyệt',
+          orderDate: new Date().toISOString()
+        };
+
+        // Only add if has minimal required data
+        if (order.customerName || order.orderNumber) {
+          importedOrders.push(order);
+        }
+      });
+
+      if (importedOrders.length === 0) {
+        alert('Không tìm thấy dữ liệu đơn hàng hợp lệ trong file!');
+        return;
+      }
+
+      // Confirm import
+      const confirmed = confirm(`Tìm thấy ${importedOrders.length} đơn hàng. Bạn có muốn import?`);
+      if (!confirmed) return;
+
+      // Import each order
+      let successCount = 0;
+      let failCount = 0;
+
+      for (const order of importedOrders) {
+        try {
+          // Find customer by name
+          const customer = customers.find(c => 
+            c.name?.toLowerCase() === order.customerName?.toLowerCase() ||
+            c.companyName?.toLowerCase() === order.customerName?.toLowerCase()
+          );
+
+          const orderData = {
+            orderNumber: order.orderNumber || `BH${Date.now()}`,
+            orderDate: order.orderDate,
+            customerId: customer?.id || null,
+            customerName: order.customerName,
+            productType: order.productType,
+            totalAmount: order.totalAmount,
+            payment: order.payment,
+            notes: order.notes,
+            salesStaff: order.salesStaff,
+            address: order.address,
+            status: 'chưa duyệt',
+            createdBy: 'Import'
+          };
+
+          const response = await fetch(`${API_BASE_URL}/Orders`, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json'
+            },
+            body: JSON.stringify(orderData)
+          });
+
+          if (response.ok) {
+            successCount++;
+          } else {
+            failCount++;
+            console.error('Failed to import order:', order.orderNumber);
+          }
+        } catch (err) {
+          failCount++;
+          console.error('Error importing order:', err);
+        }
+      }
+
+      // Refresh orders list
+      await fetchOrders();
+
+      if (failCount === 0) {
+        alert(`Import thành công ${successCount} đơn hàng!`);
+      } else {
+        alert(`Import thành công ${successCount} đơn hàng, thất bại ${failCount} đơn hàng.`);
+      }
+    } catch (error) {
+      console.error('Error reading Excel file:', error);
+      alert('Có lỗi khi đọc file Excel! Vui lòng kiểm tra định dạng file.');
+    }
+
+    // Reset file input
+    event.target.value = '';
   };
 
   // Handle edit order - navigate to edit form
@@ -435,6 +788,92 @@ const CreateOrder = () => {
     // This function is now handled inline above
   };
 
+  // Vietnamese text normalization utility for search
+  const removeVietnameseTones = (str) => {
+    if (!str) return '';
+    return str
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .replace(/đ/g, 'd')
+      .replace(/Đ/g, 'D')
+      .toLowerCase();
+  };
+
+  // Handle column search icon click
+  const handleColumnSearchClick = (e, columnId) => {
+    e.stopPropagation();
+    setSearchColumn(columnId);
+    setColumnSearchQuery('');
+    setShowSearchModal(true);
+  };
+
+  // Get raw cell value for search (without formatting)
+  const getRawCellValue = (order, columnId) => {
+    switch (columnId) {
+      case 'orderDate': return order.orderDate ? new Date(order.orderDate).toLocaleDateString('vi-VN') : '';
+      case 'orderNumber': return order.orderNumber || '';
+      case 'customerName': return order.customerName || '';
+      case 'payment': 
+        const totalAfterDiscount = (order.totalAmount || 0) - (order.discountAmount || 0);
+        return totalAfterDiscount > 0 ? totalAfterDiscount.toString() : '';
+      case 'status': return order.status || 'chưa duyệt';
+      case 'notes': return order.notes || '';
+      case 'createdBy': return order.createdBy || '';
+      case 'productType': return order.productType || '';
+      case 'taxRate': return order.discountPercent != null ? order.discountPercent + '%' : '';
+      case 'salesStaff': return order.salesStaff || '';
+      case 'mergeFrom': return order.mergeFromOrder || '';
+      case 'mergeTo': return order.mergeToOrder || '';
+      case 'customerGroup': return order.customerGroup || '';
+      case 'salesSchedule': return order.salesSchedule || '';
+      case 'totalAmount': return order.totalAmount ? order.totalAmount.toString() : '';
+      case 'totalKg': return order.totalKg != null ? order.totalKg.toString() : '';
+      case 'totalM3': return order.totalM3 != null ? order.totalM3.toString() : '';
+      case 'printOrder': return order.printOrder ? order.printOrder.toString() : '';
+      case 'address': return order.address || '';
+      case 'paid': return order.paid ? 'Đã thanh toán' : 'Chưa thanh toán';
+      case 'deliveryStaff': return order.deliveryStaff || '';
+      case 'driver': return order.driver || '';
+      case 'vehicle': return order.vehicle || '';
+      case 'deliverySuccessful': return order.deliverySuccessful ? 'Có' : 'Chưa';
+      case 'vatExport': return order.vatExport ? 'Có' : 'Chưa';
+      case 'position': return order.location || '';
+      default: return '';
+    }
+  };
+
+  // Get unique values for a column (for search suggestions)
+  const getUniqueColumnValues = (columnId) => {
+    const values = orders.map(order => getRawCellValue(order, columnId)).filter(v => v && v !== '-');
+    return [...new Set(values)].sort();
+  };
+
+  // Filter orders by column search
+  const handleColumnSearch = (query) => {
+    setColumnSearchQuery(query);
+    
+    if (!query.trim()) {
+      setFilteredOrders(orders);
+      return;
+    }
+
+    const queryNormalized = removeVietnameseTones(query.toLowerCase());
+    const filtered = orders.filter(order => {
+      const cellValue = getRawCellValue(order, searchColumn);
+      const valueNormalized = removeVietnameseTones(String(cellValue).toLowerCase());
+      return valueNormalized.includes(queryNormalized);
+    });
+    
+    setFilteredOrders(filtered);
+  };
+
+  // Close search modal and reset
+  const closeSearchModal = () => {
+    setShowSearchModal(false);
+    setSearchColumn(null);
+    setColumnSearchQuery('');
+  };
+
   // Get cell value for a column
   const getCellValue = (order, columnId) => {
     switch (columnId) {
@@ -463,7 +902,27 @@ const CreateOrder = () => {
         // "Tổng tiền sau giảm" - calculate from totalAmount - discountAmount
         const totalAfterDiscount = (order.totalAmount || 0) - (order.discountAmount || 0);
         return totalAfterDiscount > 0 ? totalAfterDiscount.toLocaleString() + ' ₫' : '-';
-      case 'status': return order.status || 'Chưa duyệt';
+      case 'status': 
+        const statusValue = order.status || 'chưa duyệt';
+        const statusColors = {
+          'đã duyệt': { bg: '#28a745', color: '#fff' },
+          'đã hủy': { bg: '#dc3545', color: '#fff' },
+          'chưa duyệt': { bg: '#ffc107', color: '#000' }
+        };
+        const statusStyle = statusColors[statusValue.toLowerCase()] || statusColors['chưa duyệt'];
+        return (
+          <span style={{
+            display: 'inline-block',
+            padding: '4px 8px',
+            borderRadius: '4px',
+            fontSize: '12px',
+            fontWeight: 'bold',
+            backgroundColor: statusStyle.bg,
+            color: statusStyle.color
+          }}>
+            {statusValue}
+          </span>
+        );
       case 'notes': return order.notes || '-';
       case 'createdBy': return order.createdBy || '-';
       case 'productType': return order.productType || '-';
@@ -740,7 +1199,7 @@ const CreateOrder = () => {
     <div className="create-order-page">
       {/* Header */}
       <div className="page-header">
-        <h1>TÌM KIẾM - ĐƠN HÀNG SALE</h1>
+        <h1>QUẢN LÝ BÁN HÀNG (ADMIN)</h1>
       </div>
 
       {/* Search Form */}
@@ -910,20 +1369,51 @@ const CreateOrder = () => {
             <span className="search-label">TÌM KIẾM</span>
           </button>
 
+          {/* Admin action buttons */}
+          <button className="action-btn admin-cancel-btn" title="Hủy đơn hàng đã chọn" onClick={handleCancelSelected}>
+            <i className="icon">🗑️</i>
+            <span>Hủy</span>
+          </button>
+          <button className="action-btn admin-approve-btn" title="Duyệt đơn hàng đã chọn" onClick={handleApproveSelected}>
+            <i className="icon">✓</i>
+            <span>Duyệt</span>
+          </button>
+          <button className="action-btn admin-merge-btn" title="Gộp đơn hàng đã chọn">
+            <i className="icon">📋</i>
+            <span>Gộp đơn</span>
+          </button>
+          <button className="action-btn admin-auto-merge-btn" title="Gộp tự động">
+            <i className="icon">📋</i>
+            <span>Gộp tự động</span>
+          </button>
+
           <button className="action-btn blue-btn" title="Thêm mới" onClick={() => navigate('/business/sales/create-order-form')}>
             <i className="icon">📄</i>
+            <span>Thêm</span>
           </button>
           <button className="action-btn red-btn" title="Xóa đơn hàng" onClick={handleDeleteSelected}>
-            <span style={{fontSize: '12px'}}>Xóa ĐH</span>
+            <i className="icon">🗑️</i>
+            <span>Xóa ĐH</span>
           </button>
-          <button className="action-btn purple-btn import-btn" title="Import">
+          <button className="action-btn purple-btn import-btn" title="Import từ Excel" onClick={handleImport}>
             <i className="icon">📥</i>
+            <span>Import</span>
           </button>
-          <button className="action-btn pink-btn" title="Export">
+          <button className="action-btn pink-btn" title="Export ra Excel" onClick={handleExport}>
             <i className="icon">📊</i>
+            <span>Export</span>
           </button>
+          {/* Hidden file input for import */}
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            accept=".xlsx,.xls"
+            onChange={handleFileChange}
+          />
           <button className="action-btn gray-btn" title="Cài đặt" onClick={() => setShowColumnSettings(true)}>
             <i className="icon">⚙️</i>
+            <span>Cài đặt</span>
           </button>
       </div>
 
@@ -964,7 +1454,15 @@ const CreateOrder = () => {
                   onDragEnd={handleColumnDragEnd}
                   className={dragColumn === column.id ? 'dragging' : ''}
                 >
-                  {column.label} <i className="sort-icon">🔍</i>
+                  {column.label} 
+                  {column.id !== 'actions' && (
+                    <i 
+                      className="sort-icon" 
+                      onClick={(e) => handleColumnSearchClick(e, column.id)}
+                      style={{ cursor: 'pointer', marginLeft: '4px' }}
+                      title={`Tìm kiếm theo ${column.label}`}
+                    >🔍</i>
+                  )}
                   {/* Resize handle */}
                   {column.id !== 'actions' && (
                     <div 
@@ -1144,8 +1642,111 @@ const CreateOrder = () => {
           </div>
         </div>
       )}
+
+      {/* Column Search Modal */}
+      {showSearchModal && (
+        <div className="search-modal-overlay" onClick={closeSearchModal}>
+          <div className="search-modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '500px' }}>
+            <div className="search-modal-header">
+              <h3 className="search-modal-title">
+                🔍 Tìm kiếm theo "{columns.find(c => c.id === searchColumn)?.label || ''}"
+              </h3>
+              <button className="search-modal-close" onClick={closeSearchModal}>×</button>
+            </div>
+            
+            <div className="search-modal-search-box">
+              <div className="search-input-wrapper">
+                <input
+                  type="text"
+                  className="search-modal-input"
+                  placeholder="Nhập từ khóa tìm kiếm (có thể gõ không dấu)..."
+                  value={columnSearchQuery}
+                  onChange={(e) => handleColumnSearch(e.target.value)}
+                  autoFocus
+                />
+                <span className="search-input-icon">🔍</span>
+              </div>
+            </div>
+            
+            <div className="search-modal-body" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              <div style={{ marginBottom: '10px', fontSize: '12px', color: '#6c757d' }}>
+                Các giá trị có trong cột (click để chọn):
+              </div>
+              <div className="search-suggestions-list">
+                {getUniqueColumnValues(searchColumn).length === 0 ? (
+                  <div style={{ padding: '10px', color: '#999', textAlign: 'center' }}>
+                    Không có dữ liệu
+                  </div>
+                ) : (
+                  getUniqueColumnValues(searchColumn)
+                    .filter(value => {
+                      if (!columnSearchQuery.trim()) return true;
+                      const valueNormalized = removeVietnameseTones(String(value).toLowerCase());
+                      const queryNormalized = removeVietnameseTones(columnSearchQuery.toLowerCase());
+                      return valueNormalized.includes(queryNormalized);
+                    })
+                    .slice(0, 50) // Limit to 50 items
+                    .map((value, index) => (
+                      <div
+                        key={index}
+                        className="search-suggestion-item"
+                        onClick={() => {
+                          handleColumnSearch(value);
+                          closeSearchModal();
+                        }}
+                        style={{
+                          padding: '8px 12px',
+                          cursor: 'pointer',
+                          borderBottom: '1px solid #eee',
+                          backgroundColor: columnSearchQuery === value ? '#e3f2fd' : 'transparent'
+                        }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = columnSearchQuery === value ? '#e3f2fd' : 'transparent'}
+                      >
+                        {value}
+                      </div>
+                    ))
+                )}
+              </div>
+            </div>
+            
+            <div style={{ padding: '12px', borderTop: '1px solid #eee', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setColumnSearchQuery('');
+                  setFilteredOrders(orders);
+                  closeSearchModal();
+                }}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#6c757d',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Xóa bộ lọc
+              </button>
+              <button
+                onClick={closeSearchModal}
+                style={{
+                  padding: '8px 16px',
+                  backgroundColor: '#007bff',
+                  color: 'white',
+                  border: 'none',
+                  borderRadius: '4px',
+                  cursor: 'pointer'
+                }}
+              >
+                Đóng
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
 
-export default CreateOrder;
+export default SaleManagement;

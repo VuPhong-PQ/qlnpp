@@ -20,9 +20,9 @@ import ImportGoods from './components/business/ImportGoods';
 import ResizableTable from './components/business/ResizableTable';
 import WarehouseTransfer from './components/business/WarehouseTransfer';
 import ExportGoods from './components/business/ExportGoods';
-import CreateOrder from './components/business/sales/CreateOrder';
+import SaleManagementByCurrentUser from './components/business/sales/SaleManagementByCurrentUser';
+import SaleManagement from './components/business/sales/SaleManagement';
 import CreateOrderForm from './components/business/sales/CreateOrderForm';
-import OrderManagement from './components/business/sales/OrderManagement';
 import PrintOrder from './components/business/sales/PrintOrder';
 import PrintOrderByVehicle from './components/business/sales/PrintOrderByVehicle';
 import ReceiptVoucher from './components/business/accounting/ReceiptVoucher';
@@ -56,9 +56,9 @@ function App() {
             <Route path="/business/warehouse-transfer" element={<WarehouseTransfer />} />
             <Route path="/business/export-goods" element={<ExportGoods />} />
             <Route path="/business/exports" element={<ExportGoods />} />
-            <Route path="/business/sales/create-order" element={<CreateOrder />} />
+            <Route path="/business/sales/sale-management-by-current-user" element={<SaleManagementByCurrentUser />} />
+            <Route path="/business/sales/sale-management" element={<SaleManagement />} />
             <Route path="/business/sales/create-order-form" element={<CreateOrderForm />} />
-            <Route path="/business/sales/order-management" element={<OrderManagement />} />
             <Route path="/business/sales/print-order" element={<PrintOrder />} />
             <Route path="/business/sales/print-order-by-vehicle" element={<PrintOrderByVehicle />} />
             <Route path="/business/accounting/receipt-voucher" element={<ReceiptVoucher />} />

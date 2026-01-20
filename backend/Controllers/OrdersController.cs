@@ -12,6 +12,11 @@ namespace QlnppApi.Controllers
         public List<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
     }
 
+    public class UpdateOrderStatusRequest
+    {
+        public string Status { get; set; } = string.Empty;
+    }
+
     [Route("api/[controller]")]
     [ApiController]
     public class OrdersController : ControllerBase
@@ -251,6 +256,28 @@ namespace QlnppApi.Controllers
             await _context.SaveChangesAsync();
 
             return NoContent();
+        }
+
+        // PUT: api/Orders/5/status
+        [HttpPut("{id}/status")]
+        public async Task<IActionResult> UpdateOrderStatus(int id, [FromBody] UpdateOrderStatusRequest request)
+        {
+            if (request == null || string.IsNullOrEmpty(request.Status))
+                return BadRequest("Status is required");
+
+            var order = await _context.Orders.FindAsync(id);
+            if (order == null)
+                return NotFound();
+
+            // Validate status value
+            var validStatuses = new[] { "chưa duyệt", "đã duyệt", "đã hủy" };
+            if (!validStatuses.Contains(request.Status.ToLower()))
+                return BadRequest($"Invalid status. Valid values are: {string.Join(", ", validStatuses)}");
+
+            order.Status = request.Status;
+            await _context.SaveChangesAsync();
+
+            return Ok(new { message = "Status updated successfully", status = order.Status });
         }
 
         // GET: api/Orders/by-customer/{customerId}

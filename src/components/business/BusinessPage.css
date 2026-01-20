@@ -2449,9 +2449,11 @@
   display: flex;
   align-items: center;
   justify-content: space-between;
+  flex-wrap: wrap;
   margin: 8px 0;
   padding: 0;
   width: 100%;
+  gap: 10px;
 }
 
 /* Position left-info at the far left edge */
@@ -2464,14 +2466,15 @@
 /* Position action-buttons at the far right edge */
 .create-order-page .action-buttons {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 10px;
   margin-left: auto;
   margin-right: 0;
   padding-right: 0;
 }
 
 .create-order-page .action-toolbar .search-btn {
-  min-width: 140px;
+  min-width: 100px;
   width: auto;
   height: 40px;
   padding: 8px 14px;
@@ -2488,12 +2491,6 @@
   overflow: visible;
 }
 
-/* Keep other icon action buttons compact while allowing the search button to size by content */
-.create-order-page .action-buttons .action-btn:not(.search-btn) {
-  width: 40px;
-  height: 40px;
-}
-
 /* Ensure action buttons area doesn't clip expanded search button */
 .create-order-page .action-buttons {
   overflow: visible;
@@ -2506,8 +2503,8 @@
   z-index: 1300;
   background: #4a90e2;
   color: #fff;
-  padding: 8px 18px !important;
-  min-width: 140px !important;
+  padding: 8px 14px !important;
+  min-width: 100px !important;
   box-shadow: none;
   border-radius: 6px;
   display: inline-flex;
@@ -2550,31 +2547,100 @@
 
 .create-order-page .action-buttons {
   display: flex;
-  gap: 8px;
+  flex-wrap: wrap;
+  gap: 10px;
 }
 
 .create-order-page .action-btn {
-  width: 40px;
-  height: 40px;
+  width: auto !important;
+  min-width: 80px !important;
+  height: 40px !important;
   border: none;
-  border-radius: 8px;
+  border-radius: 6px;
   cursor: pointer;
-  display: flex;
+  display: inline-flex !important;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  gap: 6px;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 8px 14px !important;
+  white-space: nowrap;
   transition: all 0.2s;
 }
 
-.create-order-page .blue-btn {
-  background: #4a90e2;
-  color: white;
+/* Style for action buttons with text labels - blue, red, purple, pink, gray */
+.create-order-page .action-buttons .action-btn.blue-btn,
+.create-order-page .action-buttons .action-btn.red-btn,
+.create-order-page .action-buttons .action-btn.purple-btn,
+.create-order-page .action-buttons .action-btn.pink-btn,
+.create-order-page .action-buttons .action-btn.gray-btn {
+  width: auto !important;
+  min-width: 80px !important;
+  height: 40px !important;
+  padding: 8px 14px !important;
+  border-radius: 6px !important;
+  border: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  white-space: nowrap !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.create-order-page .action-buttons .action-btn.blue-btn {
+  background: #4a90e2 !important;
+  color: white !important;
+}
+
+.create-order-page .action-buttons .action-btn.blue-btn:hover {
+  background: #357abd !important;
+}
+
+.create-order-page .action-buttons .action-btn.red-btn {
+  background: #dc3545 !important;
+  color: white !important;
+}
+
+.create-order-page .action-buttons .action-btn.red-btn:hover {
+  background: #c82333 !important;
+}
+
+.create-order-page .action-buttons .action-btn.purple-btn {
+  background: #9b59b6 !important;
+  color: white !important;
+}
+
+.create-order-page .action-buttons .action-btn.purple-btn:hover {
+  background: #8e44ad !important;
+}
+
+.create-order-page .action-buttons .action-btn.pink-btn {
+  background: #e91e63 !important;
+  color: white !important;
+}
+
+.create-order-page .action-buttons .action-btn.pink-btn:hover {
+  background: #c2185b !important;
+}
+
+.create-order-page .action-buttons .action-btn.gray-btn {
+  background: #6c757d !important;
+  color: white !important;
+}
+
+.create-order-page .action-buttons .action-btn.gray-btn:hover {
+  background: #545b62 !important;
 }
 
 /* Ensure search button shows full label despite generic .action-btn sizing */
 .create-order-page .action-toolbar .search-btn {
   width: auto !important;
-  min-width: 140px !important;
+  min-width: 100px !important;
   padding: 8px 14px !important;
   display: inline-flex !important;
   justify-content: center !important;
@@ -2584,31 +2650,229 @@
   background: #357abd;
 }
 
-.create-order-page .purple-btn {
-  background: #9b59b6;
-  color: white;
+/* Admin action buttons for SaleManagement page - same style as search-btn */
+.create-order-page .action-buttons .action-btn.admin-cancel-btn,
+.create-order-page .action-buttons .action-btn.admin-approve-btn,
+.create-order-page .action-buttons .action-btn.admin-merge-btn,
+.create-order-page .action-buttons .action-btn.admin-auto-merge-btn {
+  width: auto !important;
+  min-width: 80px !important;
+  height: 40px !important;
+  padding: 8px 14px !important;
+  border-radius: 6px !important;
+  border: none !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 6px !important;
+  font-weight: 600 !important;
+  font-size: 14px !important;
+  white-space: nowrap !important;
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 
-.create-order-page .purple-btn:hover {
-  background: #8e44ad;
+.create-order-page .action-buttons .action-btn.admin-cancel-btn {
+  background: linear-gradient(135deg, #ff6b8a 0%, #ff5277 100%) !important;
+  color: white !important;
+  box-shadow: 0 2px 4px rgba(255, 107, 138, 0.3);
 }
 
-.create-order-page .pink-btn {
-  background: #e91e63;
-  color: white;
+.create-order-page .action-buttons .action-btn.admin-cancel-btn:hover {
+  background: linear-gradient(135deg, #ff5277 0%, #ff3d64 100%) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(255, 107, 138, 0.4);
 }
 
-.create-order-page .pink-btn:hover {
-  background: #c2185b;
+.create-order-page .action-buttons .action-btn.admin-approve-btn {
+  background: linear-gradient(135deg, #4cd964 0%, #34c759 100%) !important;
+  color: white !important;
+  box-shadow: 0 2px 4px rgba(76, 217, 100, 0.3);
 }
 
-.create-order-page .gray-btn {
-  background: #6c757d;
-  color: white;
+.create-order-page .action-buttons .action-btn.admin-approve-btn:hover {
+  background: linear-gradient(135deg, #34c759 0%, #28a745 100%) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(76, 217, 100, 0.4);
 }
 
-.create-order-page .gray-btn:hover {
-  background: #545b62;
+.create-order-page .action-buttons .action-btn.admin-merge-btn {
+  background: linear-gradient(135deg, #5ac8fa 0%, #34aadc 100%) !important;
+  color: white !important;
+  box-shadow: 0 2px 4px rgba(90, 200, 250, 0.3);
+}
+
+.create-order-page .action-buttons .action-btn.admin-merge-btn:hover {
+  background: linear-gradient(135deg, #34aadc 0%, #007aff 100%) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(90, 200, 250, 0.4);
+}
+
+.create-order-page .action-buttons .action-btn.admin-auto-merge-btn {
+  background: linear-gradient(135deg, #00d4aa 0%, #00b894 100%) !important;
+  color: white !important;
+  box-shadow: 0 2px 4px rgba(0, 212, 170, 0.3);
+}
+
+.create-order-page .action-buttons .action-btn.admin-auto-merge-btn:hover {
+  background: linear-gradient(135deg, #00b894 0%, #00a085 100%) !important;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 8px rgba(0, 212, 170, 0.4);
+}
+
+.create-order-page .admin-cancel-btn .icon,
+.create-order-page .admin-approve-btn .icon,
+.create-order-page .admin-merge-btn .icon,
+.create-order-page .admin-auto-merge-btn .icon {
+  font-size: 14px;
+}
+
+/* Responsive for action buttons on mobile */
+@media (max-width: 768px) {
+  .create-order-page {
+    overflow-x: hidden;
+    box-sizing: border-box;
+    max-width: 100vw;
+  }
+  
+  .create-order-page .search-section {
+    margin: 0 0 12px 0;
+    border-radius: 8px;
+    box-sizing: border-box;
+  }
+  
+  .create-order-page .toolbar-row {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 12px;
+    width: 100%;
+    box-sizing: border-box;
+  }
+  
+  .create-order-page .left-info {
+    text-align: center;
+  }
+  
+  .create-order-page .action-buttons {
+    display: grid !important;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 8px !important;
+    width: 100%;
+    margin-left: 0;
+    box-sizing: border-box;
+  }
+  
+  .create-order-page .action-buttons .action-btn,
+  .create-order-page .action-buttons .action-btn.search-btn,
+  .create-order-page .action-buttons .action-btn.admin-cancel-btn,
+  .create-order-page .action-buttons .action-btn.admin-approve-btn,
+  .create-order-page .action-buttons .action-btn.admin-merge-btn,
+  .create-order-page .action-buttons .action-btn.admin-auto-merge-btn,
+  .create-order-page .action-buttons .action-btn.blue-btn,
+  .create-order-page .action-buttons .action-btn.red-btn,
+  .create-order-page .action-buttons .action-btn.purple-btn,
+  .create-order-page .action-buttons .action-btn.pink-btn,
+  .create-order-page .action-buttons .action-btn.gray-btn {
+    width: 100% !important;
+    min-width: unset !important;
+    justify-content: center !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .create-order-page {
+    padding: 8px !important;
+    overflow-x: hidden;
+    box-sizing: border-box;
+    max-width: 100vw;
+  }
+  
+  .create-order-page .search-section {
+    padding: 10px !important;
+    margin: 0 0 10px 0 !important;
+    border-radius: 8px;
+  }
+  
+  .create-order-page .action-buttons {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 6px !important;
+    padding: 0 !important;
+  }
+  
+  .create-order-page .action-buttons .action-btn,
+  .create-order-page .action-buttons .action-btn.search-btn,
+  .create-order-page .action-buttons .action-btn.admin-cancel-btn,
+  .create-order-page .action-buttons .action-btn.admin-approve-btn,
+  .create-order-page .action-buttons .action-btn.admin-merge-btn,
+  .create-order-page .action-buttons .action-btn.admin-auto-merge-btn,
+  .create-order-page .action-buttons .action-btn.blue-btn,
+  .create-order-page .action-buttons .action-btn.red-btn,
+  .create-order-page .action-buttons .action-btn.purple-btn,
+  .create-order-page .action-buttons .action-btn.pink-btn,
+  .create-order-page .action-buttons .action-btn.gray-btn {
+    height: 36px !important;
+    padding: 6px 10px !important;
+    font-size: 13px !important;
+  }
+  
+  .create-order-page .toolbar-row {
+    padding: 0 !important;
+    margin: 8px 0 !important;
+  }
+  
+  .create-order-page .table-container {
+    margin: 0 0 10px 0 !important;
+    border-radius: 8px;
+  }
+}
+
+/* Landscape mode on mobile - 2 rows with 4 columns each for search form */
+@media (max-width: 926px) and (orientation: landscape) {
+  .create-order-page {
+    padding: 10px !important;
+    overflow-x: hidden;
+  }
+  
+  .create-order-page .search-section {
+    padding: 10px !important;
+  }
+  
+  .create-order-page .form-row {
+    display: grid !important;
+    grid-template-columns: repeat(4, 1fr) !important;
+    gap: 8px !important;
+  }
+  
+  .create-order-page .form-input,
+  .create-order-page .form-select {
+    height: 36px !important;
+    font-size: 13px !important;
+    padding: 6px 10px !important;
+  }
+  
+  .create-order-page .action-buttons {
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 6px !important;
+  }
+  
+  .create-order-page .action-buttons .action-btn {
+    height: 34px !important;
+    padding: 4px 10px !important;
+    font-size: 12px !important;
+    min-width: auto !important;
+  }
+  
+  .create-order-page .toolbar-row {
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 8px !important;
+  }
+  
+  .create-order-page .left-info {
+    text-align: left !important;
+  }
 }
 
 /* Table Container */
@@ -3383,6 +3647,27 @@
   width: 100%;
   box-sizing: border-box;
   text-align: right;
+}
+
+/* Checkbox column styles */
+.order-items-table td .item-checkbox {
+  cursor: pointer;
+  accent-color: #4a90e2;
+}
+
+.order-items-table th input[type="checkbox"],
+.order-items-table td input[type="checkbox"] {
+  margin: 0;
+  padding: 0;
+}
+
+/* Selected row highlight */
+.order-items-table tbody tr.selected-row {
+  background-color: #e3f2fd !important;
+}
+
+.order-items-table tbody tr.selected-row:hover {
+  background-color: #bbdefb !important;
 }
 
 /* Specific min-widths for different column types */

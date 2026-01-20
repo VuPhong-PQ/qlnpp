@@ -156,7 +156,8 @@ const CreateOrderForm = () => {
     payment: 0,
     accountFund: '',
     notes: '',
-    productType: ''
+    productType: '',
+    status: 'chưa duyệt' // chưa duyệt, đã duyệt, đã hủy
   });
 
   const [orderItems, setOrderItems] = useState([
@@ -198,13 +199,15 @@ const CreateOrderForm = () => {
   const [savedOrders, setSavedOrders] = useState([]); // Danh sách orders từ DB
   const [showOrdersList, setShowOrdersList] = useState(false); // Hiển thị danh sách orders
   const [editingOrderId, setEditingOrderId] = useState(null); // ID của order đang sửa
+  const [selectedItems, setSelectedItems] = useState([]); // Danh sách các item được chọn (checkbox)
   const isCustomerSelected = Boolean(orderForm.customer);
-  const initialColWidths = [120, 120, 220, 120, 80, 90, 110, 100, 80, 120, 120, 90, 120, 100, 180, 140, 90, 90, 100, 100, 120, 100, 130, 120];
+  const initialColWidths = [40, 120, 120, 220, 120, 80, 90, 110, 100, 80, 120, 120, 90, 120, 100, 180, 140, 90, 90, 100, 100, 120, 100, 130, 120];
   const [colWidths, setColWidths] = useState(initialColWidths);
   const resizerState = useRef({ isResizing: false, startX: 0, colIndex: null, startWidth: 0 });
   
   // Column configuration (key must match renderCell switch cases)
   const defaultColumns = [
+    { key: 'checkbox', label: '', visible: true },
     { key: 'barcode', label: 'Mã vạch', visible: true },
     { key: 'productCode', label: 'Mã hàng', visible: true },
     { key: 'productName', label: 'Tên hàng', visible: true },
@@ -296,8 +299,16 @@ const CreateOrderForm = () => {
             if (found) return { ...found, visible: (visibleMap[k] !== undefined ? visibleMap[k] : found.visible) };
             return null;
           }).filter(Boolean);
-          // include any default columns that were not in saved order (append them)
-          defaultColumns.forEach(dc => { if (!rebuilt.find(r => r.key === dc.key)) rebuilt.push(dc); });
+          // include any default columns that were not in saved order (prepend checkbox at start, append others at end)
+          defaultColumns.forEach(dc => { 
+            if (!rebuilt.find(r => r.key === dc.key)) {
+              if (dc.key === 'checkbox') {
+                rebuilt.unshift(dc); // Add checkbox at the beginning
+              } else {
+                rebuilt.push(dc);
+              }
+            }
+          });
           setColumns(rebuilt);
           // prevent immediately persisting back the same values (avoid race on StrictMode double mount)
           skipColumnsRef.current = true;
@@ -417,7 +428,8 @@ const CreateOrderForm = () => {
           totalM3: data.order.totalM3 || 0,
           payment: data.order.payment || 0,
           accountFund: data.order.accountFund || '',
-          notes: data.order.notes || ''
+          notes: data.order.notes || '',
+          status: data.order.status || 'chưa duyệt'
         });
         
         // Map order items
@@ -1027,11 +1039,13 @@ const CreateOrderForm = () => {
       totalM3: 0,
       payment: 0,
       accountFund: '',
-      notes: ''
+      notes: '',
+      status: 'chưa duyệt'
     });
     setOrderItems([{ id: 1, productCode: '', barcode: '', productName: '', productType: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }]);
     setDiscountNoteEdited(false);
     setOrderNumberEdited(false);
+    setEditingOrderId(null); // Reset editing mode
     // Reset customer selection
     setCustomerSearch('');
     setShowCustomerDropdown(false);
@@ -1042,7 +1056,93 @@ const CreateOrderForm = () => {
   };
 
   const handleGoBack = () => {
-    navigate('/business/sales/create-order');
+    navigate('/business/sales/sale-management-by-current-user');
+  };
+
+  // Handle approve order
+  const handleApproveOrder = async () => {
+    if (!editingOrderId) {
+      alert('Vui lòng lưu đơn hàng trước khi duyệt!');
+      return;
+    }
+    
+    if (orderForm.status === 'đã duyệt') {
+      alert('Đơn hàng này đã được duyệt rồi!');
+      return;
+    }
+    
+    if (orderForm.status === 'đã hủy') {
+      alert('Không thể duyệt đơn hàng đã bị hủy!');
+      return;
+    }
+    
+    const confirmApprove = window.confirm('Bạn có chắc chắn muốn DUYỆT đơn hàng này?');
+    if (!confirmApprove) return;
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/Orders/${editingOrderId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: 'đã duyệt' })
+      });
+      
+      if (response.ok) {
+        setOrderForm(prev => ({ ...prev, status: 'đã duyệt' }));
+        alert('Đơn hàng đã được duyệt thành công!');
+        fetchOrders(); // Refresh orders list
+      } else {
+        const errorData = await response.text();
+        throw new Error(`Lỗi duyệt đơn hàng: ${errorData}`);
+      }
+    } catch (error) {
+      console.error('Error approving order:', error);
+      alert(`Lỗi khi duyệt đơn hàng: ${error.message}`);
+    }
+  };
+
+  // Handle cancel order
+  const handleCancelOrder = async () => {
+    if (!editingOrderId) {
+      alert('Vui lòng lưu đơn hàng trước khi hủy!');
+      return;
+    }
+    
+    if (orderForm.status === 'đã hủy') {
+      alert('Đơn hàng này đã bị hủy rồi!');
+      return;
+    }
+    
+    if (orderForm.status === 'đã duyệt') {
+      const confirmCancelApproved = window.confirm('Đơn hàng này đã được duyệt. Bạn vẫn muốn HỦY?');
+      if (!confirmCancelApproved) return;
+    }
+    
+    const confirmCancel = window.confirm('Bạn có chắc chắn muốn HỦY đơn hàng này?');
+    if (!confirmCancel) return;
+    
+    try {
+      const response = await fetch(`${API_BASE_URL}/Orders/${editingOrderId}/status`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ status: 'đã hủy' })
+      });
+      
+      if (response.ok) {
+        setOrderForm(prev => ({ ...prev, status: 'đã hủy' }));
+        alert('Đơn hàng đã được hủy!');
+        fetchOrders(); // Refresh orders list
+      } else {
+        const errorData = await response.text();
+        throw new Error(`Lỗi hủy đơn hàng: ${errorData}`);
+      }
+    } catch (error) {
+      console.error('Error cancelling order:', error);
+      alert(`Lỗi khi hủy đơn hàng: ${error.message}`);
+    }
   };
 
   const handleSearchInOrderItems = () => {
@@ -1926,13 +2026,31 @@ const CreateOrderForm = () => {
                 <tr>
                   {columns.map((c, i) => c.visible && (
                     <th key={c.key}
-                        draggable
-                        onDragStart={(e) => onDragStartHeader(e, i)}
+                        draggable={c.key !== 'checkbox'}
+                        onDragStart={(e) => c.key !== 'checkbox' && onDragStartHeader(e, i)}
                         onDragOver={onDragOverHeader}
                         onDrop={(e) => onDropHeader(e, i)}
                         onDragEnd={onDragEndHeader}
                     >
-                      {c.label} {c.key === 'barcode' || c.key === 'productCode' || c.key === 'productName' ? <i className="sort-icon" onClick={handleSearchInOrderItems} style={{cursor: 'pointer'}} title="Tìm kiếm trong đơn hàng">🔍</i> : null}
+                      {c.key === 'checkbox' ? (
+                        <input
+                          type="checkbox"
+                          checked={orderItems.length > 0 && selectedItems.length === orderItems.length}
+                          onChange={(e) => {
+                            if (e.target.checked) {
+                              setSelectedItems(orderItems.map(item => item.id));
+                            } else {
+                              setSelectedItems([]);
+                            }
+                          }}
+                          title="Chọn tất cả"
+                          style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                        />
+                      ) : (
+                        <>
+                          {c.label} {c.key === 'barcode' || c.key === 'productCode' || c.key === 'productName' ? <i className="sort-icon" onClick={handleSearchInOrderItems} style={{cursor: 'pointer'}} title="Tìm kiếm trong đơn hàng">🔍</i> : null}
+                        </>
+                      )}
                       <div className="col-resizer" onMouseDown={startResize} />
                     </th>
                   ))}
@@ -1940,11 +2058,27 @@ const CreateOrderForm = () => {
               </thead>
               <tbody>
                 {orderItems.map((item, rowIndex) => (
-                  <tr key={item.id}>
+                  <tr key={item.id} className={selectedItems.includes(item.id) ? 'selected-row' : ''}>
                     {columns.map((c, colIndex) => c.visible && (
                       <td key={c.key} className={['priceAfterCK','totalAfterCK','discountPercentGlobal','totalAfterDiscount','stock'].includes(c.key) ? 'total-cell' : ''}>
                         {(() => {
                           switch (c.key) {
+                            case 'checkbox':
+                              return (
+                                <input
+                                  type="checkbox"
+                                  checked={selectedItems.includes(item.id)}
+                                  onChange={(e) => {
+                                    if (e.target.checked) {
+                                      setSelectedItems(prev => [...prev, item.id]);
+                                    } else {
+                                      setSelectedItems(prev => prev.filter(id => id !== item.id));
+                                    }
+                                  }}
+                                  className="item-checkbox"
+                                  style={{ width: '18px', height: '18px', cursor: 'pointer' }}
+                                />
+                              );
                             case 'barcode':
                               return (
                                 <input
@@ -2400,12 +2534,26 @@ const CreateOrderForm = () => {
         <button className="modal-btn copy" onClick={handleCopyOrder}>
           📋 Copy
         </button>
-        <button className="modal-btn cancel">
+        <button className="modal-btn cancel" onClick={handleCancelOrder}>
           🚫 Hủy
         </button>
-        <button className="modal-btn approve">
+        <button className="modal-btn approve" onClick={handleApproveOrder}>
           ✓ Duyệt
         </button>
+        {/* Order status indicator */}
+        {editingOrderId && (
+          <div className="order-status-indicator" style={{
+            marginLeft: 'auto',
+            padding: '8px 16px',
+            borderRadius: '4px',
+            fontWeight: 'bold',
+            backgroundColor: orderForm.status === 'đã duyệt' ? '#28a745' : 
+                           orderForm.status === 'đã hủy' ? '#dc3545' : '#ffc107',
+            color: orderForm.status === 'chưa duyệt' ? '#000' : '#fff'
+          }}>
+            Trạng thái: {orderForm.status || 'chưa duyệt'}
+          </div>
+        )}
       </div>
       
       {/* Search Modal */}

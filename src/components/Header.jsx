@@ -157,8 +157,8 @@ const Header = () => {
           name: 'Bán hàng', 
           path: '/business/sales',
           submenu: [
-            { name: 'Tạo đơn hàng', path: '/business/sales/create-order' },
-            { name: 'Quản lý đơn hàng', path: '/business/sales/order-management' },
+            { name: 'Quản lý bán hàng (User)', path: '/business/sales/sale-management-by-current-user' },
+            { name: 'Quản lý bán hàng (Admin)', path: '/business/sales/sale-management' },
             { name: 'In đơn hàng', path: '/business/sales/print-order' },
             { name: 'In đơn hàng theo xe', path: '/business/sales/print-order-by-vehicle' }
           ]
