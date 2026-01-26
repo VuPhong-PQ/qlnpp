@@ -35,6 +35,15 @@ namespace QlnppApi.Data
         public DbSet<WarehouseTransferItem> WarehouseTransferItems { get; set; }
         public DbSet<Export> Exports { get; set; }
         public DbSet<ExportItem> ExportItems { get; set; }
+        
+        // Permission tables
+        public DbSet<PermissionGroup> PermissionGroups { get; set; }
+        public DbSet<UserPermissionGroup> UserPermissionGroups { get; set; }
+        public DbSet<PermissionGroupDetail> PermissionGroupDetails { get; set; }
+        public DbSet<ReportPermission> ReportPermissions { get; set; }
+        public DbSet<ReportCategory> ReportCategories { get; set; }
+        public DbSet<WarehousePermission> WarehousePermissions { get; set; }
+        public DbSet<ProductCategoryPermission> ProductCategoryPermissions { get; set; }
         protected override void OnModelCreating(ModelBuilder modelBuilder)
         {
             base.OnModelCreating(modelBuilder);
@@ -429,6 +438,83 @@ namespace QlnppApi.Data
                 entity.HasOne(i => i.Quotation).WithMany(q => q.Items).HasForeignKey(i => i.QuotationId).OnDelete(DeleteBehavior.Cascade);
                 entity.Property(i => i.Price).HasPrecision(18, 2);
                 entity.Property(i => i.Price1).HasPrecision(18, 2);
+            });
+
+            // Permission entities configuration
+            modelBuilder.Entity<PermissionGroup>(entity =>
+            {
+                entity.HasKey(pg => pg.Id);
+                entity.Property(pg => pg.Name).IsRequired().HasMaxLength(100);
+                entity.Property(pg => pg.Description).HasMaxLength(500);
+            });
+
+            modelBuilder.Entity<UserPermissionGroup>(entity =>
+            {
+                entity.HasKey(upg => upg.Id);
+                entity.HasOne(upg => upg.User)
+                      .WithMany()
+                      .HasForeignKey(upg => upg.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(upg => upg.PermissionGroup)
+                      .WithMany(pg => pg.UserPermissionGroups)
+                      .HasForeignKey(upg => upg.PermissionGroupId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<PermissionGroupDetail>(entity =>
+            {
+                entity.HasKey(pgd => pgd.Id);
+                entity.HasOne(pgd => pgd.PermissionGroup)
+                      .WithMany(pg => pg.PermissionDetails)
+                      .HasForeignKey(pgd => pgd.PermissionGroupId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                entity.Property(pgd => pgd.ResourceKey).IsRequired().HasMaxLength(200);
+                entity.Property(pgd => pgd.ResourceName).HasMaxLength(200);
+            });
+
+            modelBuilder.Entity<ReportPermission>(entity =>
+            {
+                entity.HasKey(rp => rp.Id);
+                entity.HasOne(rp => rp.User)
+                      .WithMany()
+                      .HasForeignKey(rp => rp.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                entity.Property(rp => rp.ReportKey).IsRequired().HasMaxLength(100);
+                entity.Property(rp => rp.ReportName).HasMaxLength(200);
+            });
+
+            modelBuilder.Entity<ReportCategory>(entity =>
+            {
+                entity.HasKey(rc => rc.Id);
+                entity.Property(rc => rc.Key).IsRequired().HasMaxLength(100);
+                entity.Property(rc => rc.Name).IsRequired().HasMaxLength(200);
+                entity.Property(rc => rc.Description).HasMaxLength(500);
+            });
+
+            modelBuilder.Entity<WarehousePermission>(entity =>
+            {
+                entity.HasKey(wp => wp.Id);
+                entity.HasOne(wp => wp.User)
+                      .WithMany()
+                      .HasForeignKey(wp => wp.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(wp => wp.Warehouse)
+                      .WithMany()
+                      .HasForeignKey(wp => wp.WarehouseId)
+                      .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<ProductCategoryPermission>(entity =>
+            {
+                entity.HasKey(pcp => pcp.Id);
+                entity.HasOne(pcp => pcp.User)
+                      .WithMany()
+                      .HasForeignKey(pcp => pcp.UserId)
+                      .OnDelete(DeleteBehavior.Cascade);
+                entity.HasOne(pcp => pcp.ProductCategory)
+                      .WithMany()
+                      .HasForeignKey(pcp => pcp.ProductCategoryId)
+                      .OnDelete(DeleteBehavior.Cascade);
             });
         }
     }

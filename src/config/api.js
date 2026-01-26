@@ -3,6 +3,13 @@ export const API_BASE_URL = 'http://localhost:5238/api';
 
 // API Endpoints
 export const API_ENDPOINTS = {
+  // Auth - Xác thực
+  auth: `${API_BASE_URL}/auth`,
+  login: `${API_BASE_URL}/auth/login`,
+  register: `${API_BASE_URL}/auth/register`,
+  changePassword: `${API_BASE_URL}/auth/change-password`,
+  resetPassword: `${API_BASE_URL}/auth/reset-password`,
+  
   // Setup - Thiết lập ban đầu
   units: `${API_BASE_URL}/units`,
   productCategories: `${API_BASE_URL}/productcategories`,
@@ -21,6 +28,14 @@ export const API_ENDPOINTS = {
   vehicles: `${API_BASE_URL}/vehicles`,
   orders: `${API_BASE_URL}/orders`,
   geocoding: `${API_BASE_URL}/geocoding`,
+  
+  // Permissions - Phân quyền
+  permissionGroups: `${API_BASE_URL}/permissiongroups`,
+  userPermissions: `${API_BASE_URL}/userpermissions`,
+  groupPermissions: `${API_BASE_URL}/grouppermissions`,
+  reportPermissions: `${API_BASE_URL}/reportpermissions`,
+  warehousePermissions: `${API_BASE_URL}/warehousepermissions`,
+  productCategoryPermissions: `${API_BASE_URL}/productcategorypermissions`,
 };
 
 // API Helper functions

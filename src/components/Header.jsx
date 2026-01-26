@@ -2,11 +2,14 @@ import React, { useState, useEffect } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { removeVietnameseTones } from '../utils/searchUtils';
 import { API_ENDPOINTS, api } from '../config/api';
+import { useAuth } from '../contexts/AuthContext';
 import './Header.css';
 
 const Header = () => {
+  const { user, logout, isAuthenticated } = useAuth();
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [showSearchModal, setShowSearchModal] = useState(false);
+  const [showUserMenu, setShowUserMenu] = useState(false);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchResults, setSearchResults] = useState([]);
   const [selectedItems, setSelectedItems] = useState([]);
@@ -187,11 +190,16 @@ const Header = () => {
       icon: '🛠️',
       items: [
         { name: 'Quản lý dữ liệu', path: '/admin/manage-data' },
-        { name: 'Quản lý vai trò', path: '/permissions/roles' },
+        { name: 'Nhóm quyền', path: '/permissions/groups' },
         { name: 'Phân quyền người dùng', path: '/permissions/users' }
       ]
     }
   ];
+
+  const handleLogout = () => {
+    logout();
+    navigate('/login');
+  };
 
   const handleMouseEnter = (menuId) => {
     setActiveDropdown(menuId);
@@ -267,10 +275,52 @@ const Header = () => {
       {/* header-actions removed: using page-level search modal instead */}
 
       <div className="header-user">
-        <div className="user-info">
-          <span className="user-icon">👤</span>
-          <span className="user-name">admin</span>
+        <div 
+          className="user-info"
+          onClick={() => setShowUserMenu(!showUserMenu)}
+          style={{ cursor: 'pointer' }}
+        >
+          {user?.avatarUrl ? (
+            <img src={user.avatarUrl} alt="avatar" className="user-avatar" />
+          ) : (
+            <span className="user-icon">👤</span>
+          )}
+          <span className="user-name">{user?.name || user?.username || 'Người dùng'}</span>
+          <span className="dropdown-arrow">▼</span>
         </div>
+        
+        {showUserMenu && (
+          <>
+            <div className="user-menu-overlay" onClick={() => setShowUserMenu(false)} />
+            <div className="user-menu">
+              <div className="user-menu-header">
+                <div className="user-menu-avatar">
+                  {user?.avatarUrl ? (
+                    <img src={user.avatarUrl} alt="avatar" />
+                  ) : (
+                    <span>👤</span>
+                  )}
+                </div>
+                <div className="user-menu-info">
+                  <div className="user-menu-name">{user?.name || user?.username}</div>
+                  <div className="user-menu-email">{user?.email || user?.position || ''}</div>
+                </div>
+              </div>
+              <div className="user-menu-items">
+                <button className="user-menu-item" onClick={() => { setShowUserMenu(false); navigate('/profile'); }}>
+                  <span>👤</span> Thông tin cá nhân
+                </button>
+                <button className="user-menu-item" onClick={() => { setShowUserMenu(false); navigate('/change-password'); }}>
+                  <span>🔑</span> Đổi mật khẩu
+                </button>
+                <div className="user-menu-divider"></div>
+                <button className="user-menu-item logout" onClick={handleLogout}>
+                  <span>🚪</span> Đăng xuất
+                </button>
+              </div>
+            </div>
+          </>
+        )}
       </div>
 
       {/* Search Modal */}

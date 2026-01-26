@@ -95,8 +95,9 @@ using (var scope = app.Services.CreateScope())
     {
         if (db.Database.CanConnect())
         {
-            var exists = db.Users.Any(u => u.Username == "superadmin");
-            if (!exists)
+            // Seed superadmin user
+            var existsSuperAdmin = db.Users.Any(u => u.Username == "superadmin");
+            if (!existsSuperAdmin)
             {
                 var user = new User
                 {
@@ -110,6 +111,24 @@ using (var scope = app.Services.CreateScope())
                 db.Users.Add(user);
                 db.SaveChanges();
                 Console.WriteLine("Seeded default superadmin user.");
+            }
+
+            // Seed admin user
+            var existsAdmin = db.Users.Any(u => u.Username == "admin");
+            if (!existsAdmin)
+            {
+                var adminUser = new User
+                {
+                    Username = "admin",
+                    PasswordHash = ComputeSha256Hash("admin123"),
+                    Name = "Quản trị viên",
+                    Email = "admin@company.com",
+                    Phone = null,
+                    IsInactive = false
+                };
+                db.Users.Add(adminUser);
+                db.SaveChanges();
+                Console.WriteLine("Seeded default admin user.");
             }
         }
     }

@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { API_BASE_URL } from '../../config/api';
 import '../setup/SetupPage.css';
 
 const empty = {
@@ -21,6 +22,11 @@ const empty = {
 export default function UserModal({ show, onClose, onSave, initialData }) {
   const [form, setForm] = useState(empty);
   const [showPassword, setShowPassword] = useState(false);
+  const [showResetPwDialog, setShowResetPwDialog] = useState(false);
+  const [resetPwNewPassword, setResetPwNewPassword] = useState('');
+  const [resetPwConfirm, setResetPwConfirm] = useState('');
+  const [resetPwError, setResetPwError] = useState('');
+  const [resetPwLoading, setResetPwLoading] = useState(false);
   const fileRef = useRef(null);
 
   useEffect(() => {
@@ -46,9 +52,61 @@ export default function UserModal({ show, onClose, onSave, initialData }) {
     setForm(prev => ({ ...prev, avatarUrl: url }));
   };
 
-  const handleResetPassword = () => {
-    setForm(prev => ({ ...prev, password: '' }));
-    alert('Mật khẩu đã được đặt lại tạm thời. (Thực hiện backend để gửi mật khẩu mới.)');
+  const handleResetPassword = async () => {
+    // If editing existing user, show dialog to enter new password
+    if (initialData && initialData.id) {
+      setResetPwNewPassword('');
+      setResetPwConfirm('');
+      setResetPwError('');
+      setShowResetPwDialog(true);
+    } else {
+      // For new user, just clear password field
+      setForm(prev => ({ ...prev, password: '' }));
+    }
+  };
+
+  const handleConfirmResetPassword = async () => {
+    setResetPwError('');
+    
+    if (!resetPwNewPassword) {
+      setResetPwError('Vui lòng nhập mật khẩu mới');
+      return;
+    }
+    
+    if (resetPwNewPassword.length < 4) {
+      setResetPwError('Mật khẩu phải có ít nhất 4 ký tự');
+      return;
+    }
+    
+    if (resetPwNewPassword !== resetPwConfirm) {
+      setResetPwError('Mật khẩu xác nhận không khớp');
+      return;
+    }
+
+    try {
+      setResetPwLoading(true);
+      const response = await fetch(`${API_BASE_URL}/users/${initialData.id}/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ newPassword: resetPwNewPassword }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        alert(`Đã đặt lại mật khẩu cho người dùng "${initialData.username}" thành công!`);
+        setShowResetPwDialog(false);
+      } else {
+        setResetPwError(data.message || 'Đặt lại mật khẩu thất bại');
+      }
+    } catch (err) {
+      console.error('Reset password failed', err);
+      setResetPwError('Có lỗi xảy ra. Vui lòng thử lại.');
+    } finally {
+      setResetPwLoading(false);
+    }
   };
 
   const submit = (e) => {
@@ -179,7 +237,9 @@ export default function UserModal({ show, onClose, onSave, initialData }) {
 
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 12 }}>
             <div>
-              <button type="button" className="btn btn-success" onClick={handleResetPassword}>Đặt lại mật khẩu</button>
+              {initialData && initialData.id && (
+                <button type="button" className="btn btn-success" onClick={handleResetPassword}>Đặt lại mật khẩu</button>
+              )}
             </div>
             <div style={{ display: 'flex', gap: 8 }}>
               <button type="submit" className="btn btn-primary">Lưu lại</button>
@@ -187,6 +247,100 @@ export default function UserModal({ show, onClose, onSave, initialData }) {
             </div>
           </div>
         </form>
+
+        {/* Reset Password Dialog */}
+        {showResetPwDialog && (
+          <div style={{
+            position: 'fixed',
+            top: 0,
+            left: 0,
+            right: 0,
+            bottom: 0,
+            backgroundColor: 'rgba(0,0,0,0.5)',
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            zIndex: 1100
+          }}>
+            <div style={{
+              background: '#fff',
+              borderRadius: 8,
+              padding: 24,
+              width: 400,
+              maxWidth: '90%',
+              boxShadow: '0 4px 20px rgba(0,0,0,0.2)'
+            }}>
+              <h3 style={{ marginBottom: 16 }}>Đặt lại mật khẩu cho "{initialData?.username}"</h3>
+              
+              {resetPwError && (
+                <div style={{ 
+                  background: '#fff5f5', 
+                  color: '#e53e3e', 
+                  padding: 12, 
+                  borderRadius: 6, 
+                  marginBottom: 16,
+                  fontSize: 14
+                }}>
+                  {resetPwError}
+                </div>
+              )}
+              
+              <div style={{ marginBottom: 16 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>Mật khẩu mới</label>
+                <input
+                  type="password"
+                  value={resetPwNewPassword}
+                  onChange={(e) => setResetPwNewPassword(e.target.value)}
+                  style={{ 
+                    width: '100%', 
+                    padding: '10px 12px', 
+                    border: '1px solid #e2e8f0', 
+                    borderRadius: 6,
+                    fontSize: 14
+                  }}
+                  placeholder="Nhập mật khẩu mới"
+                />
+              </div>
+              
+              <div style={{ marginBottom: 20 }}>
+                <label style={{ display: 'block', marginBottom: 6, fontWeight: 500 }}>Xác nhận mật khẩu</label>
+                <input
+                  type="password"
+                  value={resetPwConfirm}
+                  onChange={(e) => setResetPwConfirm(e.target.value)}
+                  style={{ 
+                    width: '100%', 
+                    padding: '10px 12px', 
+                    border: '1px solid #e2e8f0', 
+                    borderRadius: 6,
+                    fontSize: 14
+                  }}
+                  placeholder="Nhập lại mật khẩu mới"
+                  onKeyDown={(e) => { if (e.key === 'Enter') handleConfirmResetPassword(); }}
+                />
+              </div>
+              
+              <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+                <button 
+                  type="button" 
+                  className="btn btn-secondary"
+                  onClick={() => setShowResetPwDialog(false)}
+                  disabled={resetPwLoading}
+                >
+                  Hủy
+                </button>
+                <button 
+                  type="button" 
+                  className="btn btn-primary"
+                  onClick={handleConfirmResetPassword}
+                  disabled={resetPwLoading}
+                >
+                  {resetPwLoading ? 'Đang xử lý...' : 'Xác nhận'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

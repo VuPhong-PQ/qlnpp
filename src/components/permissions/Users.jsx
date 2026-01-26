@@ -1,13 +1,15 @@
 import React, { useState, useEffect } from 'react';
+import { useNavigate } from 'react-router-dom';
 import '../setup/SetupPage.css';
 import UserModal from './UserModal';
 import PermissionModal from './PermissionModal';
 import GroupPermissionModal from './GroupPermissionModal';
-import { API_ENDPOINTS, api } from '../../config/api';
+import { API_ENDPOINTS, api, API_BASE_URL } from '../../config/api';
 import { exportToExcel } from '../../utils/excelUtils';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
 
 export default function Users() {
+  const navigate = useNavigate();
   const [users, setUsers] = useState([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -21,6 +23,14 @@ export default function Users() {
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [showPageSizeDropdown, setShowPageSizeDropdown] = useState(false);
+  
+  // Reset password modal
+  const [showResetPwModal, setShowResetPwModal] = useState(false);
+  const [resetPwUser, setResetPwUser] = useState(null);
+  const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [resetPwError, setResetPwError] = useState('');
+  const [resetPwLoading, setResetPwLoading] = useState(false);
 
   useEffect(() => {
     loadUsers();
@@ -79,6 +89,59 @@ export default function Users() {
       alert('Lưu thất bại');
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Reset password handlers
+  const openResetPwModal = (user) => {
+    setResetPwUser(user);
+    setNewPassword('');
+    setConfirmPassword('');
+    setResetPwError('');
+    setShowResetPwModal(true);
+  };
+
+  const handleResetPassword = async () => {
+    setResetPwError('');
+    
+    if (!newPassword) {
+      setResetPwError('Vui lòng nhập mật khẩu mới');
+      return;
+    }
+    
+    if (newPassword.length < 4) {
+      setResetPwError('Mật khẩu phải có ít nhất 4 ký tự');
+      return;
+    }
+    
+    if (newPassword !== confirmPassword) {
+      setResetPwError('Mật khẩu xác nhận không khớp');
+      return;
+    }
+
+    try {
+      setResetPwLoading(true);
+      const response = await fetch(`${API_BASE_URL}/users/${resetPwUser.id}/reset-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ newPassword }),
+      });
+
+      const data = await response.json();
+      
+      if (data.success) {
+        alert(`Đã đặt lại mật khẩu cho người dùng "${resetPwUser.username}"`);
+        setShowResetPwModal(false);
+      } else {
+        setResetPwError(data.message || 'Đặt lại mật khẩu thất bại');
+      }
+    } catch (err) {
+      console.error('Reset password failed', err);
+      setResetPwError('Có lỗi xảy ra. Vui lòng thử lại.');
+    } finally {
+      setResetPwLoading(false);
     }
   };
 
@@ -227,8 +290,10 @@ export default function Users() {
                   <td style={{ width: 72, position: 'sticky', right: 0, background: '#fff', zIndex: 3 }}>
                     <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', padding: 8 }}>
                       <button title="Chi tiết / Sửa" onClick={() => handleEdit(u)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#5bc0de', color: '#fff', cursor: 'pointer' }}>✎</button>
+                      <button title="Đặt lại mật khẩu" onClick={() => openResetPwModal(u)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#f39c12', color: '#fff', cursor: 'pointer' }}>🔓</button>
                       <button title="Xóa nhân viên" onClick={() => handleDelete(u.id)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#ff6b6b', color: '#fff', cursor: 'pointer' }}>🗑</button>
-                      <button title="Phân quyền" onClick={() => { setPermTarget(u); setShowPermModal(true); }} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#8e44ad', color: '#fff', cursor: 'pointer' }}>🔐</button>
+                      <button title="Phân quyền chi tiết" onClick={() => navigate(`/permissions/user-permissions/${u.id}`)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#667eea', color: '#fff', cursor: 'pointer' }}>🔑</button>
+                      <button title="Phân quyền nhanh" onClick={() => { setPermTarget(u); setShowPermModal(true); }} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#8e44ad', color: '#fff', cursor: 'pointer' }}>🔐</button>
                       <button title="Phân quyền nhóm hàng" onClick={() => { setPermTarget(u); setShowGroupPermModal(true); }} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#2ecc71', color: '#fff', cursor: 'pointer' }}>📦</button>
                     </div>
                   </td>
@@ -342,6 +407,134 @@ export default function Users() {
           onSave={async () => { setShowGroupPermModal(false); await loadUsers(); }}
           user={permTarget}
         />
+      )}
+
+      {/* Reset Password Modal */}
+      {showResetPwModal && (
+        <div style={{
+          position: 'fixed',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'rgba(0,0,0,0.5)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          zIndex: 10000
+        }}>
+          <div style={{
+            background: '#fff',
+            borderRadius: 12,
+            padding: 24,
+            width: 400,
+            maxWidth: '90%',
+            boxShadow: '0 4px 20px rgba(0,0,0,0.3)'
+          }}>
+            <h3 style={{ margin: '0 0 20px', color: '#333', display: 'flex', alignItems: 'center', gap: 8 }}>
+              🔓 Đặt lại mật khẩu
+            </h3>
+            
+            <div style={{ marginBottom: 16 }}>
+              <p style={{ margin: '0 0 8px', color: '#666' }}>
+                Đặt lại mật khẩu cho người dùng: <strong>{resetPwUser?.username}</strong>
+              </p>
+              {resetPwUser?.name && (
+                <p style={{ margin: 0, color: '#999', fontSize: 14 }}>
+                  ({resetPwUser.name})
+                </p>
+              )}
+            </div>
+
+            {resetPwError && (
+              <div style={{
+                background: '#fff3f3',
+                border: '1px solid #ffccc7',
+                borderRadius: 6,
+                padding: '10px 12px',
+                marginBottom: 16,
+                color: '#ff4d4f',
+                fontSize: 14
+              }}>
+                {resetPwError}
+              </div>
+            )}
+
+            <div style={{ marginBottom: 16 }}>
+              <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, color: '#333' }}>
+                Mật khẩu mới
+              </label>
+              <input
+                type="password"
+                value={newPassword}
+                onChange={(e) => setNewPassword(e.target.value)}
+                placeholder="Nhập mật khẩu mới"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d9d9d9',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  boxSizing: 'border-box'
+                }}
+                autoFocus
+              />
+            </div>
+
+            <div style={{ marginBottom: 24 }}>
+              <label style={{ display: 'block', marginBottom: 6, fontWeight: 500, color: '#333' }}>
+                Xác nhận mật khẩu
+              </label>
+              <input
+                type="password"
+                value={confirmPassword}
+                onChange={(e) => setConfirmPassword(e.target.value)}
+                placeholder="Nhập lại mật khẩu mới"
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #d9d9d9',
+                  borderRadius: 6,
+                  fontSize: 14,
+                  boxSizing: 'border-box'
+                }}
+                onKeyDown={(e) => { if (e.key === 'Enter') handleResetPassword(); }}
+              />
+            </div>
+
+            <div style={{ display: 'flex', gap: 12, justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => setShowResetPwModal(false)}
+                style={{
+                  padding: '10px 20px',
+                  border: '1px solid #d9d9d9',
+                  borderRadius: 6,
+                  background: '#fff',
+                  cursor: 'pointer',
+                  fontSize: 14
+                }}
+              >
+                Hủy
+              </button>
+              <button
+                onClick={handleResetPassword}
+                disabled={resetPwLoading}
+                style={{
+                  padding: '10px 20px',
+                  border: 'none',
+                  borderRadius: 6,
+                  background: resetPwLoading ? '#ccc' : '#f39c12',
+                  color: '#fff',
+                  cursor: resetPwLoading ? 'not-allowed' : 'pointer',
+                  fontSize: 14,
+                  fontWeight: 500
+                }}
+              >
+                {resetPwLoading ? 'Đang xử lý...' : 'Đặt lại mật khẩu'}
+              </button>
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
