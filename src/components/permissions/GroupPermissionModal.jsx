@@ -74,30 +74,44 @@ export default function GroupPermissionModal({ show, onClose, onSave, user }) {
   };
 
   const handleSave = async () => {
-    // Build payload: for each category that has any permission true and rowChecked true
-    const payload = { Group: user?.id || null, Permissions: {} };
+    // Build payload: list of ProductCategoryPermission objects
+    const permissions = [];
     Object.keys(selected).forEach(key => {
       if (!rowChecked[key]) return;
       const p = selected[key];
-      payload.Permissions[key] = {
-        CanView: !!p.view,
-        CanAdd: !!p.add,
-        CanEdit: !!p.edit,
-        CanDelete: !!p.delete,
-        CanPrint: !!p.print,
-        CanImport: !!p.import,
-        CanExport: !!p.export
-      };
+      // Find the category to get its ID
+      const cat = categories.find(c => (c.id || c.code || c.name) === key);
+      if (!cat) return;
+      
+      permissions.push({
+        userId: user?.id,
+        productCategoryId: cat.id,
+        canView: !!p.view,
+        canAdd: !!p.add,
+        canEdit: !!p.edit,
+        canDelete: !!p.delete,
+        canViewPrice: !!p.view,
+        canEditPrice: !!p.edit,
+        canViewStock: !!p.view
+      });
     });
 
     try {
-      if (API_ENDPOINTS.permissionGroups) {
-        await api.post(API_ENDPOINTS.permissionGroups, payload);
+      // Use productCategoryPermissions API
+      const response = await fetch(`${API_ENDPOINTS.productCategoryPermissions}/user/${user?.id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(permissions)
+      });
+      
+      if (response.ok) {
+        alert('Lưu phân quyền nhóm hàng thành công!');
+        if (onSave) onSave(permissions);
+        onClose();
       } else {
-        // fallback: call onSave so app can handle
-        if (onSave) onSave(payload);
+        const err = await response.json();
+        alert(err.message || 'Lưu thất bại');
       }
-      onClose();
     } catch (err) {
       console.error('Save group permissions failed', err);
       alert('Lưu thất bại');

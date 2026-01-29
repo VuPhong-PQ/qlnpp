@@ -2,7 +2,18 @@ import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../../config/api';
 import ExcelJS from 'exceljs';
+import SearchableSelect from '../../common/SearchableSelect';
 import '../BusinessPage.css';
+
+// Hàm xóa dấu tiếng Việt để tìm kiếm
+const removeVietnameseTones = (str) => {
+  if (!str) return '';
+  return str.normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase();
+};
 
 // Constants for localStorage
 const COLUMN_SETTINGS_KEY = 'saleManagementColumnSettings';
@@ -33,18 +44,18 @@ const SaleManagement = () => {
 
   const [searchData, setSearchData] = useState({
     orderNumber: '',
-    dateRange: '01/01/2026 - 02/01/2026',
+    dateRange: '01/01/2026 - 31/01/2026',
     customerGroup: '',
     productType: '',
     customer: '',
     createdBy: '',
     salesStaff: '',
-    status: 'Chưa duyệt'
+    status: ''
   });
 
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedStartDate, setSelectedStartDate] = useState(new Date(2026, 0, 1));
-  const [selectedEndDate, setSelectedEndDate] = useState(new Date(2026, 0, 2));
+  const [selectedEndDate, setSelectedEndDate] = useState(new Date(2026, 0, 31));
   const datePickerRef = useRef(null);
 
   const [orders, setOrders] = useState([]);
@@ -143,14 +154,62 @@ const SaleManagement = () => {
     };
   }, [showDatePicker]);
 
-  // Fetch orders from database - all orders for admin
+  // Fetch orders from database - filtered by current user unless admin
   const fetchOrders = async () => {
     setLoading(true);
     try {
-      const response = await fetch(`${API_BASE_URL}/Orders`);
+      // Get current user info and permissions from localStorage
+      let currentUser = null;
+      let isAdmin = false;
+      
+      try {
+        const userStr = localStorage.getItem('user');
+        if (userStr) {
+          currentUser = JSON.parse(userStr);
+        }
+      } catch (e) {
+        console.error('Error parsing user from localStorage:', e);
+      }
+      
+      // Check if user is admin
+      try {
+        const permStr = localStorage.getItem('permissions');
+        if (permStr) {
+          const permissions = JSON.parse(permStr);
+          // Check for admin permission
+          isAdmin = permissions.some(p => 
+            p.startsWith('quan_tri_he_thong:') || 
+            p === 'quan_tri_he_thong'
+          );
+        }
+      } catch (e) {
+        console.error('Error parsing permissions from localStorage:', e);
+      }
+      
+      // Also check if username contains 'admin'
+      if (!isAdmin && currentUser) {
+        const username = currentUser.username || currentUser.name || currentUser.displayName || '';
+        if (username.toLowerCase().includes('admin')) {
+          isAdmin = true;
+        }
+      }
+      
+      // Build query params
+      const params = new URLSearchParams();
+      if (isAdmin) {
+        params.append('isAdmin', 'true');
+      } else if (currentUser) {
+        // Use tenNhanVien (employee name) as that's what's stored in CreatedBy
+        const username = currentUser.tenNhanVien || currentUser.name || currentUser.username || currentUser.displayName || '';
+        if (username) {
+          params.append('username', username);
+        }
+      }
+      
+      const url = `${API_BASE_URL}/Orders${params.toString() ? '?' + params.toString() : ''}`;
+      const response = await fetch(url);
       if (response.ok) {
         const ordersData = await response.json();
-        // Show all orders for admin
         setOrders(ordersData);
         setFilteredOrders(ordersData);
       } else {
@@ -238,14 +297,14 @@ const SaleManagement = () => {
   }, []);
 
   const handleSearch = () => {
-    console.log('Tìm kiếm với dữ liệu:', searchData);
     
     let filtered = [...orders];
     
-    // Filter by order number
+    // Filter by order number (hỗ trợ tìm kiếm không dấu)
     if (searchData.orderNumber.trim()) {
+      const searchTerm = removeVietnameseTones(searchData.orderNumber.trim());
       filtered = filtered.filter(order => 
-        order.orderNumber && order.orderNumber.toLowerCase().includes(searchData.orderNumber.toLowerCase())
+        order.orderNumber && removeVietnameseTones(order.orderNumber).includes(searchTerm)
       );
     }
     
@@ -260,37 +319,71 @@ const SaleManagement = () => {
         filtered = filtered.filter(order => {
           if (!order.orderDate) return false;
           const orderDate = new Date(order.orderDate);
-          return orderDate >= startDate && orderDate <= endDate;
+          const match = orderDate >= startDate && orderDate <= endDate;
+          if (!match) {
+            // order excluded by date range
+          }
+          return match;
         });
+        
       }
     }
     
-    // Filter by customer group
-    if (searchData.customerGroup && searchData.customerGroup !== 'Nhóm khách hàng') {
+    // Filter by customer group (hỗ trợ tìm kiếm không dấu)
+    if (searchData.customerGroup && searchData.customerGroup !== '') {
+      const searchTerm = removeVietnameseTones(searchData.customerGroup);
       filtered = filtered.filter(order => 
-        order.customerGroup && order.customerGroup === searchData.customerGroup
+        order.customerGroup && removeVietnameseTones(order.customerGroup).includes(searchTerm)
       );
     }
     
-    // Filter by customer
-    if (searchData.customer && searchData.customer !== 'Khách hàng') {
+    // Filter by customer (hỗ trợ tìm kiếm không dấu - so sánh với customerName)
+    if (searchData.customer && searchData.customer !== '') {
+      const searchTerm = removeVietnameseTones(searchData.customer);
+      filtered = filtered.filter(order => {
+        const customer = removeVietnameseTones(order.customer || '');
+        const customerName = removeVietnameseTones(order.customerName || '');
+        return customer.includes(searchTerm) || customerName.includes(searchTerm);
+      });
+    }
+    
+    // Filter by product type (hỗ trợ tìm kiếm không dấu)
+    if (searchData.productType && searchData.productType !== '') {
+      const searchTerm = removeVietnameseTones(searchData.productType);
       filtered = filtered.filter(order => 
-        order.customer && order.customer === searchData.customer
+        order.productType && removeVietnameseTones(order.productType).includes(searchTerm)
       );
     }
     
-    // Filter by product type
-    if (searchData.productType && searchData.productType !== 'Loại hàng') {
-      filtered = filtered.filter(order => 
-        order.productType && order.productType === searchData.productType
-      );
-    }
-    
-    // Filter by created by
+    // Filter by created by (nhân viên lập - hỗ trợ tìm kiếm không dấu)
     if (searchData.createdBy && searchData.createdBy.trim()) {
+      const searchTerm = removeVietnameseTones(searchData.createdBy.trim());
       filtered = filtered.filter(order => 
-        order.createdBy && order.createdBy.toLowerCase().includes(searchData.createdBy.toLowerCase())
+        order.createdBy && removeVietnameseTones(order.createdBy).includes(searchTerm)
       );
+    }
+    
+    // Filter by sales staff (NV Sales - hỗ trợ tìm kiếm không dấu)
+    if (searchData.salesStaff && searchData.salesStaff.trim()) {
+      const searchTerm = removeVietnameseTones(searchData.salesStaff.trim());
+      filtered = filtered.filter(order => 
+        order.salesStaff && removeVietnameseTones(order.salesStaff).includes(searchTerm)
+      );
+    }
+    
+    // Filter by status (trạng thái - hỗ trợ tìm kiếm không dấu)
+    if (searchData.status && searchData.status !== '') {
+      const searchTerm = removeVietnameseTones(searchData.status);
+      filtered = filtered.filter(order => {
+        // Coi status trống, null, undefined, '-' như là "Chưa duyệt"
+        let orderStatus = order.status || '';
+        if (!orderStatus || orderStatus === '-' || orderStatus.trim() === '') {
+          orderStatus = 'Chưa duyệt';
+        }
+        const normalizedStatus = removeVietnameseTones(orderStatus);
+        const match = normalizedStatus.includes(searchTerm);
+        return match;
+      });
     }
     
     setFilteredOrders(filtered);
@@ -1208,12 +1301,15 @@ const SaleManagement = () => {
           {/* First Row */}
           <div className="form-row">
             <div className="form-group">
-              <input
-                type="text"
-                placeholder="Số phiếu"
+              <SearchableSelect
                 value={searchData.orderNumber}
                 onChange={(e) => handleInputChange('orderNumber', e.target.value)}
-                className="form-input"
+                options={[...new Set(orders.map(o => o.orderNumber).filter(Boolean))].map(num => ({
+                  value: num,
+                  label: num
+                }))}
+                placeholder="Số phiếu"
+                className="form-select-searchable"
               />
             </div>
             
@@ -1261,33 +1357,29 @@ const SaleManagement = () => {
             </div>
             
             <div className="form-group">
-              <select
+              <SearchableSelect
                 value={searchData.customerGroup}
                 onChange={(e) => handleInputChange('customerGroup', e.target.value)}
-                className="form-select"
-              >
-                <option value="">Nhóm khách hàng</option>
-                {customerGroups.map(group => (
-                  <option key={group.id} value={group.code}>
-                    {group.name}
-                  </option>
-                ))}
-              </select>
+                options={customerGroups.map(group => ({
+                  value: group.name,
+                  label: group.name
+                }))}
+                placeholder="Nhóm khách hàng"
+                className="form-select-searchable"
+              />
             </div>
             
             <div className="form-group">
-              <select
+              <SearchableSelect
                 value={searchData.productType}
                 onChange={(e) => handleInputChange('productType', e.target.value)}
-                className="form-select"
-              >
-                <option value="">Loại hàng</option>
-                {productCategories.map(category => (
-                  <option key={category.id} value={category.name}>
-                    {category.name}
-                  </option>
-                ))}
-              </select>
+                options={productCategories.map(category => ({
+                  value: category.name,
+                  label: category.name
+                }))}
+                placeholder="Loại hàng"
+                className="form-select-searchable"
+              />
             </div>
             
             {/* search button moved to right column for vertical centering */}
@@ -1296,40 +1388,42 @@ const SaleManagement = () => {
           {/* Second Row */}
           <div className="form-row">
             <div className="form-group">
-              <select
+              <SearchableSelect
                 value={searchData.customer}
                 onChange={(e) => handleInputChange('customer', e.target.value)}
-                className="form-select"
-              >
-                <option value="">Khách hàng</option>
-                {customers.map(customer => (
-                  <option key={customer.id || customer.code} value={customer.code || customer.id}>
-                    {customer.name}{customer.phone ? ` (${customer.phone})` : ''}
-                  </option>
-                ))}
-              </select>
-            </div>
-            
-            <div className="form-group">
-              <input
-                type="text"
-                placeholder="Nhân viên lập"
-                value={searchData.createdBy}
-                onChange={(e) => handleInputChange('createdBy', e.target.value)}
-                className="form-input"
+                options={customers.map(customer => ({
+                  value: customer.name,
+                  label: customer.name + (customer.phone ? ` (${customer.phone})` : '')
+                }))}
+                placeholder="Khách hàng"
+                className="form-select-searchable"
               />
             </div>
             
             <div className="form-group">
-              <select
+              <SearchableSelect
+                value={searchData.createdBy}
+                onChange={(e) => handleInputChange('createdBy', e.target.value)}
+                options={users.map(user => ({
+                  value: user.name || user.tenNhanVien || user.username,
+                  label: user.name || user.tenNhanVien || user.username
+                }))}
+                placeholder="Nhân viên lập"
+                className="form-select-searchable"
+              />
+            </div>
+            
+            <div className="form-group">
+              <SearchableSelect
                 value={searchData.salesStaff}
                 onChange={(e) => handleInputChange('salesStaff', e.target.value)}
-                className="form-select"
-              >
-                <option value="">Nhân viên sale</option>
-                <option value="NV Sales 01">NV Sales 01</option>
-                <option value="NV Sales 02">NV Sales 02</option>
-              </select>
+                options={users.map(user => ({
+                  value: user.name || user.tenNhanVien || user.username,
+                  label: user.name || user.tenNhanVien || user.username
+                }))}
+                placeholder="Nhân viên sale"
+                className="form-select-searchable"
+              />
             </div>
             
             <div className="form-group">

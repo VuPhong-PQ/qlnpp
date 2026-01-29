@@ -19,6 +19,41 @@ const empty = {
   isInactive: false
 };
 
+// Helper function to format date for display (dd-MM-yyyy)
+const formatDateForDisplay = (dateValue) => {
+  if (!dateValue) return '';
+  try {
+    // Handle dd-MM-yyyy format
+    if (/^\d{2}-\d{2}-\d{4}$/.test(dateValue)) return dateValue;
+    // Handle yyyy-MM-dd format
+    if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
+      const [y, m, d] = dateValue.split('-');
+      return `${d}-${m}-${y}`;
+    }
+    // Handle ISO format
+    const date = new Date(dateValue);
+    if (isNaN(date.getTime())) return '';
+    const d = String(date.getDate()).padStart(2, '0');
+    const m = String(date.getMonth() + 1).padStart(2, '0');
+    const y = date.getFullYear();
+    return `${d}-${m}-${y}`;
+  } catch {
+    return '';
+  }
+};
+
+// Helper function to convert dd-MM-yyyy to ISO for API
+const parseDisplayDate = (dateStr) => {
+  if (!dateStr) return null;
+  // Handle dd-MM-yyyy format
+  const match = dateStr.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (match) {
+    const [, d, m, y] = match;
+    return new Date(`${y}-${m}-${d}T00:00:00`).toISOString();
+  }
+  return null;
+};
+
 export default function UserModal({ show, onClose, onSave, initialData }) {
   const [form, setForm] = useState(empty);
   const [showPassword, setShowPassword] = useState(false);
@@ -30,8 +65,18 @@ export default function UserModal({ show, onClose, onSave, initialData }) {
   const fileRef = useRef(null);
 
   useEffect(() => {
-    if (initialData) setForm({ ...empty, ...initialData });
-    else setForm(empty);
+    if (initialData) {
+      // Format date fields properly for display (dd-MM-yyyy)
+      setForm({
+        ...empty,
+        ...initialData,
+        birthYear: formatDateForDisplay(initialData.birthYear),
+        idIssuedDate: formatDateForDisplay(initialData.idIssuedDate),
+        yearStarted: formatDateForDisplay(initialData.yearStarted),
+      });
+    } else {
+      setForm(empty);
+    }
   }, [initialData, show]);
 
   if (!show) return null;
@@ -70,11 +115,6 @@ export default function UserModal({ show, onClose, onSave, initialData }) {
     
     if (!resetPwNewPassword) {
       setResetPwError('Vui lòng nhập mật khẩu mới');
-      return;
-    }
-    
-    if (resetPwNewPassword.length < 4) {
-      setResetPwError('Mật khẩu phải có ít nhất 4 ký tự');
       return;
     }
     
@@ -122,10 +162,10 @@ export default function UserModal({ show, onClose, onSave, initialData }) {
     const submitData = {
       ...form,
       passwordHash: form.password, // Map password -> passwordHash
-      // Convert date strings to proper format if needed
-      birthYear: form.birthYear ? new Date(form.birthYear).toISOString() : null,
-      idIssuedDate: form.idIssuedDate ? new Date(form.idIssuedDate).toISOString() : null,
-      yearStarted: form.yearStarted ? new Date(form.yearStarted).toISOString() : null
+      // Convert dd-MM-yyyy date strings to ISO format for API
+      birthYear: parseDisplayDate(form.birthYear),
+      idIssuedDate: parseDisplayDate(form.idIssuedDate),
+      yearStarted: parseDisplayDate(form.yearStarted)
     };
     
     // Remove password field since we mapped it to passwordHash
@@ -193,7 +233,7 @@ export default function UserModal({ show, onClose, onSave, initialData }) {
 
               <div className="form-group">
                 <label>Năm sinh</label>
-                <input name="birthYear" type="date" value={form.birthYear} onChange={handleChange} />
+                <input name="birthYear" type="text" placeholder="dd-MM-yyyy" value={form.birthYear || ''} onChange={handleChange} />
               </div>
 
               <div className="form-group">
@@ -203,7 +243,7 @@ export default function UserModal({ show, onClose, onSave, initialData }) {
 
               <div className="form-group">
                 <label>Ngày cấp</label>
-                <input name="idIssuedDate" type="date" value={form.idIssuedDate} onChange={handleChange} />
+                <input name="idIssuedDate" type="text" placeholder="dd-MM-yyyy" value={form.idIssuedDate || ''} onChange={handleChange} />
               </div>
 
               <div className="form-group">
@@ -213,7 +253,7 @@ export default function UserModal({ show, onClose, onSave, initialData }) {
 
               <div className="form-group">
                 <label>Năm vào làm</label>
-                <input name="yearStarted" type="date" value={form.yearStarted} onChange={handleChange} />
+                <input name="yearStarted" type="text" placeholder="dd-MM-yyyy" value={form.yearStarted || ''} onChange={handleChange} />
               </div>
 
               <div className="form-group">

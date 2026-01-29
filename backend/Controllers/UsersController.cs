@@ -101,11 +101,6 @@ namespace QlnppApi.Controllers
                     return BadRequest(new { success = false, message = "Mật khẩu mới không được để trống" });
                 }
 
-                if (request.NewPassword.Length < 4)
-                {
-                    return BadRequest(new { success = false, message = "Mật khẩu phải có ít nhất 4 ký tự" });
-                }
-
                 // Hash the new password using hex format (same as seed data)
                 user.PasswordHash = HashPasswordHex(request.NewPassword);
                 await _db.SaveChangesAsync();

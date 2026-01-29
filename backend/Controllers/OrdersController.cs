@@ -29,16 +29,80 @@ namespace QlnppApi.Controllers
         }
 
         // GET: api/Orders
+        // Query params: username (optional) - filter orders by CreatedBy if not admin
+        //               isAdmin (optional) - if true, return all orders
         [HttpGet]
-        public async Task<ActionResult<IEnumerable<Order>>> GetOrders()
+        public async Task<ActionResult<IEnumerable<object>>> GetOrders([FromQuery] string? username = null, [FromQuery] bool isAdmin = false)
         {
-            var orders = await _context.Orders
-                .AsNoTracking()
+            var query = _context.Orders
+                .Include(o => o.OrderItems)
+                .AsNoTracking();
+
+            // If not admin and username is provided, filter by CreatedBy
+            if (!isAdmin && !string.IsNullOrEmpty(username))
+            {
+                query = query.Where(o => 
+                    o.CreatedBy != null && 
+                    o.CreatedBy.ToLower() == username.ToLower()
+                );
+            }
+
+            var orders = await query
                 .OrderByDescending(o => o.OrderDate)
                 .ThenByDescending(o => o.Id)
                 .ToListAsync();
 
-            return orders;
+            // Map orders to include productTypes from order items
+            var result = orders.Select(o => new {
+                o.Id,
+                o.OrderDate,
+                o.OrderNumber,
+                o.Customer,
+                o.CustomerName,
+                o.Phone,
+                o.CreatedBy,
+                o.Address,
+                o.Vehicle,
+                o.CustomerGroup,
+                o.SalesSchedule,
+                o.PrintOrder,
+                o.DeliveryVehicle,
+                o.PriceType,
+                o.ActiveTab,
+                o.DiscountPercent,
+                o.DiscountAmount,
+                o.DiscountNote,
+                o.TotalKg,
+                o.TotalM3,
+                o.Payment,
+                o.AccountFund,
+                o.Notes,
+                o.TotalAmount,
+                o.TotalAfterDiscount,
+                o.Status,
+                o.CreatedDate,
+                o.PaymentDate,
+                o.InvoiceNumber,
+                o.MergeFromOrder,
+                o.MergeToOrder,
+                o.SalesStaff,
+                // Get all unique ProductTypes from OrderItems, join with comma
+                ProductType = o.OrderItems != null && o.OrderItems.Any() 
+                    ? string.Join(", ", o.OrderItems
+                        .Where(i => !string.IsNullOrEmpty(i.ProductType))
+                        .Select(i => i.ProductType)
+                        .Distinct())
+                    : o.ProductType,
+                o.TotalWeight,
+                o.TotalVolume,
+                o.Note,
+                o.DeliveryNote,
+                o.DeliverySuccessful,
+                o.VatExport,
+                o.Location
+            });
+
+            return Ok(result);
         }
 
         // GET: api/Orders/5 (includes items)

@@ -109,11 +109,6 @@ export default function Users() {
       return;
     }
     
-    if (newPassword.length < 4) {
-      setResetPwError('Mật khẩu phải có ít nhất 4 ký tự');
-      return;
-    }
-    
     if (newPassword !== confirmPassword) {
       setResetPwError('Mật khẩu xác nhận không khớp');
       return;

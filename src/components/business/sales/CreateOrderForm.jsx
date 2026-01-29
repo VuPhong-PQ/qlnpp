@@ -3,11 +3,14 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import '../BusinessPage.css';
 import { API_ENDPOINTS, API_BASE_URL, api } from '../../../config/api';
 import OpenStreetMapModal from '../../OpenStreetMapModal';
+import ExcelJS from 'exceljs';
+import { useAuth } from '../../../contexts/AuthContext';
 
 const CreateOrderForm = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const containerRef = useRef(null);
+  const { user: authUser } = useAuth();
 
   // Vietnamese text normalization utility
   const removeVietnameseTones = (str) => {
@@ -199,6 +202,7 @@ const CreateOrderForm = () => {
   const [savedOrders, setSavedOrders] = useState([]); // Danh sách orders từ DB
   const [showOrdersList, setShowOrdersList] = useState(false); // Hiển thị danh sách orders
   const [editingOrderId, setEditingOrderId] = useState(null); // ID của order đang sửa
+  const [companyInfo, setCompanyInfo] = useState(null); // Thông tin công ty cho xuất Excel
   const [selectedItems, setSelectedItems] = useState([]); // Danh sách các item được chọn (checkbox)
   const isCustomerSelected = Boolean(orderForm.customer);
   const initialColWidths = [40, 120, 120, 220, 120, 80, 90, 110, 100, 80, 120, 120, 90, 120, 100, 180, 140, 90, 90, 100, 100, 120, 100, 130, 120];
@@ -260,7 +264,11 @@ const CreateOrderForm = () => {
   
   useEffect(() => {
     // determine current user and permissions
+    // Priority: authUser from context > localStorage
     const getCurrentUser = () => {
+      // First, use authUser from AuthContext (most reliable source)
+      if (authUser) return authUser;
+      
       try {
         if (window && window.__USER__) return window.__USER__;
       } catch {}
@@ -274,14 +282,65 @@ const CreateOrderForm = () => {
       } catch {}
       return null;
     };
+    
+    // Get user permissions from localStorage
+    const getUserPermissions = () => {
+      try {
+        const perms = localStorage.getItem('permissions');
+        if (perms) return JSON.parse(perms);
+      } catch {}
+      return [];
+    };
+    
     const cu = getCurrentUser();
+    const userPermissions = getUserPermissions();
     setCurrentUser(cu);
-    // heuristic: allow choosing sales if user has explicit flag or roles/permissions that imply admin-like access
-    const allowed = Boolean(cu && (cu.canSelectSales || (cu.roles && (cu.roles.includes('admin') || cu.roles.includes('sales_manager'))) || (cu.permissions && cu.permissions.includes('choose_sales'))));
-    setCanChooseSales(allowed);
-    // ensure default nvSales for existing rows when not allowed to choose
-    if (!allowed && cu) {
-      setOrderItems(prev => prev.map(it => ({ ...it, nvSales: it.nvSales || (cu.name || cu.username || cu.displayName || '') })));
+    
+    // Check if user can choose sales staff:
+    // 1. Has 'chon_nhan_vien_sale' permission (with any action)
+    // 2. Is admin (by role or by having 'quan_tri_he_thong' permission)
+    // 3. Has admin-like username/name
+    const hasSelectSalesPermission = userPermissions.some(p => 
+      p.startsWith('chon_nhan_vien_sale:') || p === 'chon_nhan_vien_sale'
+    );
+    const hasAdminPermission = userPermissions.some(p => 
+      p.startsWith('quan_tri_he_thong:') || p === 'quan_tri_he_thong'
+    );
+    const isAdminByRole = cu && (
+      cu.canSelectSales || 
+      (cu.roles && (cu.roles.includes('admin') || cu.roles.includes('Admin') || cu.roles.includes('sales_manager'))) || 
+      (cu.role && (cu.role.toLowerCase().includes('admin') || cu.role.toLowerCase().includes('manager')))
+    );
+    const isAdminByName = cu && (
+      (cu.username && cu.username.toLowerCase().includes('admin')) ||
+      (cu.name && cu.name.toLowerCase().includes('admin')) ||
+      (cu.displayName && cu.displayName.toLowerCase().includes('admin'))
+    );
+    
+    const canSelectSales = hasSelectSalesPermission || hasAdminPermission || isAdminByRole || isAdminByName;
+    setCanChooseSales(canSelectSales);
+    
+    // Get current user's display name for auto-fill
+    // Priority: name (from backend) > tenNhanVien > username > displayName
+    const currentUserDisplayName = cu?.name || cu?.tenNhanVien || cu?.username || cu?.displayName || '';
+    
+    // Check if we're creating a new order (no id in URL)
+    const isCreatingNew = !searchParams.get('id');
+    
+    // ALWAYS auto-fill createdBy (Nhân viên lập) and nvSales with current user's name when creating new
+    // Admin can change later, but default is always current user
+    if (currentUserDisplayName && isCreatingNew) {
+      // Auto-fill createdBy (Nhân viên lập) - FORCE set for new orders
+      setOrderForm(prev => ({
+        ...prev,
+        createdBy: currentUserDisplayName  // Always use current user's name for new orders
+      }));
+      
+      // Auto-fill nvSales for all order items
+      setOrderItems(prev => prev.map(it => ({ 
+        ...it, 
+        nvSales: currentUserDisplayName  // Always use current user's name for new orders
+      })));
     }
     let rebuilt = null;
     try {
@@ -340,7 +399,7 @@ const CreateOrderForm = () => {
     } catch (e) {
       // Failed to load persisted settings, use defaults
     }
-  }, []);
+  }, [authUser, searchParams]); // Re-run when authUser or searchParams changes
 
   // Save compact columns spec (order + visibility)
   useEffect(() => {
@@ -509,9 +568,26 @@ const CreateOrderForm = () => {
     }
   };
 
+  // Fetch company info for Excel export
+  const fetchCompanyInfo = async () => {
+    try {
+      const data = await api.get(API_ENDPOINTS.companyInfos);
+      if (data && data.length > 0) {
+        setCompanyInfo({
+          name: data[0].companyName || data[0].name || 'CÔNG TY',
+          address: data[0].address || '',
+          phone: data[0].phone || ''
+        });
+      }
+    } catch (error) {
+      console.error('Error fetching company info:', error);
+    }
+  };
+
   // Load initial data
   useEffect(() => {
     fetchProductCategories();
+    fetchCompanyInfo();
   }, []);
 
   // Drag state for column reordering
@@ -582,6 +658,9 @@ const CreateOrderForm = () => {
   };
 
   const addOrderItem = () => {
+    // ALWAYS auto-fill nvSales with current user's name (admin can change later if needed)
+    const defaultNvSales = currentUser?.name || currentUser?.tenNhanVien || currentUser?.username || currentUser?.displayName || '';
+    
     setOrderItems(prev => [...prev, {
       id: prev.length + 1,
       productCode: '',
@@ -596,7 +675,7 @@ const CreateOrderForm = () => {
       priceAfterCK: 0,
       totalAfterCK: 0,
       totalAfterDiscount: 0,
-      nvSales: canChooseSales ? '' : (currentUser ? (currentUser.name || currentUser.username || currentUser.displayName || '') : ''),
+      nvSales: defaultNvSales,
       description: '',
       conversion: '',
       amount: 0,
@@ -621,6 +700,9 @@ const CreateOrderForm = () => {
 
   // Add a new order item after a specific index
   const addOrderItemAfter = (index) => {
+    // ALWAYS auto-fill nvSales with current user's name (admin can change later if needed)
+    const defaultNvSales = currentUser?.name || currentUser?.tenNhanVien || currentUser?.username || currentUser?.displayName || '';
+    
     const newItem = {
       id: Date.now(),
       productCode: '',
@@ -635,7 +717,7 @@ const CreateOrderForm = () => {
       priceAfterCK: 0,
       totalAfterCK: 0,
       totalAfterDiscount: 0,
-      nvSales: '',
+      nvSales: defaultNvSales,
       description: '',
       conversion: 1,
       amount: 0,
@@ -661,6 +743,346 @@ const CreateOrderForm = () => {
   const calculateTotals = () => {
     const subtotal = orderItems.reduce((sum, item) => sum + (parseFloat(item.totalAfterDiscount) || 0), 0);
     return subtotal;
+  };
+
+  // Export Excel theo mẫu Phiếu Giao Hàng Kiểm Xác Nhận Công Nợ với định dạng đẹp
+  const handleExportExcel = async () => {
+    // Filter valid items
+    const validItems = orderItems.filter(item => {
+      const hasText = (item.productCode && String(item.productCode).trim()) || 
+                     (item.barcode && String(item.barcode).trim()) || 
+                     (item.productName && String(item.productName).trim());
+      const hasNumbers = (item.quantity && Number(item.quantity) > 0) || 
+                        (item.unitPrice && Number(item.unitPrice) > 0);
+      return Boolean(hasText) || Boolean(hasNumbers);
+    });
+
+    if (validItems.length === 0) {
+      alert('Không có sản phẩm nào để xuất!');
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      const ws = workbook.addWorksheet('Phiếu Giao Hàng');
+
+      // Company info
+      const compName = companyInfo?.name || 'CÔNG TY TNHH MTV Phân Phối TPQ';
+      const compAddr = companyInfo?.address || '';
+      const compPhone = companyInfo?.phone || '';
+
+      // Set column widths
+      ws.columns = [
+        { width: 6 },   // A - STT
+        { width: 12 },  // B - NVBH
+        { width: 18 },  // C - MV (barcode)
+        { width: 50 },  // D - Tên hàng
+        { width: 8 },   // E - ĐVT
+        { width: 8 },   // F - SL
+        { width: 12 },  // G - Đơn giá
+        { width: 8 },   // H - %CK
+        { width: 12 },  // I - Giá sau CK
+        { width: 14 }   // J - Thành tiền
+      ];
+
+      // Helper function for border style
+      const thinBorder = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+
+      // Row 1: Company name + Order number
+      ws.mergeCells('A1:E1');
+      ws.getCell('A1').value = compName;
+      ws.getCell('A1').font = { bold: true, size: 12 };
+      ws.mergeCells('G1:J1');
+      ws.getCell('G1').value = `Số: ${orderForm.orderNumber || ''}`;
+      ws.getCell('G1').alignment = { horizontal: 'right' };
+
+      // Row 2: Address + Vehicle
+      ws.mergeCells('A2:E2');
+      ws.getCell('A2').value = `Địa chỉ: ${compAddr}`;
+      ws.getCell('A2').font = { size: 10 };
+      ws.mergeCells('G2:J2');
+      ws.getCell('G2').value = `Xe: ${orderForm.vehicle || ''}`;
+      ws.getCell('G2').alignment = { horizontal: 'right' };
+
+      // Row 3: Phone + Customer group
+      ws.mergeCells('A3:E3');
+      ws.getCell('A3').value = `Điện thoại: ${compPhone}`;
+      ws.getCell('A3').font = { size: 10 };
+      ws.mergeCells('G3:J3');
+      ws.getCell('G3').value = `Nhóm: ${orderForm.customerGroup || ''}`;
+      ws.getCell('G3').alignment = { horizontal: 'right' };
+
+      // Row 4: STT In
+      ws.mergeCells('G4:J4');
+      ws.getCell('G4').value = `STT In: ${orderForm.printOrder || 0}`;
+      ws.getCell('G4').alignment = { horizontal: 'right' };
+
+      // Row 5: Empty
+
+      // Row 6: Title
+      ws.mergeCells('A6:J6');
+      ws.getCell('A6').value = 'PHIẾU GIAO HÀNG KIỂM XÁC NHẬN CÔNG NỢ';
+      ws.getCell('A6').font = { bold: true, size: 16 };
+      ws.getCell('A6').alignment = { horizontal: 'center' };
+
+      // Row 7: Liên
+      ws.mergeCells('A7:J7');
+      ws.getCell('A7').value = 'Liên: 1';
+      ws.getCell('A7').alignment = { horizontal: 'center' };
+
+      // Row 8: Empty
+
+      // Row 9: Customer info
+      ws.getCell('A9').value = 'Khách hàng:';
+      ws.getCell('A9').font = { bold: true };
+      ws.mergeCells('B9:E9');
+      ws.getCell('B9').value = orderForm.customerName || '';
+      ws.getCell('B9').font = { bold: true, size: 12 };
+      
+      // Xác nhận đã thanh toán box
+      ws.mergeCells('G9:J12');
+      ws.getCell('G9').value = 'Xác nhận đã thanh toán';
+      ws.getCell('G9').alignment = { horizontal: 'center', vertical: 'top' };
+      ws.getCell('G9').border = thinBorder;
+
+      // Row 10: Address
+      ws.getCell('A10').value = 'Địa chỉ:';
+      ws.mergeCells('B10:E10');
+      ws.getCell('B10').value = orderForm.address || '';
+
+      // Row 11: Phone
+      ws.getCell('A11').value = 'ĐT:';
+      ws.mergeCells('B11:E11');
+      ws.getCell('B11').value = orderForm.phone || '';
+
+      // Row 12: Empty
+
+      // Row 13: Table headers
+      const headerRow = 13;
+      const headers = ['STT', 'NVBH', 'MV', 'Tên hàng', 'ĐVT', 'SL', 'Đơn giá', '%CK', 'Giá sau CK', 'Thành tiền'];
+      headers.forEach((header, idx) => {
+        const cell = ws.getCell(headerRow, idx + 1);
+        cell.value = header;
+        cell.font = { bold: true };
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+        cell.border = thinBorder;
+      });
+      ws.getRow(headerRow).height = 22;
+
+      // Row 14: Section "Hàng bán"
+      let currentRow = 14;
+      ws.mergeCells(`A${currentRow}:J${currentRow}`);
+      ws.getCell(`A${currentRow}`).value = 'Hàng bán';
+      ws.getCell(`A${currentRow}`).font = { bold: true, italic: true };
+      ws.getCell(`A${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+      for (let col = 1; col <= 10; col++) {
+        ws.getCell(currentRow, col).border = thinBorder;
+      }
+      currentRow++;
+
+      let totalAmount = 0;
+      let stt = 1;
+
+      // Data rows - "Hàng bán"
+      validItems.forEach((item) => {
+        if (item.exportType !== 'khuyến mãi') {
+          const qty = parseFloat(item.quantity) || 0;
+          const unitPrice = parseFloat(item.unitPrice) || 0;
+          const discPercent = parseFloat(item.discountPercent) || 0;
+          const priceAfterCK = parseFloat(item.priceAfterCK) || unitPrice * (1 - discPercent / 100);
+          const thanhTien = parseFloat(item.totalAfterCK) || qty * priceAfterCK;
+          totalAmount += thanhTien;
+
+          const rowData = [
+            stt++,
+            item.nvSales || '',
+            item.barcode || '',
+            item.productName || '',
+            item.unit || '',
+            qty,
+            unitPrice,
+            discPercent,
+            priceAfterCK,
+            thanhTien
+          ];
+
+          rowData.forEach((value, colIdx) => {
+            const cell = ws.getCell(currentRow, colIdx + 1);
+            cell.value = value;
+            cell.border = thinBorder;
+            // Alignment
+            if (colIdx === 0) cell.alignment = { horizontal: 'center' }; // STT
+            else if (colIdx >= 5) cell.alignment = { horizontal: 'right' }; // Numbers
+            // Number format
+            if (colIdx >= 5 && typeof value === 'number') {
+              cell.numFmt = '#,##0';
+            }
+          });
+          currentRow++;
+        }
+      });
+
+      // Hàng khuyến mãi section
+      const promoItems = validItems.filter(item => item.exportType === 'khuyến mãi');
+      if (promoItems.length > 0) {
+        ws.mergeCells(`A${currentRow}:J${currentRow}`);
+        ws.getCell(`A${currentRow}`).value = 'Hàng khuyến mãi';
+        ws.getCell(`A${currentRow}`).font = { bold: true, italic: true };
+        ws.getCell(`A${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE2EFDA' } };
+        for (let col = 1; col <= 10; col++) {
+          ws.getCell(currentRow, col).border = thinBorder;
+        }
+        currentRow++;
+
+        promoItems.forEach((item) => {
+          const qty = parseFloat(item.quantity) || 0;
+          const rowData = [stt++, item.nvSales || '', item.barcode || '', item.productName || '', item.unit || '', qty, 0, 0, 0, 0];
+          rowData.forEach((value, colIdx) => {
+            const cell = ws.getCell(currentRow, colIdx + 1);
+            cell.value = value;
+            cell.border = thinBorder;
+            if (colIdx === 0) cell.alignment = { horizontal: 'center' };
+            else if (colIdx >= 5) cell.alignment = { horizontal: 'right' };
+            if (colIdx >= 5 && typeof value === 'number') cell.numFmt = '#,##0';
+          });
+          currentRow++;
+        });
+      }
+
+      // Empty row
+      currentRow++;
+
+      // Totals section
+      const discountPercent = parseFloat(orderForm.discountPercent) || 0;
+      const discountAmount = parseFloat(orderForm.discountAmount) || 0;
+      const finalTotal = totalAmount - discountAmount;
+
+      // Row: Số tài khoản + Tổng cộng
+      ws.mergeCells(`A${currentRow}:F${currentRow}`);
+      ws.getCell(`A${currentRow}`).value = 'Số tài khoản: -';
+      ws.mergeCells(`G${currentRow}:I${currentRow}`);
+      ws.getCell(`G${currentRow}`).value = 'Tổng cộng:';
+      ws.getCell(`G${currentRow}`).font = { bold: true };
+      ws.getCell(`G${currentRow}`).alignment = { horizontal: 'right' };
+      ws.getCell(`J${currentRow}`).value = totalAmount;
+      ws.getCell(`J${currentRow}`).numFmt = '#,##0';
+      ws.getCell(`J${currentRow}`).font = { bold: true };
+      ws.getCell(`J${currentRow}`).alignment = { horizontal: 'right' };
+      ws.getCell(`J${currentRow}`).border = thinBorder;
+      currentRow++;
+
+      // Row: Lưu ý + Chiết khấu
+      ws.mergeCells(`A${currentRow}:F${currentRow}`);
+      ws.getCell(`A${currentRow}`).value = 'Lưu ý chuyển khoản: Quý khách vui lòng ghi tên cửa hàng theo hóa đơn khi CK';
+      ws.getCell(`A${currentRow}`).font = { italic: true, size: 9 };
+      ws.mergeCells(`G${currentRow}:I${currentRow}`);
+      ws.getCell(`G${currentRow}`).value = `Chiết khấu: ${discountPercent}%`;
+      ws.getCell(`G${currentRow}`).alignment = { horizontal: 'right' };
+      ws.getCell(`J${currentRow}`).value = discountAmount;
+      ws.getCell(`J${currentRow}`).numFmt = '#,##0';
+      ws.getCell(`J${currentRow}`).alignment = { horizontal: 'right' };
+      ws.getCell(`J${currentRow}`).border = thinBorder;
+      currentRow++;
+
+      // Row: Thành tiền
+      ws.mergeCells(`G${currentRow}:I${currentRow}`);
+      ws.getCell(`G${currentRow}`).value = 'Thành tiền:';
+      ws.getCell(`G${currentRow}`).font = { bold: true };
+      ws.getCell(`G${currentRow}`).alignment = { horizontal: 'right' };
+      ws.getCell(`J${currentRow}`).value = finalTotal;
+      ws.getCell(`J${currentRow}`).numFmt = '#,##0';
+      ws.getCell(`J${currentRow}`).font = { bold: true, color: { argb: 'FFFF0000' } };
+      ws.getCell(`J${currentRow}`).alignment = { horizontal: 'right' };
+      ws.getCell(`J${currentRow}`).border = thinBorder;
+      currentRow++;
+
+      // Empty row
+      currentRow++;
+
+      // Tổng số kg, m3
+      ws.getCell(`A${currentRow}`).value = `Tổng số kg: ${orderForm.totalKg || 0}`;
+      ws.getCell(`A${currentRow}`).font = { bold: true };
+      ws.getCell(`C${currentRow}`).value = `Số m³: ${orderForm.totalM3 || 0}`;
+      ws.getCell(`C${currentRow}`).font = { bold: true };
+      currentRow++;
+
+      // Empty row
+      currentRow++;
+
+      // Tổng tiền bằng chữ
+      ws.mergeCells(`A${currentRow}:J${currentRow}`);
+      ws.getCell(`A${currentRow}`).value = `Tổng tiền bằng chữ: ${totalInWords(finalTotal)}`;
+      ws.getCell(`A${currentRow}`).font = { italic: true, bold: true };
+      currentRow++;
+
+      // Empty row
+      currentRow++;
+
+      // Signatures section
+      ws.getCell(`B${currentRow}`).value = 'Ký nhận hàng, chưa thanh toán';
+      ws.getCell(`B${currentRow}`).alignment = { horizontal: 'center' };
+      ws.getCell(`E${currentRow}`).value = 'Người giao';
+      ws.getCell(`E${currentRow}`).alignment = { horizontal: 'center' };
+      ws.mergeCells(`H${currentRow}:J${currentRow}`);
+      ws.getCell(`H${currentRow}`).value = `Ngày: ${formatDisplayDate(orderForm.orderDate) || new Date().toLocaleDateString('vi-VN')}`;
+      ws.getCell(`H${currentRow}`).alignment = { horizontal: 'right' };
+      currentRow++;
+
+      ws.getCell(`B${currentRow}`).value = '(Ký, ghi rõ họ tên)';
+      ws.getCell(`B${currentRow}`).font = { italic: true, size: 9 };
+      ws.getCell(`B${currentRow}`).alignment = { horizontal: 'center' };
+      ws.mergeCells(`H${currentRow}:J${currentRow}`);
+      ws.getCell(`H${currentRow}`).value = 'Người in phiếu';
+      ws.getCell(`H${currentRow}`).alignment = { horizontal: 'right' };
+      currentRow++;
+
+      // Empty rows for signature space
+      currentRow += 2;
+
+      ws.mergeCells(`H${currentRow}:J${currentRow}`);
+      ws.getCell(`H${currentRow}`).value = orderForm.createdBy || currentUser?.name || '';
+      ws.getCell(`H${currentRow}`).font = { bold: true };
+      ws.getCell(`H${currentRow}`).alignment = { horizontal: 'right' };
+      currentRow++;
+
+      // Empty row
+      currentRow++;
+
+      // Ghi chú
+      ws.mergeCells(`A${currentRow}:J${currentRow}`);
+      ws.getCell(`A${currentRow}`).value = `Ghi chú: ${orderForm.notes || ''}`;
+      currentRow++;
+
+      // Empty row
+      currentRow++;
+
+      // Footer warning
+      ws.mergeCells(`A${currentRow}:J${currentRow}`);
+      ws.getCell(`A${currentRow}`).value = 'ĐỀ NGHỊ QUÝ KHÁCH KIỂM ĐẾM KỸ HÀNG & TIỀN NV NPP SẼ KHÔNG CHỊU TRÁCH NHIỆM SAU KHI ĐI KHỎI CỬA HÀNG';
+      ws.getCell(`A${currentRow}`).font = { bold: true, color: { argb: 'FFFF0000' }, size: 10 };
+      ws.getCell(`A${currentRow}`).alignment = { horizontal: 'center' };
+
+      // Generate and download file
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `PhieuGiaoHang_${orderForm.orderNumber || 'New'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+
+      alert('Xuất Excel thành công!');
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Lỗi khi xuất file Excel: ' + error.message);
+    }
   };
 
   // Recalculate per-item final totals when order-level discountPercent changes
@@ -1017,13 +1439,17 @@ const CreateOrderForm = () => {
   };
 
   const handleCreateNew = () => {
+    // ALWAYS auto-fill with current user's name (admin can change later if needed)
+    const defaultCreatedBy = currentUser?.name || currentUser?.tenNhanVien || currentUser?.username || currentUser?.displayName || '';
+    const defaultNvSales = currentUser?.name || currentUser?.tenNhanVien || currentUser?.username || currentUser?.displayName || '';
+    
     setOrderForm({
       orderDate: defaultOrderDate,
       orderNumber: formatOrderNumber(defaultOrderDate, peekNextSerialForYear(new Date(defaultOrderDate).getFullYear())),
       customer: '',
       customerName: '',
       phone: '',
-      createdBy: '',
+      createdBy: defaultCreatedBy,
       address: '',
       vehicle: '',
       customerGroup: '',
@@ -1042,7 +1468,7 @@ const CreateOrderForm = () => {
       notes: '',
       status: 'chưa duyệt'
     });
-    setOrderItems([{ id: 1, productCode: '', barcode: '', productName: '', productType: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }]);
+    setOrderItems([{ id: 1, productCode: '', barcode: '', productName: '', productType: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: defaultNvSales, description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }]);
     setDiscountNoteEdited(false);
     setOrderNumberEdited(false);
     setEditingOrderId(null); // Reset editing mode
@@ -1316,51 +1742,8 @@ const CreateOrderForm = () => {
           setSalesUsers(udata);
           setUsers(udata);
           
-          // Get current logged in user
-          const loggedInUser = localStorage.getItem('currentUser') || localStorage.getItem('username') || '';
-          // current logged in user (from localStorage)
-          
-          let defaultUser = '';
-          
-          if (loggedInUser) {
-            // Find user by username/name
-            const currentUserObj = udata.find(u => 
-              u.username === loggedInUser || 
-              u.name === loggedInUser ||
-              u.displayName === loggedInUser ||
-              u.tenNhanVien === loggedInUser
-            );
-            if (currentUserObj) {
-              defaultUser = currentUserObj.tenNhanVien || currentUserObj.name || currentUserObj.username || '';
-              setCurrentUser(defaultUser);
-            }
-          }
-          
-          // If no current user found, use default "tên nhân viên"
-          if (!defaultUser) {
-            const defaultUserObj = udata.find(u => 
-              u.tenNhanVien === 'tên nhân viên' ||
-              u.name === 'tên nhân viên' ||
-              u.username === 'tên nhân viên'
-            );
-            if (defaultUserObj) {
-              defaultUser = defaultUserObj.tenNhanVien || defaultUserObj.name || defaultUserObj.username || '';
-            } else if (udata.length > 0) {
-              // If no "tên nhân viên" found, use first user
-              defaultUser = udata[0].tenNhanVien || udata[0].name || udata[0].username || '';
-            }
-            setCurrentUser(defaultUser);
-          }
-          
-          // Set default createdBy
-          if (defaultUser) {
-            setOrderForm(prev => ({
-              ...prev,
-              createdBy: defaultUser
-            }));
-          }
-          
-          // default createdBy set
+          // Don't override createdBy here - it's handled by the authUser useEffect
+          // This useEffect only loads the users list for dropdowns
         }
       })
       .catch(err => console.warn('Failed to load users', err));
@@ -1495,7 +1878,10 @@ const CreateOrderForm = () => {
     const defaultWh = sel.defaultWarehouseId || sel.warehouseId || (warehouses.length > 0 ? warehouses[0].id : '');
     if (defaultWh) handleOrderItemChange(rowIndex, 'warehouse', String(defaultWh));
     handleOrderItemChange(rowIndex, 'description', sel.description || sel.note || '');
-    handleOrderItemChange(rowIndex, 'nvSales', sel.nvSales || '');
+    // ALWAYS auto-fill nvSales with current user's name (keep existing value if product has nvSales and admin)
+    const currentUserName = currentUser?.name || currentUser?.tenNhanVien || currentUser?.username || currentUser?.displayName || '';
+    const defaultNvSalesValue = currentUserName || sel.nvSales || '';
+    handleOrderItemChange(rowIndex, 'nvSales', defaultNvSalesValue);
     // Set VAT % from product, show "KCT" if null/empty
     const vatPercent = sel.vatPercent || sel.VAT_Percent || sel.vat || sel.taxRate || '';
     handleOrderItemChange(rowIndex, 'tax', vatPercent || 'KCT');
@@ -1515,6 +1901,8 @@ const CreateOrderForm = () => {
     setTimeout(() => {
       setOrderItems(prev => {
         if (rowIndex === prev.length - 1) {
+          // ALWAYS auto-fill nvSales with current user's name for new row
+          const newRowNvSales = currentUser?.name || currentUser?.tenNhanVien || currentUser?.username || currentUser?.displayName || '';
           return [...prev, {
             id: prev.length + 1,
             productCode: '',
@@ -1529,7 +1917,7 @@ const CreateOrderForm = () => {
             priceAfterCK: 0,
             totalAfterCK: 0,
             totalAfterDiscount: 0,
-            nvSales: '',
+            nvSales: newRowNvSales,
             description: '',
             conversion: '',
             total: 0,
@@ -1816,21 +2204,33 @@ const CreateOrderForm = () => {
           <div className="order-form-group">
             <label className="required">Nhân viên lập</label>
             <div className="input-with-icon">
-              <select
-                value={orderForm.createdBy}
-                onChange={(e) => handleOrderFormChange('createdBy', e.target.value)}
-                className="order-form-select"
-              >
-                <option value="">Chọn nhân viên</option>
-                {users.map(user => {
-                  const displayName = user.tenNhanVien || user.name || user.username || '';
-                  return (
-                    <option key={user.id || user.username} value={displayName}>
-                      {displayName}
-                    </option>
-                  );
-                })}
-              </select>
+              {canChooseSales ? (
+                <select
+                  value={orderForm.createdBy}
+                  onChange={(e) => handleOrderFormChange('createdBy', e.target.value)}
+                  className="order-form-select"
+                >
+                  <option value="">Chọn nhân viên</option>
+                  {users.map(user => {
+                    // Use same priority as auto-fill: name > tenNhanVien > username
+                    const displayName = user.name || user.tenNhanVien || user.username || '';
+                    return (
+                      <option key={user.id || user.username} value={displayName}>
+                        {displayName}
+                      </option>
+                    );
+                  })}
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  value={orderForm.createdBy || (currentUser?.name || currentUser?.tenNhanVien || currentUser?.username || currentUser?.displayName || '')}
+                  className="order-form-input"
+                  disabled
+                  title="Bạn không có quyền chọn nhân viên khác"
+                  style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
+                />
+              )}
               <span className="input-icon success">✓</span>
             </div>
           </div>
@@ -2173,19 +2573,17 @@ const CreateOrderForm = () => {
                                 </div>
                               );
                             case 'productType':
+                              // Loại hàng tự động theo sản phẩm - chỉ hiển thị, không cho chọn
                               return (
-                                <select
+                                <input
+                                  type="text"
                                   value={item.productType || ''}
-                                  onChange={(e) => handleOrderItemChange(rowIndex, 'productType', e.target.value)}
-                                  className="item-select"
-                                >
-                                  <option value="">Chọn loại hàng</option>
-                                  {productCategories.map(category => (
-                                    <option key={category.id} value={category.name}>
-                                      {category.name}
-                                    </option>
-                                  ))}
-                                </select>
+                                  className="item-input"
+                                  disabled
+                                  readOnly
+                                  title="Loại hàng tự động theo sản phẩm đã chọn"
+                                  style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
+                                />
                               );
                             case 'warehouse':
                               return (
@@ -2294,15 +2692,24 @@ const CreateOrderForm = () => {
                                   <select value={item.nvSales || ''} onChange={(e) => handleOrderItemChange(rowIndex, 'nvSales', e.target.value)} className="item-select">
                                     <option value="">Chọn NV Sales</option>
                                     {salesUsers.map(u => (
-                                      <option key={u.id} value={u.name || u.username || u.displayName}>
-                                        {u.name || u.username || u.displayName}
+                                      <option key={u.id || u.username || u.name} value={u.name || u.tenNhanVien || u.username || u.displayName}>
+                                        {u.name || u.tenNhanVien || u.username || u.displayName}
                                       </option>
                                     ))}
                                   </select>
                                 );
                               }
-                              // not allowed to choose: show current user as static text
-                              return <div className="item-text">{item.nvSales || (currentUser ? (currentUser.name || currentUser.username || currentUser.displayName) : '')}</div>;
+                              // not allowed to choose: show current user as static text (disabled input for visual consistency)
+                              return (
+                                <input 
+                                  type="text" 
+                                  value={item.nvSales || (currentUser?.name || currentUser?.tenNhanVien || currentUser?.username || currentUser?.displayName || '')} 
+                                  className="item-input" 
+                                  disabled 
+                                  title="Bạn không có quyền chọn NV Sales"
+                                  style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
+                                />
+                              );
                             case 'description':
                               return <input type="text" value={item.description} onChange={(e) => handleOrderItemChange(rowIndex, 'description', e.target.value)} className="item-input" />;
                             case 'conversion':
@@ -2528,7 +2935,7 @@ const CreateOrderForm = () => {
         <button className="modal-btn save" onClick={handleSaveOrder}>
           💾 Lưu lại
         </button>
-        <button className="modal-btn excel">
+        <button className="modal-btn excel" onClick={handleExportExcel}>
           📊 Xuất Excel
         </button>
         <button className="modal-btn copy" onClick={handleCopyOrder}>

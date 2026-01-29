@@ -38,12 +38,39 @@ namespace QlnppApi.Controllers
         }
 
         [HttpPost]
-        public async Task<IActionResult> Create([FromBody] PermissionGroup group)
+        public async Task<IActionResult> Create([FromBody] PermissionGroupDto dto)
         {
             try
             {
-                if (group == null)
-                    return BadRequest(new { error = "Dữ liệu không hợp lệ" });
+                if (dto == null || string.IsNullOrEmpty(dto.Name))
+                    return BadRequest(new { error = "Tên nhóm quyền không được để trống" });
+
+                var group = new PermissionGroup
+                {
+                    Name = dto.Name,
+                    Description = dto.Description,
+                    IsActive = dto.IsActive
+                };
+
+                // Add permission details
+                if (dto.PermissionDetails != null)
+                {
+                    foreach (var pd in dto.PermissionDetails)
+                    {
+                        group.PermissionDetails.Add(new PermissionGroupDetail
+                        {
+                            ResourceKey = pd.ResourceKey ?? "",
+                            ResourceName = pd.ResourceName,
+                            CanView = pd.CanView,
+                            CanAdd = pd.CanAdd,
+                            CanEdit = pd.CanEdit,
+                            CanDelete = pd.CanDelete,
+                            CanPrint = pd.CanPrint,
+                            CanImport = pd.CanImport,
+                            CanExport = pd.CanExport
+                        });
+                    }
+                }
 
                 _db.PermissionGroups.Add(group);
                 await _db.SaveChangesAsync();
@@ -56,9 +83,9 @@ namespace QlnppApi.Controllers
         }
 
         [HttpPut("{id}")]
-        public async Task<IActionResult> Update(int id, [FromBody] PermissionGroup group)
+        public async Task<IActionResult> Update(int id, [FromBody] PermissionGroupDto dto)
         {
-            if (group == null || id != group.Id)
+            if (dto == null)
                 return BadRequest();
 
             var exists = await _db.PermissionGroups
@@ -68,21 +95,32 @@ namespace QlnppApi.Controllers
             if (exists == null)
                 return NotFound();
 
-            exists.Name = group.Name;
-            exists.Description = group.Description;
-            exists.IsActive = group.IsActive;
+            exists.Name = dto.Name ?? exists.Name;
+            exists.Description = dto.Description;
+            exists.IsActive = dto.IsActive;
 
             // Update permission details
-            if (group.PermissionDetails != null)
+            if (dto.PermissionDetails != null)
             {
                 // Remove existing details
                 _db.PermissionGroupDetails.RemoveRange(exists.PermissionDetails);
                 
                 // Add new details
-                foreach (var detail in group.PermissionDetails)
+                foreach (var pd in dto.PermissionDetails)
                 {
-                    detail.PermissionGroupId = id;
-                    _db.PermissionGroupDetails.Add(detail);
+                    exists.PermissionDetails.Add(new PermissionGroupDetail
+                    {
+                        PermissionGroupId = id,
+                        ResourceKey = pd.ResourceKey ?? "",
+                        ResourceName = pd.ResourceName,
+                        CanView = pd.CanView,
+                        CanAdd = pd.CanAdd,
+                        CanEdit = pd.CanEdit,
+                        CanDelete = pd.CanDelete,
+                        CanPrint = pd.CanPrint,
+                        CanImport = pd.CanImport,
+                        CanExport = pd.CanExport
+                    });
                 }
             }
 
@@ -169,5 +207,28 @@ namespace QlnppApi.Controllers
             await _db.SaveChangesAsync();
             return Ok(new { success = true });
         }
+    }
+
+    // DTO classes for JSON binding
+    public class PermissionGroupDto
+    {
+        public int Id { get; set; }
+        public string? Name { get; set; }
+        public string? Description { get; set; }
+        public bool IsActive { get; set; } = true;
+        public List<PermissionDetailDto>? PermissionDetails { get; set; }
+    }
+
+    public class PermissionDetailDto
+    {
+        public string? ResourceKey { get; set; }
+        public string? ResourceName { get; set; }
+        public bool CanView { get; set; }
+        public bool CanAdd { get; set; }
+        public bool CanEdit { get; set; }
+        public bool CanDelete { get; set; }
+        public bool CanPrint { get; set; }
+        public bool CanImport { get; set; }
+        public bool CanExport { get; set; }
     }
 }

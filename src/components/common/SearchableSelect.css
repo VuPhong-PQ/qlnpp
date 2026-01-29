@@ -1,0 +1,115 @@
+.searchable-select {
+  position: relative;
+  width: 100%;
+}
+
+.searchable-select-control {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 36px;
+  padding: 6px 10px;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.searchable-select-control:hover {
+  border-color: #999;
+}
+
+.searchable-select-control.open {
+  border-color: #2684ff;
+  box-shadow: 0 0 0 1px #2684ff;
+}
+
+.searchable-select-input {
+  flex: 1;
+  border: none;
+  outline: none;
+  font-size: 14px;
+  padding: 0;
+  background: transparent;
+}
+
+.searchable-select-value {
+  flex: 1;
+  font-size: 14px;
+  color: #333;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.searchable-select-value.placeholder {
+  color: #999;
+}
+
+.searchable-select-indicators {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 8px;
+}
+
+.searchable-select-clear {
+  font-size: 16px;
+  color: #999;
+  cursor: pointer;
+  padding: 0 4px;
+  line-height: 1;
+}
+
+.searchable-select-clear:hover {
+  color: #333;
+}
+
+.searchable-select-arrow {
+  font-size: 10px;
+  color: #999;
+  transition: transform 0.2s;
+}
+
+.searchable-select-control.open .searchable-select-arrow {
+  transform: rotate(180deg);
+}
+
+.searchable-select-menu {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  max-height: 250px;
+  overflow-y: auto;
+  background: white;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+  z-index: 1000;
+  margin-top: 4px;
+}
+
+.searchable-select-option {
+  padding: 8px 12px;
+  font-size: 14px;
+  cursor: pointer;
+  transition: background-color 0.15s;
+}
+
+.searchable-select-option:hover {
+  background-color: #f0f0f0;
+}
+
+.searchable-select-option.selected {
+  background-color: #e6f2ff;
+  color: #2684ff;
+}
+
+.searchable-select-no-options {
+  padding: 12px;
+  text-align: center;
+  color: #999;
+  font-size: 14px;
+}
