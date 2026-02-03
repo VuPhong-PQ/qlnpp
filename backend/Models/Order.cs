@@ -23,6 +23,7 @@ namespace QlnppApi.Models
         public string PriceType { get; set; } = string.Empty; // retail or wholesale
         public string ActiveTab { get; set; } = string.Empty; // products or promotions
         
+        // Hàng bán fields
         [Column(TypeName = "decimal(5,2)")]
         public decimal DiscountPercent { get; set; }
         
@@ -42,6 +43,23 @@ namespace QlnppApi.Models
         
         public string AccountFund { get; set; } = string.Empty;
         public string Notes { get; set; } = string.Empty;
+        
+        // Hàng khuyến mãi fields (riêng biệt)
+        [Column(TypeName = "decimal(5,2)")]
+        public decimal PromoDiscountPercent { get; set; }
+        
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal PromoDiscountAmount { get; set; }
+        
+        public string PromoDiscountNote { get; set; } = string.Empty;
+        
+        [Column(TypeName = "decimal(18,2)")]
+        public decimal PromoTotalKg { get; set; }
+        
+        [Column(TypeName = "decimal(18,3)")]
+        public decimal PromoTotalM3 { get; set; }
+        
+        public string PromoNotes { get; set; } = string.Empty;
         
         // Calculated fields
         [Column(TypeName = "decimal(18,2)")]

@@ -3,6 +3,7 @@ using System;
 using Microsoft.EntityFrameworkCore;
 using Microsoft.EntityFrameworkCore.Infrastructure;
 using Microsoft.EntityFrameworkCore.Metadata;
+using Microsoft.EntityFrameworkCore.Migrations;
 using Microsoft.EntityFrameworkCore.Storage.ValueConversion;
 using QlnppApi.Data;
 
@@ -11,9 +12,11 @@ using QlnppApi.Data;
 namespace QlnppApi.Migrations
 {
     [DbContext(typeof(ApplicationDbContext))]
-    partial class ApplicationDbContextModelSnapshot : ModelSnapshot
+    [Migration("20260130100443_AddItemTypeToOrderItem")]
+    partial class AddItemTypeToOrderItem
     {
-        protected override void BuildModel(ModelBuilder modelBuilder)
+        /// <inheritdoc />
+        protected override void BuildTargetModel(ModelBuilder modelBuilder)
         {
 #pragma warning disable 612, 618
             modelBuilder
@@ -772,26 +775,6 @@ namespace QlnppApi.Migrations
                     b.Property<string>("ProductType")
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal>("PromoDiscountAmount")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<string>("PromoDiscountNote")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal>("PromoDiscountPercent")
-                        .HasColumnType("decimal(5,2)");
-
-                    b.Property<string>("PromoNotes")
-                        .IsRequired()
-                        .HasColumnType("nvarchar(max)");
-
-                    b.Property<decimal>("PromoTotalKg")
-                        .HasColumnType("decimal(18,2)");
-
-                    b.Property<decimal>("PromoTotalM3")
-                        .HasColumnType("decimal(18,3)");
 
                     b.Property<string>("SalesSchedule")
                         .IsRequired()

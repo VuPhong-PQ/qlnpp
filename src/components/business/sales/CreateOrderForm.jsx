@@ -4,6 +4,7 @@ import '../BusinessPage.css';
 import { API_ENDPOINTS, API_BASE_URL, api } from '../../../config/api';
 import OpenStreetMapModal from '../../OpenStreetMapModal';
 import ExcelJS from 'exceljs';
+import QRCode from 'qrcode';
 import { useAuth } from '../../../contexts/AuthContext';
 
 const CreateOrderForm = () => {
@@ -151,6 +152,7 @@ const CreateOrderForm = () => {
     deliveryVehicle: '',
     priceType: 'retail', // retail or wholesale
     activeTab: 'products', // products or promotions
+    // Thông tin cho hàng bán
     discountPercent: 0,
     discountAmount: 0,
     discountNote: '',
@@ -159,12 +161,25 @@ const CreateOrderForm = () => {
     payment: 0,
     accountFund: '',
     notes: '',
+    // Thông tin cho hàng khuyến mãi (riêng biệt)
+    promoDiscountPercent: 0,
+    promoDiscountAmount: 0,
+    promoDiscountNote: '',
+    promoTotalKg: 0,
+    promoTotalM3: 0,
+    promoNotes: '',
     productType: '',
     status: 'chưa duyệt' // chưa duyệt, đã duyệt, đã hủy
   });
 
+  // Hàng bán (sale items)
   const [orderItems, setOrderItems] = useState([
     { id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }
+  ]);
+
+  // Hàng khuyến mãi (promotion items) - separate from sale items
+  const [promotionItems, setPromotionItems] = useState([
+    { id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'khuyến mãi', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }
   ]);
 
   const [positions, setPositions] = useState([]);
@@ -187,7 +202,9 @@ const CreateOrderForm = () => {
   const [discountNoteEdited, setDiscountNoteEdited] = useState(false);
   const [orderNumberEdited, setOrderNumberEdited] = useState(false);
   // count only rows that contain actual data (not empty placeholder rows)
-  const nonEmptyCount = orderItems.filter(item => {
+  // Use appropriate list based on activeTab
+  const currentDisplayItems = orderForm.activeTab === 'promotions' ? promotionItems : orderItems;
+  const nonEmptyCount = currentDisplayItems.filter(item => {
     const hasText = (item.productCode && String(item.productCode).trim()) || (item.barcode && String(item.barcode).trim()) || (item.productName && String(item.productName).trim());
     const hasNumbers = (item.quantity && Number(item.quantity) > 0) || (item.unitPrice && Number(item.unitPrice) > 0);
     return Boolean(hasText) || Boolean(hasNumbers);
@@ -199,6 +216,10 @@ const CreateOrderForm = () => {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [searchResults, setSearchResults] = useState([]);
+  // Promotion search modal state (copy from sales modal but with hidden price fields)
+  const [showPromoSearchModal, setShowPromoSearchModal] = useState(false);
+  const [promoSearchQuery, setPromoSearchQuery] = useState('');
+  const [promoSearchResults, setPromoSearchResults] = useState([]);
   const [savedOrders, setSavedOrders] = useState([]); // Danh sách orders từ DB
   const [showOrdersList, setShowOrdersList] = useState(false); // Hiển thị danh sách orders
   const [editingOrderId, setEditingOrderId] = useState(null); // ID của order đang sửa
@@ -488,40 +509,61 @@ const CreateOrderForm = () => {
           payment: data.order.payment || 0,
           accountFund: data.order.accountFund || '',
           notes: data.order.notes || '',
-          status: data.order.status || 'chưa duyệt'
+          status: data.order.status || 'chưa duyệt',
+          // Promotion fields (hàng khuyến mãi - độc lập)
+          promoDiscountPercent: data.order.promoDiscountPercent || 0,
+          promoDiscountAmount: data.order.promoDiscountAmount || 0,
+          promoDiscountNote: data.order.promoDiscountNote || '',
+          promoTotalKg: data.order.promoTotalKg || 0,
+          promoTotalM3: data.order.promoTotalM3 || 0,
+          promoNotes: data.order.promoNotes || ''
         });
         
-        // Map order items
+        // Helper function to map item from backend
+        const mapItemFromBackend = (item, index) => ({
+          id: index + 1,
+          productCode: item.productCode || '',
+          barcode: item.barcode || '',
+          productName: item.productName || '',
+          productType: item.productType || '',
+          warehouse: item.warehouse || '',
+          unit: item.unit || '',
+          quantity: item.quantity || 0,
+          unitPrice: item.unitPrice || 0,
+          discountPercent: item.discountPercent || 0,
+          priceAfterCK: item.priceAfterCK || 0,
+          totalAfterCK: item.totalAfterCK || 0,
+          totalAfterDiscount: item.totalAfterDiscount || 0,
+          nvSales: item.nvSales || '',
+          description: item.description || '',
+          conversion: item.conversion || '',
+          amount: item.amount || 0,
+          total: item.total || 0,
+          weight: item.weight || 0,
+          volume: item.volume || 0,
+          baseWeight: item.baseWeight || 0,
+          baseVolume: item.baseVolume || 0,
+          exportType: item.exportType || 'xuất bán',
+          stock: item.stock || 0,
+          tax: item.tax || 'KCT',
+          priceExcludeVAT: item.priceExcludeVAT || 0,
+          totalExcludeVAT: item.totalExcludeVAT || 0
+        });
+        
+        // Map sale order items (hàng bán)
         if (data.items && data.items.length > 0) {
-          setOrderItems(data.items.map((item, index) => ({
-            id: index + 1,
-            productCode: item.productCode || '',
-            barcode: item.barcode || '',
-            productName: item.productName || '',
-            productType: item.productType || '',
-            warehouse: item.warehouse || '',
-            unit: item.unit || '',
-            quantity: item.quantity || 0,
-            unitPrice: item.unitPrice || 0,
-            discountPercent: item.discountPercent || 0,
-            priceAfterCK: item.priceAfterCK || 0,
-            totalAfterCK: item.totalAfterCK || 0,
-            totalAfterDiscount: item.totalAfterDiscount || 0,
-            nvSales: item.nvSales || '',
-            description: item.description || '',
-            conversion: item.conversion || '',
-            amount: item.amount || 0,
-            total: item.total || 0,
-            weight: item.weight || 0,
-            volume: item.volume || 0,
-            baseWeight: item.baseWeight || 0,
-            baseVolume: item.baseVolume || 0,
-            exportType: item.exportType || 'xuất bán',
-            stock: item.stock || 0,
-            tax: item.tax || 'KCT',
-            priceExcludeVAT: item.priceExcludeVAT || 0,
-            totalExcludeVAT: item.totalExcludeVAT || 0
-          })));
+          setOrderItems(data.items.map(mapItemFromBackend));
+        } else {
+          // Reset to default empty row if no sale items
+          setOrderItems([{ id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }]);
+        }
+        
+        // Map promotion items (hàng khuyến mãi)
+        if (data.promotionItems && data.promotionItems.length > 0) {
+          setPromotionItems(data.promotionItems.map(mapItemFromBackend));
+        } else {
+          // Reset to default empty row if no promotion items
+          setPromotionItems([{ id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'khuyến mãi', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }]);
         }
         
         // Set editing mode with order ID
@@ -541,6 +583,38 @@ const CreateOrderForm = () => {
       alert('Lỗi khi tải đơn hàng: ' + error.message);
     }
   };
+
+  // Auto-calculate totals for orderItems (hàng bán)
+  useEffect(() => {
+    const totalKg = orderItems.reduce((sum, item) => sum + (parseFloat(item.weight) || 0), 0);
+    const totalM3 = orderItems.reduce((sum, item) => sum + (parseFloat(item.volume) || 0), 0);
+    const subtotal = orderItems.reduce((sum, item) => sum + (parseFloat(item.totalAfterCK) || 0), 0);
+    const discountPercent = parseFloat(orderForm.discountPercent) || 0;
+    const discountAmount = Number((subtotal * discountPercent / 100).toFixed(2));
+    
+    setOrderForm(prev => ({
+      ...prev,
+      totalKg: Number(totalKg.toFixed(2)),
+      totalM3: Number(totalM3.toFixed(3)),
+      discountAmount
+    }));
+  }, [orderItems, orderForm.discountPercent]);
+
+  // Auto-calculate totals for promotionItems (hàng khuyến mãi)
+  useEffect(() => {
+    const promoTotalKg = promotionItems.reduce((sum, item) => sum + (parseFloat(item.weight) || 0), 0);
+    const promoTotalM3 = promotionItems.reduce((sum, item) => sum + (parseFloat(item.volume) || 0), 0);
+    const subtotal = promotionItems.reduce((sum, item) => sum + (parseFloat(item.totalAfterCK) || 0), 0);
+    const promoDiscountPercent = parseFloat(orderForm.promoDiscountPercent) || 0;
+    const promoDiscountAmount = Number((subtotal * promoDiscountPercent / 100).toFixed(2));
+    
+    setOrderForm(prev => ({
+      ...prev,
+      promoTotalKg: Number(promoTotalKg.toFixed(2)),
+      promoTotalM3: Number(promoTotalM3.toFixed(3)),
+      promoDiscountAmount
+    }));
+  }, [promotionItems, orderForm.promoDiscountPercent]);
 
   // Load orders when component mounts
   useEffect(() => {
@@ -619,11 +693,61 @@ const CreateOrderForm = () => {
   };
 
   const handleOrderFormChange = (field, value) => {
-    setOrderForm(prev => ({ ...prev, [field]: value }));
+    setOrderForm(prev => {
+      const newForm = { ...prev, [field]: value };
+      
+      // Khi thay đổi giảm % cho tab promotions, cần cập nhật lại discountAmount và các items
+      if (field === 'promoDiscountPercent') {
+        const discountPercent = parseFloat(value) || 0;
+        const subtotal = promotionItems.reduce((sum, item) => sum + (parseFloat(item.totalAfterCK) || 0), 0);
+        newForm.promoDiscountAmount = Number((subtotal * discountPercent / 100).toFixed(2));
+        
+        // Cập nhật lại totalAfterDiscount cho từng item trong promotionItems
+        setPromotionItems(items => items.map(item => {
+          const totalAfterCK = parseFloat(item.totalAfterCK) || 0;
+          const totalAfterDiscount = Number((totalAfterCK - (totalAfterCK * discountPercent / 100)).toFixed(2));
+          return { ...item, totalAfterDiscount, total: totalAfterDiscount };
+        }));
+      }
+      
+      // Khi thay đổi giảm % cho tab hàng bán
+      if (field === 'discountPercent') {
+        const discountPercent = parseFloat(value) || 0;
+        const subtotal = orderItems.reduce((sum, item) => sum + (parseFloat(item.totalAfterCK) || 0), 0);
+        newForm.discountAmount = Number((subtotal * discountPercent / 100).toFixed(2));
+        
+        // Cập nhật lại totalAfterDiscount cho từng item trong orderItems
+        setOrderItems(items => items.map(item => {
+          const totalAfterCK = parseFloat(item.totalAfterCK) || 0;
+          const totalAfterDiscount = Number((totalAfterCK - (totalAfterCK * discountPercent / 100)).toFixed(2));
+          return { ...item, totalAfterDiscount, total: totalAfterDiscount };
+        }));
+      }
+      
+      return newForm;
+    });
+  };
+
+  // Helper function to get current items based on active tab
+  const getCurrentItems = () => {
+    return orderForm.activeTab === 'promotions' ? promotionItems : orderItems;
+  };
+
+  // Helper function to set current items based on active tab
+  const setCurrentItems = (updater) => {
+    if (orderForm.activeTab === 'promotions') {
+      setPromotionItems(updater);
+    } else {
+      setOrderItems(updater);
+    }
   };
 
   const handleOrderItemChange = (index, field, value) => {
-    setOrderItems(prev => {
+    const setItems = orderForm.activeTab === 'promotions' ? setPromotionItems : setOrderItems;
+    // Use appropriate discount percent based on active tab
+    const currentDiscountPercent = orderForm.activeTab === 'promotions' ? orderForm.promoDiscountPercent : orderForm.discountPercent;
+    
+    setItems(prev => {
       const updated = [...prev];
       updated[index] = { ...updated[index], [field]: value };
       // Recalculate total after discount
@@ -637,8 +761,8 @@ const CreateOrderForm = () => {
       const totalAfter = qty * priceAfter;
       item.priceAfterCK = Number(priceAfter.toFixed(2));
       item.totalAfterCK = Number(totalAfter.toFixed(2));
-      // apply order-level giảm % (orderForm.discountPercent) to compute final amount per row
-      const orderDisc = parseFloat(orderForm.discountPercent) || 0;
+      // apply order-level giảm % to compute final amount per row
+      const orderDisc = parseFloat(currentDiscountPercent) || 0;
       item.totalAfterDiscount = Number((item.totalAfterCK - (item.totalAfterCK * orderDisc / 100)).toFixed(2));
       item.total = item.totalAfterDiscount;
       
@@ -660,8 +784,10 @@ const CreateOrderForm = () => {
   const addOrderItem = () => {
     // ALWAYS auto-fill nvSales with current user's name (admin can change later if needed)
     const defaultNvSales = currentUser?.name || currentUser?.tenNhanVien || currentUser?.username || currentUser?.displayName || '';
+    const isPromoTab = orderForm.activeTab === 'promotions';
+    const setItems = isPromoTab ? setPromotionItems : setOrderItems;
     
-    setOrderItems(prev => [...prev, {
+    setItems(prev => [...prev, {
       id: prev.length + 1,
       productCode: '',
       barcode: '',
@@ -684,7 +810,7 @@ const CreateOrderForm = () => {
       volume: 0,
       baseWeight: 0,
       baseVolume: 0,
-      exportType: 'xuất bán',
+      exportType: isPromoTab ? 'khuyến mãi' : 'xuất bán',
       stock: 0,
       tax: 'KCT',
       priceExcludeVAT: 0,
@@ -693,8 +819,9 @@ const CreateOrderForm = () => {
   };
 
   const removeOrderItem = (index) => {
-    if (orderItems.length > 1) {
-      setOrderItems(prev => prev.filter((_, i) => i !== index));
+    const currentItems = getCurrentItems();
+    if (currentItems.length > 1) {
+      setCurrentItems(prev => prev.filter((_, i) => i !== index));
     }
   };
 
@@ -702,6 +829,7 @@ const CreateOrderForm = () => {
   const addOrderItemAfter = (index) => {
     // ALWAYS auto-fill nvSales with current user's name (admin can change later if needed)
     const defaultNvSales = currentUser?.name || currentUser?.tenNhanVien || currentUser?.username || currentUser?.displayName || '';
+    const isPromoTab = orderForm.activeTab === 'promotions';
     
     const newItem = {
       id: Date.now(),
@@ -726,23 +854,35 @@ const CreateOrderForm = () => {
       volume: 0,
       baseWeight: 0,
       baseVolume: 0,
-      exportType: 'xuất bán',
+      exportType: isPromoTab ? 'khuyến mãi' : 'xuất bán',
       stock: 0,
       tax: 'KCT',
       priceExcludeVAT: 0,
       totalExcludeVAT: 0
     };
     
-    setOrderItems(prev => {
+    setCurrentItems(prev => {
       const newItems = [...prev];
       newItems.splice(index + 1, 0, newItem);
       return newItems;
     });
   };
 
+  // Calculate totals for sale items (hàng bán)
   const calculateTotals = () => {
     const subtotal = orderItems.reduce((sum, item) => sum + (parseFloat(item.totalAfterDiscount) || 0), 0);
     return subtotal;
+  };
+
+  // Calculate totals for promotion items (hàng khuyến mãi)
+  const calculatePromoTotals = () => {
+    const subtotal = promotionItems.reduce((sum, item) => sum + (parseFloat(item.totalAfterDiscount) || 0), 0);
+    return subtotal;
+  };
+
+  // Get current totals based on active tab
+  const getCurrentTotals = () => {
+    return orderForm.activeTab === 'promotions' ? calculatePromoTotals() : calculateTotals();
   };
 
   // Export Excel theo mẫu Phiếu Giao Hàng Kiểm Xác Nhận Công Nợ với định dạng đẹp
@@ -766,23 +906,42 @@ const CreateOrderForm = () => {
       const workbook = new ExcelJS.Workbook();
       const ws = workbook.addWorksheet('Phiếu Giao Hàng');
 
+      // Set page setup for A4 Landscape printing
+      ws.pageSetup = {
+        paperSize: 9, // A4
+        orientation: 'landscape',
+        fitToPage: true,
+        fitToWidth: 1,
+        fitToHeight: 0,
+        horizontalCentered: true,
+        margins: {
+          left: 0.4,
+          right: 0.4,
+          top: 0.5,
+          bottom: 0.5,
+          header: 0.3,
+          footer: 0.3
+        }
+      };
+
       // Company info
       const compName = companyInfo?.name || 'CÔNG TY TNHH MTV Phân Phối TPQ';
       const compAddr = companyInfo?.address || '';
       const compPhone = companyInfo?.phone || '';
 
-      // Set column widths
+      // Set column widths - optimized for A4 Landscape
       ws.columns = [
-        { width: 6 },   // A - STT
-        { width: 12 },  // B - NVBH
-        { width: 18 },  // C - MV (barcode)
-        { width: 50 },  // D - Tên hàng
-        { width: 8 },   // E - ĐVT
-        { width: 8 },   // F - SL
-        { width: 12 },  // G - Đơn giá
-        { width: 8 },   // H - %CK
-        { width: 12 },  // I - Giá sau CK
-        { width: 14 }   // J - Thành tiền
+        { width: 5 },   // A - STT
+        { width: 14 },  // B - NVBH
+        { width: 16 },  // C - MV (barcode)
+        { width: 45 },  // D - Tên hàng
+        { width: 7 },   // E - ĐVT
+        { width: 7 },   // F - SL
+        { width: 11 },  // G - Đơn giá
+        { width: 6 },   // H - %CK
+        { width: 11 },  // I - Giá sau CK
+        { width: 13 },  // J - Thành tiền
+        { width: 10 }   // K - QR Code column
       ];
 
       // Helper function for border style
@@ -793,6 +952,12 @@ const CreateOrderForm = () => {
         right: { style: 'thin' }
       };
 
+      // Set row heights for header area
+      ws.getRow(1).height = 18;
+      ws.getRow(2).height = 18;
+      ws.getRow(3).height = 18;
+      ws.getRow(4).height = 18;
+
       // Row 1: Company name + Order number
       ws.mergeCells('A1:E1');
       ws.getCell('A1').value = compName;
@@ -801,20 +966,58 @@ const CreateOrderForm = () => {
       ws.getCell('G1').value = `Số: ${orderForm.orderNumber || ''}`;
       ws.getCell('G1').alignment = { horizontal: 'right' };
 
-      // Row 2: Address + Vehicle
+      // Row 2: Address + Coordinates
       ws.mergeCells('A2:E2');
       ws.getCell('A2').value = `Địa chỉ: ${compAddr}`;
       ws.getCell('A2').font = { size: 10 };
       ws.mergeCells('G2:J2');
-      ws.getCell('G2').value = `Xe: ${orderForm.vehicle || ''}`;
+      ws.getCell('G2').value = `Tọa độ: ${orderForm.vehicle || ''}`;
+      ws.getCell('G2').font = { size: 9 };
       ws.getCell('G2').alignment = { horizontal: 'right' };
 
-      // Row 3: Phone + Customer group
+      // Generate QR Code for Google Maps directions if coordinates exist
+      if (orderForm.vehicle && orderForm.vehicle.includes(',')) {
+        try {
+          const coords = orderForm.vehicle.split(',').map(c => c.trim());
+          if (coords.length === 2) {
+            const [lat, lng] = coords;
+            // Google Maps directions URL
+            const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
+            
+            // Generate QR code as base64 image
+            const qrDataUrl = await QRCode.toDataURL(mapsUrl, {
+              width: 300,
+              margin: 1,
+              color: { dark: '#000000', light: '#ffffff' }
+            });
+            
+            // Add QR code image to workbook
+            const qrImageId = workbook.addImage({
+              base64: qrDataUrl,
+              extension: 'png'
+            });
+            
+            // Place QR code at rows 4-8, columns J-K (moved right to not overlap title)
+            ws.addImage(qrImageId, {
+              tl: { col: 9, row: 3 },    // Start at column J (index 9), row 4 (index 3)
+              br: { col: 10.9, row: 8 }  // End at column K (index 10.9), row 9 (index 8)
+            });
+          }
+        } catch (qrError) {
+          console.warn('Could not generate QR code:', qrError);
+        }
+      }
+
+      // Row 3: Phone + Customer group (display group NAME instead of code)
       ws.mergeCells('A3:E3');
       ws.getCell('A3').value = `Điện thoại: ${compPhone}`;
       ws.getCell('A3').font = { size: 10 };
+      // Resolve customer group name from code if available
+      const custGroupCode = orderForm.customerGroup || '';
+      const custGroupObj = (customerGroups || []).find(g => String(g.code) === String(custGroupCode));
+      const custGroupName = custGroupObj ? custGroupObj.name : custGroupCode;
       ws.mergeCells('G3:J3');
-      ws.getCell('G3').value = `Nhóm: ${orderForm.customerGroup || ''}`;
+      ws.getCell('G3').value = `Nhóm: ${custGroupName || ''}`;
       ws.getCell('G3').alignment = { horizontal: 'right' };
 
       // Row 4: STT In
@@ -831,7 +1034,7 @@ const CreateOrderForm = () => {
       ws.getCell('A6').alignment = { horizontal: 'center' };
 
       // Row 7: Liên
-      ws.mergeCells('A7:J7');
+      ws.mergeCells('A7:J7');;
       ws.getCell('A7').value = 'Liên: 1';
       ws.getCell('A7').alignment = { horizontal: 'center' };
 
@@ -1068,6 +1271,9 @@ const CreateOrderForm = () => {
       ws.getCell(`A${currentRow}`).font = { bold: true, color: { argb: 'FFFF0000' }, size: 10 };
       ws.getCell(`A${currentRow}`).alignment = { horizontal: 'center' };
 
+      // Set print area (columns A to K, row 1 to current row)
+      ws.pageSetup.printArea = `A1:K${currentRow}`;
+
       // Generate and download file
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
@@ -1082,6 +1288,240 @@ const CreateOrderForm = () => {
     } catch (error) {
       console.error('Error exporting to Excel:', error);
       alert('Lỗi khi xuất file Excel: ' + error.message);
+    }
+  };
+
+  // Export order data to Excel (raw data format with filter)
+  const handleExportOrderData = async () => {
+    // Filter valid items
+    const validItems = orderItems.filter(item => {
+      const hasText = (item.productCode && String(item.productCode).trim()) || 
+                     (item.barcode && String(item.barcode).trim()) || 
+                     (item.productName && String(item.productName).trim());
+      const hasNumbers = (item.quantity && Number(item.quantity) > 0) || 
+                        (item.unitPrice && Number(item.unitPrice) > 0);
+      return Boolean(hasText) || Boolean(hasNumbers);
+    });
+
+    if (validItems.length === 0) {
+      alert('Không có dữ liệu để xuất!');
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Quản Lý Nhà Phân Phối';
+      workbook.created = new Date();
+      
+      // Single sheet for all data
+      const ws = workbook.addWorksheet('Dữ liệu đơn hàng');
+      
+      // Styles
+      const headerFill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4472C4' }
+      };
+      const headerFont = { bold: true, color: { argb: 'FFFFFFFF' }, size: 11 };
+      const thinBorder = {
+        top: { style: 'thin' },
+        left: { style: 'thin' },
+        bottom: { style: 'thin' },
+        right: { style: 'thin' }
+      };
+
+      // Set column widths
+      ws.columns = [
+        { width: 20 },  // A - Label column (wider for info section)
+        { width: 15 },  // B - Mã vạch
+        { width: 15 },  // C - Mã hàng
+        { width: 40 },  // D - Tên hàng
+        { width: 18 },  // E - Loại hàng
+        { width: 15 },  // F - Kho hàng
+        { width: 8 },   // G - ĐVT
+        { width: 10 },  // H - Số lượng
+        { width: 12 },  // I - Đơn giá
+        { width: 14 },  // J - Thành tiền
+        { width: 8 },   // K - % CK
+        { width: 12 },  // L - Giá sau CK
+        { width: 14 },  // M - Tiền sau CK
+        { width: 8 },   // N - Giảm %
+        { width: 14 },  // O - Tiền sau giảm
+        { width: 15 }   // P - NV Sales
+      ];
+
+      // ========== PHẦN 1: THÔNG TIN ĐƠN HÀNG ==========
+      // Title
+      ws.mergeCells('A1:D1');
+      ws.getCell('A1').value = 'THÔNG TIN ĐƠN HÀNG';
+      ws.getCell('A1').font = { bold: true, size: 16, color: { argb: 'FF4472C4' } };
+      ws.getCell('A1').alignment = { horizontal: 'center' };
+      
+      // Get customer group name from code
+      const customerGroupCode = orderForm.customerGroup || '';
+      const customerGroupObj = customerGroups.find(g => g.code === customerGroupCode);
+      const customerGroupName = customerGroupObj ? customerGroupObj.name : customerGroupCode;
+
+      // Order info rows
+      const orderInfo = [
+        ['Số phiếu', orderForm.orderNumber || ''],
+        ['Ngày lập', formatDisplayDate(orderForm.orderDate) || ''],
+        ['Nhân viên lập', orderForm.createdBy || ''],
+        ['Khách hàng', orderForm.customerName || ''],
+        ['Địa chỉ', orderForm.address || ''],
+        ['Điện thoại', orderForm.phone || ''],
+        ['Nhóm khách hàng', customerGroupName],
+        ['Lịch bán hàng', orderForm.salesSchedule || ''],
+        ['STT In', orderForm.printOrder || ''],
+        ['Trạng thái', orderForm.status || 'chưa duyệt'],
+        ['Vị trí', orderForm.location || ''],
+        ['Tọa độ', orderForm.vehicle || ''],
+        ['Tổng tiền', orderForm.totalAmount || 0],
+        ['Giảm %', (orderForm.discountPercent || 0) + '%'],
+        ['Tiền giảm', orderForm.discountAmount || 0],
+        ['Tổng sau giảm', (orderForm.totalAmount || 0) - (orderForm.discountAmount || 0)],
+        ['Tổng kg', orderForm.totalKg || 0],
+        ['Tổng khối', orderForm.totalM3 || 0],
+        ['Ghi chú', orderForm.notes || '']
+      ];
+
+      let currentRow = 3;
+      orderInfo.forEach(([label, value]) => {
+        ws.getCell(`A${currentRow}`).value = label;
+        ws.getCell(`A${currentRow}`).font = { bold: true };
+        ws.getCell(`A${currentRow}`).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFE7E6E6' } };
+        ws.getCell(`A${currentRow}`).border = thinBorder;
+        ws.mergeCells(`B${currentRow}:D${currentRow}`);
+        ws.getCell(`B${currentRow}`).value = value;
+        ws.getCell(`B${currentRow}`).border = thinBorder;
+        ws.getCell(`C${currentRow}`).border = thinBorder;
+        ws.getCell(`D${currentRow}`).border = thinBorder;
+        if (typeof value === 'number') {
+          ws.getCell(`B${currentRow}`).numFmt = '#,##0';
+        }
+        currentRow++;
+      });
+
+      // ========== PHẦN 2: CHI TIẾT SẢN PHẨM ==========
+      // Add empty row for spacing
+      currentRow += 2;
+      
+      // Title for product details
+      ws.mergeCells(`A${currentRow}:P${currentRow}`);
+      ws.getCell(`A${currentRow}`).value = 'CHI TIẾT SẢN PHẨM';
+      ws.getCell(`A${currentRow}`).font = { bold: true, size: 16, color: { argb: 'FF4472C4' } };
+      ws.getCell(`A${currentRow}`).alignment = { horizontal: 'center' };
+      currentRow += 2;
+
+      // Header row for product table
+      const productHeaders = ['STT', 'Mã vạch', 'Mã hàng', 'Tên hàng', 'Loại hàng', 'Kho hàng', 'ĐVT', 'Số lượng', 'Đơn giá', 'Thành tiền', '% CK', 'Giá sau CK', 'Tiền sau CK', 'Giảm %', 'Tiền sau giảm', 'NV Sales'];
+      const headerRowNum = currentRow;
+      
+      productHeaders.forEach((header, index) => {
+        const cell = ws.getCell(currentRow, index + 1);
+        cell.value = header;
+        cell.font = headerFont;
+        cell.fill = headerFill;
+        cell.alignment = { horizontal: 'center', vertical: 'middle' };
+        cell.border = thinBorder;
+      });
+      ws.getRow(currentRow).height = 25;
+      currentRow++;
+
+      // Add data rows
+      validItems.forEach((item, index) => {
+        const qty = parseFloat(item.quantity) || 0;
+        const unitPrice = parseFloat(item.unitPrice) || 0;
+        const totalAmt = qty * unitPrice;
+        const discPct = parseFloat(item.discountPercent) || 0;
+        const priceAfterCK = parseFloat(item.priceAfterCK) || unitPrice * (1 - discPct / 100);
+        const totalAfterCK = parseFloat(item.totalAfterCK) || qty * priceAfterCK;
+        const orderDiscPct = parseFloat(orderForm.discountPercent) || 0;
+        const totalAfterDiscount = parseFloat(item.totalAfterDiscount) || totalAfterCK * (1 - orderDiscPct / 100);
+
+        const rowData = [
+          index + 1,
+          item.barcode || '',
+          item.productCode || '',
+          item.productName || '',
+          item.productType || '',
+          item.warehouse || '',
+          item.unit || '',
+          qty,
+          unitPrice,
+          totalAmt,
+          discPct,
+          priceAfterCK,
+          totalAfterCK,
+          orderDiscPct,
+          totalAfterDiscount,
+          item.nvSales || ''
+        ];
+
+        rowData.forEach((value, colIndex) => {
+          const cell = ws.getCell(currentRow, colIndex + 1);
+          cell.value = value;
+          cell.border = thinBorder;
+          // Format number columns
+          if ([8, 9, 11, 12, 14].includes(colIndex)) {
+            cell.numFmt = '#,##0';
+          }
+        });
+        currentRow++;
+      });
+
+      // Add totals row
+      const totalRowNum = currentRow;
+      const totalsData = [
+        '',
+        '',
+        '',
+        'TỔNG CỘNG',
+        '',
+        '',
+        '',
+        validItems.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0), 0),
+        '',
+        validItems.reduce((sum, item) => sum + (parseFloat(item.quantity) || 0) * (parseFloat(item.unitPrice) || 0), 0),
+        '',
+        '',
+        validItems.reduce((sum, item) => sum + (parseFloat(item.totalAfterCK) || 0), 0),
+        '',
+        validItems.reduce((sum, item) => sum + (parseFloat(item.totalAfterDiscount) || parseFloat(item.totalAfterCK) || 0), 0),
+        ''
+      ];
+
+      totalsData.forEach((value, colIndex) => {
+        const cell = ws.getCell(currentRow, colIndex + 1);
+        cell.value = value;
+        cell.font = { bold: true };
+        cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFFFF2CC' } };
+        cell.border = thinBorder;
+        if ([7, 9, 12, 14].includes(colIndex) && typeof value === 'number') {
+          cell.numFmt = '#,##0';
+        }
+      });
+
+      // Add AutoFilter for product table
+      ws.autoFilter = {
+        from: { row: headerRowNum, column: 1 },
+        to: { row: totalRowNum, column: 16 }
+      };
+
+      // Generate and download file
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `DuLieuDonHang_${orderForm.orderNumber || 'New'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+
+      alert('Xuất dữ liệu Excel thành công!');
+    } catch (error) {
+      console.error('Error exporting order data:', error);
+      alert('Lỗi khi xuất dữ liệu: ' + error.message);
     }
   };
 
@@ -1203,15 +1643,8 @@ const CreateOrderForm = () => {
       // Commit serial from order number so next generated will be higher
       try { commitSerialFromOrderNumber(orderForm.orderNumber); } catch(e) {}
       
-// Filter out empty order items and map to backend format
-      const validOrderItems = orderItems.filter(item => {
-        const hasText = (item.productCode && String(item.productCode).trim()) || 
-                       (item.barcode && String(item.barcode).trim()) || 
-                       (item.productName && String(item.productName).trim());
-        const hasNumbers = (item.quantity && Number(item.quantity) > 0) || 
-                          (item.unitPrice && Number(item.unitPrice) > 0);
-        return Boolean(hasText) || Boolean(hasNumbers);
-      }).map(item => ({
+      // Helper function to map item to backend format
+      const mapItemToBackend = (item) => ({
         ProductCode: String(item.productCode || ''),
         Barcode: String(item.barcode || ''),
         ProductName: String(item.productName || ''),
@@ -1238,9 +1671,25 @@ const CreateOrderForm = () => {
         Tax: String(item.tax || 'KCT'),
         PriceExcludeVAT: Number(item.priceExcludeVAT || 0),
         TotalExcludeVAT: Number(item.totalExcludeVAT || 0)
-      }));
+      });
 
-      // Auto-set order ProductType based on items
+      // Filter and validate items helper
+      const filterValidItems = (items) => items.filter(item => {
+        const hasText = (item.productCode && String(item.productCode).trim()) || 
+                       (item.barcode && String(item.barcode).trim()) || 
+                       (item.productName && String(item.productName).trim());
+        const hasNumbers = (item.quantity && Number(item.quantity) > 0) || 
+                          (item.unitPrice && Number(item.unitPrice) > 0);
+        return Boolean(hasText) || Boolean(hasNumbers);
+      });
+
+      // Filter out empty order items (hàng bán)
+      const validOrderItems = filterValidItems(orderItems).map(mapItemToBackend);
+      
+      // Filter out empty promotion items (hàng khuyến mãi)
+      const validPromotionItems = filterValidItems(promotionItems).map(mapItemToBackend);
+
+      // Auto-set order ProductType based on sale items
       const orderProductTypes = validOrderItems.map(item => item.ProductType).filter(pt => pt);
       const mostCommonProductType = orderProductTypes.length > 0 ? orderProductTypes[0] : '';
       
@@ -1260,6 +1709,7 @@ const CreateOrderForm = () => {
         DeliveryVehicle: String(orderForm.deliveryVehicle || ''),
         PriceType: String(orderForm.priceType || 'retail'),
         ActiveTab: String(orderForm.activeTab || 'products'),
+        // Hàng bán fields
         DiscountPercent: Number(orderForm.discountPercent || 0),
         DiscountAmount: Number(orderForm.discountAmount || 0),
         DiscountNote: String(orderForm.discountNote || ''),
@@ -1268,6 +1718,13 @@ const CreateOrderForm = () => {
         Payment: Number(orderForm.payment || 0),
         AccountFund: String(orderForm.accountFund || ''),
         Notes: String(orderForm.notes || ''),
+        // Hàng khuyến mãi fields
+        PromoDiscountPercent: Number(orderForm.promoDiscountPercent || 0),
+        PromoDiscountAmount: Number(orderForm.promoDiscountAmount || 0),
+        PromoDiscountNote: String(orderForm.promoDiscountNote || ''),
+        PromoTotalKg: Number(orderForm.promoTotalKg || 0),
+        PromoTotalM3: Number(orderForm.promoTotalM3 || 0),
+        PromoNotes: String(orderForm.promoNotes || ''),
         ProductType: mostCommonProductType,
         TotalAmount: calculateTotals(),
         TotalAfterDiscount: calculateTotals()
@@ -1279,7 +1736,8 @@ const CreateOrderForm = () => {
         // Update existing order - include ID in orderData
         const updatePayload = {
           Order: { ...orderData, Id: editingOrderId },
-          OrderItems: validOrderItems
+          OrderItems: validOrderItems,
+          PromotionItems: validPromotionItems
         };
         
         response = await fetch(`${API_BASE_URL}/Orders/${editingOrderId}/update-with-items`, {
@@ -1301,7 +1759,8 @@ const CreateOrderForm = () => {
         // Create new order
         const createPayload = {
           Order: orderData,
-          OrderItems: validOrderItems
+          OrderItems: validOrderItems,
+          PromotionItems: validPromotionItems
         };
         
         response = await api.post(`${API_ENDPOINTS.orders}/create-with-items`, createPayload);
@@ -1646,6 +2105,84 @@ const CreateOrderForm = () => {
     }
   };
 
+  // === Promotion Search Modal Handlers (copy from sales modal) ===
+  const handleSearchInPromoItems = () => {
+    setShowPromoSearchModal(true);
+    setPromoSearchQuery('');
+    // Hiển thị tất cả sản phẩm khuyến mãi đã chọn ban đầu
+    const allItems = promotionItems.map((item, index) => ({
+      ...item,
+      rowIndex: index
+    })).filter(item => {
+      // Chỉ hiển thị những item khuyến mãi có dữ liệu
+      const hasData = (item.productCode && String(item.productCode).trim()) || 
+             (item.barcode && String(item.barcode).trim()) || 
+             (item.productName && String(item.productName).trim());
+      return hasData;
+    });
+    setPromoSearchResults(allItems);
+  };
+
+  const handlePromoSearchQueryChange = (e) => {
+    const query = e.target.value;
+    setPromoSearchQuery(query);
+    
+    // Nếu không có query, hiển thị tất cả items khuyến mãi đã chọn
+    if (!query.trim()) {
+      const allItems = promotionItems.map((item, index) => ({
+        ...item,
+        rowIndex: index
+      })).filter(item => {
+        const hasData = (item.productCode && String(item.productCode).trim()) || 
+               (item.barcode && String(item.barcode).trim()) || 
+               (item.productName && String(item.productName).trim());
+        return hasData;
+      });
+      setPromoSearchResults(allItems);
+      return;
+    }
+
+    // Tìm kiếm trong các promotion items với hỗ trợ tiếng Việt không dấu
+    const queryNormalized = removeVietnameseTones(query.toLowerCase());
+    const results = promotionItems.filter((item, index) => {
+      // Chỉ tìm những item có dữ liệu
+      const hasData = (item.productCode && String(item.productCode).trim()) || 
+                     (item.barcode && String(item.barcode).trim()) || 
+                     (item.productName && String(item.productName).trim());
+      
+      if (!hasData) return false;
+
+      const searchText = `${item.barcode || ''} ${item.productCode || ''} ${item.productName || ''} ${item.description || ''}`.toLowerCase();
+      const searchTextNormalized = removeVietnameseTones(searchText);
+      
+      return searchTextNormalized.includes(queryNormalized);
+    }).map((item, originalIndex) => ({
+      ...item,
+      rowIndex: promotionItems.indexOf(item) // Lưu index gốc để highlight
+    }));
+
+    setPromoSearchResults(results);
+  };
+
+  const handleSelectPromoSearchResult = (result) => {
+    setShowPromoSearchModal(false);
+    
+    // Scroll đến dòng được chọn và highlight
+    const table = document.querySelector('.order-items-table tbody');
+    if (table) {
+      const targetRow = table.children[result.rowIndex];
+      if (targetRow) {
+        targetRow.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        
+        // Highlight dòng được chọn
+        targetRow.style.backgroundColor = '#fffacd';
+        setTimeout(() => {
+          targetRow.style.backgroundColor = '';
+        }, 3000);
+      }
+    }
+  };
+
   // Use same simple approach as CreateOrder page - no measurement needed
 
   // Filter customers based on search text
@@ -1891,7 +2428,8 @@ const CreateOrderForm = () => {
     handleOrderItemChange(rowIndex, 'baseVolume', parseFloat(vol) || 0);
     handleOrderItemChange(rowIndex, 'baseWeight', parseFloat(wt) || 0);
     // Calculate displayed weight and volume: base * conversion * quantity
-    const qty = orderItems[rowIndex] ? (parseFloat(orderItems[rowIndex].quantity) || 0) : 0;
+    const currentItems = orderForm.activeTab === 'promotions' ? promotionItems : orderItems;
+    const qty = currentItems[rowIndex] ? (parseFloat(currentItems[rowIndex].quantity) || 0) : 0;
     handleOrderItemChange(rowIndex, 'volume', Number((parseFloat(vol) * (chosenConv || 1) * qty).toFixed(2)));
     handleOrderItemChange(rowIndex, 'weight', Number((parseFloat(wt) * (chosenConv || 1) * qty).toFixed(2)));
     handleOrderItemChange(rowIndex, 'productName', sel.name || sel.vatName || sel.displayName || sel.code || sel.id || '');
@@ -1899,7 +2437,9 @@ const CreateOrderForm = () => {
     setSuggestionRow(null);
     setActiveSuggestionIndex(0);
     setTimeout(() => {
-      setOrderItems(prev => {
+      const isPromoTab = orderForm.activeTab === 'promotions';
+      const setItems = isPromoTab ? setPromotionItems : setOrderItems;
+      setItems(prev => {
         if (rowIndex === prev.length - 1) {
           // ALWAYS auto-fill nvSales with current user's name for new row
           const newRowNvSales = currentUser?.name || currentUser?.tenNhanVien || currentUser?.username || currentUser?.displayName || '';
@@ -1925,7 +2465,7 @@ const CreateOrderForm = () => {
             volume: 0,
             baseWeight: 0,
             baseVolume: 0,
-            exportType: 'xuất bán',
+            exportType: isPromoTab ? 'khuyến mãi' : 'xuất bán',
             stock: 0
           }];
         }
@@ -2355,12 +2895,14 @@ const CreateOrderForm = () => {
             onClick={() => handleOrderFormChange('activeTab', 'products')}
           >
             🛒 Hàng bán
+            <i className="sort-icon" onClick={(e) => { e.stopPropagation(); handleSearchInOrderItems(); }} style={{cursor: 'pointer', marginLeft: '8px'}} title="Tìm kiếm hàng bán">🔍</i>
           </button>
           <button
             className={`tab-btn ${orderForm.activeTab === 'promotions' ? 'active' : ''}`}
             onClick={() => handleOrderFormChange('activeTab', 'promotions')}
           >
             🔊 Hàng khuyến mãi
+            <i className="sort-icon" onClick={(e) => { e.stopPropagation(); handleSearchInPromoItems(); }} style={{cursor: 'pointer', marginLeft: '8px'}} title="Tìm kiếm hàng khuyến mãi">🔍</i>
           </button>
         </div>
 
@@ -2407,24 +2949,44 @@ const CreateOrderForm = () => {
             </div>
           )}
 
+          {/* Columns to hide when promotions tab is active */}
+          {(() => {
+            const hiddenColumnsForPromo = ['unitPrice', 'amount', 'discountPercent', 'priceAfterCK', 'totalAfterCK', 'discountPercentGlobal', 'totalAfterDiscount', 'priceExcludeVAT', 'totalExcludeVAT'];
+            const isPromoTab = orderForm.activeTab === 'promotions';
+            const visibleColumns = columns.filter(c => {
+              if (!c.visible) return false;
+              if (isPromoTab && hiddenColumnsForPromo.includes(c.key)) return false;
+              return true;
+            });
+            const visibleColIndices = columns.map((c, i) => {
+              if (!c.visible) return -1;
+              if (isPromoTab && hiddenColumnsForPromo.includes(c.key)) return -1;
+              return i;
+            }).filter(i => i >= 0);
+
+            return (
           <div className="order-items-table-container">
             <table 
               className="order-items-table"
               style={{
-                width: columns.reduce((sum, c, i) => 
-                  sum + (c.visible ? (colWidths[i] || 120) : 0), 0) + 'px',
-                minWidth: columns.reduce((sum, c, i) => 
-                  sum + (c.visible ? (colWidths[i] || 120) : 0), 0) + 'px'
+                width: visibleColIndices.reduce((sum, i) => sum + (colWidths[i] || 120), 0) + 'px',
+                minWidth: visibleColIndices.reduce((sum, i) => sum + (colWidths[i] || 120), 0) + 'px'
               }}
             >
               <colgroup>
-                {columns.map((c, i) => (
-                  <col key={c.key} style={{ width: (colWidths[i] || 120) + 'px', display: c.visible ? undefined : 'none' }} />
-                ))}
+                {columns.map((c, i) => {
+                  const shouldShow = c.visible && !(isPromoTab && hiddenColumnsForPromo.includes(c.key));
+                  return (
+                    <col key={c.key} style={{ width: (colWidths[i] || 120) + 'px', display: shouldShow ? undefined : 'none' }} />
+                  );
+                })}
               </colgroup>
               <thead>
                 <tr>
-                  {columns.map((c, i) => c.visible && (
+                  {columns.map((c, i) => {
+                    const shouldShow = c.visible && !(isPromoTab && hiddenColumnsForPromo.includes(c.key));
+                    if (!shouldShow) return null;
+                    return (
                     <th key={c.key}
                         draggable={c.key !== 'checkbox'}
                         onDragStart={(e) => c.key !== 'checkbox' && onDragStartHeader(e, i)}
@@ -2435,10 +2997,10 @@ const CreateOrderForm = () => {
                       {c.key === 'checkbox' ? (
                         <input
                           type="checkbox"
-                          checked={orderItems.length > 0 && selectedItems.length === orderItems.length}
+                          checked={currentDisplayItems.length > 0 && selectedItems.length === currentDisplayItems.length}
                           onChange={(e) => {
                             if (e.target.checked) {
-                              setSelectedItems(orderItems.map(item => item.id));
+                              setSelectedItems(currentDisplayItems.map(item => item.id));
                             } else {
                               setSelectedItems([]);
                             }
@@ -2448,18 +3010,22 @@ const CreateOrderForm = () => {
                         />
                       ) : (
                         <>
-                          {c.label} {c.key === 'barcode' || c.key === 'productCode' || c.key === 'productName' ? <i className="sort-icon" onClick={handleSearchInOrderItems} style={{cursor: 'pointer'}} title="Tìm kiếm trong đơn hàng">🔍</i> : null}
+                          {c.label} {c.key === 'barcode' || c.key === 'productCode' || c.key === 'productName' ? <i className="sort-icon" onClick={isPromoTab ? handleSearchInPromoItems : handleSearchInOrderItems} style={{cursor: 'pointer'}} title="Tìm kiếm trong đơn hàng">🔍</i> : null}
                         </>
                       )}
                       <div className="col-resizer" onMouseDown={startResize} />
                     </th>
-                  ))}
+                    );
+                  })}
                 </tr>
               </thead>
               <tbody>
-                {orderItems.map((item, rowIndex) => (
+                {currentDisplayItems.map((item, rowIndex) => (
                   <tr key={item.id} className={selectedItems.includes(item.id) ? 'selected-row' : ''}>
-                    {columns.map((c, colIndex) => c.visible && (
+                    {columns.map((c, colIndex) => {
+                      const shouldShow = c.visible && !(isPromoTab && hiddenColumnsForPromo.includes(c.key));
+                      if (!shouldShow) return null;
+                      return (
                       <td key={c.key} className={['priceAfterCK','totalAfterCK','discountPercentGlobal','totalAfterDiscount','stock'].includes(c.key) ? 'total-cell' : ''}>
                         {(() => {
                           switch (c.key) {
@@ -2832,12 +3398,15 @@ const CreateOrderForm = () => {
                           }
                         })()}
                       </td>
-                    ))}
+                      );
+                    })}
                   </tr>
                 ))}
               </tbody>
             </table>
           </div>
+            );
+          })()}
 
           <div className="items-pagination">
             <span>Dòng 1-{nonEmptyCount} trên tổng {nonEmptyCount} dòng</span>
@@ -2858,7 +3427,7 @@ const CreateOrderForm = () => {
         <div className="order-summary-section">
           <div className="summary-row">
             <div className="summary-group">
-              <label>Tổng tiền: <strong>{calculateTotals().toLocaleString()}</strong></label>
+              <label>Tổng tiền (Hàng bán): <strong>{calculateTotals().toLocaleString()}</strong></label>
               <span className="summary-note">{totalInWords(calculateTotals())}</span>
             </div>
           </div>
@@ -2895,8 +3464,8 @@ const CreateOrderForm = () => {
               <label>Tổng số kg</label>
               <input
                 type="number"
-                value={orderForm.totalKg}
-                onChange={(e) => handleOrderFormChange('totalKg', e.target.value)}
+                value={Number((parseFloat(orderForm.totalKg) || 0) + (parseFloat(orderForm.promoTotalKg) || 0)).toFixed(2)}
+                readOnly
                 className="summary-input highlight-red"
               />
             </div>
@@ -2904,8 +3473,8 @@ const CreateOrderForm = () => {
               <label>Tổng số khối</label>
               <input
                 type="number"
-                value={orderForm.totalM3}
-                onChange={(e) => handleOrderFormChange('totalM3', e.target.value)}
+                value={Number((parseFloat(orderForm.totalM3) || 0) + (parseFloat(orderForm.promoTotalM3) || 0)).toFixed(3)}
+                readOnly
                 className="summary-input highlight-red"
               />
             </div>
@@ -2936,7 +3505,7 @@ const CreateOrderForm = () => {
           💾 Lưu lại
         </button>
         <button className="modal-btn excel" onClick={handleExportExcel}>
-          📊 Xuất Excel
+          🧾 Xuất phiếu BH
         </button>
         <button className="modal-btn copy" onClick={handleCopyOrder}>
           📋 Copy
@@ -2946,6 +3515,12 @@ const CreateOrderForm = () => {
         </button>
         <button className="modal-btn approve" onClick={handleApproveOrder}>
           ✓ Duyệt
+        </button>
+        <button className="modal-btn export-data" onClick={handleExportOrderData} style={{
+          backgroundColor: '#17a2b8',
+          color: 'white'
+        }}>
+          📊 Xuất DL Excel
         </button>
         {/* Order status indicator */}
         {editingOrderId && (
@@ -3034,6 +3609,91 @@ const CreateOrderForm = () => {
                           <div className="search-results-item-detail">
                             <span>Thành tiền:</span> <span>{(result.amount || ((result.quantity || 0) * (result.unitPrice || 0))).toLocaleString()} ₫</span>
                           </div>
+                          <div className="search-results-item-detail">
+                            <span>Vị trí:</span> <span>Dòng {result.rowIndex + 1}</span>
+                          </div>
+                        </div>
+                        {result.description && (
+                          <div className="search-results-item-description" style={{marginTop: '5px', fontSize: '11px', color: '#888'}}>
+                            {result.description}
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Promotion Search Modal - copy from sales modal with hidden price fields */}
+      {showPromoSearchModal && (
+        <div className="search-modal-overlay" onClick={() => setShowPromoSearchModal(false)}>
+          <div className="search-modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="search-modal-header">
+              <h3 className="search-modal-title">🔍 Tìm kiếm hàng khuyến mãi trong đơn hàng</h3>
+              <button className="search-modal-close" onClick={() => setShowPromoSearchModal(false)}>×</button>
+            </div>
+            
+            <div className="search-modal-search-box">
+              <div className="search-input-wrapper">
+                <input
+                  type="text"
+                  className="search-modal-input"
+                  placeholder="Tìm hàng khuyến mãi (có thể gõ không dấu): tên, mã, đơn vị..."
+                  value={promoSearchQuery}
+                  onChange={handlePromoSearchQueryChange}
+                  autoFocus
+                />
+                <span className="search-input-icon">🔍</span>
+              </div>
+            </div>
+            
+            <div className="search-modal-body">
+              <div className="search-results-container">
+                {promoSearchResults.length === 0 ? (
+                  <div className="search-results-empty">
+                    {promotionItems.filter(item => 
+                      (item.productCode && String(item.productCode).trim()) || 
+                      (item.barcode && String(item.barcode).trim()) || 
+                      (item.productName && String(item.productName).trim())
+                    ).length === 0 ? 'Chưa có hàng khuyến mãi nào trong đơn hàng' : 
+                     promoSearchQuery ? 'Không tìm thấy hàng khuyến mãi nào' : 'Nhập từ khóa để tìm kiếm'}
+                  </div>
+                ) : (
+                  <>
+                    <div style={{ marginBottom: '10px', fontSize: '12px', color: '#6c757d', textAlign: 'center' }}>
+                      Tìm thấy {promoSearchResults.length} hàng khuyến mãi{promoSearchQuery && ` cho "${promoSearchQuery}"`}
+                    </div>
+                    {promoSearchResults.map((result, index) => (
+                      <div 
+                        key={index}
+                        className="search-results-item"
+                        onClick={() => handleSelectPromoSearchResult(result)}
+                      >
+                        <div className="search-results-item-name">{result.productName || result.productCode || result.barcode || 'Không có tên'}</div>
+                        <div className="search-results-item-details">
+                          {result.productCode && (
+                            <div className="search-results-item-detail">
+                              <span>Mã:</span> <span>{result.productCode}</span>
+                            </div>
+                          )}
+                          {result.barcode && (
+                            <div className="search-results-item-detail">
+                              <span>Mã vạch:</span> <span>{result.barcode}</span>
+                            </div>
+                          )}
+                          {result.unit && (
+                            <div className="search-results-item-detail">
+                              <span>ĐVT:</span> <span>{result.unit}</span>
+                            </div>
+                          )}
+                          <div className="search-results-item-detail">
+                            <span>SL:</span> <span>{result.quantity || 0}</span>
+                          </div>
+                          {/* Hidden fields for promotion modal: Đơn giá, thành tiền, % CK, Giá sau ck, Ttien sau ck, giảm %, ttien sau giảm, giá bán (-vat), TT(-vat) */}
                           <div className="search-results-item-detail">
                             <span>Vị trí:</span> <span>Dòng {result.rowIndex + 1}</span>
                           </div>

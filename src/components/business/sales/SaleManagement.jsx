@@ -15,6 +15,21 @@ const removeVietnameseTones = (str) => {
     .toLowerCase();
 };
 
+// Format tax rates string to ensure each value ends with '%', e.g. "8% 10%"
+const formatTaxRates = (order) => {
+  if (!order) return '';
+  const raw = order.TaxRates || order.taxRates || (order.discountPercent != null ? String(order.discountPercent) : (order.vatExport ? '10' : ''));
+  if (!raw) return '';
+  // Split on spaces, commas, semicolons
+  const parts = String(raw).split(/[,;\s]+/).map(p => p.trim()).filter(Boolean);
+  const mapped = parts.map(p => {
+    if (p.includes('%')) return p.replace(/\s*%/g, '%');
+    const num = p.replace(/[^0-9.\-]/g, '');
+    return num ? (num + '%') : p;
+  });
+  return mapped.join(' ');
+};
+
 // Constants for localStorage
 const COLUMN_SETTINGS_KEY = 'saleManagementColumnSettings';
 
@@ -596,13 +611,16 @@ const SaleManagement = () => {
         const orderDate = order.orderDate ? new Date(order.orderDate).toLocaleDateString('vi-VN') : '';
         // Calculate payment (total after discount)
         const totalAfterDiscount = (order.totalAmount || 0) - (order.discountAmount || 0);
+        // Get customer group name from code
+        const customerGroupName = order.customerGroup ? 
+          (customerGroups.find(g => g.code === order.customerGroup)?.name || order.customerGroup) : '';
         
         worksheet.addRow({
           stt: index + 1,
           orderNumber: order.orderNumber || '',
           orderDate: orderDate,
           customerName: order.customerName || '',
-          customerGroup: order.customerGroup || '',
+          customerGroup: customerGroupName,
           productType: order.productType || '',
           totalAmount: order.totalAmount || 0,
           payment: totalAfterDiscount > 0 ? totalAfterDiscount : (order.totalAmount || 0),
@@ -610,7 +628,7 @@ const SaleManagement = () => {
           notes: order.notes || '',
           createdBy: order.createdBy || '',
           salesStaff: order.salesStaff || '',
-          taxRate: order.discountPercent ? `${order.discountPercent}%` : '',
+          taxRate: formatTaxRates(order) || (order.discountPercent ? `${order.discountPercent}%` : ''),
           address: order.address || '',
           salesSchedule: order.salesSchedule || '',
           totalKg: order.totalKg || 0,
@@ -913,7 +931,7 @@ const SaleManagement = () => {
       case 'notes': return order.notes || '';
       case 'createdBy': return order.createdBy || '';
       case 'productType': return order.productType || '';
-      case 'taxRate': return order.discountPercent != null ? order.discountPercent + '%' : '';
+      case 'taxRate': return formatTaxRates(order);
       case 'salesStaff': return order.salesStaff || '';
       case 'mergeFrom': return order.mergeFromOrder || '';
       case 'mergeTo': return order.mergeToOrder || '';
@@ -1020,8 +1038,8 @@ const SaleManagement = () => {
       case 'createdBy': return order.createdBy || '-';
       case 'productType': return order.productType || '-';
       case 'taxRate': 
-        return order.discountPercent != null ? order.discountPercent + '%' : 
-               order.vatExport ? '10%' : '-';
+        const tr = formatTaxRates(order);
+        return tr ? tr : (order.vatExport ? '10%' : '-');
       case 'salesStaff': return order.salesStaff || '-';
       case 'mergeFrom': return order.mergeFromOrder || '-';
       case 'mergeTo': return order.mergeToOrder || '-';
@@ -1488,10 +1506,6 @@ const SaleManagement = () => {
           <button className="action-btn red-btn" title="Xóa đơn hàng" onClick={handleDeleteSelected}>
             <i className="icon">🗑️</i>
             <span>Xóa ĐH</span>
-          </button>
-          <button className="action-btn purple-btn import-btn" title="Import từ Excel" onClick={handleImport}>
-            <i className="icon">📥</i>
-            <span>Import</span>
           </button>
           <button className="action-btn pink-btn" title="Export ra Excel" onClick={handleExport}>
             <i className="icon">📊</i>

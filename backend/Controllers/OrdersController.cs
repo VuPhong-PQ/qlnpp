@@ -9,7 +9,8 @@ namespace QlnppApi.Controllers
     public class CreateOrderRequest
     {
         public Order Order { get; set; } = new Order();
-        public List<OrderItem> OrderItems { get; set; } = new List<OrderItem>();
+        public List<OrderItem> OrderItems { get; set; } = new List<OrderItem>(); // Hàng bán
+        public List<OrderItem> PromotionItems { get; set; } = new List<OrderItem>(); // Hàng khuyến mãi
     }
 
     public class UpdateOrderStatusRequest
@@ -52,7 +53,7 @@ namespace QlnppApi.Controllers
                 .ThenByDescending(o => o.Id)
                 .ToListAsync();
 
-            // Map orders to include productTypes from order items
+            // Map orders to include productTypes and tax rates from order items
             var result = orders.Select(o => new {
                 o.Id,
                 o.OrderDate,
@@ -86,6 +87,13 @@ namespace QlnppApi.Controllers
                 o.MergeFromOrder,
                 o.MergeToOrder,
                 o.SalesStaff,
+                // Promotion fields (hàng khuyến mãi)
+                o.PromoDiscountPercent,
+                o.PromoDiscountAmount,
+                o.PromoDiscountNote,
+                o.PromoTotalKg,
+                o.PromoTotalM3,
+                o.PromoNotes,
                 // Get all unique ProductTypes from OrderItems, join with comma
                 ProductType = o.OrderItems != null && o.OrderItems.Any() 
                     ? string.Join(", ", o.OrderItems
@@ -93,6 +101,13 @@ namespace QlnppApi.Controllers
                         .Select(i => i.ProductType)
                         .Distinct())
                     : o.ProductType,
+                // Get all unique Tax from OrderItems, join with space
+                TaxRates = o.OrderItems != null && o.OrderItems.Any()
+                    ? string.Join(" ", o.OrderItems
+                        .Where(i => !string.IsNullOrEmpty(i.Tax))
+                        .Select(i => i.Tax.Trim())
+                        .Distinct())
+                    : string.Empty,
                 o.TotalWeight,
                 o.TotalVolume,
                 o.Note,
@@ -116,9 +131,13 @@ namespace QlnppApi.Controllers
                 return NotFound();
             }
 
-            var items = await _context.OrderItems.Where(i => i.OrderId == id).ToListAsync();
+            var allItems = await _context.OrderItems.Where(i => i.OrderId == id).ToListAsync();
+            
+            // Separate items by ItemType
+            var orderItems = allItems.Where(i => i.ItemType != "promotion").ToList();
+            var promotionItems = allItems.Where(i => i.ItemType == "promotion").ToList();
 
-            return Ok(new { order, items });
+            return Ok(new { order, items = orderItems, promotionItems });
         }
 
         // GET: api/Orders/with-items (get orders with their items)
@@ -173,7 +192,30 @@ namespace QlnppApi.Controllers
                 if (request.Order.OrderDate == default(DateTime))
                     request.Order.OrderDate = DateTime.Today;
 
-                // Calculate totals from items
+                // Combine all items for calculation
+                var allItems = new List<OrderItem>();
+                
+                // Add sale items with ItemType = "sale"
+                if (request.OrderItems?.Any() == true)
+                {
+                    foreach (var item in request.OrderItems)
+                    {
+                        item.ItemType = "sale";
+                    }
+                    allItems.AddRange(request.OrderItems);
+                }
+                
+                // Add promotion items with ItemType = "promotion"
+                if (request.PromotionItems?.Any() == true)
+                {
+                    foreach (var item in request.PromotionItems)
+                    {
+                        item.ItemType = "promotion";
+                    }
+                    allItems.AddRange(request.PromotionItems);
+                }
+
+                // Calculate totals from sale items only (promotions don't count)
                 if (request.OrderItems?.Any() == true)
                 {
                     request.Order.TotalAmount = request.OrderItems.Sum(i => i.Amount);
@@ -186,10 +228,10 @@ namespace QlnppApi.Controllers
                 _context.Orders.Add(request.Order);
                 await _context.SaveChangesAsync();
 
-                // Set OrderId for items and save them
-                if (request.OrderItems?.Any() == true)
+                // Set OrderId for all items and save them
+                if (allItems.Any())
                 {
-                    foreach (var item in request.OrderItems)
+                    foreach (var item in allItems)
                     {
                         item.OrderId = request.Order.Id;
                         // Calculate missing fields if needed
@@ -199,17 +241,18 @@ namespace QlnppApi.Controllers
                             item.Total = item.TotalAfterDiscount > 0 ? item.TotalAfterDiscount : item.Amount;
                     }
                     
-                    _context.OrderItems.AddRange(request.OrderItems);
+                    _context.OrderItems.AddRange(allItems);
                     await _context.SaveChangesAsync();
                 }
 
                 await transaction.CommitAsync();
 
-                // Return the created order with items
+                // Return the created order with items separated
                 var result = new
                 {
                     order = request.Order,
-                    items = request.OrderItems
+                    items = request.OrderItems,
+                    promotionItems = request.PromotionItems
                 };
 
                 return CreatedAtAction(nameof(GetOrder), new { id = request.Order.Id }, result);
@@ -262,7 +305,30 @@ namespace QlnppApi.Controllers
                 // Copy properties from request to existing order
                 _context.Entry(existingOrder).CurrentValues.SetValues(request.Order);
 
-                // Calculate totals from items
+                // Combine all items
+                var allItems = new List<OrderItem>();
+                
+                // Add sale items with ItemType = "sale"
+                if (request.OrderItems?.Any() == true)
+                {
+                    foreach (var item in request.OrderItems)
+                    {
+                        item.ItemType = "sale";
+                    }
+                    allItems.AddRange(request.OrderItems);
+                }
+                
+                // Add promotion items with ItemType = "promotion"
+                if (request.PromotionItems?.Any() == true)
+                {
+                    foreach (var item in request.PromotionItems)
+                    {
+                        item.ItemType = "promotion";
+                    }
+                    allItems.AddRange(request.PromotionItems);
+                }
+
+                // Calculate totals from sale items only
                 if (request.OrderItems?.Any() == true)
                 {
                     existingOrder.TotalAmount = request.OrderItems.Sum(i => i.Amount);
@@ -276,9 +342,9 @@ namespace QlnppApi.Controllers
                 _context.OrderItems.RemoveRange(existingItems);
 
                 // Add new items
-                if (request.OrderItems?.Any() == true)
+                if (allItems.Any())
                 {
-                    foreach (var item in request.OrderItems)
+                    foreach (var item in allItems)
                     {
                         item.Id = 0; // Reset ID for new items
                         item.OrderId = id;
@@ -289,7 +355,7 @@ namespace QlnppApi.Controllers
                             item.Total = item.TotalAfterDiscount > 0 ? item.TotalAfterDiscount : item.Amount;
                     }
                     
-                    _context.OrderItems.AddRange(request.OrderItems);
+                    _context.OrderItems.AddRange(allItems);
                 }
 
                 await _context.SaveChangesAsync();

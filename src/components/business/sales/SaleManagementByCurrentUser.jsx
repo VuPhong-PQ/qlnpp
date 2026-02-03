@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { API_BASE_URL } from '../../../config/api';
+import ExcelJS from 'exceljs';
 import SearchableSelect from '../../common/SearchableSelect';
 import '../BusinessPage.css';
 
@@ -13,6 +14,20 @@ const removeVietnameseTones = (str) => {
     .replace(/đ/g, 'd')
     .replace(/Đ/g, 'D')
     .toLowerCase();
+};
+
+// Format tax rates string to ensure each value ends with '%', e.g. "8% 10%"
+const formatTaxRates = (order) => {
+  if (!order) return '';
+  const raw = order.TaxRates || order.taxRates || (order.discountPercent != null ? String(order.discountPercent) : (order.vatExport ? '10' : ''));
+  if (!raw) return '';
+  const parts = String(raw).split(/[,;\s]+/).map(p => p.trim()).filter(Boolean);
+  const mapped = parts.map(p => {
+    if (p.includes('%')) return p.replace(/\s*%/g, '%');
+    const num = p.replace(/[^0-9.\-]/g, '');
+    return num ? (num + '%') : p;
+  });
+  return mapped.join(' ');
 };
 
 // Constants for localStorage
@@ -412,6 +427,120 @@ const SaleManagementByCurrentUser = () => {
     }
   };
 
+  // Handle Export to Excel
+  const handleExport = async () => {
+    // Determine which orders to export: selected ones or all filtered
+    const ordersToExport = selectedOrders.size > 0 
+      ? filteredOrders.filter(order => selectedOrders.has(order.id))
+      : filteredOrders;
+    
+    if (ordersToExport.length === 0) {
+      alert('Không có đơn hàng nào để xuất!');
+      return;
+    }
+
+    try {
+      const workbook = new ExcelJS.Workbook();
+      workbook.creator = 'Quản Lý Nhà Phân Phối';
+      workbook.created = new Date();
+      
+      const worksheet = workbook.addWorksheet('Đơn hàng');
+
+      // Define columns
+      worksheet.columns = [
+        { header: 'STT', key: 'stt', width: 6 },
+        { header: 'Số phiếu', key: 'orderNumber', width: 18 },
+        { header: 'Ngày lập', key: 'orderDate', width: 12 },
+        { header: 'Khách hàng', key: 'customerName', width: 25 },
+        { header: 'Nhóm KH', key: 'customerGroup', width: 18 },
+        { header: 'Loại hàng', key: 'productType', width: 18 },
+        { header: 'Tổng tiền', key: 'totalAmount', width: 15 },
+        { header: 'Tổng tiền sau giảm', key: 'payment', width: 18 },
+        { header: 'Trạng thái', key: 'status', width: 12 },
+        { header: 'Ghi chú', key: 'notes', width: 30 },
+        { header: 'Nhân viên lập', key: 'createdBy', width: 15 },
+        { header: 'Nhân viên sale', key: 'salesStaff', width: 15 },
+        { header: 'Thuế suất', key: 'taxRate', width: 10 },
+        { header: 'Địa chỉ', key: 'address', width: 35 },
+        { header: 'Lịch bán hàng', key: 'salesSchedule', width: 15 },
+        { header: 'Tổng kg', key: 'totalKg', width: 10 },
+        { header: 'Tổng khối', key: 'totalM3', width: 10 }
+      ];
+
+      // Style header row
+      worksheet.getRow(1).font = { bold: true };
+      worksheet.getRow(1).fill = {
+        type: 'pattern',
+        pattern: 'solid',
+        fgColor: { argb: 'FF4A90E2' }
+      };
+      worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      worksheet.getRow(1).alignment = { vertical: 'middle', horizontal: 'center' };
+
+      // Add data rows
+      ordersToExport.forEach((order, index) => {
+        const orderDate = order.orderDate ? new Date(order.orderDate).toLocaleDateString('vi-VN') : '';
+        // Calculate payment (total after discount)
+        const totalAfterDiscount = (order.totalAmount || 0) - (order.discountAmount || 0);
+        // Get customer group name from code
+        const customerGroupName = order.customerGroup ? 
+          (customerGroups.find(g => g.code === order.customerGroup)?.name || order.customerGroup) : '';
+        
+        worksheet.addRow({
+          stt: index + 1,
+          orderNumber: order.orderNumber || '',
+          orderDate: orderDate,
+          customerName: order.customerName || '',
+          customerGroup: customerGroupName,
+          productType: order.productType || '',
+          totalAmount: order.totalAmount || 0,
+          payment: totalAfterDiscount > 0 ? totalAfterDiscount : (order.totalAmount || 0),
+          status: order.status || 'chưa duyệt',
+          notes: order.notes || '',
+          createdBy: order.createdBy || '',
+          salesStaff: order.salesStaff || '',
+          taxRate: formatTaxRates(order) || (order.discountPercent ? `${order.discountPercent}%` : ''),
+          address: order.address || '',
+          salesSchedule: order.salesSchedule || '',
+          totalKg: order.totalKg || 0,
+          totalM3: order.totalM3 || 0
+        });
+      });
+
+      // Format number columns
+      worksheet.getColumn('totalAmount').numFmt = '#,##0';
+      worksheet.getColumn('payment').numFmt = '#,##0';
+
+      // Add borders to all cells
+      worksheet.eachRow((row, rowNumber) => {
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: 'thin' },
+            left: { style: 'thin' },
+            bottom: { style: 'thin' },
+            right: { style: 'thin' }
+          };
+        });
+      });
+
+      // Generate file and download
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      const fileName = `DonHang_${currentUser || 'User'}_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      link.download = fileName;
+      link.click();
+      window.URL.revokeObjectURL(url);
+
+      alert(`Đã xuất ${ordersToExport.length} đơn hàng ra file Excel!`);
+    } catch (error) {
+      console.error('Error exporting to Excel:', error);
+      alert('Có lỗi khi xuất file Excel!');
+    }
+  };
+
   // Handle individual order selection
   const handleOrderSelect = (orderId) => {
     const newSelected = new Set(selectedOrders);
@@ -559,7 +688,7 @@ const SaleManagementByCurrentUser = () => {
       case 'notes': return order.notes || '';
       case 'createdBy': return order.createdBy || '';
       case 'productType': return order.productType || '';
-      case 'taxRate': return order.discountPercent != null ? order.discountPercent + '%' : '';
+      case 'taxRate': return formatTaxRates(order);
       case 'salesStaff': return order.salesStaff || '';
       case 'mergeFrom': return order.mergeFromOrder || '';
       case 'mergeTo': return order.mergeToOrder || '';
@@ -666,8 +795,8 @@ const SaleManagementByCurrentUser = () => {
       case 'createdBy': return order.createdBy || '-';
       case 'productType': return order.productType || '-';
       case 'taxRate': 
-        return order.discountPercent != null ? order.discountPercent + '%' : 
-               order.vatExport ? '10%' : '-';
+        const tr = formatTaxRates(order);
+        return tr ? tr : (order.vatExport ? '10%' : '-');
       case 'salesStaff': return order.salesStaff || '-';
       case 'mergeFrom': return order.mergeFromOrder || '-';
       case 'mergeTo': return order.mergeToOrder || '-';
@@ -1113,11 +1242,7 @@ const SaleManagementByCurrentUser = () => {
             <i className="icon">📄</i>
             <span>Thêm</span>
           </button>
-          <button className="action-btn purple-btn import-btn" title="Import">
-            <i className="icon">📥</i>
-            <span>Import</span>
-          </button>
-          <button className="action-btn pink-btn" title="Export">
+          <button className="action-btn pink-btn" title="Export" onClick={handleExport}>
             <i className="icon">📊</i>
             <span>Export</span>
           </button>

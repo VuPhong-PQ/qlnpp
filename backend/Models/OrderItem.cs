@@ -10,6 +10,9 @@ namespace QlnppApi.Models
         public int OrderId { get; set; }
         public virtual Order? Order { get; set; }
 
+        // Item type: "sale" for hàng bán, "promotion" for hàng khuyến mãi
+        public string ItemType { get; set; } = "sale";
+
         // Product information
         public string ProductCode { get; set; } = string.Empty;
         public string Barcode { get; set; } = string.Empty;
