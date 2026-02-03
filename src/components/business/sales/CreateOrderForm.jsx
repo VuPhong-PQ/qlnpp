@@ -887,8 +887,8 @@ const CreateOrderForm = () => {
 
   // Export Excel theo mẫu Phiếu Giao Hàng Kiểm Xác Nhận Công Nợ với định dạng đẹp
   const handleExportExcel = async () => {
-    // Filter valid items
-    const validItems = orderItems.filter(item => {
+    // Filter valid sale items and promotion items separately
+    const validSaleItems = orderItems.filter(item => {
       const hasText = (item.productCode && String(item.productCode).trim()) || 
                      (item.barcode && String(item.barcode).trim()) || 
                      (item.productName && String(item.productName).trim());
@@ -897,7 +897,16 @@ const CreateOrderForm = () => {
       return Boolean(hasText) || Boolean(hasNumbers);
     });
 
-    if (validItems.length === 0) {
+    const validPromoItems = promotionItems.filter(item => {
+      const hasText = (item.productCode && String(item.productCode).trim()) || 
+                     (item.barcode && String(item.barcode).trim()) || 
+                     (item.productName && String(item.productName).trim());
+      const hasNumbers = (item.quantity && Number(item.quantity) > 0) || 
+                        (item.unitPrice && Number(item.unitPrice) > 0);
+      return Boolean(hasText) || Boolean(hasNumbers);
+    });
+
+    if (validSaleItems.length === 0 && validPromoItems.length === 0) {
       alert('Không có sản phẩm nào để xuất!');
       return;
     }
@@ -975,36 +984,112 @@ const CreateOrderForm = () => {
       ws.getCell('G2').font = { size: 9 };
       ws.getCell('G2').alignment = { horizontal: 'right' };
 
-      // Generate QR Code for Google Maps directions if coordinates exist
-      if (orderForm.vehicle && orderForm.vehicle.includes(',')) {
+      // Generate a styled QR Code that encodes the order number (số phiếu)
+      // Draw the QR on an offscreen canvas with a rounded card, shadow and label
+      if (orderForm.orderNumber) {
         try {
-          const coords = orderForm.vehicle.split(',').map(c => c.trim());
-          if (coords.length === 2) {
-            const [lat, lng] = coords;
-            // Google Maps directions URL
-            const mapsUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
-            
-            // Generate QR code as base64 image
-            const qrDataUrl = await QRCode.toDataURL(mapsUrl, {
-              width: 300,
-              margin: 1,
-              color: { dark: '#000000', light: '#ffffff' }
+          const payload = String(orderForm.orderNumber || '');
+
+          // Create base QR as data URL (high-res for quality)
+          const baseQrDataUrl = await QRCode.toDataURL(payload, {
+            width: 600,
+            margin: 1,
+            color: { dark: '#000000', light: '#ffffff' }
+          });
+
+          // Helper: create styled PNG from QR data URL using canvas
+          const createStyledPng = async (qrDataUrl, options = {}) => {
+            const cardSize = options.cardSize || 300; // square card
+            const padding = options.padding || 18;
+            const labelHeight = options.labelHeight || 26;
+
+            const img = await new Promise((resolve, reject) => {
+              const i = new Image();
+              i.onload = () => resolve(i);
+              i.onerror = reject;
+              i.src = qrDataUrl;
             });
-            
-            // Add QR code image to workbook
-            const qrImageId = workbook.addImage({
-              base64: qrDataUrl,
-              extension: 'png'
-            });
-            
-            // Place QR code at rows 4-8, columns J-K (moved right to not overlap title)
-            ws.addImage(qrImageId, {
-              tl: { col: 9, row: 3 },    // Start at column J (index 9), row 4 (index 3)
-              br: { col: 10.9, row: 8 }  // End at column K (index 10.9), row 9 (index 8)
-            });
-          }
+
+            const canvas = document.createElement('canvas');
+            canvas.width = cardSize + padding * 2;
+            canvas.height = cardSize + padding * 2 + labelHeight;
+            const ctx = canvas.getContext('2d');
+
+            // Clear
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+            // Draw shadowed rounded card
+            const cardX = padding;
+            const cardY = padding;
+            const cardW = cardSize;
+            const cardH = cardSize;
+            const radius = 18;
+
+            ctx.fillStyle = 'rgba(0,0,0,0)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            ctx.save();
+            ctx.shadowColor = 'rgba(0,0,0,0.18)';
+            ctx.shadowBlur = 14;
+            ctx.shadowOffsetY = 6;
+            ctx.fillStyle = '#ffffff';
+            // rounded rect path
+            ctx.beginPath();
+            ctx.moveTo(cardX + radius, cardY);
+            ctx.arcTo(cardX + cardW, cardY, cardX + cardW, cardY + cardH, radius);
+            ctx.arcTo(cardX + cardW, cardY + cardH, cardX, cardY + cardH, radius);
+            ctx.arcTo(cardX, cardY + cardH, cardX, cardY, radius);
+            ctx.arcTo(cardX, cardY, cardX + cardW, cardY, radius);
+            ctx.closePath();
+            ctx.fill();
+            ctx.restore();
+
+            // Draw QR image centered inside card with inner padding
+            const innerPad = 18;
+            const qrSize = cardSize - innerPad * 2;
+            const dx = cardX + innerPad;
+            const dy = cardY + innerPad;
+            ctx.drawImage(img, dx, dy, qrSize, qrSize);
+
+            // Draw subtle border around card
+            ctx.strokeStyle = 'rgba(0,0,0,0.06)';
+            ctx.lineWidth = 1;
+            ctx.beginPath();
+            ctx.moveTo(cardX + radius, cardY);
+            ctx.arcTo(cardX + cardW, cardY, cardX + cardW, cardY + cardH, radius);
+            ctx.arcTo(cardX + cardW, cardY + cardH, cardX, cardY + cardH, radius);
+            ctx.arcTo(cardX, cardY + cardH, cardX, cardY, radius);
+            ctx.arcTo(cardX, cardY, cardX + cardW, cardY, radius);
+            ctx.closePath();
+            ctx.stroke();
+
+            // Draw order number label below the card
+            ctx.fillStyle = '#333333';
+            ctx.font = '600 14px Arial';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            const labelX = canvas.width / 2;
+            const labelY = cardY + cardH + labelHeight / 2 + 4;
+            ctx.fillText(payload, labelX, labelY);
+
+            return canvas.toDataURL('image/png');
+          };
+
+          const styledDataUrl = await createStyledPng(baseQrDataUrl, { cardSize: 220, padding: 12, labelHeight: 26 });
+
+          // Add QR code image to workbook
+          const qrImageId = workbook.addImage({
+            base64: styledDataUrl,
+            extension: 'png'
+          });
+
+          // Place styled QR code in upper right corner area (columns H-J, rows 4-7)
+          ws.addImage(qrImageId, {
+            tl: { col: 7.2, row: 3.2 },
+            br: { col: 9.8, row: 6.8 }
+          });
         } catch (qrError) {
-          console.warn('Could not generate QR code:', qrError);
+          console.warn('Could not generate styled QR code:', qrError);
         }
       }
 
@@ -1093,47 +1178,44 @@ const CreateOrderForm = () => {
       let stt = 1;
 
       // Data rows - "Hàng bán"
-      validItems.forEach((item) => {
-        if (item.exportType !== 'khuyến mãi') {
-          const qty = parseFloat(item.quantity) || 0;
-          const unitPrice = parseFloat(item.unitPrice) || 0;
-          const discPercent = parseFloat(item.discountPercent) || 0;
-          const priceAfterCK = parseFloat(item.priceAfterCK) || unitPrice * (1 - discPercent / 100);
-          const thanhTien = parseFloat(item.totalAfterCK) || qty * priceAfterCK;
-          totalAmount += thanhTien;
+      validSaleItems.forEach((item) => {
+        const qty = parseFloat(item.quantity) || 0;
+        const unitPrice = parseFloat(item.unitPrice) || 0;
+        const discPercent = parseFloat(item.discountPercent) || 0;
+        const priceAfterCK = parseFloat(item.priceAfterCK) || unitPrice * (1 - discPercent / 100);
+        const thanhTien = parseFloat(item.totalAfterCK) || qty * priceAfterCK;
+        totalAmount += thanhTien;
 
-          const rowData = [
-            stt++,
-            item.nvSales || '',
-            item.barcode || '',
-            item.productName || '',
-            item.unit || '',
-            qty,
-            unitPrice,
-            discPercent,
-            priceAfterCK,
-            thanhTien
-          ];
+        const rowData = [
+          stt++,
+          item.nvSales || '',
+          item.barcode || '',
+          item.productName || '',
+          item.unit || '',
+          qty,
+          unitPrice,
+          discPercent,
+          priceAfterCK,
+          thanhTien
+        ];
 
-          rowData.forEach((value, colIdx) => {
-            const cell = ws.getCell(currentRow, colIdx + 1);
-            cell.value = value;
-            cell.border = thinBorder;
-            // Alignment
-            if (colIdx === 0) cell.alignment = { horizontal: 'center' }; // STT
-            else if (colIdx >= 5) cell.alignment = { horizontal: 'right' }; // Numbers
-            // Number format
-            if (colIdx >= 5 && typeof value === 'number') {
-              cell.numFmt = '#,##0';
-            }
-          });
-          currentRow++;
-        }
+        rowData.forEach((value, colIdx) => {
+          const cell = ws.getCell(currentRow, colIdx + 1);
+          cell.value = value;
+          cell.border = thinBorder;
+          // Alignment
+          if (colIdx === 0) cell.alignment = { horizontal: 'center' }; // STT
+          else if (colIdx >= 5) cell.alignment = { horizontal: 'right' }; // Numbers
+          // Number format
+          if (colIdx >= 5 && typeof value === 'number') {
+            cell.numFmt = '#,##0';
+          }
+        });
+        currentRow++;
       });
 
-      // Hàng khuyến mãi section
-      const promoItems = validItems.filter(item => item.exportType === 'khuyến mãi');
-      if (promoItems.length > 0) {
+      // Hàng khuyến mãi section (from promotionItems)
+      if (validPromoItems.length > 0) {
         ws.mergeCells(`A${currentRow}:J${currentRow}`);
         ws.getCell(`A${currentRow}`).value = 'Hàng khuyến mãi';
         ws.getCell(`A${currentRow}`).font = { bold: true, italic: true };
@@ -1143,7 +1225,7 @@ const CreateOrderForm = () => {
         }
         currentRow++;
 
-        promoItems.forEach((item) => {
+        validPromoItems.forEach((item) => {
           const qty = parseFloat(item.quantity) || 0;
           const rowData = [stt++, item.nvSales || '', item.barcode || '', item.productName || '', item.unit || '', qty, 0, 0, 0, 0];
           rowData.forEach((value, colIdx) => {
@@ -1161,6 +1243,22 @@ const CreateOrderForm = () => {
       // Empty row
       currentRow++;
 
+      // Compute total weight (kg) and total volume (m3) including both sale and promo items
+      let totalKgComputed = 0;
+      let totalM3Computed = 0;
+      const sumKgFunc = (item) => {
+        const qty = parseFloat(item.quantity) || 0;
+        const per = parseFloat(item.weight) || parseFloat(item.baseWeight) || 0;
+        return qty * per;
+      };
+      const sumM3Func = (item) => {
+        const qty = parseFloat(item.quantity) || 0;
+        const per = parseFloat(item.volume) || parseFloat(item.baseVolume) || 0;
+        return qty * per;
+      };
+      validSaleItems.forEach(i => { totalKgComputed += sumKgFunc(i); totalM3Computed += sumM3Func(i); });
+      validPromoItems.forEach(i => { totalKgComputed += sumKgFunc(i); totalM3Computed += sumM3Func(i); });
+
       // Totals section
       const discountPercent = parseFloat(orderForm.discountPercent) || 0;
       const discountAmount = parseFloat(orderForm.discountAmount) || 0;
@@ -1177,7 +1275,6 @@ const CreateOrderForm = () => {
       ws.getCell(`J${currentRow}`).numFmt = '#,##0';
       ws.getCell(`J${currentRow}`).font = { bold: true };
       ws.getCell(`J${currentRow}`).alignment = { horizontal: 'right' };
-      ws.getCell(`J${currentRow}`).border = thinBorder;
       currentRow++;
 
       // Row: Lưu ý + Chiết khấu
@@ -1190,7 +1287,6 @@ const CreateOrderForm = () => {
       ws.getCell(`J${currentRow}`).value = discountAmount;
       ws.getCell(`J${currentRow}`).numFmt = '#,##0';
       ws.getCell(`J${currentRow}`).alignment = { horizontal: 'right' };
-      ws.getCell(`J${currentRow}`).border = thinBorder;
       currentRow++;
 
       // Row: Thành tiền
@@ -1202,16 +1298,15 @@ const CreateOrderForm = () => {
       ws.getCell(`J${currentRow}`).numFmt = '#,##0';
       ws.getCell(`J${currentRow}`).font = { bold: true, color: { argb: 'FFFF0000' } };
       ws.getCell(`J${currentRow}`).alignment = { horizontal: 'right' };
-      ws.getCell(`J${currentRow}`).border = thinBorder;
       currentRow++;
 
       // Empty row
       currentRow++;
 
-      // Tổng số kg, m3
-      ws.getCell(`A${currentRow}`).value = `Tổng số kg: ${orderForm.totalKg || 0}`;
+      // Tổng số kg, m3 (tính lại bao gồm cả hàng khuyến mãi)
+      ws.getCell(`A${currentRow}`).value = `Tổng số kg: ${Number(totalKgComputed || orderForm.totalKg || 0).toLocaleString(undefined, { maximumFractionDigits: 3 })}`;
       ws.getCell(`A${currentRow}`).font = { bold: true };
-      ws.getCell(`C${currentRow}`).value = `Số m³: ${orderForm.totalM3 || 0}`;
+      ws.getCell(`C${currentRow}`).value = `Số m³: ${Number(totalM3Computed || orderForm.totalM3 || 0).toLocaleString(undefined, { maximumFractionDigits: 3 })}`;
       ws.getCell(`C${currentRow}`).font = { bold: true };
       currentRow++;
 
@@ -1362,6 +1457,22 @@ const CreateOrderForm = () => {
       const customerGroupObj = customerGroups.find(g => g.code === customerGroupCode);
       const customerGroupName = customerGroupObj ? customerGroupObj.name : customerGroupCode;
 
+      // Compute totals (kg and m3) including promotion items
+      let computedTotalKg = 0;
+      let computedTotalM3 = 0;
+      const sumKg = (item) => {
+        const qty = parseFloat(item.quantity) || 0;
+        const per = parseFloat(item.weight) || parseFloat(item.baseWeight) || 0;
+        return qty * per;
+      };
+      const sumM3 = (item) => {
+        const qty = parseFloat(item.quantity) || 0;
+        const per = parseFloat(item.volume) || parseFloat(item.baseVolume) || 0;
+        return qty * per;
+      };
+      (orderItems || []).forEach(i => { computedTotalKg += sumKg(i); computedTotalM3 += sumM3(i); });
+      (promotionItems || []).forEach(i => { computedTotalKg += sumKg(i); computedTotalM3 += sumM3(i); });
+
       // Order info rows
       const orderInfo = [
         ['Số phiếu', orderForm.orderNumber || ''],
@@ -1380,8 +1491,8 @@ const CreateOrderForm = () => {
         ['Giảm %', (orderForm.discountPercent || 0) + '%'],
         ['Tiền giảm', orderForm.discountAmount || 0],
         ['Tổng sau giảm', (orderForm.totalAmount || 0) - (orderForm.discountAmount || 0)],
-        ['Tổng kg', orderForm.totalKg || 0],
-        ['Tổng khối', orderForm.totalM3 || 0],
+        ['Tổng kg', Number(computedTotalKg || orderForm.totalKg || 0).toLocaleString(undefined, { maximumFractionDigits: 3 })],
+        ['Tổng khối', Number(computedTotalM3 || orderForm.totalM3 || 0).toLocaleString(undefined, { maximumFractionDigits: 3 })],
         ['Ghi chú', orderForm.notes || '']
       ];
 

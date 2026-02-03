@@ -1012,7 +1012,7 @@ const SaleManagement = () => {
       case 'payment': 
         // "Tổng tiền sau giảm" - calculate from totalAmount - discountAmount
         const totalAfterDiscount = (order.totalAmount || 0) - (order.discountAmount || 0);
-        return totalAfterDiscount > 0 ? totalAfterDiscount.toLocaleString() + ' ₫' : '-';
+        return totalAfterDiscount > 0 ? totalAfterDiscount.toLocaleString() : '-';
       case 'status': 
         const statusValue = order.status || 'chưa duyệt';
         const statusColors = {

@@ -86,7 +86,13 @@ namespace QlnppApi.Controllers
                 o.InvoiceNumber,
                 o.MergeFromOrder,
                 o.MergeToOrder,
-                o.SalesStaff,
+                // Combine unique NvSales from OrderItems if available, otherwise use SalesStaff
+                SalesStaff = (o.OrderItems != null && o.OrderItems.Any())
+                    ? string.Join(", ", o.OrderItems
+                        .Where(i => !string.IsNullOrEmpty(i.NvSales))
+                        .Select(i => i.NvSales)
+                        .Distinct())
+                    : o.SalesStaff,
                 // Promotion fields (hàng khuyến mãi)
                 o.PromoDiscountPercent,
                 o.PromoDiscountAmount,
