@@ -1,4 +1,5 @@
 import * as XLSX from 'xlsx';
+import ExcelJS from 'exceljs';
 
 /**
  * Export data to Excel file with company header
@@ -77,24 +78,81 @@ export const exportToExcelWithHeader = (data, filename = 'export', sheetName = '
  * @param {String} filename - Name of the file (without extension)
  * @param {String} sheetName - Name of the worksheet
  */
-export const exportToExcel = (data, filename = 'export', sheetName = 'Sheet1') => {
+export const exportToExcel = async (data, filename = 'export', sheetName = 'Sheet1') => {
   try {
-    // Create a new workbook
-    const wb = XLSX.utils.book_new();
-    
-    // Convert data to worksheet
-    const ws = XLSX.utils.json_to_sheet(data);
-    
-    // Add worksheet to workbook
-    XLSX.utils.book_append_sheet(wb, ws, sheetName);
-    
-    // Generate Excel file and trigger download
-    XLSX.writeFile(wb, `${filename}.xlsx`);
-    
+    if (!Array.isArray(data) || data.length === 0) {
+      alert('Không có dữ liệu để xuất!');
+      return false;
+    }
+
+    const workbook = new ExcelJS.Workbook();
+    const worksheet = workbook.addWorksheet(sheetName);
+
+    // Prepare headers
+    const headers = Object.keys(data[0]);
+    worksheet.addRow(headers);
+
+    // Add data rows
+    data.forEach(row => {
+      const rowData = headers.map(h => row[h]);
+      worksheet.addRow(rowData);
+    });
+
+    // Styling: header row
+    const headerRow = worksheet.getRow(1);
+    headerRow.eachCell((cell) => {
+      cell.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+      cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: true };
+      cell.border = {
+        top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' }
+      };
+    });
+
+    // Apply border to all cells and compute max column widths
+    const colCount = headers.length;
+    const colWidths = new Array(colCount).fill(10);
+
+    worksheet.eachRow((row, rowNumber) => {
+      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        // border
+        cell.border = {
+          top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' }
+        };
+        // alignment for data rows
+        if (rowNumber > 1) cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+
+        const text = (cell.value === null || cell.value === undefined) ? '' : cell.value.toString();
+        const length = Math.min(60, Math.max(8, text.length + 2));
+        if (length > colWidths[colNumber - 1]) colWidths[colNumber - 1] = length;
+      });
+    });
+
+    worksheet.columns = colWidths.map(w => ({ width: w }));
+
+    // Auto filter and freeze header
+    worksheet.autoFilter = {
+      from: { row: 1, column: 1 },
+      to: { row: 1, column: colCount }
+    };
+    worksheet.views = [{ state: 'frozen', ySplit: 1 }];
+
+    // Generate buffer and trigger download
+    const buf = await workbook.xlsx.writeBuffer();
+    const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${filename}.xlsx`;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+
     return true;
   } catch (error) {
     console.error('Error exporting to Excel:', error);
-    alert('Lỗi khi xuất file Excel: ' + error.message);
+    alert('Lỗi khi xuất file Excel: ' + (error.message || error));
     return false;
   }
 };

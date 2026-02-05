@@ -27,7 +27,7 @@ const formatTaxRates = (order) => {
     const num = p.replace(/[^0-9.\-]/g, '');
     return num ? (num + '%') : p;
   });
-  return mapped.join(' ');
+  return mapped.join(', ');
 };
 
 // Constants for localStorage
@@ -86,12 +86,12 @@ const SaleManagement = () => {
     { id: 'orderDate', label: 'Ngày lập', width: 120, visible: true },
     { id: 'orderNumber', label: 'Số phiếu', width: 130, visible: true },
     { id: 'customerName', label: 'Khách hàng', width: 150, visible: true },
-    { id: 'productType', label: 'Loại hàng', width: 120, visible: true },
     { id: 'payment', label: 'Tổng tiền sau giảm', width: 140, visible: true },
     { id: 'status', label: 'Trạng thái', width: 100, visible: true },
     { id: 'notes', label: 'Ghi chú đơn hàng', width: 150, visible: true },
     { id: 'createdBy', label: 'Nhân viên lập', width: 120, visible: true },
     { id: 'taxRate', label: 'Thuế suất', width: 90, visible: true },
+    { id: 'productType', label: 'Loại hàng', width: 120, visible: true },
     { id: 'salesStaff', label: 'Nhân viên sale', width: 120, visible: true },
     { id: 'mergeFrom', label: 'Gộp từ đơn', width: 110, visible: true },
     { id: 'mergeTo', label: 'Gộp vào đơn', width: 110, visible: true },
@@ -1045,7 +1045,7 @@ const SaleManagement = () => {
       case 'mergeTo': return order.mergeToOrder || '-';
       case 'customerGroup': return getCustomerGroupName(order.customerGroup);
       case 'salesSchedule': return order.salesSchedule || '-';
-      case 'totalAmount': return order.totalAmount ? order.totalAmount.toLocaleString() + ' ₫' : '-';
+      case 'totalAmount': return order.totalAmount ? order.totalAmount.toLocaleString() : '-';
       case 'totalAfterDiscount': 
         return order.totalAfterDiscount ? order.totalAfterDiscount.toLocaleString() + ' ₫' : '-';
       case 'totalKg': return order.totalKg != null ? order.totalKg.toLocaleString() : '-';

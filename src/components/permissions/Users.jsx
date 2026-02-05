@@ -5,7 +5,7 @@ import UserModal from './UserModal';
 import PermissionModal from './PermissionModal';
 import GroupPermissionModal from './GroupPermissionModal';
 import { API_ENDPOINTS, api, API_BASE_URL } from '../../config/api';
-import { exportToExcel } from '../../utils/excelUtils';
+import { exportToExcel, importFromExcel } from '../../utils/excelUtils';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
 
 export default function Users() {
@@ -31,6 +31,10 @@ export default function Users() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [resetPwError, setResetPwError] = useState('');
   const [resetPwLoading, setResetPwLoading] = useState(false);
+  // Mobile: which user's action panel is open
+  const [openActionsFor, setOpenActionsFor] = useState(null);
+  // File import ref
+  const fileInputRef = React.useRef(null);
 
   useEffect(() => {
     loadUsers();
@@ -142,6 +146,17 @@ export default function Users() {
 
   const filtered = applyFilters(users, search, ['username', 'name', 'phone', 'email', 'idNumber']);
 
+  const renderActionButtons = (u) => (
+    <>
+      <button title="Chi tiết / Sửa" onClick={() => handleEdit(u)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#5bc0de', color: '#fff', cursor: 'pointer' }}>✎</button>
+      <button title="Đặt lại mật khẩu" onClick={() => openResetPwModal(u)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#f39c12', color: '#fff', cursor: 'pointer' }}>🔓</button>
+      <button title="Xóa nhân viên" onClick={() => handleDelete(u.id)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#ff6b6b', color: '#fff', cursor: 'pointer' }}>🗑</button>
+      <button title="Phân quyền chi tiết" onClick={() => navigate(`/permissions/user-permissions/${u.id}`)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#667eea', color: '#fff', cursor: 'pointer' }}>🔑</button>
+      <button title="Phân quyền nhanh" onClick={() => { setPermTarget(u); setShowPermModal(true); }} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#8e44ad', color: '#fff', cursor: 'pointer' }}>🔐</button>
+      <button title="Phân quyền nhóm hàng" onClick={() => { setPermTarget(u); setShowGroupPermModal(true); }} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#2ecc71', color: '#fff', cursor: 'pointer' }}>📦</button>
+    </>
+  );
+
   // Phân trang: tính toán các giá trị
   const totalPages = Math.ceil(filtered.length / itemsPerPage) || 1;
   const startIndex = (currentPage - 1) * itemsPerPage;
@@ -176,6 +191,90 @@ export default function Users() {
     exportToExcel(data, 'Danh_sach_nhan_vien', 'Nhân viên');
   };
 
+  const handleImportClick = () => {
+    if (fileInputRef.current) fileInputRef.current.click();
+  };
+
+  const handleFileChange = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+
+    try {
+      setLoading(true);
+      importFromExcel(file, async (jsonData) => {
+        let successCount = 0;
+        let errorCount = 0;
+        let skippedCount = 0;
+        let cancelled = false;
+        const errors = [];
+
+        const parseDate = (val) => {
+          if (!val) return null;
+          const d = new Date(val);
+          return isNaN(d.getTime()) ? null : d.toISOString();
+        };
+
+        for (const row of jsonData) {
+          try {
+            const newUser = {
+              username: (row['Tên đăng nhập'] || row['Username'] || '')?.toString().trim(),
+              name: (row['Tên nhân viên'] || row['Name'] || '')?.toString().trim(),
+              phone: (row['Số điện thoại'] || '')?.toString().trim(),
+              email: (row['Email'] || '')?.toString().trim(),
+              birthYear: parseDate(row['Năm sinh']),
+              idNumber: (row['Số CMND/CCCD'] || '')?.toString().trim(),
+              idIssuedDate: parseDate(row['Ngày cấp']),
+              idIssuedPlace: (row['Nơi cấp'] || '')?.toString().trim(),
+              yearStarted: parseDate(row['Năm vào làm']),
+              position: (row['Chức vụ'] || '')?.toString().trim(),
+              note: (row['Ghi chú'] || '')?.toString().trim()
+            };
+
+            if (!newUser.username || !newUser.name) {
+              errors.push(`Dòng thiếu username hoặc tên: ${JSON.stringify(row)}`);
+              errorCount++;
+              continue;
+            }
+
+            // Check if user already exists in current system
+            const existsInState = users && users.some(u => (u.username || '').toString().trim() === (newUser.username || '').toString().trim());
+            if (existsInState) {
+              const displayName = newUser.username || newUser.name || '';
+              const proceed = window.confirm(`Nhân viên "${displayName}" đã có trong hệ thống. Nhấn OK để BỎ QUA và tiếp tục, hoặc Cancel để HỦY import.`);
+              if (!proceed) {
+                cancelled = true;
+                break;
+              }
+              skippedCount++;
+              continue;
+            }
+
+            await api.post(API_ENDPOINTS.users, newUser);
+            successCount++;
+          } catch (err) {
+            console.error('Import row failed', err);
+            errors.push(err.message || JSON.stringify(err));
+            errorCount++;
+          }
+        }
+        await loadUsers();
+
+        let msg = cancelled ? 'Import bị hủy bởi người dùng.' : `Import hoàn tất. Thành công: ${successCount}, Lỗi: ${errorCount}, Bỏ qua: ${skippedCount}`;
+        if (errors.length > 0) {
+          msg += '\n\nChi tiết lỗi:\n' + errors.slice(0, 5).join('\n');
+          if (errors.length > 5) msg += `\n... và ${errors.length - 5} lỗi khác`;
+        }
+        alert(msg);
+      }, 0);
+    } catch (err) {
+      console.error('Import failed', err);
+      alert('Lỗi khi import file: ' + (err.message || err));
+    } finally {
+      setLoading(false);
+      e.target.value = '';
+    }
+  };
+
   return (
     <div className="setup-page">
       <div className="page-header">
@@ -195,6 +294,8 @@ export default function Users() {
           <div className="table-actions">
             <button className="btn btn-primary" onClick={handleAdd}>+ Thêm nhân viên</button>
             <button className="btn btn-success" onClick={handleExport} style={{ marginLeft: 8 }}>📤 Export Excel</button>
+            <button className="btn btn-secondary" onClick={handleImportClick} style={{ marginLeft: 8 }}>📥 Import NV</button>
+            <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".xlsx,.xls" onChange={handleFileChange} />
           </div>
         </div>
 
@@ -282,15 +383,38 @@ export default function Users() {
                   <td>{u.yearStarted ? new Date(u.yearStarted).toLocaleDateString() : ''}</td>
                   <td>{u.position || ''}</td>
                   <td>{u.note || ''}</td>
-                  <td style={{ width: 72, position: 'sticky', right: 0, background: '#fff', zIndex: 3 }}>
-                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8, alignItems: 'center', padding: 8 }}>
-                      <button title="Chi tiết / Sửa" onClick={() => handleEdit(u)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#5bc0de', color: '#fff', cursor: 'pointer' }}>✎</button>
-                      <button title="Đặt lại mật khẩu" onClick={() => openResetPwModal(u)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#f39c12', color: '#fff', cursor: 'pointer' }}>🔓</button>
-                      <button title="Xóa nhân viên" onClick={() => handleDelete(u.id)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#ff6b6b', color: '#fff', cursor: 'pointer' }}>🗑</button>
-                      <button title="Phân quyền chi tiết" onClick={() => navigate(`/permissions/user-permissions/${u.id}`)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#667eea', color: '#fff', cursor: 'pointer' }}>🔑</button>
-                      <button title="Phân quyền nhanh" onClick={() => { setPermTarget(u); setShowPermModal(true); }} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#8e44ad', color: '#fff', cursor: 'pointer' }}>🔐</button>
-                      <button title="Phân quyền nhóm hàng" onClick={() => { setPermTarget(u); setShowGroupPermModal(true); }} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#2ecc71', color: '#fff', cursor: 'pointer' }}>📦</button>
+                  <td style={{ width: 64, position: 'sticky', right: 0, background: '#fff', zIndex: 3 }}>
+                    <div style={{ position: 'relative', padding: 8, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                      {/* Desktop / wide screens: show inline row */}
+                      <div className="action-row" style={{ display: 'flex', flexDirection: 'row', gap: 8, alignItems: 'center', justifyContent: 'center', padding: 0 }}>
+                        {renderActionButtons(u)}
+                      </div>
+
+                      {/* Mobile toggle: visible on small screens via CSS below */}
+                      <button className="action-toggle" onClick={(e) => { e.stopPropagation(); setOpenActionsFor(openActionsFor === u.id ? null : u.id); }} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#3498db', color: '#fff', cursor: 'pointer', display: 'none' }} title="Mở hành động">▸</button>
+
+                      {/* Mobile overlay panel */}
+                      {openActionsFor === u.id && (
+                        <>
+                          <div onClick={() => setOpenActionsFor(null)} style={{ position: 'fixed', inset: 0, zIndex: 1000 }} />
+                          <div style={{ position: 'fixed', right: 16, bottom: 90, zIndex: 1001, background: '#fff', border: '1px solid #ddd', padding: 8, borderRadius: 8, boxShadow: '0 6px 18px rgba(0,0,0,0.12)' }}>
+                            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                              {renderActionButtons(u)}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
+                    {/* Responsive CSS placed here so it stays colocated with component */}
+                    <style>{`
+                      @media (max-width: 600px) {
+                        .action-row { display: none !important; }
+                        .action-toggle { display: inline-flex !important; }
+                      }
+                      @media (min-width: 601px) {
+                        .action-toggle { display: none !important; }
+                      }
+                    `}</style>
                   </td>
                 </tr>
               ))}
