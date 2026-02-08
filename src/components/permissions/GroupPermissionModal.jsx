@@ -1,103 +1,98 @@
 import React, { useEffect, useMemo, useState } from 'react';
 import '../setup/SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
+import { vietnameseSearch } from '../../utils/searchUtils';
 
 export default function GroupPermissionModal({ show, onClose, onSave, user }) {
   const [categories, setCategories] = useState([]);
-  const [selected, setSelected] = useState({}); // { catId: { view:true,... } }
-  const [rowChecked, setRowChecked] = useState({}); // selected rows
-  const [selectAllRows, setSelectAllRows] = useState(false);
+  const [selectedIds, setSelectedIds] = useState(new Set()); // Set of selected category IDs
+  const [loading, setLoading] = useState(false);
   // pagination & search
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(10);
   const [search, setSearch] = useState('');
+  // Column search states
+  const [searchCode, setSearchCode] = useState('');
+  const [searchName, setSearchName] = useState('');
+  const [searchNote, setSearchNote] = useState('');
+  const [activeSearchCol, setActiveSearchCol] = useState(null); // 'code' | 'name' | 'note' | null
 
   useEffect(() => {
     if (!show) return;
-    loadCategories();
-  }, [show]);
+    loadData();
+  }, [show, user?.id]);
 
-  const loadCategories = async () => {
+  const loadData = async () => {
     try {
+      setLoading(true);
+      // Load all categories
       const data = API_ENDPOINTS.productCategories ? await api.get(API_ENDPOINTS.productCategories) : [];
       setCategories(data || []);
-      // init selections
-      const s = {};
-      const rc = {};
-      (data || []).forEach(c => {
-        const key = c.id || c.code || c.name;
-        s[key] = { view: false, add: false, edit: false, delete: false, print: false, import: false, export: false };
-        rc[key] = false;
-      });
-      setSelected(s);
-      setRowChecked(rc);
-      setSelectAllRows(false);
+
+      // Load existing permissions for this user
+      if (user?.id) {
+        const permsRes = await fetch(`${API_ENDPOINTS.productCategoryPermissions}/user/${user.id}`);
+        if (permsRes.ok) {
+          const perms = await permsRes.json();
+          const ids = new Set();
+          (perms || []).forEach(p => {
+            if (p.canView || p.CanView) {
+              ids.add(p.productCategoryId || p.ProductCategoryId);
+            }
+          });
+          setSelectedIds(ids);
+        }
+      }
       setPage(1);
       setSearch('');
     } catch (e) {
       console.error('Load categories failed', e);
       setCategories([]);
+    } finally {
+      setLoading(false);
     }
   };
 
-  const togglePerm = (catKey, field) => {
-    setSelected(prev => ({ ...prev, [catKey]: { ...prev[catKey], [field]: !prev[catKey][field] } }));
-  };
-
-  const toggleRow = (catKey, checked) => {
-    setRowChecked(prev => {
-      const next = { ...prev, [catKey]: checked };
-      // update selectAllRows state based on visible keys
-      const vis = visibleKeys();
-      const allSelected = vis.length > 0 && vis.every(k => next[k]);
-      setSelectAllRows(allSelected);
+  const toggleCategory = (catId) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(catId)) {
+        next.delete(catId);
+      } else {
+        next.add(catId);
+      }
       return next;
     });
   };
 
-  const handleSelectAllRows = (checked) => {
-    // apply select all only to visible rows (current page & filtered)
-    const next = { ...rowChecked };
-    const visible = visibleKeys();
-    visible.forEach(k => next[k] = checked);
-    setRowChecked(next);
-    setSelectAllRows(checked);
-  };
-
-  const applyHeaderToggle = (field, checked) => {
-    // apply to all checked rows
-    const next = { ...selected };
-    Object.keys(rowChecked).forEach(k => {
-      if (rowChecked[k]) next[k] = { ...next[k], [field]: checked };
-    });
-    setSelected(next);
+  const handleSelectAll = (checked) => {
+    if (checked) {
+      const allIds = new Set(categories.map(c => c.id));
+      setSelectedIds(allIds);
+    } else {
+      setSelectedIds(new Set());
+    }
   };
 
   const handleSave = async () => {
-    // Build payload: list of ProductCategoryPermission objects
+    // Build payload: list of ProductCategoryPermission objects for selected categories
     const permissions = [];
-    Object.keys(selected).forEach(key => {
-      if (!rowChecked[key]) return;
-      const p = selected[key];
-      // Find the category to get its ID
-      const cat = categories.find(c => (c.id || c.code || c.name) === key);
-      if (!cat) return;
-      
+    selectedIds.forEach(catId => {
       permissions.push({
         userId: user?.id,
-        productCategoryId: cat.id,
-        canView: !!p.view,
-        canAdd: !!p.add,
-        canEdit: !!p.edit,
-        canDelete: !!p.delete,
-        canViewPrice: !!p.view,
-        canEditPrice: !!p.edit,
-        canViewStock: !!p.view
+        productCategoryId: catId,
+        canView: true,
+        canAdd: true,
+        canEdit: true,
+        canDelete: true,
+        canViewPrice: true,
+        canEditPrice: true,
+        canViewStock: true
       });
     });
 
     try {
-      // Use productCategoryPermissions API
+      setLoading(true);
       const response = await fetch(`${API_ENDPOINTS.productCategoryPermissions}/user/${user?.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
@@ -115,143 +110,242 @@ export default function GroupPermissionModal({ show, onClose, onSave, user }) {
     } catch (err) {
       console.error('Save group permissions failed', err);
       alert('Lưu thất bại');
+    } finally {
+      setLoading(false);
     }
   };
 
   // filtering and pagination helpers
   const filteredCategories = useMemo(() => {
-    if (!search) return categories;
-    const q = search.trim().toLowerCase();
     return categories.filter(c => {
-      const code = (c.code || c.id || '').toString().toLowerCase();
-      const name = (c.name || c.title || '').toString().toLowerCase();
-      return code.includes(q) || name.includes(q);
+      const code = (c.code || c.id || '').toString();
+      const name = (c.name || c.title || '').toString();
+      const note = (c.note || '').toString();
+      
+      // Check each column filter using Vietnamese search
+      if (searchCode && !vietnameseSearch(code, searchCode)) return false;
+      if (searchName && !vietnameseSearch(name, searchName)) return false;
+      if (searchNote && !vietnameseSearch(note, searchNote)) return false;
+      
+      return true;
     });
-  }, [categories, search]);
+  }, [categories, searchCode, searchName, searchNote]);
 
-  const totalPages = () => Math.max(1, Math.ceil((filteredCategories || []).length / pageSize));
+  const totalPages = Math.max(1, Math.ceil((filteredCategories || []).length / pageSize));
 
-  const pagedCategories = () => {
+  const pagedCategories = useMemo(() => {
     const start = (page - 1) * pageSize;
     return (filteredCategories || []).slice(start, start + pageSize);
-  };
-
-  const visibleKeys = () => pagedCategories().map((c, idx) => (c.id || c.code || c.name || idx));
+  }, [filteredCategories, page, pageSize]);
 
   const countInfo = () => {
     const total = (filteredCategories || []).length;
     const start = total === 0 ? 0 : (page - 1) * pageSize + 1;
     const end = Math.min(total, page * pageSize);
-    return `${start}-${end} / ${total}`;
+    return `Dòng ${start}-${end} trên tổng ${total} dòng`;
   };
 
   const renderPageNumbers = () => {
     const pages = [];
-    const tp = totalPages();
-    const start = Math.max(1, page - 2);
-    const end = Math.min(tp, page + 2);
+    const maxButtons = 5;
+    let start = Math.max(1, page - Math.floor(maxButtons / 2));
+    let end = Math.min(totalPages, start + maxButtons - 1);
+    if (end - start < maxButtons - 1) start = Math.max(1, end - maxButtons + 1);
+
     for (let i = start; i <= end; i++) {
       pages.push(
-        <button key={i} className={`btn ${i === page ? 'active' : ''}`} onClick={() => setPage(i)}>{i}</button>
+        <button
+          key={i}
+          onClick={() => setPage(i)}
+          style={{
+            width: 32, height: 32, border: '1px solid #ddd', borderRadius: 4,
+            background: i === page ? '#1890ff' : '#fff', color: i === page ? '#fff' : '#333',
+            cursor: 'pointer', fontWeight: i === page ? 600 : 400
+          }}
+        >
+          {i}
+        </button>
+      );
+    }
+    if (end < totalPages) {
+      pages.push(<span key="dots" style={{ padding: '0 4px' }}>···</span>);
+      pages.push(
+        <button
+          key={totalPages}
+          onClick={() => setPage(totalPages)}
+          style={{
+            width: 32, height: 32, border: '1px solid #ddd', borderRadius: 4,
+            background: '#fff', color: '#333', cursor: 'pointer'
+          }}
+        >
+          {totalPages}
+        </button>
       );
     }
     return pages;
   };
 
-  // keep selectAllRows in sync when page/filter/selection changes
-  useEffect(() => {
-    const vis = visibleKeys();
-    const all = vis.length > 0 && vis.every(k => !!rowChecked[k]);
-    setSelectAllRows(all);
-  }, [page, pageSize, search, categories, rowChecked]);
+  const isAllSelected = categories.length > 0 && categories.every(c => selectedIds.has(c.id));
 
   if (!show) return null;
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content" style={{ width: '90%', maxWidth: '1200px' }}>
-        <div className="modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-          <h3 style={{ margin: 0, textTransform: 'uppercase', fontWeight: 700 }}>PHÂN QUYỀN NHÓM HÀNG</h3>
-          <button className="close-btn" onClick={onClose} style={{ position: 'absolute', right: 12, top: 8 }}>×</button>
+    <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.4)', zIndex: 10000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+      <div style={{ background: '#fff', borderRadius: 8, width: 'calc(100% - 32px)', height: 'calc(100% - 32px)', margin: 16, display: 'flex', flexDirection: 'column', boxShadow: '0 8px 32px rgba(0,0,0,0.2)' }}>
+        {/* Header */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', borderBottom: '1px solid #eee' }}>
+          <div style={{ fontSize: 14, color: '#666' }}>Tổng {categories.length}</div>
+          <div style={{ display: 'flex', gap: 8 }}>
+            <button onClick={loadData} style={{ width: 36, height: 36, borderRadius: 4, border: 'none', background: '#17a2b8', color: '#fff', cursor: 'pointer' }} title="Làm mới">↻</button>
+            <button style={{ width: 36, height: 36, borderRadius: 4, border: 'none', background: '#e74c3c', color: '#fff', cursor: 'pointer' }} title="Xóa chọn" onClick={() => setSelectedIds(new Set())}>🗑</button>
+            <button style={{ width: 36, height: 36, borderRadius: 4, border: 'none', background: '#6c757d', color: '#fff', cursor: 'pointer' }} title="Cài đặt">⚙</button>
+          </div>
+          <button onClick={onClose} style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#999' }}>×</button>
         </div>
 
-        <div style={{ padding: '8px 16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-            <input value={search} onChange={(e) => { setSearch(e.target.value); setPage(1); }} placeholder="Tìm kiếm nhóm / mã" style={{ flex: 1, padding: 8, marginRight: 12, borderRadius: 4, border: '1px solid #ddd' }} />
-            <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-              <label style={{ fontSize: 13 }}>Số hàng:</label>
-              <select value={pageSize} onChange={(e) => { setPageSize(parseInt(e.target.value, 10)); setPage(1); }} style={{ padding: 6 }}>
-                <option value={10}>10</option>
-                <option value={20}>20</option>
-                <option value={50}>50</option>
-                <option value={100}>100</option>
-                <option value={200}>200</option>
-                <option value={500}>500</option>
-                <option value={1000}>1000</option>
-              </select>
-              <button className="btn btn-danger" style={{ padding: '6px 12px', height: 36 }}>Xóa</button>
-            </div>
-          </div>
+        {/* Table */}
+        <div style={{ flex: 1, overflow: 'auto', padding: '0 16px' }}>
+          <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr style={{ background: '#cfeefb', position: 'sticky', top: 0 }}>
+                <th style={{ padding: 12, borderBottom: '1px solid #ddd', width: 50 }}>
+                  <input type="checkbox" checked={isAllSelected} onChange={(e) => handleSelectAll(e.target.checked)} style={{ width: 18, height: 18 }} />
+                </th>
+                <th style={{ padding: 12, borderBottom: '1px solid #ddd', textAlign: 'left', position: 'relative' }}>
+                  Mã loại{' '}
+                  <span style={{ cursor: 'pointer', opacity: searchCode ? 1 : 0.5, color: searchCode ? '#1890ff' : 'inherit' }} onClick={() => setActiveSearchCol(activeSearchCol === 'code' ? null : 'code')}>🔍</span>
+                  {activeSearchCol === 'code' && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid #ddd', borderRadius: 4, padding: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
+                      <input
+                        autoFocus
+                        type="text"
+                        placeholder="Tìm mã loại..."
+                        value={searchCode}
+                        onChange={e => { setSearchCode(e.target.value); setPage(1); }}
+                        style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: 4, width: 160 }}
+                        onKeyDown={e => e.key === 'Escape' && setActiveSearchCol(null)}
+                      />
+                      {searchCode && <button onClick={() => { setSearchCode(''); setPage(1); }} style={{ marginLeft: 4, padding: '4px 8px', border: 'none', background: '#e74c3c', color: '#fff', borderRadius: 4, cursor: 'pointer' }}>×</button>}
+                    </div>
+                  )}
+                </th>
+                <th style={{ padding: 12, borderBottom: '1px solid #ddd', textAlign: 'left', position: 'relative' }}>
+                  Tên loại{' '}
+                  <span style={{ cursor: 'pointer', opacity: searchName ? 1 : 0.5, color: searchName ? '#1890ff' : 'inherit' }} onClick={() => setActiveSearchCol(activeSearchCol === 'name' ? null : 'name')}>🔍</span>
+                  {activeSearchCol === 'name' && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid #ddd', borderRadius: 4, padding: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
+                      <input
+                        autoFocus
+                        type="text"
+                        placeholder="Tìm tên loại..."
+                        value={searchName}
+                        onChange={e => { setSearchName(e.target.value); setPage(1); }}
+                        style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: 4, width: 160 }}
+                        onKeyDown={e => e.key === 'Escape' && setActiveSearchCol(null)}
+                      />
+                      {searchName && <button onClick={() => { setSearchName(''); setPage(1); }} style={{ marginLeft: 4, padding: '4px 8px', border: 'none', background: '#e74c3c', color: '#fff', borderRadius: 4, cursor: 'pointer' }}>×</button>}
+                    </div>
+                  )}
+                </th>
+                <th style={{ padding: 12, borderBottom: '1px solid #ddd', textAlign: 'center' }}>
+                  Không gộp đơn hàng <span style={{ cursor: 'pointer', opacity: 0.5 }}>▼</span>
+                </th>
+                <th style={{ padding: 12, borderBottom: '1px solid #ddd', textAlign: 'left', position: 'relative' }}>
+                  Ghi chú{' '}
+                  <span style={{ cursor: 'pointer', opacity: searchNote ? 1 : 0.5, color: searchNote ? '#1890ff' : 'inherit' }} onClick={() => setActiveSearchCol(activeSearchCol === 'note' ? null : 'note')}>🔍</span>
+                  {activeSearchCol === 'note' && (
+                    <div style={{ position: 'absolute', top: '100%', left: 0, zIndex: 100, background: '#fff', border: '1px solid #ddd', borderRadius: 4, padding: 8, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }} onClick={e => e.stopPropagation()}>
+                      <input
+                        autoFocus
+                        type="text"
+                        placeholder="Tìm ghi chú..."
+                        value={searchNote}
+                        onChange={e => { setSearchNote(e.target.value); setPage(1); }}
+                        style={{ padding: '6px 8px', border: '1px solid #ddd', borderRadius: 4, width: 160 }}
+                        onKeyDown={e => e.key === 'Escape' && setActiveSearchCol(null)}
+                      />
+                      {searchNote && <button onClick={() => { setSearchNote(''); setPage(1); }} style={{ marginLeft: 4, padding: '4px 8px', border: 'none', background: '#e74c3c', color: '#fff', borderRadius: 4, cursor: 'pointer' }}>×</button>}
+                    </div>
+                  )}
+                </th>
+                <th style={{ padding: 12, borderBottom: '1px solid #ddd', textAlign: 'center' }}>
+                  Ngưng hoạt động <span style={{ cursor: 'pointer', opacity: 0.5 }}>▼</span>
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {loading && (
+                <tr><td colSpan={6} style={{ padding: 20, textAlign: 'center' }}>Đang tải...</td></tr>
+              )}
+              {!loading && pagedCategories.length === 0 && (
+                <tr><td colSpan={6} style={{ padding: 20, textAlign: 'center', color: '#999' }}>Không có dữ liệu</td></tr>
+              )}
+              {!loading && pagedCategories.map((c, idx) => {
+                const isSelected = selectedIds.has(c.id);
+                return (
+                  <tr
+                    key={c.id || idx}
+                    style={{ background: isSelected ? '#e3f2fd' : (idx % 2 === 0 ? '#fff' : '#fafafa'), cursor: 'pointer' }}
+                    onClick={() => toggleCategory(c.id)}
+                  >
+                    <td style={{ padding: 12, borderBottom: '1px solid #eee', textAlign: 'center' }}>
+                      <input type="checkbox" checked={isSelected} onChange={() => {}} style={{ width: 18, height: 18 }} />
+                    </td>
+                    <td style={{ padding: 12, borderBottom: '1px solid #eee' }}>{c.code || '-'}</td>
+                    <td style={{ padding: 12, borderBottom: '1px solid #eee' }}>{c.name || '-'}</td>
+                    <td style={{ padding: 12, borderBottom: '1px solid #eee', textAlign: 'center' }}>
+                      {c.noGroupOrder ? (
+                        <span style={{ color: '#2ecc71', fontSize: 18 }}>✓</span>
+                      ) : (
+                        <span style={{ color: '#e74c3c', fontSize: 18 }}>✗</span>
+                      )}
+                    </td>
+                    <td style={{ padding: 12, borderBottom: '1px solid #eee', color: '#999' }}>{c.note || '-'}</td>
+                    <td style={{ padding: 12, borderBottom: '1px solid #eee', textAlign: 'center' }}>
+                      {c.status === 'inactive' ? (
+                        <span style={{ color: '#2ecc71', fontSize: 18 }}>✓</span>
+                      ) : (
+                        <span style={{ color: '#e74c3c', fontSize: 18 }}>✗</span>
+                      )}
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
 
-          <div style={{ overflowX: 'auto' }}>
-            <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
-                <tr style={{ background: '#cfeefb' }}>
-                  <th style={{ padding: 10, border: '1px solid #eaeaea' }}><input type="checkbox" checked={selectAllRows} onChange={(e) => handleSelectAllRows(e.target.checked)} /></th>
-                  <th style={{ padding: 10, border: '1px solid #eaeaea' }}>Mã</th>
-                  <th style={{ padding: 10, border: '1px solid #eaeaea' }}>Tên</th>
-                  <th style={{ padding: 10, border: '1px solid #eaeaea', textAlign: 'center' }}><input type="checkbox" onChange={(e) => applyHeaderToggle('view', e.target.checked)} /> Xem</th>
-                  <th style={{ padding: 10, border: '1px solid #eaeaea', textAlign: 'center' }}><input type="checkbox" onChange={(e) => applyHeaderToggle('add', e.target.checked)} /> Thêm</th>
-                  <th style={{ padding: 10, border: '1px solid #eaeaea', textAlign: 'center' }}><input type="checkbox" onChange={(e) => applyHeaderToggle('edit', e.target.checked)} /> Sửa</th>
-                  <th style={{ padding: 10, border: '1px solid #eaeaea', textAlign: 'center' }}><input type="checkbox" onChange={(e) => applyHeaderToggle('delete', e.target.checked)} /> Xóa</th>
-                  <th style={{ padding: 10, border: '1px solid #eaeaea', textAlign: 'center' }}><input type="checkbox" onChange={(e) => applyHeaderToggle('print', e.target.checked)} /> In phiếu</th>
-                  <th style={{ padding: 10, border: '1px solid #eaeaea', textAlign: 'center' }}><input type="checkbox" onChange={(e) => applyHeaderToggle('import', e.target.checked)} /> Import</th>
-                  <th style={{ padding: 10, border: '1px solid #eaeaea', textAlign: 'center' }}><input type="checkbox" onChange={(e) => applyHeaderToggle('export', e.target.checked)} /> Export</th>
-                </tr>
-              </thead>
-              <tbody>
-                {pagedCategories().map((c, idx) => {
-                  const key = c.id || c.code || c.name || idx;
-                  const sel = selected[key] || { view: false, add: false, edit: false, delete: false, print: false, import: false, export: false };
-                  return (
-                    <tr key={key}>
-                      <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
-                        <input type="checkbox" checked={!!rowChecked[key]} onChange={(e) => toggleRow(key, e.target.checked)} />
-                      </td>
-                      <td style={{ padding: 8, border: '1px solid #eaeaea' }}>{c.code || c.id || '-'}</td>
-                      <td style={{ padding: 8, border: '1px solid #eaeaea' }}>{c.name || c.title || '-'}</td>
-                      <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}><input type="checkbox" checked={!!sel.view} onChange={() => togglePerm(key, 'view')} /></td>
-                      <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}><input type="checkbox" checked={!!sel.add} onChange={() => togglePerm(key, 'add')} /></td>
-                      <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}><input type="checkbox" checked={!!sel.edit} onChange={() => togglePerm(key, 'edit')} /></td>
-                      <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}><input type="checkbox" checked={!!sel.delete} onChange={() => togglePerm(key, 'delete')} /></td>
-                      <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}><input type="checkbox" checked={!!sel.print} onChange={() => togglePerm(key, 'print')} /></td>
-                      <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}><input type="checkbox" checked={!!sel.import} onChange={() => togglePerm(key, 'import')} /></td>
-                      <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}><input type="checkbox" checked={!!sel.export} onChange={() => togglePerm(key, 'export')} /></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+        {/* Footer with pagination */}
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <div style={{ fontSize: 13, color: '#666' }}>{countInfo()}</div>
+          <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
+            <button onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1} style={{ width: 32, height: 32, border: '1px solid #ddd', borderRadius: 4, background: '#fff', cursor: page === 1 ? 'not-allowed' : 'pointer', opacity: page === 1 ? 0.5 : 1 }}>{'<'}</button>
+            {renderPageNumbers()}
+            <button onClick={() => setPage(p => Math.min(totalPages, p + 1))} disabled={page === totalPages} style={{ width: 32, height: 32, border: '1px solid #ddd', borderRadius: 4, background: '#fff', cursor: page === totalPages ? 'not-allowed' : 'pointer', opacity: page === totalPages ? 0.5 : 1 }}>{'>'}</button>
+            <select value={pageSize} onChange={(e) => { setPageSize(parseInt(e.target.value, 10)); setPage(1); }} style={{ padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd' }}>
+              <option value={10}>10 / trang</option>
+              <option value={20}>20 / trang</option>
+              <option value={50}>50 / trang</option>
+              <option value={100}>100 / trang</option>
+            </select>
           </div>
+        </div>
 
-          {/* Pagination controls */}
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
-            <div style={{ fontSize: 13 }}>{countInfo()}</div>
-            <div style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
-              <button className="btn" onClick={() => setPage(1)} disabled={page === 1}>⏮</button>
-              <button className="btn" onClick={() => setPage(p => Math.max(1, p - 1))} disabled={page === 1}>◀</button>
-              {renderPageNumbers()}
-              <button className="btn" onClick={() => setPage(p => Math.min(totalPages(), p + 1))} disabled={page === totalPages()}>▶</button>
-              <button className="btn" onClick={() => setPage(totalPages())} disabled={page === totalPages()}>⏭</button>
-            </div>
-          </div>
-
-          <div style={{ marginTop: 12, color: '#d9534f', fontSize: 13 }}>* Lưu ý: Các quyền thêm, sửa, xóa, in phiếu, xuất file sẽ được lưu lại khi có quyền truy cập.</div>
-
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 8, marginTop: 12 }}>
-            <button className="btn btn-primary" onClick={handleSave}>Đồng ý</button>
-            <button className="btn btn-danger" onClick={onClose}>Đóng</button>
-          </div>
+        {/* Action buttons */}
+        <div style={{ padding: '12px 16px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'flex-end', gap: 12 }}>
+          <button
+            onClick={handleSave}
+            disabled={loading}
+            style={{ padding: '10px 24px', background: '#17a2b8', color: '#fff', border: 'none', borderRadius: 4, cursor: loading ? 'not-allowed' : 'pointer', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            ✓ Đồng ý
+          </button>
+          <button
+            onClick={onClose}
+            style={{ padding: '10px 24px', background: '#e74c3c', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontWeight: 500, display: 'flex', alignItems: 'center', gap: 6 }}
+          >
+            ✗ Đóng
+          </button>
         </div>
       </div>
     </div>

@@ -6,7 +6,7 @@ import { useAuth } from '../contexts/AuthContext';
 import './Header.css';
 
 const Header = () => {
-  const { user, logout, isAuthenticated } = useAuth();
+  const { user, logout, isAuthenticated, canView } = useAuth();
   const [activeDropdown, setActiveDropdown] = useState(null);
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [showUserMenu, setShowUserMenu] = useState(false);
@@ -126,7 +126,7 @@ const Header = () => {
       title: 'Trang chủ',
       icon: '🏠',
       items: [
-        { name: 'Dashboard', path: '/dashboard' }
+        { name: 'Dashboard', path: '/dashboard', resourceKey: 'dashboard' }
       ]
     },
     {
@@ -134,17 +134,17 @@ const Header = () => {
       title: 'Thiết lập ban đầu',
       icon: '⚙️',
       items: [
-        { name: 'Thông tin doanh nghiệp', path: '/setup/company-info' },
-        { name: 'Tài khoản quỹ & Nợ ngân hàng', path: '/setup/accounts-funds' },
-        { name: 'Nhóm khách hàng', path: '/setup/customer-groups' },
-        { name: 'Khách hàng', path: '/setup/customers' },
-        { name: 'Nhà cung cấp', path: '/setup/suppliers' },
-        { name: 'Danh sách loại hàng', path: '/setup/product-categories' },
-        { name: 'Danh sách hàng hóa', path: '/setup/products' },
-        { name: 'Danh sách đơn vị tính', path: '/setup/units' },
-        { name: 'Nội dung thu, chi, xuất, nhập', path: '/setup/transaction-contents' },
-        { name: 'Danh sách kho hàng', path: '/setup/warehouses' },
-        { name: 'Khai báo xe', path: '/setup/vehicles' }
+        { name: 'Thông tin doanh nghiệp', path: '/setup/company-info', resourceKey: 'company_info' },
+        { name: 'Tài khoản quỹ & Nợ ngân hàng', path: '/setup/accounts-funds', resourceKey: 'accounts_funds' },
+        { name: 'Nhóm khách hàng', path: '/setup/customer-groups', resourceKey: 'customer_groups' },
+        { name: 'Khách hàng', path: '/setup/customers', resourceKey: 'customers' },
+        { name: 'Nhà cung cấp', path: '/setup/suppliers', resourceKey: 'suppliers' },
+        { name: 'Danh sách loại hàng', path: '/setup/product-categories', resourceKey: 'product_categories' },
+        { name: 'Danh sách hàng hóa', path: '/setup/products', resourceKey: 'products' },
+        { name: 'Danh sách đơn vị tính', path: '/setup/units', resourceKey: 'units' },
+        { name: 'Nội dung thu, chi, xuất, nhập', path: '/setup/transaction-contents', resourceKey: 'transaction_contents' },
+        { name: 'Danh sách kho hàng', path: '/setup/warehouses', resourceKey: 'warehouses' },
+        { name: 'Khai báo xe', path: '/setup/vehicles', resourceKey: 'vehicles' }
       ]
     },
     {
@@ -152,26 +152,27 @@ const Header = () => {
       title: 'Quản lý nghiệp vụ',
       icon: '💼',
       items: [
-        { name: 'Bảng báo giá', path: '/business/quotation-table' },
-        { name: 'Nhập hàng', path: '/business/import-goods' },
-        { name: 'Xuất hàng', path: '/business/exports' },
-        { name: 'Chuyển kho', path: '/business/warehouse-transfer' },
+        { name: 'Bảng báo giá', path: '/business/quotation-table', resourceKey: 'quotations' },
+        { name: 'Nhập hàng', path: '/business/import-goods', resourceKey: 'imports' },
+        { name: 'Xuất hàng', path: '/business/exports', resourceKey: 'exports' },
+        { name: 'Chuyển kho', path: '/business/warehouse-transfer', resourceKey: 'warehouse_transfers' },
         { 
           name: 'Bán hàng', 
           path: '/business/sales',
+          resourceKey: 'orders',
           submenu: [
-            { name: 'Quản lý bán hàng (User)', path: '/business/sales/sale-management-by-current-user' },
-            { name: 'Quản lý bán hàng (Admin)', path: '/business/sales/sale-management' },
-            { name: 'In đơn hàng', path: '/business/sales/print-order' },
-            { name: 'In đơn hàng theo xe', path: '/business/sales/print-order-by-vehicle' }
+            { name: 'Quản lý bán hàng (User)', path: '/business/sales/sale-management-by-current-user', resourceKey: 'sale_management' },
+            { name: 'Quản lý bán hàng (Admin)', path: '/business/sales/sale-management', resourceKey: 'order_management' },
+            { name: 'In đơn hàng', path: '/business/sales/print-order', resourceKey: 'print_order' },
+            { name: 'In đơn hàng theo xe', path: '/business/sales/print-order-by-vehicle', resourceKey: 'print_order' }
           ]
         },
-        { name: 'Phiếu thu', path: '/business/accounting/receipt-voucher' },
-        { name: 'Phiếu chi', path: '/business/accounting/expense-voucher' },
-        { name: 'Tính giá vốn', path: '/business/cost-calculation' },
+        { name: 'Phiếu thu', path: '/business/accounting/receipt-voucher', resourceKey: 'receipt_voucher' },
+        { name: 'Phiếu chi', path: '/business/accounting/expense-voucher', resourceKey: 'expense_voucher' },
+        { name: 'Tính giá vốn', path: '/business/cost-calculation', resourceKey: 'cost_calculation' },
         
-        { name: 'Điều chỉnh kho', path: '/business/adjustments' },
-        { name: 'Khách trả hàng', path: '/business/returns' }
+        { name: 'Điều chỉnh kho', path: '/business/adjustments', resourceKey: 'adjustments' },
+        { name: 'Khách trả hàng', path: '/business/returns', resourceKey: 'returns' }
       ]
     },
     {
@@ -179,9 +180,9 @@ const Header = () => {
       title: 'Báo cáo thống kê',
       icon: '📊',
       items: [
-        { name: 'Báo cáo bán hàng', path: '/reports/sales' },
-        { name: 'Báo cáo tồn kho', path: '/reports/inventory' },
-        { name: 'Báo cáo tài chính', path: '/reports/financial' }
+        { name: 'Báo cáo bán hàng', path: '/reports/sales', resourceKey: 'sales_report' },
+        { name: 'Báo cáo tồn kho', path: '/reports/inventory', resourceKey: 'inventory_report' },
+        { name: 'Báo cáo tài chính', path: '/reports/financial', resourceKey: 'financial_report' }
       ]
     },
     {
@@ -189,12 +190,65 @@ const Header = () => {
       title: 'Admin',
       icon: '🛠️',
       items: [
-        { name: 'Quản lý dữ liệu', path: '/admin/manage-data' },
-        { name: 'Nhóm quyền', path: '/permissions/groups' },
-        { name: 'Phân quyền người dùng', path: '/permissions/users' }
+        { name: 'Quản lý dữ liệu', path: '/admin/manage-data', resourceKey: 'manage_data' },
+        { name: 'Nhóm quyền', path: '/permissions/groups', resourceKey: 'permission_groups' },
+        { name: 'Phân quyền người dùng', path: '/permissions/users', resourceKey: 'user_permissions' }
       ]
     }
   ];
+
+  // Determine visibility based on permissions.
+  const shouldShowItem = (item) => {
+    // First check parent's resourceKey if it has one
+    if (item.resourceKey && canView(item.resourceKey)) {
+      // If has submenu, also check if at least one submenu item is visible
+      if (item.submenu) {
+        const visibleSub = item.submenu.filter(sub => {
+          const key = sub.resourceKey;
+          return !key || canView(key);
+        });
+        return visibleSub.length > 0;
+      }
+      return true;
+    }
+
+    if (item.submenu) {
+      // Check if any submenu item is visible
+      const visibleSub = item.submenu.filter(sub => {
+        const key = sub.resourceKey;
+        return !key || canView(key);
+      });
+      return visibleSub.length > 0;
+    }
+
+    if (item.resourceKey) {
+      return canView(item.resourceKey);
+    }
+
+    // If no resourceKey defined, show by default
+    return true;
+  };
+
+  // Filter submenu items by permission
+  const filterSubmenuItems = (submenu) => {
+    if (!submenu) return submenu;
+    return submenu.filter(sub => {
+      const key = sub.resourceKey;
+      return !key || canView(key);
+    });
+  };
+
+  const visibleMenuItems = menuItems
+    .map(menu => ({
+      ...menu,
+      items: menu.items
+        .filter(i => shouldShowItem(i))
+        .map(item => ({
+          ...item,
+          submenu: filterSubmenuItems(item.submenu)
+        })),
+    }))
+    .filter(menu => menu.items && menu.items.length > 0);
 
   const handleLogout = () => {
     logout();
@@ -223,7 +277,7 @@ const Header = () => {
       </div>
       
       <nav className="header-nav">
-        {menuItems.map((menu) => (
+        {visibleMenuItems.map((menu) => (
           <div
             key={menu.id}
             className={`nav-item ${activeDropdown === menu.id ? 'active' : ''}`}

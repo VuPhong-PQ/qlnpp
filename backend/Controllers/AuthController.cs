@@ -272,10 +272,19 @@ namespace QlnppApi.Controllers
                 // Return all permissions for superadmin and admin
                 // Use underscore format to match frontend (e.g., company_info, customer_groups)
                 var allResources = new[] {
-                    "dashboard", "customers", "customer_groups", "suppliers", "products", "product_categories",
-                    "warehouses", "warehouse_transfers", "imports", "exports", "orders", "quotations",
-                    "vehicles", "users", "user_permissions", "permission_groups", "company_info",
-                    "bank_loans", "accounts_funds", "transaction_contents", "units", "reports"
+                    // Dashboard
+                    "dashboard",
+                    // Thiết lập ban đầu (Setup)
+                    "company_info", "accounts_funds", "customer_groups", "customers", "suppliers",
+                    "product_categories", "products", "units", "transaction_contents", "warehouses", "vehicles",
+                    // Quản lý nghiệp vụ (Business)
+                    "quotations", "imports", "exports", "warehouse_transfers", "orders",
+                    "sale_management", "print_order", "receipt_voucher", "expense_voucher",
+                    "cost_calculation", "adjustments", "returns",
+                    // Báo cáo thống kê (Reports)
+                    "sales_report", "inventory_report", "financial_report", "reports",
+                    // Admin
+                    "manage_data", "permission_groups", "user_permissions", "users"
                 };
                 var allActions = new[] { "view", "add", "edit", "delete", "print", "import", "export" };
 

@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
+import { useAuth } from '../../contexts/AuthContext.jsx';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
 import { useExcelImportExport } from '../../hooks/useExcelImportExport.jsx';
 import { ExcelButtons } from '../common/ExcelButtons.jsx';
@@ -13,6 +14,7 @@ const ProductCategories = () => {
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
   const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters, showFilterPopup } = useColumnFilter();
+  const auth = useAuth();
   
   // Phân trang
   const [currentPage, setCurrentPage] = useState(1);
@@ -31,7 +33,39 @@ const ProductCategories = () => {
     try {
       setLoading(true);
       const data = await api.get(API_ENDPOINTS.productCategories);
-      setCategories(data);
+
+      // If user has category-level permissions, only show allowed categories
+      try {
+        const currentUser = auth.user;
+        const name = (currentUser?.username || currentUser?.name || '').toString().toLowerCase();
+        const isSuperAdmin = name === 'superadmin' || name === 'admin';
+        
+        // If no current user or superadmin/admin, show all
+        if (!currentUser || isSuperAdmin || auth.canView('admin') || auth.hasPermission('admin', 'full-access')) {
+          setCategories(data);
+        } else if (auth.categoryPermissions && auth.categoryPermissions.length > 0) {
+          // Use categoryPermissions from AuthContext
+          const filtered = data.filter(c => auth.categoryPermissions.includes(c.id));
+          setCategories(filtered);
+        } else {
+          // Fallback: Fetch product category permissions for current user
+          const permsRes = await fetch(`${API_ENDPOINTS.productCategoryPermissions}/user/${currentUser.id}`);
+          if (permsRes.ok) {
+            const perms = await permsRes.json();
+            const allowedIds = (perms || [])
+              .filter(p => p.canView || p.CanView)
+              .map(p => p.productCategoryId || p.ProductCategoryId || (p.productCategory && p.productCategory.id));
+            const filtered = data.filter(c => allowedIds.includes(c.id));
+            setCategories(filtered);
+          } else {
+            setCategories(data);
+          }
+        }
+      } catch (e) {
+        // If anything fails, fall back to showing all categories
+        console.error('Error applying category permissions', e);
+        setCategories(data);
+      }
     } catch (error) {
       console.error('Error fetching categories:', error);
       alert('Không thể tải dữ liệu loại hàng. Vui lòng kiểm tra kết nối API.');

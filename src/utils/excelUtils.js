@@ -92,9 +92,13 @@ export const exportToExcel = async (data, filename = 'export', sheetName = 'Shee
     const headers = Object.keys(data[0]);
     worksheet.addRow(headers);
 
-    // Add data rows
+    // Add data rows (force values to strings so Excel won't drop leading zeros)
     data.forEach(row => {
-      const rowData = headers.map(h => row[h]);
+      const rowData = headers.map(h => {
+        const v = row[h];
+        if (v === null || v === undefined) return '';
+        return typeof v === 'string' ? v : v.toString();
+      });
       worksheet.addRow(rowData);
     });
 
@@ -114,13 +118,15 @@ export const exportToExcel = async (data, filename = 'export', sheetName = 'Shee
     const colWidths = new Array(colCount).fill(10);
 
     worksheet.eachRow((row, rowNumber) => {
-      row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
+        row.eachCell({ includeEmpty: true }, (cell, colNumber) => {
         // border
         cell.border = {
           top: { style: 'thin' }, left: { style: 'thin' }, bottom: { style: 'thin' }, right: { style: 'thin' }
         };
         // alignment for data rows
         if (rowNumber > 1) cell.alignment = { vertical: 'middle', horizontal: 'left', wrapText: true };
+        // force text format to preserve leading zeros when user types values like 090... in Excel
+        try { cell.numFmt = '@'; } catch (e) { /* ignore if not supported */ }
 
         const text = (cell.value === null || cell.value === undefined) ? '' : cell.value.toString();
         const length = Math.min(60, Math.max(8, text.length + 2));

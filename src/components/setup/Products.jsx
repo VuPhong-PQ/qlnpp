@@ -2,6 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect } from 'react';
 import './SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
+import { useAuth } from '../../contexts/AuthContext.jsx';
 import { useExcelImportExport } from '../../hooks/useExcelImportExport.jsx';
 import { ExcelButtons } from '../common/ExcelButtons.jsx';
 
@@ -12,6 +13,7 @@ const Products = () => {
   const [loading, setLoading] = useState(false);
   const [products, setProducts] = useState([]);
   const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters, showFilterPopup } = useColumnFilter();
+  const auth = useAuth();
   
   // Modal thêm loại hàng
   const [showCategoryModal, setShowCategoryModal] = useState(false);
@@ -79,7 +81,27 @@ const Products = () => {
     try {
       setLoading(true);
       const data = await api.get(API_ENDPOINTS.products);
-      setProducts(data);
+      
+      // Filter products by category permissions using AuthContext
+      if (auth.filterProductsByCategory) {
+        // First, load categories to map category codes to IDs
+        const categories = await api.get(API_ENDPOINTS.productCategories);
+        const categoryCodeToId = {};
+        (categories || []).forEach(cat => {
+          categoryCodeToId[cat.code] = cat.id;
+          categoryCodeToId[cat.name] = cat.id;
+        });
+        
+        // Add categoryId to products
+        const productsWithCategoryId = data.map(p => ({
+          ...p,
+          categoryId: p.categoryId || categoryCodeToId[p.category] || categoryCodeToId[p.Category]
+        }));
+        
+        setProducts(auth.filterProductsByCategory(productsWithCategoryId));
+      } else {
+        setProducts(data);
+      }
     } catch (error) {
       console.error('Error fetching products:', error);
       alert('Không thể tải dữ liệu sản phẩm. Vui lòng kiểm tra kết nối API.');
@@ -91,7 +113,24 @@ const Products = () => {
   const fetchCategories = async () => {
     try {
       const data = await api.get(API_ENDPOINTS.productCategories);
-      setCategories(data);
+      try {
+        const currentUser = auth.user;
+        if (!currentUser || auth.canView('admin') || auth.hasPermission('admin', 'full-access')) {
+          setCategories(data);
+        } else {
+          const permsRes = await fetch(`${API_ENDPOINTS.productCategoryPermissions}/user/${currentUser.id}`);
+          if (permsRes.ok) {
+            const perms = await permsRes.json();
+            const allowedIds = (perms || []).filter(p => p.canView || p.CanView).map(p => p.productCategoryId || p.ProductCategoryId || (p.productCategory && p.productCategory.id));
+            setCategories(data.filter(c => allowedIds.includes(c.id)));
+          } else {
+            setCategories(data);
+          }
+        }
+      } catch (e) {
+        console.error('Error applying category permissions', e);
+        setCategories(data);
+      }
     } catch (error) {
       console.error('Error fetching categories:', error);
     }

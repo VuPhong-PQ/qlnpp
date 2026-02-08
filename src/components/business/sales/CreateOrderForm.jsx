@@ -11,7 +11,7 @@ const CreateOrderForm = () => {
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const containerRef = useRef(null);
-  const { user: authUser } = useAuth();
+  const { user: authUser, filterProductsByCategory, categoryPermissions } = useAuth();
 
   // Vietnamese text normalization utility
   const removeVietnameseTones = (str) => {
@@ -198,6 +198,8 @@ const CreateOrderForm = () => {
   const [salesUsers, setSalesUsers] = useState([]);
   const [users, setUsers] = useState([]);
   const [canChooseSales, setCanChooseSales] = useState(false);
+  const [canUnlockDate, setCanUnlockDate] = useState(false);
+  const [isDateLocked, setIsDateLocked] = useState(true);
   const [currentUser, setCurrentUser] = useState(null);
   const [discountNoteEdited, setDiscountNoteEdited] = useState(false);
   const [orderNumberEdited, setOrderNumberEdited] = useState(false);
@@ -346,6 +348,13 @@ const CreateOrderForm = () => {
     
     const canSelectSales = hasSelectSalesPermission || hasAdminPermission || isAdminByRole || isAdminByName;
     setCanChooseSales(canSelectSales);
+    
+    // Check if user can unlock date (mo_khoa_ngay_lap permission)
+    const hasUnlockDatePermission = userPermissions.some(p => 
+      p.startsWith('mo_khoa_ngay_lap:') || p === 'mo_khoa_ngay_lap'
+    );
+    const canUnlock = hasUnlockDatePermission || hasAdminPermission || isAdminByRole || isAdminByName;
+    setCanUnlockDate(canUnlock);
     
     // Get current user's display name for auto-fill
     // Priority: name (from backend) > tenNhanVien > username > displayName
@@ -635,13 +644,25 @@ const CreateOrderForm = () => {
     }
   }, [searchParams]);
 
-  // Fetch product categories
+  // Fetch product categories - filtered by user permissions
   const fetchProductCategories = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/ProductCategories`);
       if (response.ok) {
         const data = await response.json();
-        setProductCategories(data);
+        
+        // Filter categories based on user permissions
+        const name = (authUser?.username || authUser?.name || '').toString().toLowerCase();
+        const isSuperAdmin = name === 'superadmin' || name === 'admin';
+        
+        if (isSuperAdmin || !categoryPermissions || categoryPermissions.length === 0) {
+          // SuperAdmin/Admin can see all categories, or no permissions set
+          setProductCategories(data);
+        } else {
+          // Filter categories by allowed IDs
+          const filteredCategories = data.filter(cat => categoryPermissions.includes(cat.id));
+          setProductCategories(filteredCategories);
+        }
       }
     } catch (error) {
       console.error('Error fetching product categories:', error);
@@ -699,6 +720,29 @@ const CreateOrderForm = () => {
   };
 
   const handleOrderFormChange = (field, value) => {
+    // Validation cho ngày lập (chỉ áp dụng khi đang khóa ngày)
+    if (field === 'orderDate' && isDateLocked) {
+      const selectedDate = new Date(value);
+      selectedDate.setHours(0, 0, 0, 0);
+      
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      
+      // Ngăn chặn user tạo đơn hàng lùi ngày
+      if (selectedDate < today) {
+        alert('Ngày lập không được thấp hơn ngày hiện tại');
+        return;
+      }
+      
+      // Ngăn chặn user tạo đơn hàng vượt xa 5 ngày so với thực tế
+      const maxDate = new Date(today);
+      maxDate.setDate(maxDate.getDate() + 5);
+      if (selectedDate > maxDate) {
+        alert('Ngày lập không được vượt hơn 5 ngày so với hiện tại');
+        return;
+      }
+    }
+    
     setOrderForm(prev => {
       const newForm = { ...prev, [field]: value };
       
@@ -2521,13 +2565,36 @@ const CreateOrderForm = () => {
     })
     .catch(err => console.warn('Failed to load data:', err));
 
-    // load products for product selection
-    api.get(API_ENDPOINTS.products)
-      .then(pdata => {
-        if (!mounted) return;
-        if (Array.isArray(pdata)) setProducts(pdata);
-      })
-      .catch(err => console.warn('Failed to load products', err));
+    // load products for product selection - filter by category permissions
+    Promise.all([
+      api.get(API_ENDPOINTS.products),
+      api.get(API_ENDPOINTS.productCategories)
+    ])
+    .then(([pdata, categories]) => {
+      if (!mounted) return;
+      if (Array.isArray(pdata)) {
+        // Map category code to category ID for permission filtering
+        const categoryCodeToId = {};
+        (categories || []).forEach(cat => {
+          categoryCodeToId[cat.code] = cat.id;
+          categoryCodeToId[cat.name] = cat.id;
+        });
+        
+        // Add categoryId to products based on their category code
+        const productsWithCategoryId = pdata.map(p => ({
+          ...p,
+          categoryId: p.categoryId || categoryCodeToId[p.category] || categoryCodeToId[p.Category]
+        }));
+        
+        // Filter products by category permissions
+        const filteredProducts = filterProductsByCategory ? 
+          filterProductsByCategory(productsWithCategoryId) : 
+          productsWithCategoryId;
+        
+        setProducts(filteredProducts);
+      }
+    })
+    .catch(err => console.warn('Failed to load products', err));
 
     // load warehouses for warehouse select
     api.get(API_ENDPOINTS.warehouses)
@@ -2851,7 +2918,8 @@ const CreateOrderForm = () => {
         <div className="order-form-row">
           <div className="order-form-group">
             <label className="required">Ngày lập</label>
-            <div style={{ position: 'relative', display: 'flex', alignItems: 'center' }}>
+            <div style={{ position: 'relative', display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <div style={{ position: 'relative', flex: 1 }}>
               <input
                 type="text"
                 value={formatDisplayDate(orderForm.orderDate)}
@@ -2907,6 +2975,31 @@ const CreateOrderForm = () => {
               >
                 📅
               </span>
+              </div>
+              {/* Nút khóa/mở khóa ngày - chỉ hiển thị cho user có quyền */}
+              {canUnlockDate && (
+                <button
+                  type="button"
+                  onClick={() => setIsDateLocked(!isDateLocked)}
+                  title={isDateLocked ? 'Mở khóa ngày (cho phép chọn tự do)' : 'Khóa ngày (áp dụng giới hạn ngày)'}
+                  style={{
+                    padding: '6px 10px',
+                    cursor: 'pointer',
+                    backgroundColor: isDateLocked ? '#ff9800' : '#4caf50',
+                    color: 'white',
+                    border: 'none',
+                    borderRadius: '4px',
+                    fontSize: '14px',
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '4px',
+                    minWidth: '36px',
+                    justifyContent: 'center'
+                  }}
+                >
+                  {isDateLocked ? '🔒' : '🔓'}
+                </button>
+              )}
             </div>
           </div>
           <div className="order-form-group" style={{ position: 'relative' }}>

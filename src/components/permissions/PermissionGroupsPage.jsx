@@ -3,47 +3,73 @@ import { API_ENDPOINTS, api } from '../../config/api';
 import '../setup/SetupPage.css';
 import './PermissionStyles.css';
 
-// Danh sách tất cả các quyền trong hệ thống
-const ALL_PERMISSIONS = [
-  { key: 'ban_hang', name: 'Bán hàng' },
-  { key: 'bao_cao_doanh_so_loai_hang', name: 'Báo cáo doanh số theo loại hàng' },
-  { key: 'bao_cao_doanh_so_mcp', name: 'Báo cáo doanh số theo MCP' },
-  { key: 'bao_gia', name: 'Báo giá' },
-  { key: 'cac_khoan_no_ngan_hang', name: 'Các khoản nợ ngân hàng' },
-  { key: 'chi_nhanh', name: 'Chi nhánh' },
-  { key: 'chi_tiet_xuat_nhap', name: 'Chi tiết xuất nhập' },
-  { key: 'chon_nhan_vien_sale', name: 'Chọn nhân viên sale' },
-  { key: 'chuyen_kho', name: 'Chuyển kho' },
-  { key: 'chuyen_tien_quy', name: 'Chuyển tiền quỹ' },
-  { key: 'cong_no_khach_hang', name: 'Công nợ khách hàng' },
-  { key: 'cong_no_nha_cung_cap', name: 'Công nợ nhà cung cấp' },
-  { key: 'danh_muc_hang_hoa', name: 'Danh mục hàng hóa' },
-  { key: 'danh_muc_kho', name: 'Danh mục kho' },
-  { key: 'danh_sach_khach_hang', name: 'Danh sách khách hàng' },
-  { key: 'danh_sach_nha_cung_cap', name: 'Danh sách nhà cung cấp' },
-  { key: 'danh_sach_nhan_vien', name: 'Danh sách nhân viên' },
-  { key: 'don_dat_hang', name: 'Đơn đặt hàng' },
-  { key: 'don_vi_tinh', name: 'Đơn vị tính' },
-  { key: 'hang_hoa', name: 'Hàng hóa' },
-  { key: 'ket_chuyen_no', name: 'Kết chuyển nợ' },
-  { key: 'lap_phieu_chi', name: 'Lập phiếu chi' },
-  { key: 'lap_phieu_thu', name: 'Lập phiếu thu' },
-  { key: 'nhap_hang', name: 'Nhập hàng' },
-  { key: 'nhom_khach_hang', name: 'Nhóm khách hàng' },
-  { key: 'nhom_quyen', name: 'Nhóm quyền' },
-  { key: 'noi_dung_giao_dich', name: 'Nội dung giao dịch' },
-  { key: 'phan_quyen_nguoi_dung', name: 'Phân quyền người dùng' },
-  { key: 'phuong_tien', name: 'Phương tiện' },
-  { key: 'quan_tri_he_thong', name: 'Quản trị hệ thống' },
-  { key: 'so_quy', name: 'Sổ quỹ' },
-  { key: 'tai_khoan_quy', name: 'Tài khoản/Quỹ' },
-  { key: 'thong_tin_cong_ty', name: 'Thông tin công ty' },
-  { key: 'tinh_gia_von', name: 'Tính giá vốn' },
-  { key: 'ton_kho', name: 'Tồn kho' },
-  { key: 'trang_chu', name: 'Trang chủ' },
-  { key: 'xem_bao_cao', name: 'Xem báo cáo' },
-  { key: 'xuat_hang', name: 'Xuất hàng' },
+// Cấu trúc quyền được phân theo nhóm - dễ dàng quản lý và phân quyền
+const PERMISSION_GROUPS = [
+  {
+    groupKey: 'setup',
+    groupName: 'Thiết lập ban đầu',
+    icon: '⚙️',
+    items: [
+      { key: 'company_info', name: 'Thông tin doanh nghiệp' },
+      { key: 'accounts_funds', name: 'Tài khoản quỹ & Nợ ngân hàng' },
+      { key: 'customer_groups', name: 'Nhóm khách hàng' },
+      { key: 'customers', name: 'Khách hàng' },
+      { key: 'suppliers', name: 'Nhà cung cấp' },
+      { key: 'product_categories', name: 'Danh sách loại hàng' },
+      { key: 'products', name: 'Danh sách hàng hóa' },
+      { key: 'units', name: 'Đơn vị tính' },
+      { key: 'transaction_contents', name: 'Nội dung thu, chi, xuất, nhập' },
+      { key: 'warehouses', name: 'Danh sách kho hàng' },
+      { key: 'vehicles', name: 'Khai báo xe' }
+    ]
+  },
+  {
+    groupKey: 'business',
+    groupName: 'Quản lý nghiệp vụ',
+    icon: '💼',
+    items: [
+      { key: 'quotations', name: 'Bảng báo giá' },
+      { key: 'imports', name: 'Nhập hàng' },
+      { key: 'exports', name: 'Xuất hàng' },
+      { key: 'warehouse_transfers', name: 'Chuyển kho' },
+      { key: 'orders', name: 'Bán hàng' },
+      { key: 'sale_management', name: 'Quản lý bán hàng (User)' },
+      { key: 'order_management', name: 'Quản lý đơn hàng (Admin)' },
+      { key: 'print_order', name: 'In đơn hàng' },
+      { key: 'mo_khoa_ngay_lap', name: 'Mở khóa ngày lập đơn hàng' },
+      { key: 'chon_nhan_vien_sale', name: 'Chọn nhân viên bán hàng' },
+      { key: 'receipt_voucher', name: 'Phiếu thu' },
+      { key: 'expense_voucher', name: 'Phiếu chi' },
+      { key: 'cost_calculation', name: 'Tính giá vốn' },
+      { key: 'adjustments', name: 'Điều chỉnh kho' },
+      { key: 'returns', name: 'Khách trả hàng' }
+    ]
+  },
+  {
+    groupKey: 'reports',
+    groupName: 'Báo cáo thống kê',
+    icon: '📊',
+    items: [
+      { key: 'sales_report', name: 'Báo cáo bán hàng' },
+      { key: 'inventory_report', name: 'Báo cáo tồn kho' },
+      { key: 'financial_report', name: 'Báo cáo tài chính' }
+    ]
+  },
+  {
+    groupKey: 'admin',
+    groupName: 'Quản trị hệ thống',
+    icon: '🛠️',
+    items: [
+      { key: 'manage_data', name: 'Quản lý dữ liệu' },
+      { key: 'permission_groups', name: 'Nhóm quyền' },
+      { key: 'user_permissions', name: 'Phân quyền người dùng' },
+      { key: 'users', name: 'Quản lý người dùng' }
+    ]
+  }
 ];
+
+// Flatten để dùng cho xử lý dữ liệu
+const ALL_PERMISSIONS = PERMISSION_GROUPS.flatMap(g => g.items);
 
 export default function PermissionGroupsPage() {
   const [groups, setGroups] = useState([]);
@@ -547,7 +573,7 @@ function GroupModal({ show, onClose, onSave, initialData }) {
             <div style={{
               border: '1px solid #e2e8f0',
               borderRadius: 6,
-              maxHeight: 300,
+              maxHeight: 350,
               overflowY: 'auto'
             }}>
               {/* Header chọn tất cả */}
@@ -567,32 +593,85 @@ function GroupModal({ show, onClose, onSave, initialData }) {
                   onChange={(e) => toggleAll(e.target.checked)}
                   style={{ marginRight: 10, width: 18, height: 18, accentColor: '#3b82f6' }}
                 />
-                <span style={{ fontWeight: 500, color: '#333' }}>Tên quyền</span>
+                <span style={{ fontWeight: 500, color: '#333' }}>Chọn tất cả quyền</span>
               </div>
 
-              {/* Danh sách các quyền */}
-              {ALL_PERMISSIONS.map((perm) => (
-                <div 
-                  key={perm.key}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    padding: '10px 12px',
-                    borderBottom: '1px solid #f1f5f9',
-                    cursor: 'pointer',
-                    background: form.selectedPermissions.includes(perm.key) ? '#eff6ff' : '#fff'
-                  }}
-                  onClick={() => togglePermission(perm.key)}
-                >
-                  <input
-                    type="checkbox"
-                    checked={form.selectedPermissions.includes(perm.key)}
-                    onChange={() => {}}
-                    style={{ marginRight: 10, width: 18, height: 18, accentColor: '#3b82f6' }}
-                  />
-                  <span style={{ fontSize: 14, color: '#333' }}>{perm.name}</span>
-                </div>
-              ))}
+              {/* Danh sách các quyền theo nhóm */}
+              {PERMISSION_GROUPS.map((group) => {
+                const groupItemKeys = group.items.map(i => i.key);
+                const allGroupSelected = groupItemKeys.every(k => form.selectedPermissions.includes(k));
+                const someGroupSelected = groupItemKeys.some(k => form.selectedPermissions.includes(k));
+
+                return (
+                  <div key={group.groupKey}>
+                    {/* Group header */}
+                    <div 
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '10px 12px',
+                        background: '#e8f4fc',
+                        borderBottom: '1px solid #d1e3f0',
+                        cursor: 'pointer',
+                        position: 'sticky',
+                        top: 42,
+                        zIndex: 1
+                      }}
+                      onClick={() => {
+                        // Toggle all in group
+                        if (allGroupSelected) {
+                          setForm(prev => ({
+                            ...prev,
+                            selectedPermissions: prev.selectedPermissions.filter(k => !groupItemKeys.includes(k))
+                          }));
+                        } else {
+                          setForm(prev => ({
+                            ...prev,
+                            selectedPermissions: [...new Set([...prev.selectedPermissions, ...groupItemKeys])]
+                          }));
+                        }
+                      }}
+                    >
+                      <input
+                        type="checkbox"
+                        checked={allGroupSelected}
+                        ref={el => el && (el.indeterminate = someGroupSelected && !allGroupSelected)}
+                        onChange={() => {}}
+                        style={{ marginRight: 10, width: 18, height: 18, accentColor: '#3b82f6' }}
+                      />
+                      <span style={{ marginRight: 8, fontSize: 16 }}>{group.icon}</span>
+                      <span style={{ fontWeight: 600, color: '#2c3e50', fontSize: 14 }}>{group.groupName}</span>
+                      <span style={{ marginLeft: 'auto', fontSize: 12, color: '#666' }}>
+                        ({groupItemKeys.filter(k => form.selectedPermissions.includes(k)).length}/{groupItemKeys.length})
+                      </span>
+                    </div>
+
+                    {/* Group items */}
+                    {group.items.map((perm) => (
+                      <div 
+                        key={perm.key}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          padding: '10px 12px 10px 36px',
+                          borderBottom: '1px solid #f1f5f9',
+                          cursor: 'pointer',
+                          background: form.selectedPermissions.includes(perm.key) ? '#eff6ff' : '#fff'
+                        }}
+                        onClick={() => togglePermission(perm.key)}
+                      >
+                        <input
+                          type="checkbox"
+                          checked={form.selectedPermissions.includes(perm.key)}
+                          onChange={() => {}}
+                          style={{ marginRight: 10, width: 18, height: 18, accentColor: '#3b82f6' }}
+                        />
+                        <span style={{ fontSize: 14, color: '#333' }}>{perm.name}</span>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })}
             </div>
 
             {/* Checkbox hoạt động */}

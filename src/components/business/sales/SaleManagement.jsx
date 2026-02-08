@@ -4,6 +4,7 @@ import { API_BASE_URL } from '../../../config/api';
 import ExcelJS from 'exceljs';
 import SearchableSelect from '../../common/SearchableSelect';
 import '../BusinessPage.css';
+import { useAuth } from '../../../contexts/AuthContext';
 
 // Hàm xóa dấu tiếng Việt để tìm kiếm
 const removeVietnameseTones = (str) => {
@@ -56,6 +57,7 @@ const loadColumnSettings = () => {
 
 const SaleManagement = () => {
   const navigate = useNavigate();
+  const { user: authUser, categoryPermissions } = useAuth();
 
   const [searchData, setSearchData] = useState({
     orderNumber: '',
@@ -276,13 +278,23 @@ const SaleManagement = () => {
     }
   };
 
-  // Fetch product categories for dropdown
+  // Fetch product categories for dropdown - filtered by permissions
   const fetchProductCategories = async () => {
     try {
       const response = await fetch(`${API_BASE_URL}/ProductCategories`);
       if (response.ok) {
         const categoriesData = await response.json();
-        setProductCategories(categoriesData);
+        
+        // Filter categories based on user permissions
+        const name = (authUser?.username || authUser?.name || '').toString().toLowerCase();
+        const isSuperAdmin = name === 'superadmin' || name === 'admin';
+        
+        if (isSuperAdmin || !categoryPermissions || categoryPermissions.length === 0) {
+          setProductCategories(categoriesData);
+        } else {
+          const filteredCategories = categoriesData.filter(cat => categoryPermissions.includes(cat.id));
+          setProductCategories(filteredCategories);
+        }
       }
     } catch (error) {
       console.error('Error fetching product categories:', error);

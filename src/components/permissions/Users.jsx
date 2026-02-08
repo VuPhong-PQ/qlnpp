@@ -35,6 +35,8 @@ export default function Users() {
   const [openActionsFor, setOpenActionsFor] = useState(null);
   // File import ref
   const fileInputRef = React.useRef(null);
+  // Selected rows for export
+  const [selectedIds, setSelectedIds] = useState(new Set());
 
   useEffect(() => {
     loadUsers();
@@ -151,7 +153,6 @@ export default function Users() {
       <button title="Chi tiết / Sửa" onClick={() => handleEdit(u)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#5bc0de', color: '#fff', cursor: 'pointer' }}>✎</button>
       <button title="Đặt lại mật khẩu" onClick={() => openResetPwModal(u)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#f39c12', color: '#fff', cursor: 'pointer' }}>🔓</button>
       <button title="Xóa nhân viên" onClick={() => handleDelete(u.id)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#ff6b6b', color: '#fff', cursor: 'pointer' }}>🗑</button>
-      <button title="Phân quyền chi tiết" onClick={() => navigate(`/permissions/user-permissions/${u.id}`)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#667eea', color: '#fff', cursor: 'pointer' }}>🔑</button>
       <button title="Phân quyền nhanh" onClick={() => { setPermTarget(u); setShowPermModal(true); }} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#8e44ad', color: '#fff', cursor: 'pointer' }}>🔐</button>
       <button title="Phân quyền nhóm hàng" onClick={() => { setPermTarget(u); setShowGroupPermModal(true); }} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#2ecc71', color: '#fff', cursor: 'pointer' }}>📦</button>
     </>
@@ -168,13 +169,15 @@ export default function Users() {
     setCurrentPage(1);
   }, [search, columnFilters]);
 
-  const handleExport = () => {
+  const handleExport = async () => {
     if (!users || users.length === 0) {
       alert('Không có dữ liệu để xuất!');
       return;
     }
 
-    const data = filtered.map(u => ({
+    const source = (selectedIds && selectedIds.size > 0) ? users.filter(u => selectedIds.has(u.id || u.code)) : filtered;
+
+    const data = source.map(u => ({
       'Tên đăng nhập': u.username || '',
       'Tên nhân viên': u.name || '',
       'Số điện thoại': u.phone || '',
@@ -188,7 +191,32 @@ export default function Users() {
       'Ghi chú': u.note || ''
     }));
 
-    exportToExcel(data, 'Danh_sach_nhan_vien', 'Nhân viên');
+    await exportToExcel(data, 'Danh_sach_nhan_vien', 'Nhân viên');
+  };
+
+  // Toggle select single row
+  const toggleSelect = (id) => {
+    setSelectedIds(prev => {
+      const s = new Set(prev);
+      if (s.has(id)) s.delete(id);
+      else s.add(id);
+      return s;
+    });
+  };
+
+  // Select / deselect all visible (paginated) rows
+  const toggleSelectAllVisible = () => {
+    setSelectedIds(prev => {
+      const s = new Set(prev);
+      const allVisibleIds = paginated.map(u => u.id || u.code);
+      const allSelected = allVisibleIds.every(id => s.has(id));
+      if (allSelected) {
+        allVisibleIds.forEach(id => s.delete(id));
+      } else {
+        allVisibleIds.forEach(id => s.add(id));
+      }
+      return s;
+    });
   };
 
   const handleImportClick = () => {
@@ -296,6 +324,9 @@ export default function Users() {
             <button className="btn btn-success" onClick={handleExport} style={{ marginLeft: 8 }}>📤 Export Excel</button>
             <button className="btn btn-secondary" onClick={handleImportClick} style={{ marginLeft: 8 }}>📥 Import NV</button>
             <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".xlsx,.xls" onChange={handleFileChange} />
+            {selectedIds && selectedIds.size > 0 && (
+              <div style={{ display: 'inline-block', marginLeft: 12, color: '#555' }}>Đã chọn: {selectedIds.size}</div>
+            )}
           </div>
         </div>
 
@@ -303,7 +334,10 @@ export default function Users() {
           <table className="data-table" style={{ minWidth: 1400 }}>
             <thead>
               <tr>
-                    <th style={{ position: 'relative' }}>
+                                      <th style={{ width: 40, textAlign: 'center' }}>
+                                        <input type="checkbox" onChange={toggleSelectAllVisible} checked={paginated.length > 0 && paginated.every(row => selectedIds.has(row.id || row.code))} />
+                                      </th>
+                      <th style={{ position: 'relative' }}>
                       Tên đăng nhập
                       <span onClick={() => setShowFilterPopup('username')} style={{ marginLeft: 8, cursor: 'pointer' }}>🔍</span>
                       {renderFilterPopup('username', 'Tên đăng nhập', false)}
@@ -363,15 +397,18 @@ export default function Users() {
             </thead>
             <tbody>
               {loading && (
-                <tr><td colSpan={12} style={{ textAlign: 'center' }}>Đang tải...</td></tr>
+                <tr><td colSpan={13} style={{ textAlign: 'center' }}>Đang tải...</td></tr>
               )}
 
               {!loading && filtered.length === 0 && (
-                <tr><td colSpan={12} style={{ textAlign: 'center' }}>Không có dữ liệu</td></tr>
+                <tr><td colSpan={13} style={{ textAlign: 'center' }}>Không có dữ liệu</td></tr>
               )}
 
               {!loading && paginated.map(u => (
                 <tr key={u.id || u.code}>
+                  <td style={{ textAlign: 'center' }}>
+                    <input type="checkbox" checked={selectedIds.has(u.id || u.code)} onChange={() => toggleSelect(u.id || u.code)} />
+                  </td>
                   <td>{u.username || ''}</td>
                   <td>{u.name || ''}</td>
                   <td>{u.phone || ''}</td>
@@ -492,7 +529,7 @@ export default function Users() {
                 {showPageSizeDropdown && (
                   <>
                     <div style={{ position: 'fixed', top: 0, left: 0, right: 0, bottom: 0, zIndex: 9999 }} onClick={() => setShowPageSizeDropdown(false)} />
-                    <div style={{ position: 'fixed', transform: 'translateY(-100%)', marginBottom: '40px', background: '#fff', border: '1px solid #ddd', borderRadius: '4px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', zIndex: 10000, minWidth: '120px' }}>
+                    <div style={{ position: 'absolute', right: 0, bottom: '44px', background: '#fff', border: '1px solid #ddd', borderRadius: '4px', boxShadow: '0 2px 8px rgba(0,0,0,0.15)', zIndex: 10000, minWidth: '120px' }}>
                       {[10, 20, 50, 100, 500, 1000].map(size => (
                         <div key={size} onClick={() => { setItemsPerPage(size); setCurrentPage(1); setShowPageSizeDropdown(false); }} style={{ padding: '8px 16px', cursor: 'pointer', background: itemsPerPage === size ? '#f0f0f0' : '#fff', fontSize: '14px', borderBottom: '1px solid #f0f0f0' }} onMouseEnter={(e) => e.target.style.background = '#f5f5f5'} onMouseLeave={(e) => e.target.style.background = itemsPerPage === size ? '#f0f0f0' : '#fff'}>
                           {size} / trang

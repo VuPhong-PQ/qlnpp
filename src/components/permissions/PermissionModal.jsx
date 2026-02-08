@@ -1,19 +1,89 @@
 import React, { useState, useEffect } from 'react';
 import '../setup/SetupPage.css';
 import { API_ENDPOINTS, api } from '../../config/api';
+import { vietnameseSearch } from '../../utils/searchUtils';
 
-const samplePermissions = [
-  { key: 'customers', name: 'Khách hàng' },
-  { key: 'products', name: 'Hàng hóa' },
-  { key: 'orders', name: 'Đơn hàng' },
-  { key: 'reports', name: 'Báo cáo' },
-  { key: 'settings', name: 'Cấu hình' }
+// Cấu trúc quyền được phân theo nhóm - dễ dàng quản lý và phân quyền
+const permissionGroups = [
+  {
+    groupKey: 'setup',
+    groupName: 'Thiết lập ban đầu',
+    icon: '⚙️',
+    items: [
+      { key: 'company_info', name: 'Thông tin doanh nghiệp' },
+      { key: 'accounts_funds', name: 'Tài khoản quỹ & Nợ ngân hàng' },
+      { key: 'customer_groups', name: 'Nhóm khách hàng' },
+      { key: 'customers', name: 'Khách hàng' },
+      { key: 'suppliers', name: 'Nhà cung cấp' },
+      { key: 'product_categories', name: 'Danh sách loại hàng' },
+      { key: 'products', name: 'Danh sách hàng hóa' },
+      { key: 'units', name: 'Đơn vị tính' },
+      { key: 'transaction_contents', name: 'Nội dung thu, chi, xuất, nhập' },
+      { key: 'warehouses', name: 'Danh sách kho hàng' },
+      { key: 'vehicles', name: 'Khai báo xe' }
+    ]
+  },
+  {
+    groupKey: 'business',
+    groupName: 'Quản lý nghiệp vụ',
+    icon: '💼',
+    items: [
+      { key: 'quotations', name: 'Bảng báo giá' },
+      { key: 'imports', name: 'Nhập hàng' },
+      { key: 'exports', name: 'Xuất hàng' },
+      { key: 'warehouse_transfers', name: 'Chuyển kho' },
+      { key: 'orders', name: 'Bán hàng' },
+      { key: 'sale_management', name: 'Quản lý bán hàng (User)' },
+      { key: 'order_management', name: 'Quản lý đơn hàng (Admin)' },
+      { key: 'print_order', name: 'In đơn hàng' },
+      { key: 'mo_khoa_ngay_lap', name: 'Mở khóa ngày lập đơn hàng' },
+      { key: 'chon_nhan_vien_sale', name: 'Chọn nhân viên bán hàng' },
+      { key: 'receipt_voucher', name: 'Phiếu thu' },
+      { key: 'expense_voucher', name: 'Phiếu chi' },
+      { key: 'cost_calculation', name: 'Tính giá vốn' },
+      { key: 'adjustments', name: 'Điều chỉnh kho' },
+      { key: 'returns', name: 'Khách trả hàng' }
+    ]
+  },
+  {
+    groupKey: 'reports',
+    groupName: 'Báo cáo thống kê',
+    icon: '📊',
+    items: [
+      { key: 'sales_report', name: 'Báo cáo bán hàng' },
+      { key: 'inventory_report', name: 'Báo cáo tồn kho' },
+      { key: 'financial_report', name: 'Báo cáo tài chính' }
+    ]
+  },
+  {
+    groupKey: 'admin',
+    groupName: 'Quản trị hệ thống',
+    icon: '🛠️',
+    items: [
+      { key: 'manage_data', name: 'Quản lý dữ liệu' },
+      { key: 'permission_groups', name: 'Nhóm quyền' },
+      { key: 'user_permissions', name: 'Phân quyền người dùng' },
+      { key: 'users', name: 'Quản lý người dùng' }
+    ]
+  }
 ];
+
+// Flatten để dùng cho xử lý dữ liệu
+const allPermissions = permissionGroups.flatMap(g => g.items);
+
+// Giữ lại samplePermissions cho compatibility
+const samplePermissions = allPermissions;
 
 export default function PermissionModal({ show, onClose, onSave, user, isGroup=false }) {
   const [permissions, setPermissions] = useState({});
   const [selectAll, setSelectAll] = useState(false);
   const [groupName, setGroupName] = useState('');
+  const [groups, setGroups] = useState([]);
+  const [selectedGroupId, setSelectedGroupId] = useState(null);
+  const [groupSearch, setGroupSearch] = useState('');
+  const [showGroupDropdown, setShowGroupDropdown] = useState(false);
+  const [userGroups, setUserGroups] = useState([]); // All groups that user belongs to
+  const [pendingGroups, setPendingGroups] = useState([]); // Groups pending to be added
 
   useEffect(() => {
     // init permissions (all false)
@@ -24,6 +94,9 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
     setPermissions(init);
     setSelectAll(false);
     setGroupName('');
+    setSelectedGroupId(null);
+    setUserGroups([]);
+    setPendingGroups([]);
   }, [show]);
 
   // load existing permissions for user when opening
@@ -64,6 +137,55 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
     load();
   }, [show, user]);
 
+  // Load permission groups for selection
+  useEffect(() => {
+    const loadGroups = async () => {
+      if (!show) return;
+      try {
+        if (API_ENDPOINTS.permissionGroups) {
+          const gs = await api.get(API_ENDPOINTS.permissionGroups);
+          setGroups(gs || []);
+        }
+      } catch (e) {
+        console.error('Load permission groups failed', e);
+        setGroups([]);
+      }
+    };
+    loadGroups();
+  }, [show]);
+
+  // If user already belongs to permission groups, detect all of them
+  useEffect(() => {
+    const detectUserGroups = async () => {
+      if (!show || !user?.id || !groups || groups.length === 0) return;
+      try {
+        const foundGroups = [];
+        for (const g of groups) {
+          try {
+            const res = await fetch(`${API_ENDPOINTS.permissionGroups}/${g.id}/users`);
+            if (!res.ok) continue;
+            const usersInGroup = await res.json();
+            if (Array.isArray(usersInGroup) && usersInGroup.find(u => u.id === user.id)) {
+              foundGroups.push(g);
+            }
+          } catch (er) {
+            // ignore per-group fetch errors
+          }
+        }
+        setUserGroups(foundGroups);
+        // If user belongs to groups, preselect first one
+        if (foundGroups.length > 0) {
+          setSelectedGroupId(foundGroups[0].id);
+          setGroupName(foundGroups[0].name || '');
+          setGroupSearch(foundGroups.map(g => g.name).join(', '));
+        }
+      } catch (e) {
+        // ignore
+      }
+    };
+    detectUserGroups();
+  }, [show, user, groups]);
+
   if (!show) return null;
 
   const togglePerm = (key, field) => {
@@ -80,67 +202,89 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
   };
 
   const handleSave = async () => {
-    const payload = { userId: user?.id || null, groupName: groupName || null, permissions };
-
-    // Try known endpoint patterns
-    try {
-      // 1) If explicit endpoint defined in API_ENDPOINTS
-      if (API_ENDPOINTS.userPermissions) {
-        // use PUT to update
-        await api.put(API_ENDPOINTS.userPermissions, user?.id || '', payload);
-        if (onSave) onSave({ user, isGroup, groupName, permissions });
+    // If there are pending groups, add them all to user
+    if (pendingGroups.length > 0 && user?.id) {
+      let successCount = 0;
+      for (const g of pendingGroups) {
+        try {
+          const res = await fetch(`${API_ENDPOINTS.permissionGroups}/${g.id}/users/${user.id}`, { method: 'POST' });
+          if (res.ok) {
+            successCount++;
+          }
+        } catch (e) {
+          console.error('Error adding user to group:', g.name, e);
+        }
+      }
+      if (successCount > 0) {
+        alert(`Đã gán ${successCount} nhóm quyền thành công!`);
+        if (onSave) onSave({ user, isGroup, groupIds: pendingGroups.map(g => g.id) });
         onClose();
         return;
       }
+    }
+    
+    // If a single group was selected (legacy behavior), call API to add user to group
+    if (selectedGroupId && user?.id) {
+      try {
+        const res = await fetch(`${API_ENDPOINTS.permissionGroups}/${selectedGroupId}/users/${user.id}`, { method: 'POST' });
+        if (res.ok) {
+          alert('Gán nhóm quyền thành công!');
+          if (onSave) onSave({ user, isGroup, groupId: selectedGroupId });
+          onClose();
+          return;
+        } else {
+          // Check if user already in group
+          const errData = await res.json().catch(() => ({}));
+          if (errData.error && errData.error.includes('đã thuộc')) {
+            alert('Người dùng đã thuộc nhóm quyền này. Đang cập nhật quyền chi tiết...');
+          } else {
+            // If error adding to group, save individual permissions instead
+            console.log('Add to group failed, saving individual permissions');
+          }
+        }
+      } catch (e) {
+        console.error('Error adding user to group:', e);
+      }
+    }
 
-      // 2) Try /users/{id}/permissions if users endpoint exists (our backend controller expects a model like { Permissions: { resourceKey: { CanView... } } })
+    // Save individual permissions
+    try {
       if (API_ENDPOINTS.users && user?.id) {
         const endpoint = `${API_ENDPOINTS.users}/${user.id}/permissions`;
-        const model = { Permissions: {} };
-        // convert our frontend keys to backend DTO shape (CanView etc)
+        // Build model with lowercase keys for ASP.NET Core JSON serialization
+        const model = { permissions: {} };
+        // convert our frontend keys to backend DTO shape
         Object.keys(permissions).forEach(key => {
           const p = permissions[key];
-          model.Permissions[key] = {
-            CanView: !!p.view,
-            CanAdd: !!p.add,
-            CanEdit: !!p.edit,
-            CanDelete: !!p.delete,
-            CanPrint: !!p.print,
-            CanImport: !!p.import,
-            CanExport: !!p.export
+          model.permissions[key] = {
+            canView: !!p.view,
+            canAdd: !!p.add,
+            canEdit: !!p.edit,
+            canDelete: !!p.delete,
+            canPrint: !!p.print,
+            canImport: !!p.import,
+            canExport: !!p.export
           };
         });
 
-        // Use fetch directly to PUT the model (api.put helper constructs URL by appending id so avoid it here)
-        try {
-          await fetch(endpoint, {
-            method: 'PUT',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(model)
-          });
-        } catch (e) {
-          // Fallback to POST
-          await fetch(endpoint, {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify(model)
-          });
+        const res = await fetch(endpoint, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(model)
+        });
+
+        if (res.ok || res.status === 204) {
+          alert('Lưu phân quyền thành công!');
+          if (onSave) onSave({ user, isGroup, groupName, permissions });
+          onClose();
+          return;
+        } else {
+          const errText = await res.text().catch(() => '');
+          console.error('Save permissions failed:', res.status, errText);
         }
-
-        if (onSave) onSave({ user, isGroup, groupName, permissions });
-        onClose();
-        return;
       }
 
-      // 3) Try permission-groups endpoint
-      if (API_ENDPOINTS.permissionGroups) {
-        await api.post(API_ENDPOINTS.permissionGroups, payload);
-        if (onSave) onSave({ user, isGroup, groupName, permissions });
-        onClose();
-        return;
-      }
-
-      // 4) Fallback: call onSave and close (no backend available)
+      // Fallback: just close
       if (onSave) onSave({ user, isGroup, groupName, permissions });
       onClose();
     } catch (err) {
@@ -150,22 +294,266 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
   };
 
   return (
-    <div className="modal-overlay">
-      <div className="modal-content" style={{ width: '90%', maxWidth: '1200px' }}>
+    <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 2000 }}>
+      <div className="modal-content" style={{ width: '100%', maxWidth: '100%', height: '100vh', maxHeight: '100vh', borderRadius: 0, margin: 0 }}>
         <div className="modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
           <h3 style={{ margin: 0, textTransform: 'uppercase', fontWeight: 700 }}>{isGroup ? 'CẤP QUYỀN CHO NHÓM' : 'CẤP QUYỀN CHO NHÂN VIÊN'}</h3>
           <button className="close-btn" onClick={onClose} style={{ position: 'absolute', right: 12, top: 8 }}>×</button>
         </div>
 
         <div style={{ padding: '8px 16px' }}>
-          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
-              <input placeholder={isGroup ? 'Chọn nhóm quyền' : 'Chọn nhóm quyền'} value={groupName} onChange={(e) => setGroupName(e.target.value)} style={{ flex: 1, padding: 8, marginRight: 12, borderRadius: 4, border: '1px solid #ddd' }} />
-              <button className="btn btn-danger" style={{ padding: '6px 12px', height: 36 }}>Xóa</button>
+          {/* Display user's assigned groups if 2 or more */}
+          {userGroups.length >= 2 && (
+            <div style={{ marginBottom: 12, padding: '8px 12px', background: '#e3f2fd', borderRadius: 6, border: '1px solid #90caf9' }}>
+              <div style={{ fontWeight: 600, marginBottom: 4, color: '#1565c0' }}>
+                Nhân viên thuộc {userGroups.length} nhóm quyền:
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {userGroups.map(g => (
+                  <span 
+                    key={g.id} 
+                    onClick={async () => {
+                      setSelectedGroupId(g.id);
+                      setGroupName(g.name);
+                      setGroupSearch(g.name);
+                      // fetch group details and show permissions
+                      try {
+                        const res = await fetch(`${API_ENDPOINTS.permissionGroups}/${g.id}`);
+                        if (res.ok) {
+                          const grp = await res.json();
+                          const next = {};
+                          samplePermissions.forEach(p => {
+                            const found = (grp.permissionDetails || grp.PermissionDetails || []).find(d => (d.resourceKey || d.ResourceKey || '').toString().toLowerCase() === p.key.toLowerCase() || (d.resourceName || d.ResourceName || '').toString().toLowerCase().includes(p.name.toLowerCase()));
+                            if (found) {
+                              next[p.key] = {
+                                view: !!(found.canView ?? found.CanView),
+                                add: !!(found.canAdd ?? found.CanAdd),
+                                edit: !!(found.canEdit ?? found.CanEdit),
+                                delete: !!(found.canDelete ?? found.CanDelete),
+                                print: !!(found.canPrint ?? found.CanPrint),
+                                import: !!(found.canImport ?? found.CanImport),
+                                export: !!(found.canExport ?? found.CanExport)
+                              };
+                            } else {
+                              next[p.key] = { view: false, add: false, edit: false, delete: false, print: false, import: false, export: false };
+                            }
+                          });
+                          setPermissions(next);
+                          const all = Object.values(next).length > 0 && Object.values(next).every(r => Object.values(r).every(Boolean));
+                          setSelectAll(all);
+                        }
+                      } catch (er) { }
+                    }}
+                    style={{ 
+                      padding: '4px 10px', 
+                      background: selectedGroupId === g.id ? '#1976d2' : '#fff', 
+                      color: selectedGroupId === g.id ? '#fff' : '#333',
+                      border: '1px solid #1976d2', 
+                      borderRadius: 16, 
+                      cursor: 'pointer',
+                      fontSize: 13,
+                      fontWeight: selectedGroupId === g.id ? 600 : 400
+                    }}
+                  >
+                    {g.name}
+                  </span>
+                ))}
+              </div>
             </div>
+          )}
 
-          <div style={{ overflowX: 'auto' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <div style={{ position: 'relative', flex: 1, marginRight: 12 }}>
+              <input
+                value={groupSearch}
+                onChange={(e) => { setGroupSearch(e.target.value); setShowGroupDropdown(true); }}
+                onFocus={() => setShowGroupDropdown(true)}
+                placeholder="Tìm và chọn nhóm quyền để thêm..."
+                style={{ width: '100%', padding: 8, borderRadius: 4, border: '1px solid #ddd' }}
+              />
+
+              {showGroupDropdown && (
+                <div style={{ position: 'absolute', left: 0, right: 0, top: '42px', maxHeight: 220, overflow: 'auto', background: '#fff', border: '1px solid #ddd', borderRadius: 6, zIndex: 2000 }}>
+                  {/* list filtered groups */}
+                  {((groups || []).filter(g => !groupSearch || vietnameseSearch(g.name || g.code || '', groupSearch))).length === 0 ? (
+                    <div style={{ padding: 8, color: '#999' }}>Không tìm thấy nhóm quyền</div>
+                  ) : (
+                    (groups || []).filter(g => !groupSearch || vietnameseSearch(g.name || g.code || '', groupSearch)).map(g => {
+                      // Check if already in userGroups or pendingGroups
+                      const isInUserGroups = userGroups.some(ug => ug.id === g.id);
+                      const isInPendingGroups = pendingGroups.some(pg => pg.id === g.id);
+                      const isAlreadyAdded = isInUserGroups || isInPendingGroups;
+                      
+                      return (
+                      <div key={g.id} onMouseDown={async (ev) => { ev.preventDefault();
+                        if (isAlreadyAdded) {
+                          // Already added, do nothing or show message
+                          return;
+                        }
+                        // Add to pending groups
+                        setPendingGroups(prev => [...prev, g]);
+                        // Clear search for next selection
+                        setGroupSearch('');
+                        setShowGroupDropdown(false);
+                        // Also set as selected for preview
+                        setSelectedGroupId(g.id);
+                        setGroupName(g.name);
+                        // fetch group details for preview
+                        try {
+                          const res = await fetch(`${API_ENDPOINTS.permissionGroups}/${g.id}`);
+                          if (res.ok) {
+                            const grp = await res.json();
+                            const next = {};
+                            samplePermissions.forEach(p => {
+                              const found = (grp.permissionDetails || grp.PermissionDetails || []).find(d => (d.resourceKey || d.ResourceKey || '').toString().toLowerCase() === p.key.toLowerCase() || (d.resourceName || d.ResourceName || '').toString().toLowerCase().includes(p.name.toLowerCase()));
+                              if (found) {
+                                next[p.key] = {
+                                  view: !!(found.canView ?? found.CanView),
+                                  add: !!(found.canAdd ?? found.CanAdd),
+                                  edit: !!(found.canEdit ?? found.CanEdit),
+                                  delete: !!(found.canDelete ?? found.CanDelete),
+                                  print: !!(found.canPrint ?? found.CanPrint),
+                                  import: !!(found.canImport ?? found.CanImport),
+                                  export: !!(found.canExport ?? found.CanExport)
+                                };
+                              } else {
+                                next[p.key] = { view: false, add: false, edit: false, delete: false, print: false, import: false, export: false };
+                              }
+                            });
+                            setPermissions(next);
+                            const all = Object.values(next).length > 0 && Object.values(next).every(r => Object.values(r).every(Boolean));
+                            setSelectAll(all);
+                          }
+                        } catch (er) { }
+                      }} style={{ 
+                        padding: 8, 
+                        borderBottom: '1px solid #f0f0f0', 
+                        cursor: isAlreadyAdded ? 'not-allowed' : 'pointer',
+                        backgroundColor: isAlreadyAdded ? '#f5f5f5' : 'transparent',
+                        color: isAlreadyAdded ? '#999' : '#333'
+                      }}>
+                        {g.name} {isAlreadyAdded && <span style={{ fontSize: 11, color: '#999' }}>(đã thêm)</span>}
+                      </div>
+                    );
+                    })
+                  )}
+                </div>
+              )}
+            </div>
+            <button className="btn btn-danger" onClick={async () => {
+              // If a group is selected, try to remove user from that group
+              if (selectedGroupId && user?.id) {
+                try {
+                  const res = await fetch(`${API_ENDPOINTS.permissionGroups}/${selectedGroupId}/users/${user.id}`, { method: 'DELETE' });
+                  if (res.ok) {
+                    alert('Đã gỡ nhóm quyền cho người dùng');
+                    // Remove from userGroups list
+                    setUserGroups(prev => prev.filter(g => g.id !== selectedGroupId));
+                  } else {
+                    // ignore
+                  }
+                } catch (e) {
+                  // ignore
+                }
+              }
+              // Also remove from pendingGroups if present
+              setPendingGroups(prev => prev.filter(g => g.id !== selectedGroupId));
+              // clear selection and reset permissions
+              setSelectedGroupId(null);
+              setGroupName('');
+              setGroupSearch('');
+              const init = {};
+              samplePermissions.forEach(p => {
+                init[p.key] = { view: false, add: false, edit: false, delete: false, print: false, import: false, export: false };
+              });
+              setPermissions(init);
+              setSelectAll(false);
+            }} style={{ padding: '6px 12px', height: 36 }}>Xóa</button>
+          </div>
+          
+          {/* Display pending groups to be added */}
+          {pendingGroups.length > 0 && (
+            <div style={{ marginBottom: 10, padding: '8px 12px', background: '#fff3e0', borderRadius: 6, border: '1px solid #ffcc80' }}>
+              <div style={{ fontWeight: 600, marginBottom: 4, color: '#e65100', fontSize: 13 }}>
+                Nhóm quyền sẽ được thêm ({pendingGroups.length}):
+              </div>
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8 }}>
+                {pendingGroups.map(g => (
+                  <span 
+                    key={g.id}
+                    style={{ 
+                      padding: '4px 8px', 
+                      background: selectedGroupId === g.id ? '#ff9800' : '#fff', 
+                      color: selectedGroupId === g.id ? '#fff' : '#333',
+                      border: '1px solid #ff9800', 
+                      borderRadius: 16, 
+                      fontSize: 13,
+                      display: 'flex',
+                      alignItems: 'center',
+                      gap: 4
+                    }}
+                  >
+                    <span 
+                      style={{ cursor: 'pointer' }}
+                      onClick={async () => {
+                        setSelectedGroupId(g.id);
+                        setGroupName(g.name);
+                        // fetch group details for preview
+                        try {
+                          const res = await fetch(`${API_ENDPOINTS.permissionGroups}/${g.id}`);
+                          if (res.ok) {
+                            const grp = await res.json();
+                            const next = {};
+                            samplePermissions.forEach(p => {
+                              const found = (grp.permissionDetails || grp.PermissionDetails || []).find(d => (d.resourceKey || d.ResourceKey || '').toString().toLowerCase() === p.key.toLowerCase() || (d.resourceName || d.ResourceName || '').toString().toLowerCase().includes(p.name.toLowerCase()));
+                              if (found) {
+                                next[p.key] = {
+                                  view: !!(found.canView ?? found.CanView),
+                                  add: !!(found.canAdd ?? found.CanAdd),
+                                  edit: !!(found.canEdit ?? found.CanEdit),
+                                  delete: !!(found.canDelete ?? found.CanDelete),
+                                  print: !!(found.canPrint ?? found.CanPrint),
+                                  import: !!(found.canImport ?? found.CanImport),
+                                  export: !!(found.canExport ?? found.CanExport)
+                                };
+                              } else {
+                                next[p.key] = { view: false, add: false, edit: false, delete: false, print: false, import: false, export: false };
+                              }
+                            });
+                            setPermissions(next);
+                            const all = Object.values(next).length > 0 && Object.values(next).every(r => Object.values(r).every(Boolean));
+                            setSelectAll(all);
+                          }
+                        } catch (er) { }
+                      }}
+                    >
+                      {g.name}
+                    </span>
+                    <span 
+                      onClick={() => {
+                        setPendingGroups(prev => prev.filter(pg => pg.id !== g.id));
+                        if (selectedGroupId === g.id) {
+                          setSelectedGroupId(null);
+                          setGroupName('');
+                        }
+                      }}
+                      style={{ 
+                        cursor: 'pointer', 
+                        fontWeight: 'bold',
+                        color: selectedGroupId === g.id ? '#fff' : '#e65100',
+                        marginLeft: 2
+                      }}
+                      title="Bỏ chọn"
+                    >×</span>
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
+
+          <div style={{ overflowX: 'auto', height: 'calc(100vh - 240px)', overflow: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse' }}>
-              <thead>
+              <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                   <tr style={{ background: '#cfeefb' }}>
                     <th style={{ padding: '10px 8px', border: '1px solid #eaeaea' }}>Stt</th>
                     <th style={{ padding: '10px 8px', border: '1px solid #eaeaea' }}>Tên quyền</th>
@@ -202,47 +590,95 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
                   <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}></td>
                 </tr>
 
-                {samplePermissions.map((p, idx) => (
-                  <tr key={p.key}>
-                    <td style={{ padding: 8, border: '1px solid #eaeaea' }}>{idx + 2}</td>
-                    <td style={{ padding: 8, border: '1px solid #eaeaea' }}>{p.name}</td>
-                    <td style={{ padding: 8, border: '1px solid #eaeaea' }}>
-                      {/* placeholder for header select-all per row */}
-                    </td>
-                    <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
-                      <input type="checkbox" checked={permissions[p.key]?.view || false} onChange={() => togglePerm(p.key, 'view')} />
-                    </td>
-                    <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
-                      <input type="checkbox" checked={permissions[p.key]?.add || false} onChange={() => togglePerm(p.key, 'add')} />
-                    </td>
-                    <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
-                      <input type="checkbox" checked={permissions[p.key]?.edit || false} onChange={() => togglePerm(p.key, 'edit')} />
-                    </td>
-                    <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
-                      <input type="checkbox" checked={permissions[p.key]?.delete || false} onChange={() => togglePerm(p.key, 'delete')} />
-                    </td>
-                    <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
-                      <input type="checkbox" checked={permissions[p.key]?.print || false} onChange={() => togglePerm(p.key, 'print')} />
-                    </td>
-                    <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
-                      <input type="checkbox" checked={permissions[p.key]?.import || false} onChange={() => togglePerm(p.key, 'import')} />
-                    </td>
-                    <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
-                      <input type="checkbox" checked={permissions[p.key]?.export || false} onChange={() => togglePerm(p.key, 'export')} />
-                    </td>
-                    <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
-                      <button className="btn btn-primary" onClick={() => {
-                        // mark all true
-                        setPermissions(prev => ({ ...prev, [p.key]: { view: true, add: true, edit: true, delete: true, print: true, import: true, export: true } }));
-                      }}>Tất cả</button>
-                    </td>
-                    <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
-                      <button className="btn btn-danger" onClick={() => {
-                        setPermissions(prev => ({ ...prev, [p.key]: { view: false, add: false, edit: false, delete: false, print: false, import: false, export: false } }));
-                      }}>Không</button>
-                    </td>
-                  </tr>
-                ))}
+                {/* Render each permission group with header */}
+                {(() => {
+                  let rowNum = 2;
+                  return permissionGroups.map((group) => (
+                    <React.Fragment key={group.groupKey}>
+                      {/* Group header row */}
+                      <tr style={{ background: '#e8f4fc' }}>
+                        <td colSpan={3} style={{ padding: '10px 8px', border: '1px solid #eaeaea', fontWeight: 700, fontSize: 14, color: '#2c3e50' }}>
+                          <span style={{ marginRight: 8 }}>{group.icon}</span>
+                          {group.groupName}
+                        </td>
+                        <td style={{ padding: 8, border: '1px solid #eaeaea' }}></td>
+                        <td style={{ padding: 8, border: '1px solid #eaeaea' }}></td>
+                        <td style={{ padding: 8, border: '1px solid #eaeaea' }}></td>
+                        <td style={{ padding: 8, border: '1px solid #eaeaea' }}></td>
+                        <td style={{ padding: 8, border: '1px solid #eaeaea' }}></td>
+                        <td style={{ padding: 8, border: '1px solid #eaeaea' }}></td>
+                        <td style={{ padding: 8, border: '1px solid #eaeaea' }}></td>
+                        <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
+                          <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => {
+                            // mark all in this group true
+                            setPermissions(prev => {
+                              const next = { ...prev };
+                              group.items.forEach(p => {
+                                next[p.key] = { view: true, add: true, edit: true, delete: true, print: true, import: true, export: true };
+                              });
+                              return next;
+                            });
+                          }}>Tất cả</button>
+                        </td>
+                        <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
+                          <button className="btn btn-danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => {
+                            // mark all in this group false
+                            setPermissions(prev => {
+                              const next = { ...prev };
+                              group.items.forEach(p => {
+                                next[p.key] = { view: false, add: false, edit: false, delete: false, print: false, import: false, export: false };
+                              });
+                              return next;
+                            });
+                          }}>Không</button>
+                        </td>
+                      </tr>
+
+                      {/* Permission items in group */}
+                      {group.items.map((p) => {
+                        const currentRowNum = rowNum++;
+                        return (
+                          <tr key={p.key} style={{ background: '#fff' }}>
+                            <td style={{ padding: 8, border: '1px solid #eaeaea', paddingLeft: 20 }}>{currentRowNum}</td>
+                            <td style={{ padding: 8, border: '1px solid #eaeaea', paddingLeft: 24 }}>{p.name}</td>
+                            <td style={{ padding: 8, border: '1px solid #eaeaea' }}></td>
+                            <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
+                              <input type="checkbox" checked={permissions[p.key]?.view || false} onChange={() => togglePerm(p.key, 'view')} />
+                            </td>
+                            <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
+                              <input type="checkbox" checked={permissions[p.key]?.add || false} onChange={() => togglePerm(p.key, 'add')} />
+                            </td>
+                            <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
+                              <input type="checkbox" checked={permissions[p.key]?.edit || false} onChange={() => togglePerm(p.key, 'edit')} />
+                            </td>
+                            <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
+                              <input type="checkbox" checked={permissions[p.key]?.delete || false} onChange={() => togglePerm(p.key, 'delete')} />
+                            </td>
+                            <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
+                              <input type="checkbox" checked={permissions[p.key]?.print || false} onChange={() => togglePerm(p.key, 'print')} />
+                            </td>
+                            <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
+                              <input type="checkbox" checked={permissions[p.key]?.import || false} onChange={() => togglePerm(p.key, 'import')} />
+                            </td>
+                            <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
+                              <input type="checkbox" checked={permissions[p.key]?.export || false} onChange={() => togglePerm(p.key, 'export')} />
+                            </td>
+                            <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
+                              <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => {
+                                setPermissions(prev => ({ ...prev, [p.key]: { view: true, add: true, edit: true, delete: true, print: true, import: true, export: true } }));
+                              }}>Tất cả</button>
+                            </td>
+                            <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
+                              <button className="btn btn-danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => {
+                                setPermissions(prev => ({ ...prev, [p.key]: { view: false, add: false, edit: false, delete: false, print: false, import: false, export: false } }));
+                              }}>Không</button>
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </React.Fragment>
+                  ));
+                })()}
               </tbody>
             </table>
           </div>
