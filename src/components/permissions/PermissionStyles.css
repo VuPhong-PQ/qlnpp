@@ -142,6 +142,59 @@
   justify-content: center;
 }
 
+/* Header action buttons (centered on desktop, moved to right/vertical on mobile) */
+.header-action-buttons {
+  position: absolute;
+  left: 50%;
+  top: calc(50% + 8px); /* nudge down to align with the 'Tổng' line */
+  transform: translate(-50%, -50%);
+  display: flex;
+  gap: 12px;
+  z-index: 50;
+}
+
+.header-action-buttons button {
+  width: 44px;
+  height: 36px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  border: none;
+  cursor: pointer;
+}
+
+@media (max-width: 600px) {
+  /* Place buttons at the top-right, laid out horizontally on small screens */
+  .header-action-buttons {
+    left: auto;
+    right: 12px;
+    top: 56px; /* lowered to align horizontally with the 'Tổng X' line */
+    transform: none;
+    flex-direction: row; /* horizontal on mobile */
+    gap: 8px;
+    overflow-x: auto;
+    padding-right: 8px;
+  }
+
+  /* Reduce visual size roughly by 50% and use compact rounded rectangles */
+  .header-action-buttons button {
+    width: 28px;
+    height: 28px;
+    border-radius: 6px;
+    box-shadow: 0 1px 4px rgba(0,0,0,0.06);
+    font-size: 8px; /* icon/text ~50% of desktop */
+    padding: 0;
+    line-height: 1;
+  }
+
+  /* If buttons contain emoji/text, ensure they scale neatly */
+  .header-action-buttons button > * {
+    transform: scale(0.9);
+  }
+}
+
 .btn-sm {
   padding: 6px 10px;
   font-size: 13px;
@@ -217,6 +270,14 @@
   width: 18px;
   height: 18px;
   accent-color: #667eea;
+}
+
+/* Permission row index */
+.perm-index {
+  width: 26px;
+  text-align: right;
+  color: #6b7280;
+  font-size: 13px;
 }
 
 /* Responsive */

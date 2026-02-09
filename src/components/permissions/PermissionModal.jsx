@@ -84,6 +84,7 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
   const [showGroupDropdown, setShowGroupDropdown] = useState(false);
   const [userGroups, setUserGroups] = useState([]); // All groups that user belongs to
   const [pendingGroups, setPendingGroups] = useState([]); // Groups pending to be added
+  const [allowedPermissionKeys, setAllowedPermissionKeys] = useState(null); // Keys from selected group's permissionDetails (null = show all)
 
   useEffect(() => {
     // init permissions (all false)
@@ -97,6 +98,7 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
     setSelectedGroupId(null);
     setUserGroups([]);
     setPendingGroups([]);
+    setAllowedPermissionKeys(null);
   }, [show]);
 
   // load existing permissions for user when opening
@@ -173,11 +175,58 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
           }
         }
         setUserGroups(foundGroups);
-        // If user belongs to groups, preselect first one
+        // If user belongs to groups, preselect first one and filter permissions
         if (foundGroups.length > 0) {
           setSelectedGroupId(foundGroups[0].id);
           setGroupName(foundGroups[0].name || '');
           setGroupSearch(foundGroups.map(g => g.name).join(', '));
+          
+          // Fetch permission details from all user's groups and combine allowed keys
+          const allAllowedKeys = new Set();
+          for (const g of foundGroups) {
+            try {
+              const res = await fetch(`${API_ENDPOINTS.permissionGroups}/${g.id}`);
+              if (res.ok) {
+                const grp = await res.json();
+                const details = grp.permissionDetails || grp.PermissionDetails || [];
+                details.forEach(d => {
+                  const key = (d.resourceKey || d.ResourceKey || '').toString().toLowerCase();
+                  if (key) allAllowedKeys.add(key);
+                });
+              }
+            } catch (er) { }
+          }
+          // Set allowed permission keys to filter display
+          setAllowedPermissionKeys([...allAllowedKeys]);
+          
+          // Also load permission values from first group for display
+          try {
+            const res = await fetch(`${API_ENDPOINTS.permissionGroups}/${foundGroups[0].id}`);
+            if (res.ok) {
+              const grp = await res.json();
+              const details = grp.permissionDetails || grp.PermissionDetails || [];
+              const next = {};
+              samplePermissions.forEach(p => {
+                const found = details.find(d => (d.resourceKey || d.ResourceKey || '').toString().toLowerCase() === p.key.toLowerCase());
+                if (found) {
+                  next[p.key] = {
+                    view: !!(found.canView ?? found.CanView),
+                    add: !!(found.canAdd ?? found.CanAdd),
+                    edit: !!(found.canEdit ?? found.CanEdit),
+                    delete: !!(found.canDelete ?? found.CanDelete),
+                    print: !!(found.canPrint ?? found.CanPrint),
+                    import: !!(found.canImport ?? found.CanImport),
+                    export: !!(found.canExport ?? found.CanExport)
+                  };
+                } else {
+                  next[p.key] = { view: false, add: false, edit: false, delete: false, print: false, import: false, export: false };
+                }
+              });
+              setPermissions(next);
+              const all = Object.values(next).length > 0 && Object.values(next).every(r => Object.values(r).every(Boolean));
+              setSelectAll(all);
+            }
+          } catch (er) { }
         }
       } catch (e) {
         // ignore
@@ -190,6 +239,33 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
 
   const togglePerm = (key, field) => {
     setPermissions(prev => ({ ...prev, [key]: { ...prev[key], [field]: !prev[key][field] } }));
+  };
+
+  // Set all permissions for a group to true
+  const handleGroupSetAll = (group) => {
+    setPermissions(prev => {
+      const next = { ...prev };
+      group.items.forEach(p => {
+        next[p.key] = { view: true, add: true, edit: true, delete: true, print: true, import: true, export: true };
+      });
+      return next;
+    });
+  };
+
+  // Set all permissions for a group to false
+  const handleGroupSetNone = (group) => {
+    setPermissions(prev => {
+      const next = { ...prev };
+      group.items.forEach(p => {
+        next[p.key] = { view: false, add: false, edit: false, delete: false, print: false, import: false, export: false };
+      });
+      return next;
+    });
+  };
+
+  // Set all permissions for a single resource (row) to true/false
+  const handleRowSetAll = (key, checked) => {
+    setPermissions(prev => ({ ...prev, [key]: { view: checked, add: checked, edit: checked, delete: checked, print: checked, import: checked, export: checked } }));
   };
 
   const handleSelectAll = (checked) => {
@@ -297,7 +373,7 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
     <div className="modal-overlay" style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 2000 }}>
       <div className="modal-content" style={{ width: '100%', maxWidth: '100%', height: '100vh', maxHeight: '100vh', borderRadius: 0, margin: 0 }}>
         <div className="modal-header" style={{ display: 'flex', alignItems: 'center', justifyContent: 'center', position: 'relative' }}>
-          <h3 style={{ margin: 0, textTransform: 'uppercase', fontWeight: 700 }}>{isGroup ? 'CẤP QUYỀN CHO NHÓM' : 'CẤP QUYỀN CHO NHÂN VIÊN'}</h3>
+          <h3 style={{ margin: 0, textTransform: 'uppercase', fontWeight: 700 }}>{isGroup ? 'CẤP QUYỀN CHO NHÓM' : `CẤP QUYỀN CHO NHÂN VIÊN${user?.name ? ': ' + user.name : ''}`}</h3>
           <button className="close-btn" onClick={onClose} style={{ position: 'absolute', right: 12, top: 8 }}>×</button>
         </div>
 
@@ -321,9 +397,13 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
                         const res = await fetch(`${API_ENDPOINTS.permissionGroups}/${g.id}`);
                         if (res.ok) {
                           const grp = await res.json();
+                          const details = grp.permissionDetails || grp.PermissionDetails || [];
+                          // Extract allowed keys from group's permissionDetails
+                          const allowedKeys = details.map(d => (d.resourceKey || d.ResourceKey || '').toString().toLowerCase());
+                          setAllowedPermissionKeys(allowedKeys);
                           const next = {};
                           samplePermissions.forEach(p => {
-                            const found = (grp.permissionDetails || grp.PermissionDetails || []).find(d => (d.resourceKey || d.ResourceKey || '').toString().toLowerCase() === p.key.toLowerCase() || (d.resourceName || d.ResourceName || '').toString().toLowerCase().includes(p.name.toLowerCase()));
+                            const found = details.find(d => (d.resourceKey || d.ResourceKey || '').toString().toLowerCase() === p.key.toLowerCase() || (d.resourceName || d.ResourceName || '').toString().toLowerCase().includes(p.name.toLowerCase()));
                             if (found) {
                               next[p.key] = {
                                 view: !!(found.canView ?? found.CanView),
@@ -403,9 +483,13 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
                           const res = await fetch(`${API_ENDPOINTS.permissionGroups}/${g.id}`);
                           if (res.ok) {
                             const grp = await res.json();
+                            const details = grp.permissionDetails || grp.PermissionDetails || [];
+                            // Extract allowed keys from group's permissionDetails
+                            const allowedKeys = details.map(d => (d.resourceKey || d.ResourceKey || '').toString().toLowerCase());
+                            setAllowedPermissionKeys(allowedKeys);
                             const next = {};
                             samplePermissions.forEach(p => {
-                              const found = (grp.permissionDetails || grp.PermissionDetails || []).find(d => (d.resourceKey || d.ResourceKey || '').toString().toLowerCase() === p.key.toLowerCase() || (d.resourceName || d.ResourceName || '').toString().toLowerCase().includes(p.name.toLowerCase()));
+                              const found = details.find(d => (d.resourceKey || d.ResourceKey || '').toString().toLowerCase() === p.key.toLowerCase() || (d.resourceName || d.ResourceName || '').toString().toLowerCase().includes(p.name.toLowerCase()));
                               if (found) {
                                 next[p.key] = {
                                   view: !!(found.canView ?? found.CanView),
@@ -462,6 +546,7 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
               setSelectedGroupId(null);
               setGroupName('');
               setGroupSearch('');
+              setAllowedPermissionKeys(null); // Reset to show all permissions
               const init = {};
               samplePermissions.forEach(p => {
                 init[p.key] = { view: false, add: false, edit: false, delete: false, print: false, import: false, export: false };
@@ -503,9 +588,13 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
                           const res = await fetch(`${API_ENDPOINTS.permissionGroups}/${g.id}`);
                           if (res.ok) {
                             const grp = await res.json();
+                            const details = grp.permissionDetails || grp.PermissionDetails || [];
+                            // Extract allowed keys from group's permissionDetails
+                            const allowedKeys = details.map(d => (d.resourceKey || d.ResourceKey || '').toString().toLowerCase());
+                            setAllowedPermissionKeys(allowedKeys);
                             const next = {};
                             samplePermissions.forEach(p => {
-                              const found = (grp.permissionDetails || grp.PermissionDetails || []).find(d => (d.resourceKey || d.ResourceKey || '').toString().toLowerCase() === p.key.toLowerCase() || (d.resourceName || d.ResourceName || '').toString().toLowerCase().includes(p.name.toLowerCase()));
+                              const found = details.find(d => (d.resourceKey || d.ResourceKey || '').toString().toLowerCase() === p.key.toLowerCase() || (d.resourceName || d.ResourceName || '').toString().toLowerCase().includes(p.name.toLowerCase()));
                               if (found) {
                                 next[p.key] = {
                                   view: !!(found.canView ?? found.CanView),
@@ -591,9 +680,17 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
                 </tr>
 
                 {/* Render each permission group with header */}
-                {(() => {
+                {/* Only show permissions when a group is selected (allowedPermissionKeys is set) */}
+                {allowedPermissionKeys !== null && (() => {
                   let rowNum = 2;
-                  return permissionGroups.map((group) => (
+                  return permissionGroups.map((group) => {
+                    // Filter items based on allowedPermissionKeys
+                    const filteredItems = group.items.filter(p => allowedPermissionKeys.includes(p.key.toLowerCase()));
+                    
+                    // Skip group if no items match
+                    if (filteredItems.length === 0) return null;
+                    
+                    return (
                     <React.Fragment key={group.groupKey}>
                       {/* Group header row */}
                       <tr style={{ background: '#e8f4fc' }}>
@@ -609,33 +706,23 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
                         <td style={{ padding: 8, border: '1px solid #eaeaea' }}></td>
                         <td style={{ padding: 8, border: '1px solid #eaeaea' }}></td>
                         <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
-                          <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => {
-                            // mark all in this group true
-                            setPermissions(prev => {
-                              const next = { ...prev };
-                              group.items.forEach(p => {
-                                next[p.key] = { view: true, add: true, edit: true, delete: true, print: true, import: true, export: true };
-                              });
-                              return next;
-                            });
-                          }}>Tất cả</button>
+                          <input
+                            type="checkbox"
+                            title="Chọn tất cả quyền trong nhóm"
+                            onChange={(e) => handleGroupSetAll(e.target.checked ? { ...group, items: filteredItems } : { items: [] })}
+                          />
                         </td>
                         <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
-                          <button className="btn btn-danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => {
-                            // mark all in this group false
-                            setPermissions(prev => {
-                              const next = { ...prev };
-                              group.items.forEach(p => {
-                                next[p.key] = { view: false, add: false, edit: false, delete: false, print: false, import: false, export: false };
-                              });
-                              return next;
-                            });
-                          }}>Không</button>
+                          <input
+                            type="checkbox"
+                            title="Không (bỏ hết quyền trong nhóm)"
+                            onChange={(e) => handleGroupSetNone(e.target.checked ? { ...group, items: filteredItems } : { items: [] })}
+                          />
                         </td>
                       </tr>
 
                       {/* Permission items in group */}
-                      {group.items.map((p) => {
+                      {filteredItems.map((p) => {
                         const currentRowNum = rowNum++;
                         return (
                           <tr key={p.key} style={{ background: '#fff' }}>
@@ -664,20 +751,21 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
                               <input type="checkbox" checked={permissions[p.key]?.export || false} onChange={() => togglePerm(p.key, 'export')} />
                             </td>
                             <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
-                              <button className="btn btn-primary" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => {
-                                setPermissions(prev => ({ ...prev, [p.key]: { view: true, add: true, edit: true, delete: true, print: true, import: true, export: true } }));
-                              }}>Tất cả</button>
+                              <input type="checkbox" title="Tất cả" checked={
+                                permissions[p.key] && Object.values(permissions[p.key]).every(Boolean)
+                              } onChange={(e) => handleRowSetAll(p.key, e.target.checked)} />
                             </td>
                             <td style={{ padding: 8, border: '1px solid #eaeaea', textAlign: 'center' }}>
-                              <button className="btn btn-danger" style={{ fontSize: 11, padding: '4px 8px' }} onClick={() => {
-                                setPermissions(prev => ({ ...prev, [p.key]: { view: false, add: false, edit: false, delete: false, print: false, import: false, export: false } }));
-                              }}>Không</button>
+                              <input type="checkbox" title="Không" checked={
+                                permissions[p.key] && Object.values(permissions[p.key]).every(v => !v)
+                              } onChange={(e) => handleRowSetAll(p.key, !e.target.checked ? true : false)} />
                             </td>
                           </tr>
                         );
                       })}
                     </React.Fragment>
-                  ));
+                  );
+                  });
                 })()}
               </tbody>
             </table>

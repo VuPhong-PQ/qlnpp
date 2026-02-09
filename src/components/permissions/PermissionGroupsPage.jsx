@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import ExcelJS from 'exceljs';
 import { API_ENDPOINTS, api } from '../../config/api';
 import '../setup/SetupPage.css';
 import './PermissionStyles.css';
@@ -140,6 +141,98 @@ export default function PermissionGroupsPage() {
     }
   };
 
+  // Export permission groups and their detailed permissions to Excel
+  const exportGroups = async () => {
+    try {
+      const wb = new ExcelJS.Workbook();
+      const ws = wb.addWorksheet('PermissionGroups');
+
+      // Header
+      ws.columns = [
+        { header: 'GroupId', key: 'groupId', width: 12 },
+        { header: 'GroupName', key: 'groupName', width: 30 },
+        { header: 'Description', key: 'description', width: 40 },
+        { header: 'ResourceKey', key: 'resourceKey', width: 30 },
+        { header: 'ResourceName', key: 'resourceName', width: 30 },
+        { header: 'CanView', key: 'canView', width: 10 },
+        { header: 'CanAdd', key: 'canAdd', width: 10 },
+        { header: 'CanEdit', key: 'canEdit', width: 10 },
+        { header: 'CanDelete', key: 'canDelete', width: 10 },
+        { header: 'CanPrint', key: 'canPrint', width: 10 },
+        { header: 'CanImport', key: 'canImport', width: 10 },
+        { header: 'CanExport', key: 'canExport', width: 10 }
+      ];
+
+      // style header
+      ws.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      ws.getRow(1).fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF1976D2' } };
+
+      // Fetch fresh groups with details
+      const srcGroups = await api.get(API_ENDPOINTS.permissionGroups) || [];
+      for (const g of srcGroups) {
+        try {
+          const res = await fetch(`${API_ENDPOINTS.permissionGroups}/${g.id}`);
+          let grp = g;
+          if (res.ok) grp = await res.json();
+          const details = grp.permissionDetails || grp.PermissionDetails || [];
+          if (details.length === 0) {
+            // add one row with empty details
+            ws.addRow({ groupId: grp.id, groupName: grp.name, description: grp.description || '', resourceKey: '', resourceName: '', canView: '', canAdd: '', canEdit: '', canDelete: '', canPrint: '', canImport: '', canExport: '' });
+          } else {
+            for (const d of details) {
+              ws.addRow({
+                groupId: grp.id,
+                groupName: grp.name,
+                description: grp.description || '',
+                resourceKey: d.resourceKey || d.ResourceKey || '',
+                resourceName: d.resourceName || d.ResourceName || '',
+                canView: d.canView ?? d.CanView ?? false,
+                canAdd: d.canAdd ?? d.CanAdd ?? false,
+                canEdit: d.canEdit ?? d.CanEdit ?? false,
+                canDelete: d.canDelete ?? d.CanDelete ?? false,
+                canPrint: d.canPrint ?? d.CanPrint ?? false,
+                canImport: d.canImport ?? d.CanImport ?? false,
+                canExport: d.canExport ?? d.CanExport ?? false
+              });
+            }
+          }
+        } catch (e) {
+          console.error('Failed to load group details for export', g.id, e);
+        }
+      }
+
+      // Add borders to all cells and auto-filter
+      ws.eachRow((row, rowNumber) => {
+        row.eachCell((cell) => {
+          cell.border = {
+            top: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+            left: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+            bottom: { style: 'thin', color: { argb: 'FFCCCCCC' } },
+            right: { style: 'thin', color: { argb: 'FFCCCCCC' } }
+          };
+        });
+      });
+      ws.autoFilter = {
+        from: 'A1',
+        to: ws.getRow(1).cellCount ? ws.getRow(1).getCell(ws.getRow(1).cellCount)._address.replace(/\d+/,'') + '1' : 'L1'
+      };
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `permission-groups-${new Date().toISOString().slice(0,10)}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      window.URL.revokeObjectURL(url);
+    } catch (err) {
+      console.error('Export failed', err);
+      alert('Xuất file thất bại');
+    }
+  };
+
   const filtered = groups.filter(g => {
     if (!search) return true;
     const q = search.toLowerCase();
@@ -154,15 +247,120 @@ export default function PermissionGroupsPage() {
 
   return (
     <div className="setup-page">
-      <div className="page-header" style={{ marginBottom: 16 }}>
+      <div className="page-header" style={{ marginBottom: 16, position: 'relative', paddingRight: 40 }}>
         <h2 style={{ fontSize: 18, fontWeight: 'bold', color: '#333', margin: 0 }}>DANH SÁCH NHÓM QUYỀN</h2>
         <span style={{ fontSize: 14, color: '#666', marginTop: 4 }}>Tổng {filtered.length}</span>
+
+        {/* Action buttons aligned horizontally with header */}
+        <div className="header-action-buttons">
+          <button 
+            onClick={handleAdd}
+            style={{
+              width: 44,
+              height: 36,
+              borderRadius: 6,
+              background: '#3b82f6',
+              color: '#fff',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(59,130,246,0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 18
+            }}
+            title="Thêm mới"
+          >
+            +
+          </button>
+          <button 
+            onClick={loadGroups}
+            style={{
+              width: 44,
+              height: 36,
+              borderRadius: 6,
+              background: '#10b981',
+              color: '#fff',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(16,185,129,0.2)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 16
+            }}
+            title="Làm mới"
+          >
+            🔄
+          </button>
+          <button 
+            onClick={exportGroups}
+            style={{
+              width: 44,
+              height: 36,
+              borderRadius: 6,
+              background: '#ef4444',
+              color: '#fff',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(239,68,68,0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 16
+            }}
+            title="Export danh sách nhóm quyền"
+          >
+            📤
+          </button>
+          <button 
+            style={{
+              width: 44,
+              height: 36,
+              borderRadius: 6,
+              background: '#8b5cf6',
+              color: '#fff',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(139,92,246,0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 16
+            }}
+            title="Import Excel"
+          >
+            📥
+          </button>
+          <button 
+            style={{
+              width: 44,
+              height: 36,
+              borderRadius: 6,
+              background: '#f59e0b',
+              color: '#fff',
+              border: 'none',
+              cursor: 'pointer',
+              boxShadow: '0 2px 8px rgba(245,158,11,0.15)',
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              fontSize: 16
+            }}
+            title="Cài đặt"
+          >
+            ⚙️
+          </button>
+        </div>
       </div>
 
-      <div className="table-container" style={{ background: '#fff', borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
+      <div className="table-container" style={{ position: 'relative', background: '#fff', borderRadius: 8, boxShadow: '0 1px 3px rgba(0,0,0,0.1)' }}>
         <table className="data-table" style={{ width: '100%' }}>
           <thead>
             <tr style={{ background: '#f8f9fa' }}>
+              <th style={{ padding: '12px 12px', textAlign: 'center', borderBottom: '1px solid #e9ecef', width: 60 }}>
+                STT
+              </th>
               <th style={{ padding: '12px 16px', textAlign: 'left', borderBottom: '1px solid #e9ecef' }}>
                 Tên nhóm quyền
                 <span style={{ marginLeft: 8, cursor: 'pointer', opacity: 0.5 }}>🔍</span>
@@ -178,12 +376,15 @@ export default function PermissionGroupsPage() {
           </thead>
           <tbody>
             {loading ? (
-              <tr><td colSpan={3} style={{ textAlign: 'center', padding: 40 }}>Đang tải...</td></tr>
+              <tr><td colSpan={4} style={{ textAlign: 'center', padding: 40 }}>Đang tải...</td></tr>
             ) : paginatedData.length === 0 ? (
-              <tr><td colSpan={3} style={{ textAlign: 'center', padding: 40 }}>Không có dữ liệu</td></tr>
+              <tr><td colSpan={4} style={{ textAlign: 'center', padding: 40 }}>Không có dữ liệu</td></tr>
             ) : (
-              paginatedData.map((g) => (
+              paginatedData.map((g, idx) => {
+                const rowNumber = startIndex + idx + 1;
+                return (
                 <tr key={g.id} style={{ borderBottom: '1px solid #e9ecef' }}>
+                  <td style={{ padding: '12px 12px', textAlign: 'center', color: '#6b7280' }}>{rowNumber}</td>
                   <td style={{ padding: '12px 16px' }}>{g.name}</td>
                   <td style={{ padding: '12px 16px', color: '#666' }}>{g.description}</td>
                   <td style={{ padding: '12px 16px', textAlign: 'center' }}>
@@ -229,7 +430,8 @@ export default function PermissionGroupsPage() {
                     </div>
                   </td>
                 </tr>
-              ))
+                );
+              })
             )}
           </tbody>
         </table>
@@ -283,96 +485,7 @@ export default function PermissionGroupsPage() {
         </div>
       </div>
 
-      {/* Floating Action Buttons */}
-      <div style={{ 
-        position: 'fixed', 
-        right: 24, 
-        top: '50%', 
-        transform: 'translateY(-50%)',
-        display: 'flex',
-        flexDirection: 'column',
-        gap: 12,
-        zIndex: 100
-      }}>
-        <button 
-          onClick={handleAdd}
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: '50%',
-            background: '#3b82f6',
-            color: '#fff',
-            border: 'none',
-            cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(59,130,246,0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 20
-          }}
-          title="Thêm mới"
-        >
-          +
-        </button>
-        <button 
-          onClick={loadGroups}
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: '50%',
-            background: '#10b981',
-            color: '#fff',
-            border: 'none',
-            cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(16,185,129,0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 18
-          }}
-          title="Làm mới"
-        >
-          🔄
-        </button>
-        <button 
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: '50%',
-            background: '#8b5cf6',
-            color: '#fff',
-            border: 'none',
-            cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(139,92,246,0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 18
-          }}
-          title="Import Excel"
-        >
-          📥
-        </button>
-        <button 
-          style={{
-            width: 48,
-            height: 48,
-            borderRadius: '50%',
-            background: '#f59e0b',
-            color: '#fff',
-            border: 'none',
-            cursor: 'pointer',
-            boxShadow: '0 2px 8px rgba(245,158,11,0.4)',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            fontSize: 18
-          }}
-          title="Cài đặt"
-        >
-          ⚙️
-        </button>
-      </div>
+      {/* Floating buttons removed from table container; now in header */}
 
       {/* Modal thêm/sửa nhóm quyền */}
       {showModal && (
@@ -647,7 +760,9 @@ function GroupModal({ show, onClose, onSave, initialData }) {
                     </div>
 
                     {/* Group items */}
-                    {group.items.map((perm) => (
+                    {group.items.map((perm) => {
+                      const globalIndex = ALL_PERMISSIONS.findIndex(p => p.key === perm.key) + 1;
+                      return (
                       <div 
                         key={perm.key}
                         style={{
@@ -660,6 +775,7 @@ function GroupModal({ show, onClose, onSave, initialData }) {
                         }}
                         onClick={() => togglePermission(perm.key)}
                       >
+                        <div className="perm-index" style={{ marginRight: 8 }}>{globalIndex}.</div>
                         <input
                           type="checkbox"
                           checked={form.selectedPermissions.includes(perm.key)}
@@ -668,7 +784,8 @@ function GroupModal({ show, onClose, onSave, initialData }) {
                         />
                         <span style={{ fontSize: 14, color: '#333' }}>{perm.name}</span>
                       </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 );
               })}
