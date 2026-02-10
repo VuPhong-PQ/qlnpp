@@ -130,7 +130,7 @@ const PrintOrder = () => {
           currentUser = JSON.parse(userStr);
         }
       } catch (e) {
-        console.error('Error parsing user from localStorage:', e);
+        // parsing user from localStorage failed
       }
       
       try {
@@ -143,7 +143,7 @@ const PrintOrder = () => {
           );
         }
       } catch (e) {
-        console.error('Error parsing permissions from localStorage:', e);
+        // parsing permissions from localStorage failed
       }
       
       if (!isAdmin && currentUser) {
@@ -164,19 +164,17 @@ const PrintOrder = () => {
       }
       
       const url = `${API_BASE_URL}/Orders${params.toString() ? '?' + params.toString() : ''}`;
-      console.log('Fetching orders from:', url);
       const response = await fetch(url);
       if (response.ok) {
         const ordersData = await response.json();
-        console.log('Fetched orders:', ordersData.length, ordersData);
         setOrders(ordersData);
         // Apply initial date filter
         applyFilters(ordersData, searchData);
       } else {
-        console.error('Failed to fetch orders:', response.status, response.statusText);
+        // failed to fetch orders: response not ok
       }
     } catch (error) {
-      console.error('Error fetching orders:', error);
+      // error fetching orders
     } finally {
       setLoading(false);
     }
@@ -191,7 +189,7 @@ const PrintOrder = () => {
         setCustomers(data);
       }
     } catch (error) {
-      console.error('Error fetching customers:', error);
+      // error fetching customers
     }
   };
 
@@ -204,7 +202,7 @@ const PrintOrder = () => {
         setCustomerGroups(data);
       }
     } catch (error) {
-      console.error('Error fetching customer groups:', error);
+      // error fetching customer groups
     }
   };
 
@@ -217,7 +215,7 @@ const PrintOrder = () => {
         setUsers(data);
       }
     } catch (error) {
-      console.error('Error fetching users:', error);
+      // error fetching users
     }
   };
 
@@ -232,7 +230,7 @@ const PrintOrder = () => {
         }
       }
     } catch (error) {
-      console.error('Error fetching company info:', error);
+      // error fetching company info
     }
   };
 
@@ -245,7 +243,7 @@ const PrintOrder = () => {
         setUnits(data);
       }
     } catch (error) {
-      console.error('Error fetching units:', error);
+      // error fetching units
     }
   };
 
@@ -313,9 +311,14 @@ const PrintOrder = () => {
     return new Intl.NumberFormat('vi-VN').format(num);
   };
 
+  // Get customer group name (component-level helper)
+  const getCustomerGroupName = (code) => {
+    const g = (customerGroups || []).find(cg => String(cg.code) === String(code));
+    return g ? g.name : (code || '-');
+  };
+
   // Apply filters
   const applyFilters = (ordersToFilter, filters) => {
-    console.log('applyFilters called with:', ordersToFilter.length, 'orders, filters:', filters);
     let filtered = [...ordersToFilter];
 
     // Filter by order number
@@ -332,13 +335,11 @@ const PrintOrder = () => {
       const endDate = new Date(filters.toDate);
       endDate.setHours(23, 59, 59, 999);
       
-      console.log('Date filter:', startDate, 'to', endDate);
       filtered = filtered.filter(order => {
         if (!order.orderDate) return false;
         const orderDate = new Date(order.orderDate);
         return orderDate >= startDate && orderDate <= endDate;
       });
-      console.log('After date filter:', filtered.length);
     }
 
     // Filter by customer group
@@ -384,11 +385,9 @@ const PrintOrder = () => {
 
     // Filter by approved status
     if (filters.approved) {
-      console.log('Approved filter - before:', filtered.length, 'statuses:', [...new Set(filtered.map(o => o.status))]);
       filtered = filtered.filter(order => 
         order.status && order.status.toLowerCase() === 'đã duyệt'
       );
-      console.log('After approved filter:', filtered.length);
     }
 
     // Filter by print status
@@ -540,7 +539,7 @@ const PrintOrder = () => {
         worksheet.addRow({
           orderDate: formatDate(order.orderDate),
           orderNumber: order.orderNumber,
-          customerGroup: order.customerGroup,
+          customerGroup: getCustomerGroupName(order.customerGroup),
           salesSchedule: order.salesSchedule || '-',
           customerName: order.customerName || order.customer,
           vehicle: order.vehicle || '-',
@@ -580,7 +579,7 @@ const PrintOrder = () => {
       link.click();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      console.error('Error exporting Excel:', error);
+      // error exporting Excel
     }
   };
 
@@ -690,11 +689,7 @@ const PrintOrder = () => {
         return new Intl.NumberFormat('vi-VN').format(num);
       };
 
-      // Get customer group name
-      const getCustomerGroupName = (code) => {
-        const g = (customerGroups || []).find(cg => String(cg.code) === String(code));
-        return g ? g.name : code;
-      };
+      // (use component-level getCustomerGroupName)
 
       // Company info
       const compName = companyInfo?.name || 'NPP THỊNH PHÚ QUỐC';
@@ -776,8 +771,11 @@ const PrintOrder = () => {
         const totalKg = (parseFloat(order.totalKg) || 0) + (parseFloat(order.promoTotalKg) || 0);
         const totalM3 = (parseFloat(order.totalM3) || 0) + (parseFloat(order.promoTotalM3) || 0);
 
+        // In 2 liên cho mỗi đơn hàng
+        for (let lien = 1; lien <= 2; lien++) {
+        const isFirstPage = idx === 0 && lien === 1;
         printContent += `
-          <div class="invoice-page" ${idx > 0 ? 'style="page-break-before: always;"' : ''}>
+          <div class="invoice-page" ${!isFirstPage ? 'style="page-break-before: always;"' : ''}>
             <div class="header-wrapper">
               <div class="header-main">
                 <div class="header-row">
@@ -797,7 +795,7 @@ const PrintOrder = () => {
             </div>
               
               <div class="title">PHIẾU GIAO HÀNG KIỂM XÁC NHẬN CÔNG NỢ</div>
-              <div class="subtitle">Liên: 1</div>
+              <div class="subtitle">Liên: ${lien}</div>
               
               <div class="customer-section">
                 <div class="customer-info">
@@ -924,6 +922,7 @@ const PrintOrder = () => {
               </div>
           </div>
         `;
+        } // end for lien
       });
 
       printContent += '</body></html>';
@@ -950,14 +949,14 @@ const PrintOrder = () => {
           body: JSON.stringify(orderIds)
         });
       } catch (e) {
-        console.error('Error updating print count:', e);
+        // error updating print count
       }
       
       // Refresh orders to show updated print count
       fetchOrders();
       
     } catch (error) {
-      console.error('Error printing orders:', error);
+      // error printing orders
       alert('Lỗi khi in đơn hàng: ' + error.message);
     } finally {
       setLoading(false);
@@ -1559,7 +1558,7 @@ const PrintOrder = () => {
                         {order.orderNumber}
                       </a>
                     </td>
-                    <td>{order.customerGroup || '-'}</td>
+                    <td>{getCustomerGroupName(order.customerGroup) || '-'}</td>
                     <td>{order.salesSchedule || '-'}</td>
                     <td>{order.customerName || order.customer || '-'}</td>
                     <td>{order.vehicle || '-'}</td>
