@@ -59,7 +59,7 @@ const CostCalculation = () => {
   };
 
   const handleSearch = () => {
-    console.log('Tìm kiếm với khoảng thời gian:', searchDateRange);
+    // perform search (debug logs removed)
   };
 
   const handleCalculateCost = () => {

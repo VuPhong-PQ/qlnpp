@@ -59,7 +59,7 @@ const PrintOrderByVehicle = () => {
 
   // Hàm xử lý tạo phiếu thu
   const handleCreateReceipt = () => {
-    console.log('Tạo phiếu thu với dữ liệu:', createReceiptData);
+    // create receipt with data (debug logs removed)
     // Logic tạo phiếu thu
     closeCreateReceiptModal();
   };
@@ -78,7 +78,7 @@ const PrintOrderByVehicle = () => {
 
   // Hàm xử lý tìm kiếm trong modal
   const handleModalSearch = () => {
-    console.log('Tìm kiếm với dữ liệu:', modalSearchData);
+    // perform modal search (debug logs removed)
     closeModal();
   };
 
@@ -127,14 +127,14 @@ const PrintOrderByVehicle = () => {
 
   // Hàm xử lý sửa đơn hàng
   const handleEditOrder = (orderId) => {
-    console.log('Sửa đơn hàng:', orderId);
+    // edit order (debug logs removed)
     // Logic sửa đơn hàng
   };
 
   // Hàm xử lý xóa đơn hàng
   const handleDeleteOrder = (orderId) => {
     if (window.confirm('Bạn có chắc chắn muốn xóa đơn hàng này khỏi danh sách in?')) {
-      console.log('Xóa đơn hàng:', orderId);
+      // delete order (debug logs removed)
       // Logic xóa đơn hàng
     }
   };
@@ -320,8 +320,7 @@ const PrintOrderByVehicle = () => {
               </thead>
               <tbody>
                 {ordersList.map((order) => {
-                  console.log('Rendering order:', order.id, 'Actions visible:', columnVisibility.actions);
-                  return (
+                        return (
                   <tr key={order.id} className="order-row">
                     {columnVisibility.fromDate && (
                       <td>

@@ -73,6 +73,7 @@ const SaleManagement = () => {
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [selectedStartDate, setSelectedStartDate] = useState(new Date(2026, 0, 1));
   const [selectedEndDate, setSelectedEndDate] = useState(new Date(2026, 0, 31));
+  const [calendarBaseDate, setCalendarBaseDate] = useState(new Date());
   const datePickerRef = useRef(null);
 
   const [orders, setOrders] = useState([]);
@@ -1193,6 +1194,24 @@ const SaleManagement = () => {
     setShowDatePicker(!showDatePicker);
   };
 
+  const handleDateRangeInputChange = (e) => {
+    const value = e.target.value;
+    setSearchData(prev => ({ ...prev, dateRange: value }));
+    
+    // Parse date range: dd/mm/yyyy - dd/mm/yyyy
+    const match = value.match(/^(\d{2})\/(\d{2})\/(\d{4})\s*-\s*(\d{2})\/(\d{2})\/(\d{4})$/);
+    if (match) {
+      const startDate = new Date(parseInt(match[3]), parseInt(match[2]) - 1, parseInt(match[1]));
+      const endDate = new Date(parseInt(match[6]), parseInt(match[5]) - 1, parseInt(match[4]));
+      
+      if (!isNaN(startDate.getTime()) && !isNaN(endDate.getTime())) {
+        setSelectedStartDate(startDate);
+        setSelectedEndDate(endDate);
+        setCalendarBaseDate(startDate);
+      }
+    }
+  };
+
   const handleDateSelect = (date, type) => {
     const newDate = new Date(date);
     
@@ -1225,7 +1244,7 @@ const SaleManagement = () => {
     }
   };
 
-  const renderCalendar = (date, monthOffset = 0) => {
+  const renderCalendar = (date, monthOffset = 0, showNav = false) => {
     const currentDate = new Date(date);
     currentDate.setMonth(currentDate.getMonth() + monthOffset);
     
@@ -1241,6 +1260,18 @@ const SaleManagement = () => {
       'Tháng 01', 'Tháng 02', 'Tháng 03', 'Tháng 04', 'Tháng 05', 'Tháng 06',
       'Tháng 07', 'Tháng 08', 'Tháng 09', 'Tháng 10', 'Tháng 11', 'Tháng 12'
     ];
+
+    const handleNavPrev = () => {
+      const newDate = new Date(calendarBaseDate);
+      newDate.setMonth(newDate.getMonth() - 1);
+      setCalendarBaseDate(newDate);
+    };
+
+    const handleNavNext = () => {
+      const newDate = new Date(calendarBaseDate);
+      newDate.setMonth(newDate.getMonth() + 1);
+      setCalendarBaseDate(newDate);
+    };
     
     const days = [];
     const current = new Date(startDate);
@@ -1272,20 +1303,18 @@ const SaleManagement = () => {
             isStart ? 'range-start' : ''
           } ${isEnd ? 'range-end' : ''}`}
           onClick={() => {
-            if (isCurrentMonth) {
-              if (!selectedStartDate || (selectedStartDate && selectedEndDate)) {
-                // Start new selection
-                setSelectedStartDate(dayDate);
-                setSelectedEndDate(null);
+            if (!selectedStartDate || (selectedStartDate && selectedEndDate)) {
+              // Start new selection
+              setSelectedStartDate(dayDate);
+              setSelectedEndDate(null);
+            } else {
+              // Set end date
+              if (dayDate >= selectedStartDate) {
+                handleDateSelect(dayDate, 'end');
               } else {
-                // Set end date
-                if (dayDate >= selectedStartDate) {
-                  handleDateSelect(dayDate, 'end');
-                } else {
-                  // If clicked date is before start, make it new start
-                  setSelectedStartDate(dayDate);
-                  setSelectedEndDate(selectedStartDate);
-                }
+                // If clicked date is before start, make it new start
+                setSelectedStartDate(dayDate);
+                setSelectedEndDate(selectedStartDate);
               }
             }
           }}
@@ -1300,7 +1329,9 @@ const SaleManagement = () => {
     return (
       <div className="calendar-month">
         <div className="calendar-header">
+          {showNav && <button type="button" className="calendar-nav-btn" onClick={handleNavPrev}>◀</button>}
           <h4>{monthNames[month]} {year}</h4>
+          {showNav && <button type="button" className="calendar-nav-btn" onClick={handleNavNext}>▶</button>}
         </div>
         <div className="calendar-weekdays">
           <div>CN</div>
@@ -1360,13 +1391,14 @@ const SaleManagement = () => {
                     <input
                       type="text"
                       value={searchData.dateRange}
+                      onChange={handleDateRangeInputChange}
                       className="date-range-display"
-                      readOnly
+                      placeholder="dd/mm/yyyy - dd/mm/yyyy"
                     />
                   </div>
                   <div className="calendar-container">
-                    {renderCalendar(selectedStartDate, 0)}
-                    {renderCalendar(selectedStartDate, 1)}
+                    {renderCalendar(calendarBaseDate, 0, true)}
+                    {renderCalendar(calendarBaseDate, 1, false)}
                   </div>
                   <div className="date-picker-actions">
                     <button 

@@ -67,6 +67,8 @@ namespace QlnppApi.Controllers
                 o.CustomerGroup,
                 o.SalesSchedule,
                 o.PrintOrder,
+                o.PrintCount,
+                o.PrintDate,
                 o.DeliveryVehicle,
                 o.PriceType,
                 o.ActiveTab,
@@ -266,7 +268,8 @@ namespace QlnppApi.Controllers
             catch (Exception ex)
             {
                 await transaction.RollbackAsync();
-                return BadRequest($"Error creating order with items: {ex.Message}");
+                var innerMessage = ex.InnerException?.Message ?? ex.Message;
+                return BadRequest($"Error creating order with items: {innerMessage}");
             }
         }
 
@@ -442,6 +445,38 @@ namespace QlnppApi.Controllers
                 .ToListAsync();
 
             return orders;
+        }
+
+        // PUT: api/Orders/print - Mark orders as printed (update PrintCount and PrintDate)
+        [HttpPut("print")]
+        public async Task<ActionResult> PrintOrders([FromBody] List<int> orderIds)
+        {
+            if (orderIds == null || !orderIds.Any())
+            {
+                return BadRequest("No order IDs provided");
+            }
+
+            var orders = await _context.Orders
+                .Where(o => orderIds.Contains(o.Id))
+                .ToListAsync();
+
+            if (!orders.Any())
+            {
+                return NotFound("No orders found with the provided IDs");
+            }
+
+            foreach (var order in orders)
+            {
+                order.PrintCount++;
+                order.PrintDate = DateTime.Now;
+            }
+
+            await _context.SaveChangesAsync();
+
+            return Ok(new { 
+                message = $"Successfully marked {orders.Count} order(s) as printed",
+                printedOrders = orders.Select(o => new { o.Id, o.OrderNumber, o.PrintCount, o.PrintDate })
+            });
         }
     }
 }

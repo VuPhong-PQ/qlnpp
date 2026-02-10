@@ -19,6 +19,8 @@ namespace QlnppApi.Models
         public string CustomerGroup { get; set; } = string.Empty;
         public string SalesSchedule { get; set; } = string.Empty;
         public int PrintOrder { get; set; }
+        public int PrintCount { get; set; } // Số lần in
+        public DateTime? PrintDate { get; set; } // Ngày in gần nhất
         public string DeliveryVehicle { get; set; } = string.Empty;
         public string PriceType { get; set; } = string.Empty; // retail or wholesale
         public string ActiveTab { get; set; } = string.Empty; // products or promotions

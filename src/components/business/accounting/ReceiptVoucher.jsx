@@ -66,7 +66,7 @@ const ReceiptVoucher = () => {
 
   // Hàm xử lý tìm kiếm hóa đơn
   const handleInvoiceSearch = () => {
-    console.log('Tìm kiếm hóa đơn với tiêu chí:', invoiceSearchCriteria);
+    // perform invoice search (debug logs removed)
     // Logic tìm kiếm hóa đơn
   };
 
@@ -90,7 +90,7 @@ const ReceiptVoucher = () => {
 
   // Hàm xử lý tạo phiếu thu
   const handleCreateReceipt = () => {
-    console.log('Tạo phiếu thu với dữ liệu:', createReceiptData);
+    // create receipt (debug logs removed)
     // Logic tạo phiếu thu
     closeCreateReceiptModal();
   };

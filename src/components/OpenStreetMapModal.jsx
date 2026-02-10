@@ -42,7 +42,6 @@ const OpenStreetMapModal = ({ isOpen, onClose, customer }) => {
       const match = code.match(/^([23456789CFGHJMPQRVWX]{4})\+([23456789CFGHJMPQRVWX]{2,3})$/);
       
       if (!match) {
-        console.log('Plus Code format not matched:', code);
         return null;
       }
 
@@ -87,7 +86,6 @@ const OpenStreetMapModal = ({ isOpen, onClose, customer }) => {
       lat += 0.00125;
       lng += 0.025;
       
-      console.log('Decoded Plus Code:', plusCode, '→', [lat, lng]);
       return [lat, lng];
     } catch (err) {
       console.error('Error decoding Plus Code:', err);
@@ -109,10 +107,9 @@ const OpenStreetMapModal = ({ isOpen, onClose, customer }) => {
           `${API_ENDPOINTS.geocoding}/parse-coordinates?input=${encodeURIComponent(position)}`
         );
         
-        if (response.ok) {
+          if (response.ok) {
           const data = await response.json();
           if (data.success && data.latitude && data.longitude) {
-            console.log('Backend parsed:', data);
             setLoading(false);
             return [data.latitude, data.longitude];
           }
@@ -201,10 +198,8 @@ const OpenStreetMapModal = ({ isOpen, onClose, customer }) => {
 
   useEffect(() => {
     const loadCoordinates = async () => {
-      if (customer?.position) {
-        console.log('Loading coordinates from position:', customer.position);
+        if (customer?.position) {
         const coords = await getCoordinates(customer.position);
-        console.log('Parsed coordinates:', coords);
         setCoordinates(coords);
       }
     };

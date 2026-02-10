@@ -77,17 +77,14 @@ export async function getBackupFiles() {
 }
 
 export async function uploadBackupFile(file) {
-  console.log('Uploading file:', file.name, file.size);
   const fd = new FormData();
   fd.append('file', file);
   
   try {
     const r = await fetch(base + '/upload', { method: 'POST', body: fd });
-    console.log('Upload response status:', r.status);
     
     // Read response once and handle both success and error cases
     const responseText = await r.text();
-    console.log('Upload response text:', responseText);
     
     let result;
     try {
@@ -100,7 +97,7 @@ export async function uploadBackupFile(file) {
       throw new Error(result.error || result.message || `HTTP ${r.status}`);
     }
     
-    console.log('Upload result:', result);
+    
     return result;
   } catch (error) {
     console.error('Upload error:', error);

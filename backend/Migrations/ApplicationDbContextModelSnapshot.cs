@@ -766,6 +766,12 @@ namespace QlnppApi.Migrations
                         .IsRequired()
                         .HasColumnType("nvarchar(max)");
 
+                    b.Property<int>("PrintCount")
+                        .HasColumnType("int");
+
+                    b.Property<DateTime?>("PrintDate")
+                        .HasColumnType("datetime2");
+
                     b.Property<int>("PrintOrder")
                         .HasColumnType("int");
 

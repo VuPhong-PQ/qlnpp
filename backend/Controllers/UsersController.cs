@@ -113,6 +113,45 @@ namespace QlnppApi.Controllers
             }
         }
 
+        [HttpDelete]
+        public async Task<IActionResult> DeleteAll()
+        {
+            try
+            {
+                var users = await _db.Users.ToListAsync();
+                if (users == null || users.Count == 0)
+                    return NoContent();
+
+                _db.Users.RemoveRange(users);
+                await _db.SaveChangesAsync();
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+ 
+        // Alternative endpoint for environments that disallow DELETE on collection
+        [HttpPost("delete-all")]
+        public async Task<IActionResult> DeleteAllPost()
+        {
+            try
+            {
+                var users = await _db.Users.ToListAsync();
+                if (users == null || users.Count == 0)
+                    return NoContent();
+
+                _db.Users.RemoveRange(users);
+                await _db.SaveChangesAsync();
+                return NoContent();
+            }
+            catch (Exception ex)
+            {
+                return StatusCode(500, new { error = ex.Message });
+            }
+        }
+
         private static string HashPasswordHex(string password)
         {
             using var sha256 = SHA256.Create();

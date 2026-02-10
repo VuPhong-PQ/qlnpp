@@ -110,7 +110,7 @@ const ExpenseVoucher = () => {
 
   // Hàm xử lý lưu phiếu chi
   const handleSaveExpense = () => {
-    console.log('Saving expense:', expenseFormData);
+    // save expense (debug logs removed)
     // Xử lý lưu dữ liệu ở đây
     closeCreateExpenseModal();
   };
@@ -813,7 +813,7 @@ const ExpenseVoucher = () => {
               </button>
               <button 
                 className="action-button print-btn"
-                onClick={() => console.log('Print expense')}
+                onClick={() => { /* print expense (debug logs removed) */ }}
               >
                 🖨️ In
               </button>

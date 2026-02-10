@@ -79,6 +79,28 @@ export default function Users() {
     }
   };
 
+  // Delete all users in system
+  const handleDeleteAll = async () => {
+    const confirm = window.confirm('Xác nhận xóa TOÀN BỘ nhân viên trong hệ thống? Hành động này không thể hoàn tác.');
+    if (!confirm) return;
+    try {
+      setLoading(true);
+      // Use POST /delete-all as some servers disallow DELETE on collection
+      const res = await fetch(`${API_ENDPOINTS.users}/delete-all`, { method: 'POST' });
+      if (!res.ok) {
+        const txt = await res.text();
+        throw new Error(txt || 'Xóa toàn bộ thất bại');
+      }
+      await loadUsers();
+      alert('Đã xóa toàn bộ nhân viên');
+    } catch (err) {
+      console.error('Delete all failed', err);
+      alert('Xóa toàn bộ thất bại: ' + (err.message || err));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleSave = async (data) => {
     try {
       setLoading(true);
@@ -323,6 +345,7 @@ export default function Users() {
             <button className="btn btn-primary" onClick={handleAdd}>+ Thêm nhân viên</button>
             <button className="btn btn-success" onClick={handleExport} style={{ marginLeft: 8 }}>📤 Export Excel</button>
             <button className="btn btn-secondary" onClick={handleImportClick} style={{ marginLeft: 8 }}>📥 Import NV</button>
+            <button className="btn btn-danger" onClick={handleDeleteAll} style={{ marginLeft: 8 }} disabled={loading}>🗑 Xóa toàn bộ NV</button>
             <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".xlsx,.xls" onChange={handleFileChange} />
             {selectedIds && selectedIds.size > 0 && (
               <div style={{ display: 'inline-block', marginLeft: 12, color: '#555' }}>Đã chọn: {selectedIds.size}</div>

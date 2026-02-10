@@ -2249,10 +2249,31 @@
 }
 
 .create-order-page .calendar-header {
-  text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
   margin-bottom: 10px;
   padding-bottom: 8px;
   border-bottom: 1px solid #eee;
+}
+
+.create-order-page .calendar-nav-btn {
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  width: 28px;
+  height: 28px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  transition: background 0.2s;
+}
+
+.create-order-page .calendar-nav-btn:hover {
+  background: #e0e0e0;
 }
 
 .create-order-page .calendar-header h4 {
@@ -2260,6 +2281,8 @@
   font-size: 14px;
   font-weight: 600;
   color: #333;
+  min-width: 100px;
+  text-align: center;
 }
 
 .create-order-page .calendar-weekdays {
@@ -2297,17 +2320,17 @@
   user-select: none;
 }
 
-.create-order-page .calendar-day:hover:not(.other-month) {
+.create-order-page .calendar-day:hover {
   background: #e3f2fd;
 }
 
 .create-order-page .calendar-day.other-month {
-  color: #ccc;
-  cursor: default;
+  color: #aaa;
+  cursor: pointer;
 }
 
 .create-order-page .calendar-day.other-month:hover {
-  background: transparent;
+  background: #f0f0f0;
 }
 
 .create-order-page .calendar-day.selected {

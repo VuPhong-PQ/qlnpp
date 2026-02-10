@@ -313,9 +313,8 @@ export default function PermissionModal({ show, onClose, onSave, user, isGroup=f
           const errData = await res.json().catch(() => ({}));
           if (errData.error && errData.error.includes('đã thuộc')) {
             alert('Người dùng đã thuộc nhóm quyền này. Đang cập nhật quyền chi tiết...');
-          } else {
+            } else {
             // If error adding to group, save individual permissions instead
-            console.log('Add to group failed, saving individual permissions');
           }
         }
       } catch (e) {

@@ -94,7 +94,7 @@ const CustomerGroups = () => {
       
       // Import with skipRows=7 to skip company header and title
       importFromExcel(file, async (jsonData) => {
-        console.log('Imported data:', jsonData);
+        // imported data received (debug logs removed)
         
         let successCount = 0;
         let errorCount = 0;

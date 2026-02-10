@@ -273,11 +273,11 @@ function Suppliers() {
   };
   
   const handleExport = () => {
-    console.log('Export Excel');
+    // export handler (no debug logs)
   };
   
   const handleImport = () => {
-    console.log('Import Excel');
+    // import handler (no debug logs)
   };
   
   // Context menu handlers
@@ -397,7 +397,6 @@ function Suppliers() {
     setLoading(true);
     try {
       const data = await api.get(API_ENDPOINTS.suppliers);
-      console.log('Fetched suppliers:', data);
       setSuppliers(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Error fetching suppliers:', error);

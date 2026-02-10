@@ -90,9 +90,7 @@ export default function AdminPage() {
       
       setLoading(true);
       try {
-        console.log('Uploading file:', file.name, file.size, 'bytes');
         const res = await uploadBackupFile(file);
-        console.log('Upload response:', res);
         
         if (res && res.success) {
           const displayName = res.fileName || file.name;
@@ -260,7 +258,6 @@ export default function AdminPage() {
                   onChange={async (e)=> { 
                     const file = e.target.files?.[0]; 
                     if(file) {
-                      console.log('File selected:', file.name, file.size);
                       await handleFileUpload(file);
                       e.target.value = ''; // Reset input
                     }
