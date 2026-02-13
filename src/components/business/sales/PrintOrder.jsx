@@ -37,10 +37,11 @@ const PrintOrder = () => {
     toDate: '2026-02-28',
     customerGroup: '',
     salesSchedule: '',
+    productType: '',
     customer: '',
     createdBy: '',
     salesStaff: '',
-    approved: true, // Mặc định lọc đơn hàng đã duyệt
+    taxRates: '',
     printCount: '',
     printFromDate: '',
     printToDate: '',
@@ -69,6 +70,207 @@ const PrintOrder = () => {
   const [searchColumn, setSearchColumn] = useState(null);
   const [columnSearchQuery, setColumnSearchQuery] = useState('');
   const [columnFilters, setColumnFilters] = useState({});
+
+  // Column settings (visibility/order) with localStorage
+  const COLUMN_SETTINGS_KEY = 'printOrderColumnSettings';
+
+  const defaultColumns = [
+    { id: 'orderDate', label: 'Ngày lập', width: 120, visible: true },
+    { id: 'orderNumber', label: 'Số phiếu', width: 150, visible: true },
+    { id: 'customerGroup', label: 'Nhóm khách hàng', width: 140, visible: true },
+    { id: 'salesSchedule', label: 'Lịch bán hàng', width: 140, visible: true },
+    { id: 'customerName', label: 'Khách hàng', width: 200, visible: true },
+    { id: 'vehicle', label: 'Xe', width: 100, visible: true },
+    { id: 'deliveryVehicle', label: 'Xe giao hàng', width: 120, visible: true },
+    { id: 'printOrder', label: 'STT in', width: 80, visible: true },
+    { id: 'createdBy', label: 'Nhân viên lập', width: 140, visible: true },
+    { id: 'salesStaff', label: 'Nhân viên sale', width: 140, visible: true },
+    { id: 'productType', label: 'Loại hàng', width: 140, visible: true },
+    { id: 'totalAmount', label: 'Tổng tiền', width: 120, visible: true },
+    { id: 'totalAfterDiscount', label: 'Tổng tiền sau giảm', width: 140, visible: true },
+    { id: 'totalKg', label: 'Tổng số kg', width: 100, visible: true },
+    { id: 'totalM3', label: 'Tổng số khối', width: 100, visible: true },
+    { id: 'taxRates', label: 'Thuế suất', width: 100, visible: true },
+    { id: 'status', label: 'Trạng thái', width: 120, visible: true },
+    { id: 'printStatus', label: 'Trạng thái in', width: 120, visible: true },
+    { id: 'printCount', label: 'Số lần in', width: 80, visible: true },
+    { id: 'printDate', label: 'Ngày in', width: 140, visible: true },
+    { id: 'actions', label: 'Thao tác', width: 100, visible: true }
+  ];
+
+  const loadColumnSettings = () => {
+    try {
+      const s = localStorage.getItem(COLUMN_SETTINGS_KEY);
+      if (!s) return null;
+      return JSON.parse(s);
+    } catch (error) {
+      return null;
+    }
+  };
+
+  const saveColumnSettings = (cols) => {
+    try {
+      localStorage.setItem(COLUMN_SETTINGS_KEY, JSON.stringify(cols));
+    } catch (error) {
+      console.error('Error saving column settings:', error);
+    }
+  };
+
+  const [columns, setColumns] = useState(() => {
+    const saved = loadColumnSettings();
+    return saved || defaultColumns;
+  });
+
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
+  const [settingsDragItem, setSettingsDragItem] = useState(null);
+
+  // Column header drag / resize
+  const [dragColumn, setDragColumn] = useState(null);
+  const [resizingColumn, setResizingColumn] = useState(null);
+  const [startX, setStartX] = useState(0);
+  const [startWidth, setStartWidth] = useState(0);
+
+  useEffect(() => {
+    saveColumnSettings(columns);
+  }, [columns]);
+
+  const toggleColumnVisibility = (id) => {
+    setColumns(prev => prev.map(c => c.id === id ? { ...c, visible: !c.visible } : c));
+  };
+
+  const resetColumns = () => {
+    setColumns(defaultColumns);
+  };
+
+  const handleSettingsDragStart = (e, index) => {
+    setSettingsDragItem(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleSettingsDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleSettingsDrop = (e, index) => {
+    e.preventDefault();
+    setColumns(prev => {
+      const arr = [...prev];
+      const item = arr.splice(settingsDragItem, 1)[0];
+      arr.splice(index, 0, item);
+      return arr;
+    });
+    setSettingsDragItem(null);
+  };
+
+  const handleSettingsDragEnd = () => {
+    setSettingsDragItem(null);
+  };
+
+  // Column reorder handlers
+  const handleColumnDragStart = (e, id) => {
+    setDragColumn(id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleColumnDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleColumnDrop = (e, id) => {
+    e.preventDefault();
+    if (!dragColumn || dragColumn === id) return;
+    setColumns(prev => {
+      const arr = [...prev];
+      const from = arr.findIndex(c => c.id === dragColumn);
+      const to = arr.findIndex(c => c.id === id);
+      if (from < 0 || to < 0) return prev;
+      const [item] = arr.splice(from, 1);
+      arr.splice(to, 0, item);
+      return arr;
+    });
+    setDragColumn(null);
+  };
+
+  const handleColumnDragEnd = () => {
+    setDragColumn(null);
+  };
+
+  // Column resize handlers
+  const handleResizeStart = (e, id) => {
+    e.preventDefault();
+    setResizingColumn(id);
+    setStartX(e.clientX);
+    const col = columns.find(c => c.id === id);
+    setStartWidth(col ? col.width : 120);
+
+    const onMouseMove = (ev) => {
+      const dx = ev.clientX - startX;
+      setColumns(prev => prev.map(c => c.id === id ? { ...c, width: Math.max(60, startWidth + dx) } : c));
+    };
+
+    const onMouseUp = () => {
+      setResizingColumn(null);
+      document.removeEventListener('mousemove', onMouseMove);
+      document.removeEventListener('mouseup', onMouseUp);
+    };
+
+    document.addEventListener('mousemove', onMouseMove);
+    document.addEventListener('mouseup', onMouseUp);
+  };
+
+  // Render cell content by key
+  const renderCell = (order, key) => {
+    switch (key) {
+      case 'orderDate': return formatDate(order.orderDate);
+      case 'orderNumber':
+        return (
+          <a href="#" className="order-link" onClick={(e) => { e.preventDefault(); handleViewDetails(order.id); }}>
+            {order.orderNumber}
+          </a>
+        );
+      case 'customerGroup': return getCustomerGroupName(order.customerGroup) || '-';
+      case 'salesSchedule': return order.salesSchedule || '-';
+      case 'customerName': return order.customerName || order.customer || '-';
+      case 'vehicle': return order.vehicle || '-';
+      case 'deliveryVehicle': return order.deliveryVehicle || '-';
+      case 'printOrder': return order.printOrder || 0;
+      case 'createdBy': return order.createdBy || '-';
+      case 'salesStaff': return order.salesStaff || order.SalesStaff || '-';
+      case 'productType': return order.productType || order.ProductType || '-';
+      case 'totalAmount': return formatCurrency(order.totalAmount);
+      case 'totalAfterDiscount': return formatCurrency(order.totalAfterDiscount);
+      case 'totalKg': return formatNumber(order.totalKg);
+      case 'totalM3': return formatNumber(order.totalM3);
+      case 'taxRates': return formatTaxRates(order) || '-';
+      case 'status': return (
+        <span className={`status-badge ${getStatusBadgeClass(order.status)}`}>
+          {order.status || '-'}
+        </span>
+      );
+      case 'printStatus': return (
+        <span className={`status-badge ${getPrintStatusClass(order.printCount || 0)}`}>
+          {(order.printCount || 0) > 0 ? 'Đã in' : 'Chưa in'}
+        </span>
+      );
+      case 'printCount': return order.printCount || 0;
+      case 'printDate': return order.printDate ? formatDate(order.printDate) : '-';
+      case 'actions':
+        return (
+          <div className="table-actions">
+            <button 
+              className="action-btn btn-view"
+              onClick={() => handleViewDetails(order.id)}
+              title="Xem chi tiết"
+            >
+              📝
+            </button>
+          </div>
+        );
+      default: return order[key] ?? '-';
+    }
+  };
 
   // Date picker states
   const [showDatePicker, setShowDatePicker] = useState(false);
@@ -383,11 +585,28 @@ const PrintOrder = () => {
       );
     }
 
-    // Filter by approved status
-    if (filters.approved) {
-      filtered = filtered.filter(order => 
-        order.status && order.status.toLowerCase() === 'đã duyệt'
+    // Filter by product type
+    if (filters.productType) {
+      const searchTerm = removeVietnameseTones(filters.productType);
+      filtered = filtered.filter(order =>
+        (order.productType && removeVietnameseTones(order.productType).includes(searchTerm)) ||
+        (order.ProductType && removeVietnameseTones(order.ProductType).includes(searchTerm))
       );
+    }
+
+    // Filter by tax rates (thuế suất)
+    if (filters.taxRates) {
+      const searchTerm = removeVietnameseTones(filters.taxRates);
+      filtered = filtered.filter(order => {
+        const raw = order.TaxRates || order.taxRates || '';
+        if (raw) {
+          const parts = String(raw).split(/[,;\s]+/).map(p => p.trim()).filter(Boolean);
+          if (parts.some(p => removeVietnameseTones(p).includes(searchTerm))) return true;
+        }
+        // fallback to formatted taxRates string
+        const formatted = formatTaxRates(order) || '';
+        return formatted && removeVietnameseTones(formatted).includes(searchTerm);
+      });
     }
 
     // Filter by print status
@@ -484,6 +703,41 @@ const PrintOrder = () => {
     setShowSearchModal(true);
   };
 
+  const closeSearchModal = () => {
+    setShowSearchModal(false);
+    setSearchColumn(null);
+    setColumnSearchQuery('');
+  };
+
+  const handleColumnSearch = (value) => {
+    setColumnSearchQuery(value);
+  };
+
+  const getUniqueColumnValues = (col) => {
+    if (!col) return [];
+    const key = col.id;
+    const values = new Set();
+    (filteredOrders || orders || []).forEach(order => {
+      let v = '';
+      switch (key) {
+        case 'orderNumber': v = order.orderNumber; break;
+        case 'customerGroup': v = getCustomerGroupName(order.customerGroup); break;
+        case 'salesSchedule': v = order.salesSchedule; break;
+        case 'customerName': v = order.customerName || order.customer; break;
+        case 'vehicle': v = order.vehicle; break;
+        case 'deliveryVehicle': v = order.deliveryVehicle; break;
+        case 'createdBy': v = order.createdBy; break;
+        case 'salesStaff': v = order.salesStaff || order.SalesStaff; break;
+        default: v = order[key]; break;
+      }
+      if (v !== undefined && v !== null) {
+        const s = String(v).trim();
+        if (s) values.add(s);
+      }
+    });
+    return Array.from(values).sort((a,b) => a.localeCompare(b, 'vi'));
+  };
+
   const applyColumnSearch = () => {
     const newFilters = { ...columnFilters };
     if (columnSearchQuery.trim()) {
@@ -510,13 +764,30 @@ const PrintOrder = () => {
       const workbook = new ExcelJS.Workbook();
       const worksheet = workbook.addWorksheet('In Đơn Hàng');
 
-      // Headers
+      // Page setup: A4 Portrait with Adjust to 70% scale
+      worksheet.pageSetup = {
+        paperSize: 9, // A4
+        orientation: 'portrait',
+        scale: 70,
+        fitToPage: false,
+        horizontalCentered: true,
+        margins: {
+          left: 0.4,
+          right: 0.4,
+          top: 0.5,
+          bottom: 0.5,
+          header: 0.3,
+          footer: 0.3
+        }
+      };
+
+      // Headers (set column for long text to width 41.44 and wrap)
       worksheet.columns = [
         { header: 'Ngày lập', key: 'orderDate', width: 18 },
         { header: 'Số phiếu', key: 'orderNumber', width: 18 },
         { header: 'Nhóm khách hàng', key: 'customerGroup', width: 20 },
         { header: 'Lịch bán hàng', key: 'salesSchedule', width: 15 },
-        { header: 'Khách hàng', key: 'customerName', width: 25 },
+        { header: 'Khách hàng', key: 'customerName', width: 41.44 },
         { header: 'Xe', key: 'vehicle', width: 15 },
         { header: 'Xe giao hàng', key: 'deliveryVehicle', width: 20 },
         { header: 'STT in', key: 'printOrder', width: 10 },
@@ -533,6 +804,14 @@ const PrintOrder = () => {
         { header: 'Số lần in', key: 'printCount', width: 10 },
         { header: 'Ngày in', key: 'printDate', width: 18 }
       ];
+
+      // Enable wrap text for the 'Khách hàng' column (customerName) so long names wrap
+      try {
+        worksheet.getColumn('customerName').alignment = { wrapText: true, vertical: 'top' };
+      } catch (e) {
+        // Fallback: set by index (5)
+        try { worksheet.getColumn(5).alignment = { wrapText: true, vertical: 'top' }; } catch (e2) {}
+      }
 
       // Data
       filteredOrders.forEach(order => {
@@ -704,14 +983,16 @@ const PrintOrder = () => {
           <meta charset="utf-8">
           <title>In Đơn Hàng</title>
           <style>
-            @page { size: A4 landscape; margin: 10mm; }
+            @page { size: A4 portrait; margin: 8mm; }
             @media print {
               body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
               .page-break { page-break-after: always; }
             }
             * { box-sizing: border-box; }
-            body { font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 0; }
-            .invoice-page { width: 100%; padding: 10px; }
+            body { font-family: Arial, sans-serif; font-size: 12px; margin: 0; padding: 0; width: 100%; }
+            /* Column "Tên hàng" with wrap text */
+            td.product-name { white-space: normal; word-wrap: break-word; }
+            .invoice-page { width: 100%; padding: 8px; }
             .header-wrapper { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 2px; }
             .header-main { flex: 1; }
             .header-row { display: flex; justify-content: space-between; margin-bottom: 2px; }
@@ -723,12 +1004,14 @@ const PrintOrder = () => {
             .customer-section { display: flex; justify-content: space-between; margin-bottom: 8px; align-items: flex-start; }
             .customer-info { flex: 1; }
             .customer-info strong { font-size: 12px; }
-            .confirm-box { border: 1px solid #000; padding: 10px 8px 8px; width: 150px; min-height: 80px; position: relative; background: #fff; overflow: visible; }
-            .confirm-box .confirm-label { position: absolute; top: 2px; right: 6px; left: auto; transform: none; background: #fff; padding: 0 4px; font-size: 10px; line-height: 1; }
-            .confirm-box .confirm-body { margin-top: 4px; }
-            .qr-section { text-align: center; flex-shrink: 0; margin-left: 8px; }
-            .qr-section img { width: 100px; height: 100px; }
-            .qr-label { font-size: 10px; margin-top: 2px; }
+            /* QR + Confirm box wrapper - stacked vertically, centered */
+            .qr-confirm-wrapper { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; margin-left: 12px; }
+            .qr-section { text-align: center; margin-bottom: 6px; }
+            .qr-section img { width: 110px; height: 110px; }
+            .qr-label { font-size: 10px; margin-top: 2px; font-weight: bold; }
+            .confirm-box { border: 1px solid #000; padding: 8px; width: 140px; min-height: 70px; text-align: center; background: #fff; }
+            .confirm-box .confirm-label { font-size: 11px; margin-bottom: 4px; }
+            .confirm-box .confirm-body { min-height: 50px; }
             table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
             th, td { border: 1px solid #000; padding: 4px 6px; }
             th { background-color: #d9e1f2; font-weight: bold; text-align: center; }
@@ -803,12 +1086,14 @@ const PrintOrder = () => {
                   <div>Địa chỉ: ${order.address || ''}</div>
                   <div>ĐT: ${order.phone || ''}</div>
                 </div>
-                <div class="qr-section">
-                  ${qrCode ? `<img src="${qrCode}" alt="QR"/><div class="qr-label">${order.orderNumber || ''}</div>` : ''}
-                </div>
-                <div class="confirm-box">
-                  <div class="confirm-label">Xác nhận đã thanh toán</div>
-                  <div class="confirm-body"></div>
+                <div class="qr-confirm-wrapper">
+                  <div class="qr-section">
+                    ${qrCode ? `<img src="${qrCode}" alt="QR"/><div class="qr-label">${order.orderNumber || ''}</div>` : ''}
+                  </div>
+                  <div class="confirm-box">
+                    <div class="confirm-label">Xác nhận đã thanh toán</div>
+                    <div class="confirm-body"></div>
+                  </div>
                 </div>
               </div>
               
@@ -818,13 +1103,13 @@ const PrintOrder = () => {
                     <th style="width:5%">STT</th>
                     <th style="width:10%">NVBH</th>
                     <th style="width:13%">MV</th>
-                    <th style="width:32%">Tên hàng</th>
+                    <th style="width:30%">Tên hàng</th>
                     <th style="width:6%">ĐVT</th>
                     <th style="width:6%">SL</th>
                     <th style="width:9%">Đơn giá</th>
                     <th style="width:5%">%CK</th>
-                    <th style="width:9%">Giá sau CK</th>
-                    <th style="width:10%">Thành tiền</th>
+                    <th style="width:8%">Giá sau CK</th>
+                    <th style="width:8%">Thành tiền</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -840,7 +1125,7 @@ const PrintOrder = () => {
               <td class="text-center">${stt++}</td>
               <td>${item.nvSales || ''}</td>
               <td>${item.barcode || ''}</td>
-              <td>${item.productName || ''}</td>
+              <td class="product-name">${item.productName || ''}</td>
               <td class="text-center">${getUnitLabel(item.unit)}</td>
               <td class="text-right">${formatNum(item.quantity)}</td>
               <td class="text-right">${formatNum(item.unitPrice)}</td>
@@ -859,7 +1144,7 @@ const PrintOrder = () => {
                 <td class="text-center">${stt++}</td>
                 <td>${item.nvSales || ''}</td>
                 <td>${item.barcode || ''}</td>
-                <td>${item.productName || ''}</td>
+                <td class="product-name">${item.productName || ''}</td>
                 <td class="text-center">${getUnitLabel(item.unit)}</td>
                 <td class="text-right">${formatNum(item.quantity)}</td>
                 <td class="text-right">0</td>
@@ -1207,6 +1492,29 @@ const PrintOrder = () => {
     return '';
   };
 
+  const productTypeOptions = (() => {
+    const s = new Set();
+    (orders || []).forEach(o => {
+      if (o?.productType) s.add(o.productType);
+      if (o?.ProductType) s.add(o.ProductType);
+    });
+    return Array.from(s).filter(Boolean).map(v => ({ value: v, label: v }));
+  })();
+
+  const taxRatesOptions = (() => {
+    const s = new Set();
+    (orders || []).forEach(o => {
+      const raw = o?.TaxRates || o?.taxRates || '';
+      if (!raw) return;
+      String(raw).split(/[,;\s]+/).map(p => p.trim()).filter(Boolean).forEach(p => {
+        // normalize percent display
+        const norm = p.includes('%') ? p.replace(/\s*%/g, '%') : p;
+        s.add(norm);
+      });
+    });
+    return Array.from(s).filter(Boolean).map(v => ({ value: v, label: v }));
+  })();
+
   return (
     <div className="print-order-page">
       {/* Search Panel */}
@@ -1216,6 +1524,10 @@ const PrintOrder = () => {
         </div>
         
         <div className="search-form">
+          { /* build productType options for searchable select */ }
+          {
+            /* derive options from orders and products */
+          }
           {/* Row 1 */}
           <div className="search-row">
             <div className="search-group flex-1">
@@ -1342,17 +1654,14 @@ const PrintOrder = () => {
               />
             </div>
             
-            <div className="search-group checkbox-group">
-              <div className="checkbox-wrapper">
-                <label style={{display: 'flex', alignItems: 'center', gap: '8px'}}>
-                  <input
-                    type="checkbox"
-                    checked={!!searchData.approved}
-                    onChange={(e) => setSearchData({...searchData, approved: e.target.checked})}
-                  />
-                  <span className="checkbox-text">Đã duyệt</span>
-                </label>
-              </div>
+            <div className="search-group flex-1">
+              <SearchableSelect
+                value={searchData.taxRates}
+                onChange={(e) => setSearchData({...searchData, taxRates: e.target.value})}
+                options={taxRatesOptions}
+                placeholder="Thuế suất"
+                className="search-select-searchable"
+              />
             </div>
             
             <div className="search-group flex-1">
@@ -1365,50 +1674,14 @@ const PrintOrder = () => {
               />
             </div>
             
-            <div className="search-group date-range-picker-print" ref={printDatePickerRef}>
-              <div className="date-range-wrapper">
-                <input
-                  type="text"
-                  readOnly
-                  className="search-input date-range-visible"
-                  value={getDateRangeDisplayText(true)}
-                  onClick={handlePrintDateRangeClick}
-                  placeholder="Ngày bắt đầu → Ngày kết thúc"
-                />
-                <i className="date-range-icon" onClick={handlePrintDateRangeClick}>📅</i>
-                
-                {showPrintDatePicker && (
-                  <div className="date-picker-popup">
-                    <div className="date-picker-header">
-                      <input
-                        type="text"
-                        value={printDateRangeInput}
-                        onChange={(e) => handleDateRangeInputChange(e, true)}
-                        className="date-range-display"
-                        placeholder="dd/mm/yyyy - dd/mm/yyyy"
-                      />
-                    </div>
-                    <div className="calendar-container">
-                      {renderCalendar(printCalendarBaseDate, 0, true)}
-                      {renderCalendar(printCalendarBaseDate, 1, true)}
-                    </div>
-                    <div className="date-picker-actions">
-                      <button 
-                        className="btn-cancel"
-                        onClick={() => setShowPrintDatePicker(false)}
-                      >
-                        Hủy
-                      </button>
-                      <button 
-                        className="btn-apply"
-                        onClick={() => setShowPrintDatePicker(false)}
-                      >
-                        Áp dụng
-                      </button>
-                    </div>
-                  </div>
-                )}
-              </div>
+            <div className="search-group flex-1">
+              <SearchableSelect
+                value={searchData.productType}
+                onChange={(e) => setSearchData({...searchData, productType: e.target.value})}
+                options={productTypeOptions}
+                placeholder="Loại hàng"
+                className="search-select-searchable"
+              />
             </div>
             
             <div className="search-group flex-1">
@@ -1447,7 +1720,7 @@ const PrintOrder = () => {
           <button className="action-btn btn-print" onClick={handlePrintSelected} title="In đơn hàng">
             🖨️
           </button>
-          <button className="action-btn btn-settings" title="Cài đặt">
+          <button className="action-btn btn-settings" title="Cài đặt" onClick={() => setShowColumnSettings(true)}>
             ⚙️
           </button>
         </div>
@@ -1471,73 +1744,46 @@ const PrintOrder = () => {
                     onChange={handleSelectAll}
                   />
                 </th>
-                <th>Ngày lập</th>
-                <th>
-                  <div className="th-content">
-                    <span>Số phiếu</span>
-                    <button className="col-search-btn" onClick={() => openColumnSearch('orderNumber', 'Số phiếu')}>🔍</button>
-                  </div>
-                </th>
-                <th>
-                  <div className="th-content">
-                    <span>Nhóm khách hàng</span>
-                    <button className="col-search-btn" onClick={() => openColumnSearch('customerGroup', 'Nhóm khách hàng')}>🔍</button>
-                  </div>
-                </th>
-                <th>
-                  <div className="th-content">
-                    <span>Lịch bán hàng</span>
-                    <button className="col-search-btn" onClick={() => openColumnSearch('salesSchedule', 'Lịch bán hàng')}>🔍</button>
-                  </div>
-                </th>
-                <th>
-                  <div className="th-content">
-                    <span>Khách hàng</span>
-                    <button className="col-search-btn" onClick={() => openColumnSearch('customerName', 'Khách hàng')}>🔍</button>
-                  </div>
-                </th>
-                <th>
-                  <div className="th-content">
-                    <span>Xe</span>
-                    <button className="col-search-btn" onClick={() => openColumnSearch('vehicle', 'Xe')}>🔍</button>
-                  </div>
-                </th>
-                <th>
-                  <div className="th-content">
-                    <span>Xe giao hàng</span>
-                    <button className="col-search-btn" onClick={() => openColumnSearch('deliveryVehicle', 'Xe giao hàng')}>🔍</button>
-                  </div>
-                </th>
-                <th>STT in</th>
-                <th>
-                  <div className="th-content">
-                    <span>Nhân viên lập</span>
-                    <button className="col-search-btn" onClick={() => openColumnSearch('createdBy', 'Nhân viên lập')}>🔍</button>
-                  </div>
-                </th>
-                <th>
-                  <div className="th-content">
-                    <span>Nhân viên sale</span>
-                    <button className="col-search-btn" onClick={() => openColumnSearch('salesStaff', 'Nhân viên sale')}>🔍</button>
-                  </div>
-                </th>
-                <th>Loại hàng</th>
-                <th>Tổng tiền</th>
-                <th>Tổng tiền sau giảm</th>
-                <th>Tổng số kg</th>
-                <th>Tổng số khối</th>
-                <th>Thuế suất</th>
-                <th>Trạng thái</th>
-                <th>Trạng thái in</th>
-                <th>Số lần in</th>
-                <th>Ngày in</th>
-                <th>Thao tác</th>
+                {columns.filter(c => c.visible).map(col => (
+                  <th 
+                    key={col.id}
+                    style={{ width: col.width + 'px', minWidth: col.width + 'px', position: 'relative', cursor: dragColumn === col.id ? 'grabbing' : (col.id !== 'actions' ? 'grab' : 'default') }}
+                    draggable={col.id !== 'actions'}
+                    onDragStart={(e) => handleColumnDragStart(e, col.id)}
+                    onDragOver={handleColumnDragOver}
+                    onDrop={(e) => handleColumnDrop(e, col.id)}
+                    onDragEnd={handleColumnDragEnd}
+                    className={dragColumn === col.id ? 'dragging' : ''}
+                  >
+                    <div className="th-content">
+                      <span>{col.label}</span>
+                      {col.id !== 'actions' && (
+                        <>
+                          <button className="col-search-btn" onClick={() => openColumnSearch(col.id, col.label)} title={`Tìm kiếm theo ${col.label}`}>
+                            🔍
+                          </button>
+                          {columnFilters[col.id] && (
+                            <button className="col-clear-btn" onClick={() => clearColumnSearch(col.id)} title="Xóa bộ lọc">✖</button>
+                          )}
+                        </>
+                      )}
+                    </div>
+                    {col.id !== 'actions' && (
+                      <div 
+                        className="resize-handle" 
+                        onMouseDown={(e) => handleResizeStart(e, col.id)}
+                        style={{ position: 'absolute', right: '-2px', top: 0, bottom: 0, width: '6px', cursor: 'col-resize', zIndex: 2 }}
+                        onMouseEnter={(e) => { e.target.style.backgroundColor = 'transparent'; }}
+                      />
+                    )}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {paginatedOrders.length === 0 ? (
                 <tr>
-                  <td colSpan="22" className="no-data">Không có dữ liệu</td>
+                  <td colSpan={columns.filter(c => c.visible).length + 1} className="no-data">Không có dữ liệu</td>
                 </tr>
               ) : (
                 paginatedOrders.map((order) => (
@@ -1552,49 +1798,11 @@ const PrintOrder = () => {
                         onChange={() => handleSelectOrder(order.id)}
                       />
                     </td>
-                    <td>{formatDate(order.orderDate)}</td>
-                    <td>
-                      <a href="#" className="order-link" onClick={(e) => { e.preventDefault(); handleViewDetails(order.id); }}>
-                        {order.orderNumber}
-                      </a>
-                    </td>
-                    <td>{getCustomerGroupName(order.customerGroup) || '-'}</td>
-                    <td>{order.salesSchedule || '-'}</td>
-                    <td>{order.customerName || order.customer || '-'}</td>
-                    <td>{order.vehicle || '-'}</td>
-                    <td>{order.deliveryVehicle || '-'}</td>
-                    <td>{order.printOrder || 0}</td>
-                    <td>{order.createdBy || '-'}</td>
-                    <td>{order.salesStaff || order.SalesStaff || '-'}</td>
-                    <td>{order.productType || order.ProductType || '-'}</td>
-                    <td className="text-right">{formatCurrency(order.totalAmount)}</td>
-                    <td className="text-right">{formatCurrency(order.totalAfterDiscount)}</td>
-                    <td className="text-right">{formatNumber(order.totalKg)}</td>
-                    <td className="text-right">{formatNumber(order.totalM3)}</td>
-                    <td>{formatTaxRates(order) || '-'}</td>
-                    <td>
-                      <span className={`status-badge ${getStatusBadgeClass(order.status)}`}>
-                        {order.status || '-'}
-                      </span>
-                    </td>
-                    <td>
-                      <span className={`status-badge ${getPrintStatusClass(order.printCount || 0)}`}>
-                        {(order.printCount || 0) > 0 ? 'Đã in' : 'Chưa in'}
-                      </span>
-                    </td>
-                    <td className="text-center">{order.printCount || 0}</td>
-                    <td>{order.printDate ? formatDate(order.printDate) : '-'}</td>
-                    <td>
-                      <div className="table-actions">
-                        <button 
-                          className="action-btn btn-view"
-                          onClick={() => handleViewDetails(order.id)}
-                          title="Xem chi tiết"
-                        >
-                          📝
-                        </button>
-                      </div>
-                    </td>
+                    {columns.filter(c => c.visible).map(col => (
+                      <td key={col.id} className={['totalAmount','totalAfterDiscount','totalKg','totalM3'].includes(col.id) ? 'text-right' : (col.id==='printCount' ? 'text-center' : '')}>
+                        {renderCell(order, col.id)}
+                      </td>
+                    ))}
                   </tr>
                 ))
               )}
@@ -1670,27 +1878,156 @@ const PrintOrder = () => {
       )}
 
       {/* Column Search Modal */}
+      {/* Column Settings Modal */}
+      {showColumnSettings && (
+        <div className="search-modal-overlay" onClick={() => setShowColumnSettings(false)}>
+          <div className="column-settings-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="search-modal-header">
+              <h3 className="search-modal-title">⚙️ Cài đặt hiển thị cột</h3>
+              <button className="search-modal-close" onClick={() => setShowColumnSettings(false)}>×</button>
+            </div>
+
+            <div className="column-settings-body">
+              <div className="column-settings-actions">
+                <button 
+                  className="reset-columns-btn"
+                  onClick={resetColumns}
+                  title="Khôi phục cài đặt mặc định"
+                >
+                  🔄 Reset về mặc định
+                </button>
+                <div className="column-count">
+                  Hiển thị {columns.filter(col => col.visible).length}/{columns.length} cột
+                </div>
+              </div>
+              
+              <div className="column-settings-list">
+                <div className="column-settings-help">
+                  💡 Kéo thả để sắp xếp, tick/untick để ẩn/hiện cột
+                </div>
+                
+                {columns.map((column, index) => (
+                  <div
+                    key={column.id}
+                    className={`column-settings-item ${settingsDragItem === index ? 'dragging' : ''}`}
+                    draggable={true}
+                    onDragStart={(e) => handleSettingsDragStart(e, index)}
+                    onDragOver={handleSettingsDragOver}
+                    onDrop={(e) => handleSettingsDrop(e, index)}
+                    onDragEnd={handleSettingsDragEnd}
+                  >
+                    <div className="column-drag-handle" title="Kéo để sắp xếp">
+                      ⋮⋮
+                    </div>
+                    
+                    <label className="column-checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={column.visible}
+                        onChange={() => toggleColumnVisibility(column.id)}
+                        className="column-checkbox"
+                      />
+                      <span className="column-name">{column.label}</span>
+                    </label>
+                    
+                    <div className="column-info">
+                      <span className="column-width" title="Độ rộng hiện tại">
+                        {column.width}px
+                      </span>
+                      {!column.visible && (
+                        <span className="column-hidden-badge">Ẩn</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="column-settings-footer">
+                <button 
+                  className="apply-settings-btn"
+                  onClick={() => setShowColumnSettings(false)}
+                >
+                  ✓ Áp dụng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
       {showSearchModal && (
-        <div className="modal-overlay" onClick={() => setShowSearchModal(false)}>
+        <div className="search-modal-overlay" onClick={closeSearchModal}>
           <div className="search-modal" onClick={e => e.stopPropagation()}>
             <div className="modal-header">
-              <h3>Tìm kiếm {searchColumn?.label}</h3>
-              <button className="close-btn" onClick={() => setShowSearchModal(false)}>×</button>
+              <h3 className="search-modal-title">🔍 Tìm kiếm theo "{searchColumn?.label}"</h3>
+              <button className="search-modal-close" onClick={closeSearchModal}>×</button>
             </div>
-            <div className="modal-body">
-              <input
-                type="text"
-                className="modal-search-input"
-                placeholder={`Nhập ${searchColumn?.label}...`}
-                value={columnSearchQuery}
-                onChange={(e) => setColumnSearchQuery(e.target.value)}
-                onKeyDown={(e) => e.key === 'Enter' && applyColumnSearch()}
-                autoFocus
-              />
+
+            <div className="search-modal-search-box">
+              <div className="search-input-wrapper">
+                <input
+                  type="text"
+                  className="search-modal-input"
+                  placeholder={`Nhập từ khóa tìm kiếm (có thể gõ không dấu)...`}
+                  value={columnSearchQuery}
+                  onChange={(e) => handleColumnSearch(e.target.value)}
+                  autoFocus
+                />
+                <span className="search-input-icon">🔍</span>
+              </div>
             </div>
-            <div className="modal-footer">
-              <button className="btn btn-cancel" onClick={() => setShowSearchModal(false)}>Hủy</button>
-              <button className="btn btn-apply" onClick={applyColumnSearch}>Áp dụng</button>
+
+            <div className="search-modal-body" style={{ maxHeight: '300px', overflowY: 'auto' }}>
+              <div style={{ marginBottom: '10px', fontSize: '12px', color: '#6c757d' }}>
+                Các giá trị có trong cột (click để chọn):
+              </div>
+              <div className="search-suggestions-list">
+                {getUniqueColumnValues(searchColumn).length === 0 ? (
+                  <div style={{ padding: '10px', color: '#999', textAlign: 'center' }}>
+                    Không có dữ liệu
+                  </div>
+                ) : (
+                  getUniqueColumnValues(searchColumn)
+                    .filter(value => {
+                      if (!columnSearchQuery.trim()) return true;
+                      const valueNormalized = removeVietnameseTones(String(value).toLowerCase());
+                      const queryNormalized = removeVietnameseTones(columnSearchQuery.toLowerCase());
+                      return valueNormalized.includes(queryNormalized);
+                    })
+                    .slice(0, 50)
+                    .map((value, index) => (
+                      <div
+                        key={index}
+                        className="search-suggestion-item"
+                        onClick={() => { setColumnSearchQuery(value); applyColumnSearch(); }}
+                        style={{ padding: '8px 12px', cursor: 'pointer', borderBottom: '1px solid #eee', backgroundColor: columnSearchQuery === value ? '#e3f2fd' : 'transparent' }}
+                        onMouseEnter={(e) => e.target.style.backgroundColor = '#f5f5f5'}
+                        onMouseLeave={(e) => e.target.style.backgroundColor = columnSearchQuery === value ? '#e3f2fd' : 'transparent'}
+                      >
+                        {value}
+                      </div>
+                    ))
+                )}
+              </div>
+            </div>
+
+            <div style={{ padding: '12px', borderTop: '1px solid #eee', display: 'flex', gap: '10px', justifyContent: 'flex-end' }}>
+              <button
+                onClick={() => {
+                  setColumnSearchQuery('');
+                  setColumnFilters({});
+                  applyFilters(orders, searchData);
+                  closeSearchModal();
+                }}
+                style={{ padding: '8px 16px', backgroundColor: '#6c757d', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                Xóa bộ lọc
+              </button>
+              <button
+                onClick={closeSearchModal}
+                style={{ padding: '8px 16px', backgroundColor: '#007bff', color: 'white', border: 'none', borderRadius: '4px', cursor: 'pointer' }}
+              >
+                Đóng
+              </button>
             </div>
           </div>
         </div>

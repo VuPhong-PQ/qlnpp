@@ -1002,13 +1002,13 @@ const CreateOrderForm = () => {
       const workbook = new ExcelJS.Workbook();
       const ws = workbook.addWorksheet('Phiếu Giao Hàng');
 
-      // Set page setup for A4 Landscape printing
+      // Set page setup for A4 Portrait printing and use "Adjust to 70%" scaling
       ws.pageSetup = {
         paperSize: 9, // A4
-        orientation: 'landscape',
-        fitToPage: true,
-        fitToWidth: 1,
-        fitToHeight: 0,
+        orientation: 'portrait',
+        // Use explicit scaling (Adjust to) instead of fitToPage
+        scale: 70,
+        fitToPage: false,
         horizontalCentered: true,
         margins: {
           left: 0.4,
@@ -1025,12 +1025,12 @@ const CreateOrderForm = () => {
       const compAddr = companyInfo?.address || '';
       const compPhone = companyInfo?.phone || '';
 
-      // Set column widths - optimized for A4 Landscape
+      // Set column widths
       ws.columns = [
         { width: 5 },   // A - STT
         { width: 14 },  // B - NVBH
         { width: 16 },  // C - MV (barcode)
-        { width: 45 },  // D - Tên hàng
+        { width: 41.44 },  // D - Tên hàng (set to 41.44 as requested)
         { width: 7 },   // E - ĐVT
         { width: 7 },   // F - SL
         { width: 11 },  // G - Đơn giá
@@ -1039,6 +1039,13 @@ const CreateOrderForm = () => {
         { width: 13 },  // J - Thành tiền
         { width: 10 }   // K - QR Code column
       ];
+
+      // Enable wrap text for column D (Tên hàng) so long names wrap to multiple lines
+      try {
+        ws.getColumn(4).alignment = { wrapText: true, vertical: 'top' };
+      } catch (e) {
+        // ignore if alignment assignment fails in unexpected environments
+      }
 
       // Helper function for border style
       const thinBorder = {
