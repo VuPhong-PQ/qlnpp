@@ -2920,7 +2920,9 @@
   color: #495057;
   font-size: 13px;
   border-bottom: 1px solid #e9ecef;
-  white-space: nowrap;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .create-order-page .results-table th .sort-icon {
@@ -2934,7 +2936,9 @@
   border-bottom: 1px solid #e9ecef;
   font-size: 13px;
   color: #495057;
-  white-space: nowrap;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .create-order-page .results-table tbody tr:hover {
@@ -3198,7 +3202,9 @@
   .create-order-page .results-table th,
   .create-order-page .results-table td {
     padding: 6px 3px;
-    white-space: nowrap;
+    white-space: normal;
+    word-wrap: break-word;
+    overflow-wrap: break-word;
   }
   
   .create-order-page .pagination-container {

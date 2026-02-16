@@ -18,6 +18,10 @@ export default function Users() {
   const [permTarget, setPermTarget] = useState(null);
   const [showGroupPermModal, setShowGroupPermModal] = useState(false);
   const [search, setSearch] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const searchInputRef = React.useRef(null);
   const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
   // Phân trang (kế thừa theo mẫu các trang như Products)
   const [currentPage, setCurrentPage] = useState(1);
@@ -33,6 +37,7 @@ export default function Users() {
   const [resetPwLoading, setResetPwLoading] = useState(false);
   // Mobile: which user's action panel is open
   const [openActionsFor, setOpenActionsFor] = useState(null);
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, target: null });
   // File import ref
   const fileInputRef = React.useRef(null);
   // Selected rows for export
@@ -170,6 +175,24 @@ export default function Users() {
 
   const filtered = applyFilters(users, search, ['username', 'name', 'phone', 'email', 'idNumber']);
 
+  const updateSuggestions = (value) => {
+    if (!value || !users || users.length === 0) {
+      setSuggestions([]);
+      return;
+    }
+
+    const q = value.toString().toLowerCase();
+    const matched = users.filter(u => {
+      return (u.name || '').toString().toLowerCase().includes(q)
+        || (u.username || '').toString().toLowerCase().includes(q)
+        || (u.phone || '').toString().toLowerCase().includes(q)
+        || (u.email || '').toString().toLowerCase().includes(q)
+        || (u.idNumber || '').toString().toLowerCase().includes(q);
+    }).slice(0, 8);
+
+    setSuggestions(matched);
+  };
+
   const renderActionButtons = (u) => (
     <>
       <button title="Chi tiết / Sửa" onClick={() => handleEdit(u)} style={{ width: 36, height: 36, borderRadius: 18, border: 'none', background: '#5bc0de', color: '#fff', cursor: 'pointer' }}>✎</button>
@@ -225,6 +248,21 @@ export default function Users() {
       return s;
     });
   };
+
+  const handleRowContextMenu = (e, u) => {
+    e.preventDefault();
+    setContextMenu({ visible: true, x: e.clientX, y: e.clientY, target: u });
+  };
+
+  useEffect(() => {
+    const onClick = (e) => {
+      if (contextMenu.visible) setContextMenu({ visible: false, x: 0, y: 0, target: null });
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setContextMenu({ visible: false, x: 0, y: 0, target: null }); };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
+  }, [contextMenu.visible]);
 
   // Select / deselect all visible (paginated) rows
   const toggleSelectAllVisible = () => {
@@ -334,13 +372,48 @@ export default function Users() {
 
       <div className="data-table-container">
         <div className="table-header">
+          <div style={{ position: 'relative', display: 'inline-block' }}>
           <input
             type="text"
             placeholder="Tìm kiếm theo Mã, Tên, SĐT, CMND..."
             className="search-box"
             value={search}
-            onChange={e => setSearch(e.target.value)}
+            ref={searchInputRef}
+            onChange={e => { const v = e.target.value; setSearch(v); updateSuggestions(v); setShowSuggestions(true); }}
+            onFocus={() => { updateSuggestions(search); setShowSuggestions(true); }}
+            onKeyDown={(e) => {
+              if (showSuggestions && suggestions.length > 0) {
+                if (e.key === 'ArrowDown') { e.preventDefault(); setActiveSuggestion(i => Math.min(suggestions.length - 1, (i === -1 ? 0 : i + 1))); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveSuggestion(i => Math.max(-1, (i === -1 ? suggestions.length - 1 : i - 1))); }
+                else if (e.key === 'Enter') {
+                  if (activeSuggestion >= 0 && suggestions[activeSuggestion]) {
+                    const sel = suggestions[activeSuggestion];
+                    setSearch(sel.name || sel.username || '');
+                    setShowSuggestions(false);
+                    setActiveSuggestion(-1);
+                    setCurrentPage(1);
+                    e.preventDefault();
+                  }
+                } else if (e.key === 'Escape') { setShowSuggestions(false); setActiveSuggestion(-1); }
+              }
+            }}
           />
+          {showSuggestions && suggestions && suggestions.length > 0 && (
+            <div style={{ position: 'absolute', marginTop: 6, background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.08)', zIndex: 2000, width: 360 }} onMouseDown={(e) => e.preventDefault()}>
+              {suggestions.map((s, idx) => (
+                <div
+                  key={s.id || s.username || idx}
+                  onClick={() => { setSearch(s.name || s.username || ''); setShowSuggestions(false); setActiveSuggestion(-1); setCurrentPage(1); }}
+                  onMouseEnter={() => setActiveSuggestion(idx)}
+                  style={{ padding: '8px 12px', cursor: 'pointer', background: activeSuggestion === idx ? '#f5f7fb' : '#fff', borderBottom: '1px solid #f0f0f0' }}
+                >
+                  <div style={{ fontWeight: 600 }}>{s.name || s.username}</div>
+                  <div style={{ fontSize: 12, color: '#666' }}>{s.username || ''} {s.phone ? ' · ' + s.phone : ''} {s.email ? ' · ' + s.email : ''}</div>
+                </div>
+              ))}
+            </div>
+          )}
+          </div>
           <div className="table-actions">
             <button className="btn btn-primary" onClick={handleAdd}>+ Thêm nhân viên</button>
             <button className="btn btn-success" onClick={handleExport} style={{ marginLeft: 8 }}>📤 Export Excel</button>
@@ -363,57 +436,57 @@ export default function Users() {
                       <th style={{ position: 'relative' }}>
                       Tên đăng nhập
                       <span onClick={() => setShowFilterPopup('username')} style={{ marginLeft: 8, cursor: 'pointer' }}>🔍</span>
-                      {renderFilterPopup('username', 'Tên đăng nhập', false)}
+                      {renderFilterPopup('username', 'Tên đăng nhập', false, users)}
                     </th>
                     <th style={{ position: 'relative' }}>
                       Tên nhân viên
                       <span onClick={() => setShowFilterPopup('name')} style={{ marginLeft: 8, cursor: 'pointer' }}>🔍</span>
-                      {renderFilterPopup('name', 'Tên nhân viên', false)}
+                      {renderFilterPopup('name', 'Tên nhân viên', false, users)}
                     </th>
                     <th style={{ position: 'relative' }}>
                       Số điện thoại
                       <span onClick={() => setShowFilterPopup('phone')} style={{ marginLeft: 8, cursor: 'pointer' }}>🔍</span>
-                      {renderFilterPopup('phone', 'Số điện thoại', false)}
+                      {renderFilterPopup('phone', 'Số điện thoại', false, users)}
                     </th>
                     <th style={{ position: 'relative' }}>
                       Email
                       <span onClick={() => setShowFilterPopup('email')} style={{ marginLeft: 8, cursor: 'pointer' }}>🔍</span>
-                      {renderFilterPopup('email', 'Email', false)}
+                      {renderFilterPopup('email', 'Email', false, users)}
                     </th>
                     <th style={{ position: 'relative' }}>
                       Năm sinh
                       <span onClick={() => setShowFilterPopup('birthYear')} style={{ marginLeft: 8, cursor: 'pointer' }}>🔍</span>
-                      {renderFilterPopup('birthYear', 'Năm sinh', true)}
+                      {renderFilterPopup('birthYear', 'Năm sinh', true, users)}
                     </th>
                     <th style={{ position: 'relative' }}>
                       Số CMND/CCCD
                       <span onClick={() => setShowFilterPopup('idNumber')} style={{ marginLeft: 8, cursor: 'pointer' }}>🔍</span>
-                      {renderFilterPopup('idNumber', 'Số CMND/CCCD', false)}
+                      {renderFilterPopup('idNumber', 'Số CMND/CCCD', false, users)}
                     </th>
                     <th style={{ position: 'relative' }}>
                       Ngày cấp
                       <span onClick={() => setShowFilterPopup('idIssuedDate')} style={{ marginLeft: 8, cursor: 'pointer' }}>🔍</span>
-                      {renderFilterPopup('idIssuedDate', 'Ngày cấp', true)}
+                      {renderFilterPopup('idIssuedDate', 'Ngày cấp', true, users)}
                     </th>
                     <th style={{ position: 'relative' }}>
                       Nơi cấp
                       <span onClick={() => setShowFilterPopup('idIssuedPlace')} style={{ marginLeft: 8, cursor: 'pointer' }}>🔍</span>
-                      {renderFilterPopup('idIssuedPlace', 'Nơi cấp', false)}
+                      {renderFilterPopup('idIssuedPlace', 'Nơi cấp', false, users)}
                     </th>
                     <th style={{ position: 'relative' }}>
                       Năm vào làm
                       <span onClick={() => setShowFilterPopup('yearStarted')} style={{ marginLeft: 8, cursor: 'pointer' }}>🔍</span>
-                      {renderFilterPopup('yearStarted', 'Năm vào làm', true)}
+                      {renderFilterPopup('yearStarted', 'Năm vào làm', true, users)}
                     </th>
                     <th style={{ position: 'relative' }}>
                       Chức vụ
                       <span onClick={() => setShowFilterPopup('position')} style={{ marginLeft: 8, cursor: 'pointer' }}>🔍</span>
-                      {renderFilterPopup('position', 'Chức vụ', false)}
+                      {renderFilterPopup('position', 'Chức vụ', false, users)}
                     </th>
                     <th style={{ position: 'relative' }}>
                       Ghi chú
                       <span onClick={() => setShowFilterPopup('note')} style={{ marginLeft: 8, cursor: 'pointer' }}>🔍</span>
-                      {renderFilterPopup('note', 'Ghi chú', false)}
+                      {renderFilterPopup('note', 'Ghi chú', false, users)}
                     </th>
                 <th>Thao tác</th>
               </tr>
@@ -428,7 +501,7 @@ export default function Users() {
               )}
 
               {!loading && paginated.map(u => (
-                <tr key={u.id || u.code}>
+                <tr key={u.id || u.code} onContextMenu={(e) => handleRowContextMenu(e, u)}>
                   <td style={{ textAlign: 'center' }}>
                     <input type="checkbox" checked={selectedIds.has(u.id || u.code)} onChange={() => toggleSelect(u.id || u.code)} />
                   </td>
@@ -481,6 +554,12 @@ export default function Users() {
             </tbody>
           </table>
         </div>
+        {contextMenu.visible && contextMenu.target && (
+          <div onMouseDown={(e) => e.stopPropagation()} style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 20000, background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.12)', overflow: 'hidden' }}>
+            <div style={{ padding: '8px 12px', cursor: 'pointer' }} onClick={() => { handleEdit(contextMenu.target); setContextMenu({ visible: false, x:0,y:0,target:null }); }}>✎ Xem chi tiết</div>
+            <div style={{ padding: '8px 12px', cursor: 'pointer', color: '#c9302c' }} onClick={() => { handleDelete(contextMenu.target.id); setContextMenu({ visible: false, x:0,y:0,target:null }); }}>🗑 Xóa</div>
+          </div>
+        )}
 
         {/* Pagination controls */}
         {filtered.length > 0 && (

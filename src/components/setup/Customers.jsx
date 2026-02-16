@@ -10,6 +10,10 @@ const Customers = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const searchInputRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
 
@@ -25,6 +29,7 @@ const Customers = () => {
   // Google Maps state
   const [showMapModal, setShowMapModal] = useState(false);
   const [selectedCustomerForMap, setSelectedCustomerForMap] = useState(null);
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, target: null });
 
   // Get max print order number
   const getMaxPrintOrder = () => {
@@ -63,6 +68,21 @@ const Customers = () => {
     }
   };
 
+  const updateSuggestions = (value) => {
+    if (!value || !customers || customers.length === 0) {
+      setSuggestions([]);
+      return;
+    }
+    const q = value.toString().toLowerCase();
+    const matched = customers.filter(c => {
+      return (c.name || '').toString().toLowerCase().includes(q)
+        || (c.code || '').toString().toLowerCase().includes(q)
+        || (c.phone || '').toString().toLowerCase().includes(q)
+        || (c.email || '').toString().toLowerCase().includes(q);
+    }).slice(0, 8);
+    setSuggestions(matched);
+  };
+
   const loadCustomerGroups = async () => {
     try {
       const data = await api.get(API_ENDPOINTS.customerGroups);
@@ -99,7 +119,7 @@ const Customers = () => {
     });
   };
 
-  const [formData, setFormData] = useState({
+  const initialFormData = {
     customerGroup: '',
     code: '',
     name: '',
@@ -122,7 +142,9 @@ const Customers = () => {
     note: '',
     exportVat: false,
     isInactive: false
-  });
+  };
+
+  const [formData, setFormData] = useState(initialFormData);
 
   const customerTypes = ['Lẻ', 'Sỉ', 'Siêu thị', 'Tạp hóa', 'Nhà hàng'];
   const businessTypes = ['Bán lẻ', 'Bán sỉ', 'Tạp hóa', 'Siêu thị', 'Nhà hàng', 'Khách sạn'];
@@ -146,39 +168,52 @@ const Customers = () => {
     });
   };
 
+  const normalizeCustomerType = (val) => {
+    if (!val && val !== 0) return '';
+    const asStr = String(val).trim();
+    if (customerTypes.includes(asStr)) return asStr;
+    const lower = asStr.toLowerCase();
+    if (lower === 'retail') return 'Lẻ';
+    if (lower === 'wholesale') return 'Sỉ';
+    // fallback to the raw value
+    return asStr;
+  };
+
   const handleSubmit = async (e, saveAndCopy = false) => {
     e.preventDefault();
     
     // Validate unique fields
-    const isDuplicate = customers.some(customer => {
+    // We'll collect conflicts so we can prompt user specially for STT in duplicates
+    for (const customer of customers) {
       // Bỏ qua khách hàng đang edit
       if (editingItem && customer.id === editingItem.id) {
-        return false;
+        continue;
       }
-      
+
       // Kiểm tra mã khách hàng
       if (formData.code && customer.code === formData.code) {
         alert(`Mã khách hàng "${formData.code}" đã tồn tại. Vui lòng nhập mã khác.`);
-        return true;
+        return; // Dừng ngay
       }
-      
+
       // Kiểm tra mã số thuế (nếu có nhập)
       if (formData.taxCode && formData.taxCode.trim() !== '' && customer.taxCode === formData.taxCode) {
         alert(`Mã số thuế "${formData.taxCode}" đã tồn tại. Vui lòng nhập mã khác.`);
-        return true;
+        return; // Dừng ngay
       }
-      
-      // Kiểm tra STT in (nếu có nhập)
-      if (formData.printIn && formData.printIn.trim() !== '' && customer.printIn === formData.printIn) {
-        alert(`STT in "${formData.printIn}" đã tồn tại. Vui lòng nhập số khác.`);
-        return true;
+    }
+
+    // Special handling for STT in (allow user to confirm overriding duplicates)
+    if (formData.printIn && formData.printIn.toString().trim() !== '') {
+      const conflicts = customers.filter(c => !(editingItem && c.id === editingItem.id) && String(c.printIn) === String(formData.printIn));
+      if (conflicts.length > 0) {
+        const names = conflicts.map(c => `${c.name || c.code || 'ID:' + c.id}${c.code ? ' (Mã: ' + c.code + ')' : ''}`).join('\n');
+        const proceed = window.confirm(`STT in "${formData.printIn}" đang trùng với:\n${names}\n\nBạn có muốn cho phép trùng và tiếp tục lưu? Nhấn OK để cho phép, Hủy để đổi STT.`);
+        if (!proceed) {
+          return; // user cancelled, stop saving
+        }
+        // if user confirmed, we proceed and allow duplicate printIn
       }
-      
-      return false;
-    });
-    
-    if (isDuplicate) {
-      return; // Dừng lại nếu có trùng lặp
     }
     
     try {
@@ -189,6 +224,8 @@ const Customers = () => {
         await api.post(API_ENDPOINTS.customers, formData);
       }
       await loadCustomers();
+      // Notify other components (e.g., PrintOrder) that customers changed
+      try { window.dispatchEvent(new Event('customersUpdated')); } catch (e) {}
       
       if (saveAndCopy) {
         // Giữ nguyên dữ liệu, chỉ reset một số trường
@@ -220,35 +257,12 @@ const Customers = () => {
   };
 
   const resetForm = () => {
-    setFormData({
-      customerGroup: '',
-      code: '',
-      name: '',
-      vatName: '',
-      address: '',
-      vatAddress: '',
-      phone: '',
-      position: '',
-      email: '',
-      account: '',
-      taxCode: '',
-      customerType: '',
-      salesSchedule: '',
-      vehicle: '',
-      printIn: '',
-      businessType: '',
-      debtLimit: 0,
-      debtTerm: '',
-      initialDebt: 0,
-      note: '',
-      exportVat: false,
-      isInactive: false
-    });
+    setFormData({ ...initialFormData });
   };
 
   const handleEdit = (item) => {
     setEditingItem(item);
-    setFormData(item);
+    setFormData({ ...initialFormData, ...item, customerType: normalizeCustomerType(item?.customerType) });
     setShowModal(true);
   };
 
@@ -258,6 +272,8 @@ const Customers = () => {
         setLoading(true);
         await api.delete(API_ENDPOINTS.customers, id);
         await loadCustomers();
+        // Notify other components that customers changed (after delete)
+        try { window.dispatchEvent(new Event('customersUpdated')); } catch (e) {}
       } catch (error) {
         console.error('Error deleting customer:', error);
         alert('Không thể xóa khách hàng');
@@ -279,6 +295,19 @@ const Customers = () => {
   useEffect(() => {
     setCurrentPage(1);
   }, [searchTerm, columnFilters]);
+
+  const handleRowContextMenu = (e, customer) => {
+    e.preventDefault();
+    setContextMenu({ visible: true, x: e.clientX, y: e.clientY, target: customer });
+  };
+
+  useEffect(() => {
+    const onClick = () => { if (contextMenu.visible) setContextMenu({ visible: false, x:0,y:0,target:null }); };
+    const onKey = (e) => { if (e.key === 'Escape') setContextMenu({ visible: false, x:0,y:0,target:null }); };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => { document.removeEventListener('mousedown', onClick); document.removeEventListener('keydown', onKey); };
+  }, [contextMenu.visible]);
 
   const formatCurrency = (amount) => {
     return new Intl.NumberFormat('vi-VN', {
@@ -571,8 +600,36 @@ const Customers = () => {
             placeholder="Tìm kiếm theo tên, mã khách hàng hoặc số điện thoại..."
             className="search-box"
             value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
+            ref={searchInputRef}
+            onChange={(e) => { const v = e.target.value; setSearchTerm(v); updateSuggestions(v); setShowSuggestions(true); }}
+            onFocus={() => { updateSuggestions(searchTerm); setShowSuggestions(true); }}
+            onKeyDown={(e) => {
+              if (showSuggestions && suggestions.length > 0) {
+                if (e.key === 'ArrowDown') { e.preventDefault(); setActiveSuggestion(i => Math.min(suggestions.length - 1, (i === -1 ? 0 : i + 1))); }
+                else if (e.key === 'ArrowUp') { e.preventDefault(); setActiveSuggestion(i => Math.max(-1, (i === -1 ? suggestions.length - 1 : i - 1))); }
+                else if (e.key === 'Enter') {
+                  if (activeSuggestion >= 0 && suggestions[activeSuggestion]) {
+                    const sel = suggestions[activeSuggestion];
+                    setSearchTerm(sel.name || sel.code || sel.phone || '');
+                    setShowSuggestions(false);
+                    setActiveSuggestion(-1);
+                    setCurrentPage(1);
+                    e.preventDefault();
+                  }
+                } else if (e.key === 'Escape') { setShowSuggestions(false); setActiveSuggestion(-1); }
+              }
+            }}
           />
+          {showSuggestions && suggestions && suggestions.length > 0 && (
+            <div style={{ position: 'absolute', left: 12, top: 44, zIndex: 2000, width: 360, background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.08)' }} onMouseDown={(e) => e.preventDefault()}>
+              {suggestions.map((s, idx) => (
+                <div key={s.id || s.code || idx} onClick={() => { setSearchTerm(s.name || s.code || s.phone || ''); setShowSuggestions(false); setActiveSuggestion(-1); setCurrentPage(1); }} onMouseEnter={() => setActiveSuggestion(idx)} style={{ padding: '8px 12px', cursor: 'pointer', background: activeSuggestion === idx ? '#f5f7fb' : '#fff', borderBottom: '1px solid #f0f0f0' }}>
+                  <div style={{ fontWeight: 600 }}>{s.name || s.code}</div>
+                  <div style={{ fontSize: 12, color: '#666' }}>{s.code ? `Mã: ${s.code}` : ''}{s.phone ? ` · ${s.phone}` : ''}{s.email ? ` · ${s.email}` : ''}</div>
+                </div>
+              ))}
+            </div>
+          )}
           <div className="table-actions">
             <button 
               className="btn btn-primary"
@@ -719,7 +776,7 @@ const Customers = () => {
                         </span>
                       )}
                       {/* Filter popup */}
-                      {renderFilterPopup(col.key, col.label, false)}
+                      {renderFilterPopup(col.key, col.label, false, customers)}
                       {/* Mép phải */}
                       {idx < arr.length - 1 && customerVisibleCols.includes(arr[idx + 1].key) && (
                         <span
@@ -735,7 +792,7 @@ const Customers = () => {
             </thead>
             <tbody>
               {paginatedCustomers.map((customer) => (
-                <tr key={customer.id}>
+                <tr key={customer.id} onContextMenu={(e) => handleRowContextMenu(e, customer)}>
                   {customerColumns.map((col, idx) => {
                     if (!customerVisibleCols.includes(col.key)) return null;
                     if (col.key === 'position') {
@@ -795,6 +852,12 @@ const Customers = () => {
             </tbody>
           </table>
         </div>
+        {contextMenu.visible && contextMenu.target && (
+          <div onMouseDown={(e) => e.stopPropagation()} style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 20000, background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.12)', overflow: 'hidden' }}>
+            <div style={{ padding: '8px 12px', cursor: 'pointer' }} onClick={() => { handleEdit(contextMenu.target); setContextMenu({ visible: false, x:0,y:0,target:null }); }}>✎ Xem chi tiết</div>
+            <div style={{ padding: '8px 12px', cursor: 'pointer', color: '#c9302c' }} onClick={() => { handleDelete(contextMenu.target.id); setContextMenu({ visible: false, x:0,y:0,target:null }); }}>🗑 Xóa</div>
+          </div>
+        )}
 
         {filteredCustomers.length === 0 && (
           <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
@@ -1043,7 +1106,6 @@ const Customers = () => {
                       name="debtLimit"
                       value={formData.debtLimit}
                       onChange={handleInputChange}
-                      defaultValue="0"
                     />
                   </div>
                   <div className="form-group">
@@ -1062,7 +1124,6 @@ const Customers = () => {
                       name="initialDebt"
                       value={formData.initialDebt}
                       onChange={handleInputChange}
-                      defaultValue="0"
                     />
                   </div>
                 </div>

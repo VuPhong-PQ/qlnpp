@@ -232,10 +232,10 @@ const PrintOrder = () => {
         );
       case 'customerGroup': return getCustomerGroupName(order.customerGroup) || '-';
       case 'salesSchedule': return order.salesSchedule || '-';
-      case 'customerName': return order.customerName || order.customer || '-';
+      case 'customerName': return getCurrentCustomerName(order);
       case 'vehicle': return order.vehicle || '-';
       case 'deliveryVehicle': return order.deliveryVehicle || '-';
-      case 'printOrder': return order.printOrder || 0;
+      case 'printOrder': return getCurrentCustomerPrintIn(order);
       case 'createdBy': return order.createdBy || '-';
       case 'salesStaff': return order.salesStaff || order.SalesStaff || '-';
       case 'productType': return order.productType || order.ProductType || '-';
@@ -369,9 +369,13 @@ const PrintOrder = () => {
       const response = await fetch(url);
       if (response.ok) {
         const ordersData = await response.json();
-        setOrders(ordersData);
+        // Only show approved orders (đã duyệt) on print-order page
+        const approvedOrders = ordersData.filter(order => 
+          order.status && order.status.toLowerCase() === 'đã duyệt'
+        );
+        setOrders(approvedOrders);
         // Apply initial date filter
-        applyFilters(ordersData, searchData);
+        applyFilters(approvedOrders, searchData);
       } else {
         // failed to fetch orders: response not ok
       }
@@ -458,6 +462,23 @@ const PrintOrder = () => {
     fetchUnits();
   }, []);
 
+  // Listen for cross-component updates when customers change elsewhere
+  useEffect(() => {
+    const onCustomersUpdated = () => {
+      fetchCustomers();
+    };
+    window.addEventListener('customersUpdated', onCustomersUpdated);
+    return () => window.removeEventListener('customersUpdated', onCustomersUpdated);
+  }, []);
+
+  // When customers list updates, re-apply filters to trigger re-render with updated printIn values
+  useEffect(() => {
+    if (!customers || customers.length === 0) return;
+    if (!orders || orders.length === 0) return;
+    // Re-apply filters to refresh filteredOrders and trigger re-render
+    applyFilters(orders, searchData);
+  }, [customers]);
+
   // Parse date string
   const parseDate = (dateStr) => {
     if (!dateStr) return null;
@@ -519,6 +540,79 @@ const PrintOrder = () => {
     return g ? g.name : (code || '-');
   };
 
+  // Get current customer name from customers list (to reflect updated names)
+  const getCurrentCustomerName = (order) => {
+    if (!order) return '-';
+    const phone = order.phone || order.Phone || '';
+    const oldName = order.customerName || order.customer || '';
+    
+    // Try to find customer by phone (most reliable)
+    if (phone) {
+      const byPhone = (customers || []).find(c => c.phone === phone);
+      if (byPhone) return byPhone.name || oldName;
+    }
+    
+    // Try to find by code matching old name
+    const byCode = (customers || []).find(c => c.code === oldName || c.name === oldName);
+    if (byCode) return byCode.name || oldName;
+    
+    // Fallback to stored name
+    return oldName || '-';
+  };
+
+  // Get current customer address from customers list (to reflect updated address)
+  const getCurrentCustomerAddress = (order) => {
+    if (!order) return '';
+    const phone = order.phone || order.Phone || '';
+    const oldName = order.customerName || order.customer || '';
+    const oldAddress = order.address || order.Address || '';
+    
+    // Try to find customer by phone (most reliable)
+    if (phone) {
+      const byPhone = (customers || []).find(c => c.phone === phone);
+      if (byPhone) return byPhone.address || oldAddress;
+    }
+    
+    // Try to find by code matching old name
+    const byCode = (customers || []).find(c => c.code === oldName || c.name === oldName);
+    if (byCode) return byCode.address || oldAddress;
+    
+    // Fallback to stored address
+    return oldAddress || '';
+  };
+
+  // Get current customer printIn (STT in) from customers list (to reflect updated values)
+  const getCurrentCustomerPrintIn = (order) => {
+    if (!order) return 0;
+    const phone = order.phone || order.Phone || '';
+    const oldName = order.customerName || order.customer || '';
+    
+    // Try to find customer by phone (most reliable)
+    if (phone) {
+      const byPhone = (customers || []).find(c => c.phone === phone);
+      if (byPhone) {
+        const val = byPhone.printIn;
+        if (val !== undefined && val !== null && String(val).trim() !== '') {
+          const parsed = parseInt(val, 10);
+          if (!isNaN(parsed)) return parsed;
+        }
+      }
+    }
+    
+    // Try to find by code matching old name
+    const byCode = (customers || []).find(c => c.code === oldName || c.name === oldName);
+    if (byCode) {
+      const val = byCode.printIn;
+      if (val !== undefined && val !== null && String(val).trim() !== '') {
+        const parsed = parseInt(val, 10);
+        if (!isNaN(parsed)) return parsed;
+      }
+    }
+    
+    // Fallback to stored printOrder on order
+    return order.printOrder || 0;
+  };
+
   // Apply filters
   const applyFilters = (ordersToFilter, filters) => {
     let filtered = [...ordersToFilter];
@@ -562,10 +656,11 @@ const PrintOrder = () => {
     // Filter by customer
     if (filters.customer) {
       const searchTerm = removeVietnameseTones(filters.customer);
-      filtered = filtered.filter(order => 
-        (order.customerName && removeVietnameseTones(order.customerName).includes(searchTerm)) ||
-        (order.customer && removeVietnameseTones(order.customer).includes(searchTerm))
-      );
+      filtered = filtered.filter(order => {
+        const currentName = getCurrentCustomerName(order);
+        return (currentName && removeVietnameseTones(currentName).includes(searchTerm)) ||
+          (order.customer && removeVietnameseTones(order.customer).includes(searchTerm));
+      });
     }
 
     // Filter by created by
@@ -633,7 +728,7 @@ const PrintOrder = () => {
             case 'orderNumber': value = order.orderNumber; break;
             case 'customerGroup': value = order.customerGroup; break;
             case 'salesSchedule': value = order.salesSchedule; break;
-            case 'customerName': value = order.customerName || order.customer; break;
+            case 'customerName': value = getCurrentCustomerName(order); break;
             case 'vehicle': value = order.vehicle; break;
             case 'deliveryVehicle': value = order.deliveryVehicle; break;
             case 'createdBy': value = order.createdBy; break;
@@ -723,7 +818,7 @@ const PrintOrder = () => {
         case 'orderNumber': v = order.orderNumber; break;
         case 'customerGroup': v = getCustomerGroupName(order.customerGroup); break;
         case 'salesSchedule': v = order.salesSchedule; break;
-        case 'customerName': v = order.customerName || order.customer; break;
+        case 'customerName': v = getCurrentCustomerName(order); break;
         case 'vehicle': v = order.vehicle; break;
         case 'deliveryVehicle': v = order.deliveryVehicle; break;
         case 'createdBy': v = order.createdBy; break;
@@ -820,10 +915,10 @@ const PrintOrder = () => {
           orderNumber: order.orderNumber,
           customerGroup: getCustomerGroupName(order.customerGroup),
           salesSchedule: order.salesSchedule || '-',
-          customerName: order.customerName || order.customer,
+          customerName: getCurrentCustomerName(order),
           vehicle: order.vehicle || '-',
           deliveryVehicle: order.deliveryVehicle || '-',
-          printOrder: order.printOrder || 0,
+          printOrder: getCurrentCustomerPrintIn(order),
           createdBy: order.createdBy,
           salesStaff: order.salesStaff || order.SalesStaff || '-',
           productType: order.productType || order.ProductType || '-',
@@ -859,6 +954,245 @@ const PrintOrder = () => {
       window.URL.revokeObjectURL(url);
     } catch (error) {
       // error exporting Excel
+    }
+  };
+
+  // Export Summary (Phiếu xuất hàng tổng hợp)
+  const handleExportSummary = async () => {
+    if (selectedOrders.size === 0) {
+      alert('Vui lòng chọn ít nhất một đơn hàng để xuất phiếu tổng hợp');
+      return;
+    }
+
+    setLoading(true);
+    try {
+      // Get selected order IDs
+      const orderIds = Array.from(selectedOrders);
+      const selectedOrderObjects = (orders || []).filter(o => orderIds.includes(o.id));
+
+      if (selectedOrderObjects.length === 0) {
+        alert('Không tìm thấy đơn hàng đã chọn');
+        setLoading(false);
+        return;
+      }
+
+      // Fetch full order details for each selected order
+      const orderDetailsPromises = selectedOrderObjects.map(async (orderObj) => {
+        const response = await fetch(`${API_BASE_URL}/Orders/${orderObj.id}`);
+        if (response.ok) {
+          return await response.json();
+        }
+        return null;
+      });
+      
+      const orderDetails = await Promise.all(orderDetailsPromises);
+      const validOrders = orderDetails.filter(o => o !== null);
+
+      if (validOrders.length === 0) {
+        alert('Không thể tải chi tiết đơn hàng');
+        setLoading(false);
+        return;
+      }
+
+      // Fetch products for unit info
+      let products = [];
+      try {
+        const prodResponse = await fetch(`${API_BASE_URL}/Products`);
+        if (prodResponse.ok) {
+          products = await prodResponse.json();
+        }
+      } catch (e) {
+        // continue without product data
+      }
+
+      // Group orders by customer group
+      const groupedByCustomerGroup = {};
+      validOrders.forEach((od) => {
+        const order = od.order;
+        const groupKey = order.customerGroup || 'null';
+        if (!groupedByCustomerGroup[groupKey]) {
+          groupedByCustomerGroup[groupKey] = [];
+        }
+        groupedByCustomerGroup[groupKey].push(od);
+      });
+
+      // Get customer group names
+      const customerGroupNames = Object.keys(groupedByCustomerGroup).map(key => {
+        if (key === 'null' || !key) return 'null';
+        return getCustomerGroupName(key);
+      });
+
+      // Aggregate items by product within each customer group
+      const aggregatedData = {};
+      Object.keys(groupedByCustomerGroup).forEach(groupKey => {
+        const ordersInGroup = groupedByCustomerGroup[groupKey];
+        const itemsMap = {};
+
+        ordersInGroup.forEach(od => {
+          const items = [...(od.items || []), ...(od.promotionItems || [])];
+          items.forEach(item => {
+            const productKey = item.barcode || item.productCode || item.productName;
+            if (!itemsMap[productKey]) {
+              // Find product for unit info
+              const product = products.find(p => 
+                p.barcode === item.barcode || 
+                p.code === item.productCode ||
+                p.name === item.productName
+              );
+
+              itemsMap[productKey] = {
+                barcode: item.barcode || '',
+                productCode: item.productCode || '',
+                productName: item.productName || '',
+                unit1: item.unit || product?.defaultUnit || product?.unit1 || '',
+                quantity1: 0,
+                baseUnit: product?.baseUnit || '',
+                baseQuantity: 0,
+                conversion: item.conversion || product?.conversion1 || 1,
+                note: item.description || ''
+              };
+            }
+
+            // Add quantity
+            const qty = parseFloat(item.quantity) || 0;
+            itemsMap[productKey].quantity1 += qty;
+            // Calculate base quantity
+            const conversion = parseFloat(itemsMap[productKey].conversion) || 1;
+            itemsMap[productKey].baseQuantity += qty * conversion;
+          });
+        });
+
+        aggregatedData[groupKey] = Object.values(itemsMap);
+      });
+
+      // Get date range from selected orders
+      const orderDates = validOrders.map(od => new Date(od.order.orderDate)).filter(d => !isNaN(d));
+      const minDate = orderDates.length > 0 ? new Date(Math.min(...orderDates)) : new Date();
+      const maxDate = orderDates.length > 0 ? new Date(Math.max(...orderDates)) : new Date();
+
+      const formatDate = (d) => {
+        return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      };
+
+      // Company info
+      const compName = companyInfo?.companyName || companyInfo?.name || 'CÔNG TY TNHH MTV PHÂN PHỐI TPQ';
+      const compAddr = companyInfo?.address || '';
+      const compPhone = companyInfo?.phone || '';
+
+      // Build print HTML
+      let printContent = `
+        <!DOCTYPE html>
+        <html>
+        <head>
+          <meta charset="utf-8">
+          <title>Phiếu Xuất Hàng Tổng Hợp</title>
+          <style>
+            @page { size: A4 portrait; margin: 8mm; }
+            @media print {
+              body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            }
+            * { box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 15px; }
+            .header { margin-bottom: 15px; }
+            .company-name { font-weight: bold; font-size: 14px; }
+            .company-info { font-size: 11px; }
+            .title { text-align: center; font-size: 16px; font-weight: bold; color: #0066cc; margin: 15px 0 10px; }
+            .subtitle { text-align: center; margin-bottom: 15px; font-style: italic; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+            th, td { border: 1px solid #000; padding: 5px 8px; }
+            th { background-color: #d9e1f2; font-weight: bold; text-align: center; }
+            td { vertical-align: top; }
+            td.text-center { text-align: center; }
+            td.text-right { text-align: right; }
+            .group-header { background-color: #f0f0f0; font-weight: bold; font-style: italic; }
+            .product-name { white-space: normal; word-wrap: break-word; }
+            .nested-header { background-color: #e8e8e8; }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="company-name">${compName}</div>
+            <div class="company-info">Địa chỉ: ${compAddr}</div>
+            <div class="company-info">Điện thoại: ${compPhone}</div>
+          </div>
+          
+          <div class="title">PHIẾU XUẤT HÀNG TỔNG HỢP THEO KHU VỰC ${customerGroupNames.join(', ')}</div>
+          <div class="subtitle">Từ ngày: ${formatDate(minDate)} đến ngày: ${formatDate(maxDate)}</div>
+          
+          <table>
+            <thead>
+              <tr>
+                <th rowspan="2" style="width: 40px;">STT</th>
+                <th rowspan="2" style="width: 120px;">Mã vạch</th>
+                <th rowspan="2" style="width: 100px;">Mã hàng</th>
+                <th rowspan="2" style="width: 300px;">Tên hàng</th>
+                <th colspan="2" style="text-align: center;">Đơn vị 1</th>
+                <th colspan="2" style="text-align: center;">Đơn vị gốc</th>
+                <th rowspan="2" style="width: 100px;">Ghi chú</th>
+              </tr>
+              <tr>
+                <th style="width: 80px;">Đơn vị 1</th>
+                <th style="width: 60px;">SL 1</th>
+                <th style="width: 80px;">Đơ n vị gốc</th>
+                <th style="width: 60px;">SL gốc</th>
+              </tr>
+            </thead>
+            <tbody>
+      `;
+
+      // Add rows for each customer group
+      Object.keys(aggregatedData).forEach(groupKey => {
+        const groupName = groupKey === 'null' || !groupKey ? 'null' : getCustomerGroupName(groupKey);
+        const items = aggregatedData[groupKey];
+
+        // Group header row
+        printContent += `
+          <tr class="group-header">
+            <td colspan="9"><strong>Nhóm khách hàng: ${groupName}</strong></td>
+          </tr>
+        `;
+
+        // Item rows
+        items.forEach((item, index) => {
+          printContent += `
+            <tr>
+              <td class="text-center">${index + 1}</td>
+              <td>${item.barcode}</td>
+              <td>${item.productCode}</td>
+              <td class="product-name">${item.productName}</td>
+              <td class="text-center">${getUnitLabel(item.unit1)}</td>
+              <td class="text-right">${item.quantity1 % 1 === 0 ? item.quantity1 : item.quantity1.toFixed(2)}</td>
+              <td class="text-center">${getUnitLabel(item.baseUnit)}</td>
+              <td class="text-right">${item.baseQuantity % 1 === 0 ? item.baseQuantity : item.baseQuantity.toFixed(2)}</td>
+              <td>${item.note || ''}</td>
+            </tr>
+          `;
+        });
+      });
+
+      printContent += `
+            </tbody>
+          </table>
+        </body>
+        </html>
+      `;
+
+      // Open print window
+      const printWindow = window.open('', '_blank', 'width=1200,height=800');
+      if (printWindow) {
+        printWindow.document.write(printContent);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+        }, 500);
+      }
+
+    } catch (error) {
+      console.error('Error exporting summary:', error);
+      alert('Có lỗi xảy ra khi xuất phiếu tổng hợp');
+    } finally {
+      setLoading(false);
     }
   };
 
@@ -926,10 +1260,41 @@ const PrintOrder = () => {
     
     setLoading(true);
     try {
-      // Fetch full order details for each selected order
+      // Determine selected orders
       const orderIds = Array.from(selectedOrders);
-      const orderDetailsPromises = orderIds.map(async (orderId) => {
-        const response = await fetch(`${API_BASE_URL}/Orders/${orderId}`);
+      const selectedOrderObjects = (orders || []).filter(o => orderIds.includes(o.id));
+
+      // Group by printOrder value (using live customer printIn), sort groups descending,
+      // and randomize order within groups that have equal printOrder.
+      const groups = {};
+      selectedOrderObjects.forEach(o => {
+        const key = getCurrentCustomerPrintIn(o);
+        if (!groups[key]) groups[key] = [];
+        groups[key].push(o);
+      });
+
+      const keys = Object.keys(groups).map(k => parseInt(k, 10)).sort((a, b) => b - a);
+
+      // Fisher-Yates shuffle
+      const shuffle = (arr) => {
+        for (let i = arr.length - 1; i > 0; i--) {
+          const j = Math.floor(Math.random() * (i + 1));
+          [arr[i], arr[j]] = [arr[j], arr[i]];
+        }
+      };
+
+      const orderedSelected = [];
+      for (const k of keys) {
+        const group = groups[k];
+        if (group.length > 1) shuffle(group);
+        orderedSelected.push(...group);
+      }
+
+      const selectedOrderObjectsSorted = orderedSelected;
+
+      // Fetch full order details for each selected order in the sorted order
+      const orderDetailsPromises = selectedOrderObjectsSorted.map(async (orderObj) => {
+        const response = await fetch(`${API_BASE_URL}/Orders/${orderObj.id}`);
         if (response.ok) {
           return await response.json();
         }
@@ -1001,17 +1366,18 @@ const PrintOrder = () => {
             .company-name { font-weight: bold; font-size: 13px; }
             .title { text-align: center; font-size: 16px; font-weight: bold; margin: 8px 0 4px; }
             .subtitle { text-align: center; margin-bottom: 8px; }
-            .customer-section { display: flex; justify-content: space-between; margin-bottom: 8px; align-items: flex-start; }
-            .customer-info { flex: 1; }
+            /* Customer info + QR/Confirm in same row */
+            .customer-qr-row { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 8px; }
+            .customer-info { flex: 1; max-width: 58%; word-wrap: break-word; overflow-wrap: break-word; }
             .customer-info strong { font-size: 12px; }
-            /* QR + Confirm box wrapper - stacked vertically, centered */
-            .qr-confirm-wrapper { display: flex; flex-direction: column; align-items: center; flex-shrink: 0; margin-left: 12px; }
-            .qr-section { text-align: center; margin-bottom: 6px; }
-            .qr-section img { width: 110px; height: 110px; }
-            .qr-label { font-size: 10px; margin-top: 2px; font-weight: bold; }
-            .confirm-box { border: 1px solid #000; padding: 8px; width: 140px; min-height: 70px; text-align: center; background: #fff; }
-            .confirm-box .confirm-label { font-size: 11px; margin-bottom: 4px; }
-            .confirm-box .confirm-body { min-height: 50px; }
+            /* QR + Confirm box wrapper - horizontal, aligned to right */
+            .qr-confirm-wrapper { display: flex; flex-direction: row; align-items: flex-start; gap: 12px; flex-shrink: 0; }
+            .qr-section { text-align: center; }
+            .qr-section img { width: 80px; height: 80px; }
+            .qr-label { font-size: 9px; margin-top: 2px; font-weight: bold; }
+            .confirm-box { border: 1px solid #000; padding: 6px; width: 120px; min-height: 60px; text-align: center; background: #fff; }
+            .confirm-box .confirm-label { font-size: 10px; margin-bottom: 4px; }
+            .confirm-box .confirm-body { min-height: 40px; }
             table { width: 100%; border-collapse: collapse; margin-bottom: 8px; }
             th, td { border: 1px solid #000; padding: 4px 6px; }
             th { background-color: #d9e1f2; font-weight: bold; text-align: center; }
@@ -1032,6 +1398,11 @@ const PrintOrder = () => {
             .note-section { margin-top: 8px; }
             .total-words { font-style: italic; font-weight: bold; margin-bottom: 8px; }
             .weight-info { font-weight: bold; margin-bottom: 8px; }
+            /* Layout tweaks: align table cells to top, improve line-height and spacing for customer block */
+            table th, table td { vertical-align: top; line-height: 1.25; }
+            .customer-info { text-align: left; }
+            .customer-info > div { margin-bottom: 4px; }
+            .invoice-page { line-height: 1.25; }
           </style>
         </head>
         <body>
@@ -1042,6 +1413,10 @@ const PrintOrder = () => {
         const items = od.items || [];
         const promoItems = od.promotionItems || [];
         const qrCode = qrCodes[idx];
+        
+        // Get current customer name from customers list
+        const currentCustomerName = getCurrentCustomerName(order);
+        const currentCustomerAddress = getCurrentCustomerAddress(order);
 
         // Calculate totals
         let totalAmount = 0;
@@ -1071,7 +1446,7 @@ const PrintOrder = () => {
                     <div>Số: <strong>${order.orderNumber || ''}</strong></div>
                     <div>Tọa độ: </div>
                     <div>Nhóm: ${getCustomerGroupName(order.customerGroup)}</div>
-                    <div>STT In: ${order.printOrder || 0}</div>
+                    <div>STT In: ${getCurrentCustomerPrintIn(order)}</div>
                   </div>
                 </div>
               </div>
@@ -1080,10 +1455,10 @@ const PrintOrder = () => {
               <div class="title">PHIẾU GIAO HÀNG KIỂM XÁC NHẬN CÔNG NỢ</div>
               <div class="subtitle">Liên: ${lien}</div>
               
-              <div class="customer-section">
+              <div class="customer-qr-row">
                 <div class="customer-info">
-                  <div>Khách hàng: <strong>${order.customerName || ''}</strong></div>
-                  <div>Địa chỉ: ${order.address || ''}</div>
+                  <div>Khách hàng: <strong>${currentCustomerName}</strong></div>
+                  <div>Địa chỉ: ${currentCustomerAddress}</div>
                   <div>ĐT: ${order.phone || ''}</div>
                 </div>
                 <div class="qr-confirm-wrapper">
@@ -1714,8 +2089,8 @@ const PrintOrder = () => {
           <button className="action-btn btn-export" onClick={handleExportExcel} title="Xuất Excel">
             📊
           </button>
-          <button className="action-btn btn-refresh" onClick={fetchOrders} title="Làm mới">
-            🔄
+          <button className="action-btn btn-export-summary" onClick={handleExportSummary} title="Xuất phiếu tổng hợp">
+            📋
           </button>
           <button className="action-btn btn-print" onClick={handlePrintSelected} title="In đơn hàng">
             🖨️

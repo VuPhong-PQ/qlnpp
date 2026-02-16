@@ -1179,9 +1179,9 @@ const CreateOrderForm = () => {
       ws.getCell('G3').value = `Nhóm: ${custGroupName || ''}`;
       ws.getCell('G3').alignment = { horizontal: 'right' };
 
-      // Row 4: STT In
+      // Row 4: STT In - use live customer printIn value
       ws.mergeCells('G4:J4');
-      ws.getCell('G4').value = `STT In: ${orderForm.printOrder || 0}`;
+      ws.getCell('G4').value = `STT In: ${getCurrentCustomerPrintIn()}`;
       ws.getCell('G4').alignment = { horizontal: 'right' };
 
       // Row 5: Empty
@@ -2535,17 +2535,13 @@ const CreateOrderForm = () => {
     setFilteredCustomers(filtered);
   }, [customerSearch, customers]);
 
-  useEffect(() => {
-    // Load customers and extract unique position values for 'Vị trí' dropdown
-    let mounted = true;
-    
-    // Load both customers and customer groups
-    Promise.all([
-      api.get(API_ENDPOINTS.customers),
-      api.get(API_ENDPOINTS.customerGroups)
-    ])
-    .then(([customersData, groupsData]) => {
-      if (!mounted) return;
+  // Function to fetch customers data - extracted for reuse with event listener
+  const fetchCustomersData = async () => {
+    try {
+      const [customersData, groupsData] = await Promise.all([
+        api.get(API_ENDPOINTS.customers),
+        api.get(API_ENDPOINTS.customerGroups)
+      ]);
       
       if (Array.isArray(customersData) && Array.isArray(groupsData)) {
         // Apply salesSchedule mapping from customer groups salesSchedule field
@@ -2569,8 +2565,59 @@ const CreateOrderForm = () => {
         
         setCustomerGroups(groupsData);
       }
-    })
-    .catch(err => console.warn('Failed to load data:', err));
+    } catch (err) {
+      console.warn('Failed to load data:', err);
+    }
+  };
+
+  // Get current customer printIn (STT in) from customers list (to reflect updated values)
+  const getCurrentCustomerPrintIn = () => {
+    const phone = orderForm.phone || '';
+    const name = orderForm.customerName || '';
+    
+    // Try to find customer by phone (most reliable)
+    if (phone) {
+      const byPhone = (customers || []).find(c => c.phone === phone);
+      if (byPhone) {
+        const val = byPhone.printIn;
+        if (val !== undefined && val !== null && String(val).trim() !== '') {
+          const parsed = parseInt(val, 10);
+          if (!isNaN(parsed)) return parsed;
+        }
+      }
+    }
+    
+    // Try to find by name
+    if (name) {
+      const byName = (customers || []).find(c => c.name === name);
+      if (byName) {
+        const val = byName.printIn;
+        if (val !== undefined && val !== null && String(val).trim() !== '') {
+          const parsed = parseInt(val, 10);
+          if (!isNaN(parsed)) return parsed;
+        }
+      }
+    }
+    
+    // Fallback to stored printOrder on form
+    return orderForm.printOrder || 0;
+  };
+
+  // Listen for cross-component updates when customers change elsewhere
+  useEffect(() => {
+    const onCustomersUpdated = () => {
+      fetchCustomersData();
+    };
+    window.addEventListener('customersUpdated', onCustomersUpdated);
+    return () => window.removeEventListener('customersUpdated', onCustomersUpdated);
+  }, []);
+
+  useEffect(() => {
+    // Load customers and extract unique position values for 'Vị trí' dropdown
+    let mounted = true;
+    
+    // Load data using the extracted function
+    fetchCustomersData();
 
     // load products for product selection - filter by category permissions
     Promise.all([
@@ -3246,7 +3293,7 @@ const CreateOrderForm = () => {
             <label>STT in</label>
             <input
               type="number"
-              value={orderForm.printOrder}
+              value={isCustomerSelected ? getCurrentCustomerPrintIn() : orderForm.printOrder}
               onChange={(e) => handleOrderFormChange('printOrder', e.target.value)}
               className="order-form-input highlight-red"
               placeholder="0"

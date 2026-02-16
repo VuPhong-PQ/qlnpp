@@ -11,6 +11,10 @@ const ProductCategories = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [suggestions, setSuggestions] = useState([]);
+  const [showSuggestions, setShowSuggestions] = useState(false);
+  const [activeSuggestion, setActiveSuggestion] = useState(-1);
+  const searchInputRef = useRef(null);
   const [loading, setLoading] = useState(false);
   const [categories, setCategories] = useState([]);
   const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters, showFilterPopup } = useColumnFilter();
@@ -72,6 +76,20 @@ const ProductCategories = () => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const updateSuggestions = (value) => {
+    if (!value || !categories || categories.length === 0) {
+      setSuggestions([]);
+      return;
+    }
+    const q = value.toString().toLowerCase();
+    const matched = categories.filter(c => {
+      return (c.name || '').toString().toLowerCase().includes(q)
+        || (c.code || '').toString().toLowerCase().includes(q)
+        || (c.note || '').toString().toLowerCase().includes(q);
+    }).slice(0, 8);
+    setSuggestions(matched);
   };
 
   // Excel Import/Export
@@ -365,13 +383,46 @@ const ProductCategories = () => {
 
       <div className="data-table-container">
         <div className="table-header" style={{ position: 'relative' }}>
-          <input
-            type="text"
-            placeholder="Tìm kiếm theo tên hoặc mã loại hàng..."
-            className="search-box"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
+          <div style={{ position: 'relative' }}>
+            <input
+              ref={searchInputRef}
+              type="text"
+              placeholder="Tìm kiếm theo tên hoặc mã loại hàng..."
+              className="search-box"
+              value={searchTerm}
+              onChange={(e) => { setSearchTerm(e.target.value); updateSuggestions(e.target.value); setShowSuggestions(true); setActiveSuggestion(-1); }}
+              onKeyDown={(e) => {
+                if (e.key === 'ArrowDown') {
+                  setActiveSuggestion(a => Math.min(a + 1, suggestions.length - 1));
+                } else if (e.key === 'ArrowUp') {
+                  setActiveSuggestion(a => Math.max(a - 1, 0));
+                } else if (e.key === 'Enter') {
+                  if (activeSuggestion >= 0 && suggestions[activeSuggestion]) {
+                    const s = suggestions[activeSuggestion];
+                    setSearchTerm(s.name || s.code || '');
+                    setShowSuggestions(false);
+                    setActiveSuggestion(-1);
+                    setCurrentPage(1);
+                    e.preventDefault();
+                  }
+                } else if (e.key === 'Escape') {
+                  setShowSuggestions(false);
+                  setActiveSuggestion(-1);
+                }
+              }}
+              onBlur={() => { setTimeout(() => setShowSuggestions(false), 150); }}
+            />
+            {showSuggestions && suggestions && suggestions.length > 0 && (
+              <div style={{ position: 'absolute', left: 0, top: 40, zIndex: 2000, width: 420, background: '#fff', border: '1px solid #ddd', borderRadius: 6, boxShadow: '0 6px 18px rgba(0,0,0,0.08)' }} onMouseDown={(e) => e.preventDefault()}>
+                {suggestions.map((s, idx) => (
+                  <div key={s.id || s.code || idx} onClick={() => { setSearchTerm(s.name || s.code || ''); setShowSuggestions(false); setActiveSuggestion(-1); setCurrentPage(1); }} onMouseEnter={() => setActiveSuggestion(idx)} style={{ padding: '8px 12px', cursor: 'pointer', background: activeSuggestion === idx ? '#f5f7fb' : '#fff', borderBottom: '1px solid #f0f0f0' }}>
+                    <div style={{ fontWeight: 600 }}>{s.name || s.code}</div>
+                    <div style={{ fontSize: 12, color: '#666' }}>{s.code ? `Mã: ${s.code}` : ''}{s.note ? ` · ${s.note}` : ''}</div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
           <div className="table-actions">
             <button 
               className="btn btn-primary"
@@ -527,7 +578,7 @@ const ProductCategories = () => {
                           </span>
                         )}
                       </div>
-                      {col.key !== 'actions' && renderFilterPopup(col.key, col.label)}
+                      {col.key !== 'actions' && renderFilterPopup(col.key, col.label, false, categories)}
                       {/* Mép phải */}
                       {idx < arr.length - 1 && categoryVisibleCols.includes(arr[idx + 1]) && (
                         <span

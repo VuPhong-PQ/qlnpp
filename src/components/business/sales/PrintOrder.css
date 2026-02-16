@@ -519,6 +519,15 @@
   background: #138496;
 }
 
+.print-order-page .btn-export-summary {
+  background: #007bff;
+  color: white;
+}
+
+.print-order-page .btn-export-summary:hover {
+  background: #0056b3;
+}
+
 .print-order-page .btn-print {
   background: #ffc107;
   color: #333;
@@ -559,7 +568,9 @@
   text-align: left;
   border-bottom: 1px solid #e9ecef;
   font-size: 13px;
-  white-space: nowrap;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: break-word;
 }
 
 .print-order-page .data-table th {
