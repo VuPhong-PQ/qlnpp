@@ -857,91 +857,239 @@ const PrintOrder = () => {
     try {
       const ExcelJS = (await import('exceljs')).default;
       const workbook = new ExcelJS.Workbook();
-      const worksheet = workbook.addWorksheet('In Đơn Hàng');
+      const worksheet = workbook.addWorksheet('In_Don_Hang');
 
-      // Page setup: A4 Portrait with Adjust to 70% scale
+      // Page setup: A4 Portrait modern layout
       worksheet.pageSetup = {
-        paperSize: 9, // A4
+        paperSize: 9,
         orientation: 'portrait',
-        scale: 70,
-        fitToPage: false,
+        fitToPage: true,
         horizontalCentered: true,
-        margins: {
-          left: 0.4,
-          right: 0.4,
-          top: 0.5,
-          bottom: 0.5,
-          header: 0.3,
-          footer: 0.3
-        }
+        margins: { left: 0.5, right: 0.5, top: 0.5, bottom: 0.5, header: 0.3, footer: 0.3 }
       };
 
-      // Headers (set column for long text to width 41.44 and wrap)
-      worksheet.columns = [
+      // Define columns to include all main order fields
+      const cols = [
+        { header: 'Id', key: 'id', width: 8 },
         { header: 'Ngày lập', key: 'orderDate', width: 18 },
         { header: 'Số phiếu', key: 'orderNumber', width: 18 },
-        { header: 'Nhóm khách hàng', key: 'customerGroup', width: 20 },
-        { header: 'Lịch bán hàng', key: 'salesSchedule', width: 15 },
-        { header: 'Khách hàng', key: 'customerName', width: 41.44 },
-        { header: 'Xe', key: 'vehicle', width: 15 },
-        { header: 'Xe giao hàng', key: 'deliveryVehicle', width: 20 },
+        { header: 'Nhóm khách hàng', key: 'customerGroup', width: 24 },
+        { header: 'Lịch bán hàng', key: 'salesSchedule', width: 16 },
+        { header: 'Khách hàng (code)', key: 'customer', width: 18 },
+        { header: 'Tên khách hàng', key: 'customerName', width: 36 },
+        { header: 'Địa chỉ', key: 'address', width: 36 },
+        { header: 'Điện thoại', key: 'phone', width: 16 },
+        { header: 'Xe', key: 'vehicle', width: 14 },
+        { header: 'Xe giao hàng', key: 'deliveryVehicle', width: 18 },
         { header: 'STT in', key: 'printOrder', width: 10 },
+        { header: 'Số lần in', key: 'printCount', width: 10 },
+        { header: 'Ngày in', key: 'printDate', width: 18 },
         { header: 'Nhân viên lập', key: 'createdBy', width: 18 },
         { header: 'Nhân viên sale', key: 'salesStaff', width: 18 },
-        { header: 'Loại hàng', key: 'productType', width: 15 },
-        { header: 'Tổng tiền', key: 'totalAmount', width: 15 },
+        { header: 'Loại hàng', key: 'productType', width: 18 },
+        { header: 'Tổng tiền', key: 'totalAmount', width: 16 },
         { header: 'Tổng tiền sau giảm', key: 'totalAfterDiscount', width: 18 },
         { header: 'Tổng số kg', key: 'totalKg', width: 12 },
         { header: 'Tổng số khối', key: 'totalM3', width: 12 },
-        { header: 'Thuế suất', key: 'taxRates', width: 12 },
-        { header: 'Trạng thái', key: 'status', width: 15 },
-        { header: 'Trạng thái in', key: 'printStatus', width: 12 },
-        { header: 'Số lần in', key: 'printCount', width: 10 },
-        { header: 'Ngày in', key: 'printDate', width: 18 }
+        { header: 'Tổng cân (weight)', key: 'totalWeight', width: 12 },
+        { header: 'Tổng thể tích (volume)', key: 'totalVolume', width: 14 },
+        { header: 'Thuế suất', key: 'taxRates', width: 14 },
+        { header: 'Trạng thái', key: 'status', width: 14 },
+        { header: 'Mô tả', key: 'notes', width: 36 },
+        { header: 'Ghi chú', key: 'remarks', width: 18 },
+        { header: 'Mô tả giao hàng', key: 'deliveryNote', width: 28 },
+        { header: 'Số hóa đơn', key: 'invoiceNumber', width: 18 },
+        { header: 'Thanh toán', key: 'payment', width: 14 },
+        { header: 'Quỹ thu', key: 'accountFund', width: 14 },
+        { header: 'MergeFrom', key: 'mergeFromOrder', width: 12 },
+        { header: 'MergeTo', key: 'mergeToOrder', width: 12 },
+        { header: 'VatExport', key: 'vatExport', width: 12 },
+        { header: 'Location', key: 'location', width: 18 }
       ];
 
-      // Enable wrap text for the 'Khách hàng' column (customerName) so long names wrap
-      try {
-        worksheet.getColumn('customerName').alignment = { wrapText: true, vertical: 'top' };
-      } catch (e) {
-        // Fallback: set by index (5)
-        try { worksheet.getColumn(5).alignment = { wrapText: true, vertical: 'top' }; } catch (e2) {}
-      }
+      worksheet.columns = cols;
 
-      // Data
+      // Insert top info rows: company info, title, filters
+      const compName = companyInfo?.companyName || companyInfo?.name || 'CÔNG TY';
+      const compAddr = companyInfo?.address || '';
+      const compPhone = companyInfo?.phone || '';
+
+      // Build filters summary
+      const activeFilters = [];
+      if (searchData) {
+        if (searchData.orderNumber) activeFilters.push(`Số phiếu: ${searchData.orderNumber}`);
+        if (searchData.fromDate || searchData.toDate) activeFilters.push(`Ngày: ${formatInputToDDMMYYYY(searchData.fromDate)} - ${formatInputToDDMMYYYY(searchData.toDate)}`);
+        if (searchData.customerGroup) activeFilters.push(`Nhóm KH: ${getCustomerGroupName(searchData.customerGroup)}`);
+        if (searchData.customer) activeFilters.push(`Khách hàng: ${searchData.customer}`);
+        if (searchData.createdBy) activeFilters.push(`Người lập: ${searchData.createdBy}`);
+        if (searchData.salesStaff) activeFilters.push(`Nhân viên sale: ${searchData.salesStaff}`);
+      }
+      // columnFilters
+      const colFilterEntries = Object.entries(columnFilters || {}).map(([k,v]) => `${k}: ${v}`);
+      const filtersText = [...activeFilters, ...colFilterEntries].join(' | ');
+
+      // Insert rows at top (will push header row down)
+      worksheet.insertRow(1, [compName]);
+      worksheet.mergeCells(1, 1, 1, cols.length);
+      worksheet.getRow(1).font = { bold: true, size: 14 };
+
+      worksheet.insertRow(2, [`Địa chỉ: ${compAddr}    Điện thoại: ${compPhone}`]);
+      worksheet.mergeCells(2, 1, 2, cols.length);
+      worksheet.getRow(2).font = { italic: true, size: 10 };
+
+      worksheet.insertRow(3, ['DANH SÁCH ĐƠN HÀNG']);
+      worksheet.mergeCells(3, 1, 3, cols.length);
+      worksheet.getRow(3).font = { bold: true, size: 12, color: { argb: 'FF0066CC' } };
+
+      worksheet.insertRow(4, [filtersText || '']);
+      worksheet.mergeCells(4, 1, 4, cols.length);
+      worksheet.getRow(4).font = { size: 9 };
+
+      worksheet.insertRow(5, []);
+
+      // After inserting, header is shifted down. Find header row index
+      const headerRowIndex = 6; // headers from worksheet.columns are at row after inserted rows
+
+      // Style header row
+      const headerRow = worksheet.getRow(headerRowIndex);
+      headerRow.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+      headerRow.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+      headerRow.height = 20;
+
+      // Freeze panes to keep header visible
+      worksheet.views = [{ state: 'frozen', ySplit: headerRowIndex }];
+
+      // Auto filter across header
+      worksheet.autoFilter = { from: { row: headerRowIndex, column: 1 }, to: { row: headerRowIndex, column: cols.length } };
+
+      // Ensure wrap text for long columns
+      try { worksheet.getColumn('customerName').alignment = { wrapText: true, vertical: 'top' }; } catch {}
+      try { worksheet.getColumn('address').alignment = { wrapText: true, vertical: 'top' }; } catch {}
+      try { worksheet.getColumn('notes').alignment = { wrapText: true, vertical: 'top' }; } catch {}
+
+      // Data rows (use filteredOrders which respects current search & filters)
       filteredOrders.forEach(order => {
         worksheet.addRow({
+          id: order.id,
           orderDate: formatDate(order.orderDate),
           orderNumber: order.orderNumber,
           customerGroup: getCustomerGroupName(order.customerGroup),
           salesSchedule: order.salesSchedule || '-',
+          customer: order.customer || order.Customer || '-',
           customerName: getCurrentCustomerName(order),
+          address: getCurrentCustomerAddress(order) || order.address || order.Address || '-',
+          phone: order.phone || order.Phone || '-',
           vehicle: order.vehicle || '-',
           deliveryVehicle: order.deliveryVehicle || '-',
           printOrder: getCurrentCustomerPrintIn(order),
-          createdBy: order.createdBy,
+          printCount: order.printCount || 0,
+          printDate: order.printDate ? formatDate(order.printDate) : '-',
+          createdBy: order.createdBy || '-',
           salesStaff: order.salesStaff || order.SalesStaff || '-',
           productType: order.productType || order.ProductType || '-',
-          totalAmount: order.totalAmount,
-          totalAfterDiscount: order.totalAfterDiscount,
-          totalKg: order.totalKg,
-          totalM3: order.totalM3,
+          totalAmount: order.totalAmount || 0,
+          totalAfterDiscount: order.totalAfterDiscount || 0,
+          totalKg: order.totalKg || 0,
+          totalM3: order.totalM3 || 0,
+          totalWeight: order.totalWeight || order.TotalWeight || '-',
+          totalVolume: order.totalVolume || order.TotalVolume || '-',
           taxRates: formatTaxRates(order),
-          status: order.status,
-          printStatus: (order.printCount || 0) > 0 ? 'Đã in' : 'Chưa in',
-          printCount: order.printCount || 0,
-          printDate: order.printDate ? formatDate(order.printDate) : '-'
+          status: order.status || '-',
+          notes: order.notes || order.Notes || order.note || order.Note || '',
+          deliveryNote: order.deliveryNote || order.DeliveryNote || '',
+          invoiceNumber: order.invoiceNumber || order.InvoiceNumber || '',
+          payment: order.payment || order.Payment || 0,
+          accountFund: order.accountFund || order.AccountFund || '',
+          mergeFromOrder: order.mergeFromOrder || order.MergeFromOrder || '',
+          mergeToOrder: order.mergeToOrder || order.MergeToOrder || '',
+          vatExport: order.vatExport || order.VatExport || false,
+          location: order.location || order.Location || ''
         });
       });
 
-      // Style header
-      worksheet.getRow(1).font = { bold: true };
-      worksheet.getRow(1).fill = {
-        type: 'pattern',
-        pattern: 'solid',
-        fgColor: { argb: 'FF4472C4' }
-      };
-      worksheet.getRow(1).font = { bold: true, color: { argb: 'FFFFFFFF' } };
+      // --- Add detailed items sheet (summary by customer group) ---
+      try {
+        const prodResp = await fetch(`${API_BASE_URL}/Products`);
+        const products = prodResp && prodResp.ok ? await prodResp.json() : [];
+
+        const orderDetailsPromises = filteredOrders.map(async (o) => {
+          try {
+            const r = await fetch(`${API_BASE_URL}/Orders/${o.id}`);
+            if (r.ok) return await r.json();
+          } catch (e) {}
+          return null;
+        });
+        const orderDetails = await Promise.all(orderDetailsPromises);
+        const validOrderDetails = orderDetails.filter(x => x);
+
+        const grouped = {};
+        validOrderDetails.forEach(od => {
+          const order = od.order;
+          const items = [...(od.items || []), ...(od.promotionItems || [])];
+          const groupKey = order.customerGroup || 'null';
+          if (!grouped[groupKey]) grouped[groupKey] = {};
+
+          items.forEach(it => {
+            const key = it.barcode || it.productCode || it.productName || Math.random().toString(36).slice(2);
+            if (!grouped[groupKey][key]) {
+              const product = products.find(p => p.barcode === it.barcode || p.code === it.productCode || p.name === it.productName);
+              grouped[groupKey][key] = {
+                barcode: it.barcode || '',
+                productCode: it.productCode || '',
+                productName: it.productName || '',
+                unit1: product?.unit1 || product?.defaultUnit || it.unit || '',
+                baseUnit: product?.baseUnit || '',
+                conversionToBase: parseFloat(it.conversion) || parseFloat(product?.conversion1) || 1,
+                convUnit1: parseFloat(product?.conversion1) || parseFloat(it.conversion) || 1,
+                baseQuantity: 0,
+                note: it.description || ''
+              };
+            }
+            const entry = grouped[groupKey][key];
+            const qty = parseFloat(it.quantity) || 0;
+            entry.baseQuantity += qty * (parseFloat(entry.conversionToBase) || 1);
+          });
+        });
+
+        const itemsSheet = workbook.addWorksheet('ChiTiet_TongHop');
+        itemsSheet.columns = [
+          { header: 'Nhóm khách hàng', key: 'customerGroup', width: 28 },
+          { header: 'Mã vạch', key: 'barcode', width: 18 },
+          { header: 'Tên hàng', key: 'productName', width: 48 },
+          { header: 'ĐVT1', key: 'unit1', width: 12 },
+          { header: 'SL 1', key: 'sl1', width: 12 },
+          { header: 'ĐVT gốc', key: 'baseUnit', width: 12 },
+          { header: 'SL gốc', key: 'baseQty', width: 14 },
+          { header: 'Ghi chú', key: 'note', width: 24 }
+        ];
+
+        Object.keys(grouped).forEach(groupKey => {
+          const map = grouped[groupKey];
+          const groupName = groupKey === 'null' || !groupKey ? 'null' : getCustomerGroupName(groupKey);
+          Object.values(map).forEach(it => {
+            const baseQty = parseFloat(it.baseQuantity) || 0;
+            const convUnit1 = parseFloat(it.convUnit1) || 1;
+            const sl1 = Math.floor(baseQty / convUnit1);
+            const baseRemaining = baseQty - (sl1 * convUnit1);
+            itemsSheet.addRow({ customerGroup: groupName, barcode: it.barcode, productName: it.productName, unit1: it.unit1, sl1: sl1, baseUnit: it.baseUnit, baseQty: baseRemaining, note: it.note });
+          });
+        });
+
+        // header style
+        const hdr = itemsSheet.getRow(1);
+        hdr.font = { bold: true, color: { argb: 'FFFFFFFF' } };
+        hdr.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+        itemsSheet.views = [{ state: 'frozen', ySplit: 1 }];
+      } catch (e) {
+        // ignore errors creating items sheet
+      }
+
+      // Format numeric columns
+      ['totalAmount','totalAfterDiscount','totalKg','totalM3','payment'].forEach(key => {
+        const col = worksheet.getColumn(key);
+        if (col) col.numFmt = '#,##0.00';
+      });
 
       // Generate file
       const buffer = await workbook.xlsx.writeBuffer();
@@ -949,11 +1097,12 @@ const PrintOrder = () => {
       const url = window.URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = url;
-      link.download = `InDonHang_${new Date().toISOString().split('T')[0]}.xlsx`;
+      link.download = `DanhSach_DonHang_${new Date().toISOString().split('T')[0]}.xlsx`;
       link.click();
       window.URL.revokeObjectURL(url);
     } catch (error) {
-      // error exporting Excel
+      console.error('Error exporting Excel:', error);
+      alert('Có lỗi khi xuất Excel');
     }
   };
 
@@ -1044,11 +1193,15 @@ const PrintOrder = () => {
                 barcode: item.barcode || '',
                 productCode: item.productCode || '',
                 productName: item.productName || '',
-                unit1: item.unit || product?.defaultUnit || product?.unit1 || '',
+                // Use product's "ĐVT 1" (Unit1) when available, otherwise fall back to defaults
+                unit1: product?.unit1 || product?.defaultUnit || item.unit || '',
                 quantity1: 0,
                 baseUnit: product?.baseUnit || '',
                 baseQuantity: 0,
-                conversion: item.conversion || product?.conversion1 || 1,
+                // conversionToBase: number of base units per the item's unit (used to compute baseQuantity)
+                conversionToBase: parseFloat(item.conversion) || parseFloat(product?.conversion1) || 1,
+                // convUnit1: number of base units per "ĐVT 1" (Quy đổi 1) - prefer product setting
+                convUnit1: parseFloat(product?.conversion1) || parseFloat(item.conversion) || 1,
                 note: item.description || ''
               };
             }
@@ -1056,13 +1209,23 @@ const PrintOrder = () => {
             // Add quantity
             const qty = parseFloat(item.quantity) || 0;
             itemsMap[productKey].quantity1 += qty;
-            // Calculate base quantity
-            const conversion = parseFloat(itemsMap[productKey].conversion) || 1;
-            itemsMap[productKey].baseQuantity += qty * conversion;
+            // Calculate base quantity using conversionToBase
+            const conversionToBase = parseFloat(itemsMap[productKey].conversionToBase) || 1;
+            itemsMap[productKey].baseQuantity += qty * conversionToBase;
           });
         });
 
-        aggregatedData[groupKey] = Object.values(itemsMap);
+        // After aggregating raw quantities, compute final SL1 as integer part of (baseQuantity / convUnit1)
+        const values = Object.values(itemsMap).map(it => {
+          const convUnit1 = parseFloat(it.convUnit1) || 1; // base units per ĐVT1
+          const baseQty = parseFloat(it.baseQuantity) || 0;
+          // SL1 = floor(baseQuantity / convUnit1)
+          const sl1 = Math.floor(baseQty / convUnit1);
+          const baseRemaining = baseQty - (sl1 * convUnit1);
+          return { ...it, quantity1: sl1, baseRemaining };
+        });
+
+        aggregatedData[groupKey] = values;
       });
 
       // Get date range from selected orders
@@ -1072,6 +1235,17 @@ const PrintOrder = () => {
 
       const formatDate = (d) => {
         return `${String(d.getDate()).padStart(2, '0')}/${String(d.getMonth() + 1).padStart(2, '0')}/${d.getFullYear()}`;
+      };
+
+      // Format quantities: show integer without decimals, otherwise show up to 3 decimals trimmed
+      const formatQty = (v) => {
+        const n = Number(v) || 0;
+        if (Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
+        let s = n.toFixed(3);
+        s = s.replace(/\.?(0+)$/,'');
+        // remove trailing dot if any
+        s = s.replace(/\.$/, '');
+        return s;
       };
 
       // Company info
@@ -1105,7 +1279,7 @@ const PrintOrder = () => {
             td.text-center { text-align: center; }
             td.text-right { text-align: right; }
             .group-header { background-color: #f0f0f0; font-weight: bold; font-style: italic; }
-            .product-name { white-space: normal; word-wrap: break-word; }
+            .product-name { white-space: normal; word-wrap: break-word; text-align: center; }
             .nested-header { background-color: #e8e8e8; }
           </style>
         </head>
@@ -1123,18 +1297,17 @@ const PrintOrder = () => {
             <thead>
               <tr>
                 <th rowspan="2" style="width: 40px;">STT</th>
-                <th rowspan="2" style="width: 120px;">Mã vạch</th>
-                <th rowspan="2" style="width: 100px;">Mã hàng</th>
-                <th rowspan="2" style="width: 300px;">Tên hàng</th>
+                <th rowspan="2" style="width: 85px;">Mã vạch</th>
+                <th rowspan="2" style="width: 440px;">Tên hàng</th>
                 <th colspan="2" style="text-align: center;">Đơn vị 1</th>
                 <th colspan="2" style="text-align: center;">Đơn vị gốc</th>
-                <th rowspan="2" style="width: 100px;">Ghi chú</th>
+                <th rowspan="2" style="width: 90px;">Ghi chú</th>
               </tr>
               <tr>
-                <th style="width: 80px;">Đơn vị 1</th>
-                <th style="width: 60px;">SL 1</th>
-                <th style="width: 80px;">Đơ n vị gốc</th>
-                <th style="width: 60px;">SL gốc</th>
+                <th style="width: 60px;">Đơn vị 1</th>
+                <th style="width: 45px;">SL 1</th>
+                <th style="width: 60px;">Đơn vị gốc</th>
+                <th style="width: 45px;">SL gốc</th>
               </tr>
             </thead>
             <tbody>
@@ -1148,7 +1321,7 @@ const PrintOrder = () => {
         // Group header row
         printContent += `
           <tr class="group-header">
-            <td colspan="9"><strong>Nhóm khách hàng: ${groupName}</strong></td>
+            <td colspan="8"><strong>Nhóm khách hàng: ${groupName}</strong></td>
           </tr>
         `;
 
@@ -1158,13 +1331,12 @@ const PrintOrder = () => {
             <tr>
               <td class="text-center">${index + 1}</td>
               <td>${item.barcode}</td>
-              <td>${item.productCode}</td>
               <td class="product-name">${item.productName}</td>
               <td class="text-center">${getUnitLabel(item.unit1)}</td>
-              <td class="text-right">${item.quantity1 % 1 === 0 ? item.quantity1 : item.quantity1.toFixed(2)}</td>
+              <td class="text-right">${formatQty(item.quantity1)}</td>
               <td class="text-center">${getUnitLabel(item.baseUnit)}</td>
-              <td class="text-right">${item.baseQuantity % 1 === 0 ? item.baseQuantity : item.baseQuantity.toFixed(2)}</td>
-              <td>${item.note || ''}</td>
+              <td class="text-right">${formatQty(item.baseRemaining)}</td>
+              <td></td>
             </tr>
           `;
         });
@@ -1574,7 +1746,7 @@ const PrintOrder = () => {
               </div>
               
               <div class="note-section">
-                Ghi chú: ${order.notes || ''}
+                Mô tả: ${order.notes || ''}
               </div>
               
               <div class="footer-warning">
@@ -1620,6 +1792,288 @@ const PrintOrder = () => {
       alert('Lỗi khi in đơn hàng: ' + error.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // Context menu state for right-click export
+  const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0 });
+
+  const handleContextMenu = (e, orderId = null) => {
+    // only show custom menu when user has selected orders
+    if ((selectedOrders || new Set()).size === 0) return;
+    e.preventDefault();
+    setContextMenu({ visible: true, x: e.clientX, y: e.clientY, orderId: orderId });
+  };
+
+  const hideContextMenu = () => {
+    if (contextMenu.visible) setContextMenu({ visible: false, x: 0, y: 0, orderId: null });
+  };
+
+  useEffect(() => {
+    const onAnyClick = (e) => {
+      if (contextMenu.visible) hideContextMenu();
+    };
+    document.addEventListener('click', onAnyClick);
+    document.addEventListener('scroll', hideContextMenu);
+    return () => {
+      document.removeEventListener('click', onAnyClick);
+      document.removeEventListener('scroll', hideContextMenu);
+    };
+  }, [contextMenu.visible]);
+
+  // Export selected orders into two-sheet Excel: "xuất hàng tổng hợp" and "thông tin"
+  const handleExportGHTongHopExcel = async () => {
+    if ((selectedOrders || new Set()).size === 0) {
+      alert('Vui lòng chọn ít nhất một đơn hàng để xuất');
+      return;
+    }
+    setLoading(true);
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const workbook = new ExcelJS.Workbook();
+
+      // Sheet 1: xuất hàng tổng hợp
+      const sheet1 = workbook.addWorksheet('xuất hàng tổng hợp');
+      sheet1.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true };
+
+      sheet1.columns = [
+        { header: 'Mã phiếu', key: 'orderNumber', width: 20 },
+        { header: 'Mã vạch', key: 'barcode', width: 18 },
+        { header: 'Mã hàng', key: 'productCode', width: 18 },
+        { header: 'Tên hàng', key: 'productName', width: 52 },
+        { header: 'Đơn vị tính 1', key: 'unit1', width: 16 },
+        { header: 'Số lượng ĐVT 1', key: 'sl1', width: 18 },
+        { header: 'Đơn vị gốc', key: 'baseUnit', width: 14 },
+        { header: 'Số lượng ĐVT gốc', key: 'slgoc', width: 20 },
+        { header: 'Mô tả', key: 'description', width: 36 },
+        { header: 'SL bán theo ĐVT Gốc', key: 'sl_sell_base', width: 22 }
+      ];
+
+      // Sheet 2: thông tin
+      const sheet2 = workbook.addWorksheet('thông tin');
+      sheet2.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true };
+      sheet2.columns = [
+        { header: 'Số TT', key: 'idx', width: 8 },
+        { header: 'Mã phiếu', key: 'orderNumber', width: 22 },
+        { header: 'Tên khách hàng', key: 'customerName', width: 40 },
+        { header: 'Tổng tiền', key: 'totalAmount', width: 18 },
+        { header: 'Tổng tiền sau giảm', key: 'totalAfterDiscount', width: 22 },
+        { header: 'NV Sale', key: 'salesStaff', width: 18 }
+      ];
+
+      // Fetch product list for unit/conversion lookup
+      let products = [];
+      try {
+        const resp = await fetch(`${API_BASE_URL}/Products`);
+        if (resp.ok) products = await resp.json();
+      } catch (e) {}
+
+      // Fetch full details for selected orders
+      const orderIds = Array.from(selectedOrders);
+      const orderDetailsPromises = orderIds.map(async id => {
+        try {
+          const r = await fetch(`${API_BASE_URL}/Orders/${id}`);
+          if (r.ok) return await r.json();
+        } catch (e) {}
+        return null;
+      });
+      const orderDetails = (await Promise.all(orderDetailsPromises)).filter(x => x);
+
+      // Prepare company and range info to insert as top merged header rows
+      const compName = companyInfo?.companyName || companyInfo?.name || 'CÔNG TY';
+      const compAddr = companyInfo?.address || '';
+      const compPhone = companyInfo?.phone || '';
+
+      const orderDates = orderDetails.map(od => new Date(od.order.orderDate)).filter(d => !isNaN(d));
+      const minDate = orderDates.length > 0 ? new Date(Math.min(...orderDates)) : null;
+      const maxDate = orderDates.length > 0 ? new Date(Math.max(...orderDates)) : null;
+      const formatD = (d) => {
+        if (!d) return '';
+        return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()}`;
+      };
+
+      const customerGroupKeys = Array.from(new Set(orderDetails.map(od => od.order.customerGroup || 'null')));
+      const customerGroupNames = customerGroupKeys.map(k => (k === 'null' || !k) ? 'null' : getCustomerGroupName(k)).join(', ');
+
+      // Insert top info rows for sheet1 (xuất hàng tổng hợp)
+      try {
+        sheet1.insertRow(1, [compName]);
+        sheet1.mergeCells(1, 1, 1, sheet1.columns.length);
+        sheet1.getRow(1).font = { bold: true, size: 14 };
+        sheet1.getRow(1).getCell(1).alignment = { horizontal: 'left' };
+
+        sheet1.insertRow(2, [`Địa chỉ: ${compAddr}    Điện thoại: ${compPhone}`]);
+        sheet1.mergeCells(2, 1, 2, sheet1.columns.length);
+        sheet1.getRow(2).font = { italic: true, size: 10 };
+        sheet1.getRow(2).getCell(1).alignment = { horizontal: 'left' };
+
+        sheet1.insertRow(3, ['PHIẾU XUẤT HÀNG TỔNG HỢP']);
+        sheet1.mergeCells(3, 1, 3, sheet1.columns.length);
+        sheet1.getRow(3).font = { bold: true, size: 12, color: { argb: 'FF0066CC' } };
+        sheet1.getRow(3).getCell(1).alignment = { horizontal: 'center' };
+
+        sheet1.insertRow(4, [`Nhóm: ${customerGroupNames}`]);
+        sheet1.mergeCells(4, 1, 4, sheet1.columns.length);
+        sheet1.getRow(4).font = { size: 10 };
+        sheet1.getRow(4).getCell(1).alignment = { horizontal: 'center' };
+
+        sheet1.insertRow(5, [`Từ ngày: ${formatD(minDate)}    Đến ngày: ${formatD(maxDate)}`]);
+        sheet1.mergeCells(5, 1, 5, sheet1.columns.length);
+        sheet1.getRow(5).font = { size: 10 };
+        sheet1.getRow(5).getCell(1).alignment = { horizontal: 'center' };
+      } catch (e) {}
+
+      // Insert top info rows for sheet2 (thông tin)
+      try {
+        sheet2.insertRow(1, [compName]);
+        sheet2.mergeCells(1, 1, 1, sheet2.columns.length);
+        sheet2.getRow(1).font = { bold: true, size: 14 };
+        sheet2.getCell('A1').alignment = { horizontal: 'left' };
+
+        sheet2.insertRow(2, [`Địa chỉ: ${compAddr}    Điện thoại: ${compPhone}`]);
+        sheet2.mergeCells(2, 1, 2, sheet2.columns.length);
+        sheet2.getRow(2).font = { italic: true, size: 10 };
+        sheet2.getCell('A2').alignment = { horizontal: 'left' };
+
+        sheet2.insertRow(3, ['PHIẾU XUẤT HÀNG TỔNG HỢP - THÔNG TIN']);
+        sheet2.mergeCells(3, 1, 3, sheet2.columns.length);
+        sheet2.getRow(3).font = { bold: true, size: 12, color: { argb: 'FF0066CC' } };
+        sheet2.getRow(3).getCell(1).alignment = { horizontal: 'center' };
+
+        sheet2.insertRow(4, [`Nhóm: ${customerGroupNames}`]);
+        sheet2.mergeCells(4, 1, 4, sheet2.columns.length);
+        sheet2.getRow(4).font = { size: 10 };
+        sheet2.getRow(4).getCell(1).alignment = { horizontal: 'center' };
+
+        sheet2.insertRow(5, [`Từ ngày: ${formatD(minDate)}    Đến ngày: ${formatD(maxDate)}`]);
+        sheet2.mergeCells(5, 1, 5, sheet2.columns.length);
+        sheet2.getRow(5).font = { size: 10 };
+        sheet2.getRow(5).getCell(1).alignment = { horizontal: 'center' };
+      } catch (e) {}
+
+      // Build rows for sheet1: one row per aggregated product per order
+      // Helper to format quantity: integer without decimal, decimal with decimal point
+      const formatQtyExcel = (v) => {
+        const n = Number(v) || 0;
+        if (Math.abs(n - Math.round(n)) < 1e-9) return Math.round(n);
+        return Math.round(n * 1000) / 1000; // up to 3 decimal places
+      };
+
+      // Following sample: list by order then items
+      orderDetails.forEach(od => {
+        const order = od.order;
+        const items = [...(od.items || []), ...(od.promotionItems || [])];
+        items.forEach(item => {
+          const product = products.find(p => p.barcode === item.barcode || p.code === item.productCode || p.name === item.productName) || {};
+          const conversionToBase = parseFloat(item.conversion) || parseFloat(product.conversion1) || 1;
+          const convUnit1 = parseFloat(product.conversion1) || parseFloat(item.conversion) || 1;
+          const baseQty = (parseFloat(item.quantity) || 0) * conversionToBase;
+          const sl1 = Math.floor(baseQty / convUnit1);
+          const baseRemaining = baseQty - (sl1 * convUnit1);
+
+          sheet1.addRow({
+            orderNumber: order.orderNumber || '',
+            barcode: item.barcode || '',
+            productCode: item.productCode || '',
+            productName: item.productName || '' ,
+            unit1: product.unit1 || product.defaultUnit || item.unit || '',
+            sl1: sl1,
+            baseUnit: product.baseUnit || '',
+            slgoc: formatQtyExcel(baseRemaining),
+            description: item.description || '',
+            sl_sell_base: formatQtyExcel(baseQty)
+          });
+        });
+      });
+
+      // Build rows for sheet2: summary lines per order
+      orderDetails.forEach((od, idx) => {
+        const order = od.order;
+        const items = [...(od.items || []), ...(od.promotionItems || [])];
+        // Compute salesStaff from items' nvSales if order doesn't have it
+        let salesStaffValue = order.salesStaff || order.SalesStaff || '';
+        if (!salesStaffValue && items.length > 0) {
+          const nvSalesSet = new Set(items.map(i => i.nvSales || i.NvSales).filter(Boolean));
+          salesStaffValue = Array.from(nvSalesSet).join(', ');
+        }
+        sheet2.addRow({
+          idx: idx + 1,
+          orderNumber: order.orderNumber || '',
+          customerName: getCurrentCustomerName(order),
+          totalAmount: order.totalAmount || 0,
+          totalAfterDiscount: order.totalAfterDiscount || 0,
+          salesStaff: salesStaffValue
+        });
+      });
+
+      // Style headers for both sheets
+      // Styling: header fill, font, borders, autofilter, freeze panes, alignments
+      const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+      const headerFontColor = { argb: 'FFFFFFFF' };
+      const borderThin = { style: 'thin', color: { argb: 'FFBFBFBF' } };
+      const allBorder = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
+
+      [sheet1, sheet2].forEach(s => {
+        // header row index: we inserted 5 top info rows, so headers are at row 6
+        const headerRowIndex = 6;
+        const hdr = s.getRow(headerRowIndex);
+        hdr.height = 20;
+        hdr.font = { bold: true, color: headerFontColor };
+        hdr.alignment = { vertical: 'middle', horizontal: 'center' };
+        hdr.eachCell((cell) => {
+          cell.fill = headerFill;
+          cell.border = allBorder;
+        });
+
+        // freeze top including header rows
+        s.views = [{ state: 'frozen', ySplit: headerRowIndex }];
+
+        // apply border & alignment for data rows (skip header and top info rows 1-6)
+        s.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+          if (rowNumber <= headerRowIndex) return;
+          row.eachCell((cell, colNumber) => {
+            cell.border = allBorder;
+            // align numeric columns to right, text columns left
+            const key = s.getColumn(colNumber).key;
+            if (['sl1','slgoc','sl_sell_base','totalAmount','totalAfterDiscount'].includes(key)) {
+              cell.alignment = { horizontal: 'right', vertical: 'top' };
+            } else if (key === 'productName' || key === 'description' || key === 'customerName') {
+              cell.alignment = { wrapText: true, vertical: 'top', horizontal: 'left' };
+            } else {
+              cell.alignment = { vertical: 'top', horizontal: 'left' };
+            }
+          });
+        });
+
+        // auto filter for header
+        try {
+          const lastCol = s.columns.length;
+          s.autoFilter = { from: { row: headerRowIndex, column: 1 }, to: { row: headerRowIndex, column: lastCol } };
+        } catch (e) {}
+      });
+
+      // Numeric formatting for numeric columns
+      try { sheet1.getColumn('sl1').numFmt = '#,##0'; } catch {}
+      try { sheet1.getColumn('slgoc').numFmt = 'General'; } catch {}
+      try { sheet1.getColumn('sl_sell_base').numFmt = 'General'; } catch {}
+      try { sheet2.getColumn('totalAmount').numFmt = '#,##0.00'; } catch {}
+      try { sheet2.getColumn('totalAfterDiscount').numFmt = '#,##0.00'; } catch {}
+
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Phieu_Giao_Hang_Tong_Hop_${new Date().toISOString().split('T')[0]}.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
+
+    } catch (error) {
+      console.error('Error exporting GH TongHop Excel:', error);
+      alert('Có lỗi khi xuất Excel phiếu giao hàng tổng hợp');
+    } finally {
+      setLoading(false);
+      hideContextMenu();
     }
   };
 
@@ -2102,7 +2556,7 @@ const PrintOrder = () => {
       </div>
 
       {/* Table */}
-      <div className="table-container">
+      <div className="table-container" onContextMenu={handleContextMenu}>
         {loading ? (
           <div className="loading-spinner">
             <div className="spinner"></div>
@@ -2165,6 +2619,7 @@ const PrintOrder = () => {
                   <tr 
                     key={order.id}
                     className={selectedOrders.has(order.id) ? 'selected' : ''}
+                    onContextMenu={(e) => handleContextMenu(e, order.id)}
                   >
                     <td className="checkbox-col">
                       <input
@@ -2183,6 +2638,18 @@ const PrintOrder = () => {
               )}
             </tbody>
           </table>
+        )}
+        {/* Custom context menu for selected orders */}
+        {contextMenu.visible && (
+          <div
+            className="custom-context-menu"
+            style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 99999 }}
+          >
+            <div className="context-menu-item" onClick={(e) => { e.stopPropagation(); hideContextMenu(); handlePrintSelected(); }}>🖨️ In danh sách đã chọn (2 liên)</div>
+            <div className="context-menu-item" onClick={(e) => { e.stopPropagation(); hideContextMenu(); handleExportSummary(); }}>📋 In phiếu xuất hàng tổng hợp theo nhóm khách hàng</div>
+            <div className="context-menu-item" onClick={(e) => { e.stopPropagation(); hideContextMenu(); handleExportExcel(); }}>📥 Xuất Excel bảng kê giao hàng</div>
+            <div className="context-menu-item" onClick={async (e) => { e.stopPropagation(); hideContextMenu(); await handleExportGHTongHopExcel(); }}>📊 Xuất Excel phiếu xuất hàng tổng hợp</div>
+          </div>
         )}
       </div>
 
