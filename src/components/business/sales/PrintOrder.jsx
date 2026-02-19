@@ -77,21 +77,21 @@ const PrintOrder = () => {
   const defaultColumns = [
     { id: 'orderDate', label: 'Ngày lập', width: 120, visible: true },
     { id: 'orderNumber', label: 'Số phiếu', width: 150, visible: true },
+    { id: 'customerName', label: 'Khách hàng', width: 200, visible: true },
+    { id: 'totalAfterDiscount', label: 'Tổng tiền sau giảm', width: 140, visible: true },
+    { id: 'status', label: 'Trạng thái', width: 120, visible: true },
+    { id: 'createdBy', label: 'Nhân viên lập', width: 140, visible: true },
+    { id: 'taxRates', label: 'Thuế suất', width: 100, visible: true },
+    { id: 'productType', label: 'Loại hàng', width: 140, visible: true },
+    { id: 'salesStaff', label: 'Nhân viên sale', width: 140, visible: true },
     { id: 'customerGroup', label: 'Nhóm khách hàng', width: 140, visible: true },
     { id: 'salesSchedule', label: 'Lịch bán hàng', width: 140, visible: true },
-    { id: 'customerName', label: 'Khách hàng', width: 200, visible: true },
-    { id: 'vehicle', label: 'Xe', width: 100, visible: true },
-    { id: 'deliveryVehicle', label: 'Xe giao hàng', width: 120, visible: true },
-    { id: 'printOrder', label: 'STT in', width: 80, visible: true },
-    { id: 'createdBy', label: 'Nhân viên lập', width: 140, visible: true },
-    { id: 'salesStaff', label: 'Nhân viên sale', width: 140, visible: true },
-    { id: 'productType', label: 'Loại hàng', width: 140, visible: true },
     { id: 'totalAmount', label: 'Tổng tiền', width: 120, visible: true },
-    { id: 'totalAfterDiscount', label: 'Tổng tiền sau giảm', width: 140, visible: true },
     { id: 'totalKg', label: 'Tổng số kg', width: 100, visible: true },
     { id: 'totalM3', label: 'Tổng số khối', width: 100, visible: true },
-    { id: 'taxRates', label: 'Thuế suất', width: 100, visible: true },
-    { id: 'status', label: 'Trạng thái', width: 120, visible: true },
+    { id: 'printOrder', label: 'STT in', width: 80, visible: true },
+    { id: 'vehicle', label: 'Xe', width: 100, visible: true },
+    { id: 'deliveryVehicle', label: 'Xe giao hàng', width: 120, visible: true },
     { id: 'printStatus', label: 'Trạng thái in', width: 120, visible: true },
     { id: 'printCount', label: 'Số lần in', width: 80, visible: true },
     { id: 'printDate', label: 'Ngày in', width: 140, visible: true },
@@ -543,18 +543,25 @@ const PrintOrder = () => {
   // Get current customer name from customers list (to reflect updated names)
   const getCurrentCustomerName = (order) => {
     if (!order) return '-';
+    const customerId = order.customer || order.Customer || '';
+    const oldName = order.customerName || order.CustomerName || customerId || '';
     const phone = order.phone || order.Phone || '';
-    const oldName = order.customerName || order.customer || '';
     
-    // Try to find customer by phone (most reliable)
-    if (phone) {
-      const byPhone = (customers || []).find(c => c.phone === phone);
-      if (byPhone) return byPhone.name || oldName;
+    // Try to find customer by ID (most reliable)
+    if (customerId) {
+      const byId = (customers || []).find(c => String(c.id) === String(customerId));
+      if (byId) return byId.name || oldName;
     }
     
     // Try to find by code matching old name
     const byCode = (customers || []).find(c => c.code === oldName || c.name === oldName);
     if (byCode) return byCode.name || oldName;
+    
+    // Try to find by phone + customerName to disambiguate
+    if (phone && oldName) {
+      const byPhoneAndName = (customers || []).find(c => c.phone === phone && c.name === oldName);
+      if (byPhoneAndName) return byPhoneAndName.name;
+    }
     
     // Fallback to stored name
     return oldName || '-';
@@ -563,19 +570,26 @@ const PrintOrder = () => {
   // Get current customer address from customers list (to reflect updated address)
   const getCurrentCustomerAddress = (order) => {
     if (!order) return '';
+    const customerId = order.customer || order.Customer || '';
+    const oldName = order.customerName || order.CustomerName || customerId || '';
     const phone = order.phone || order.Phone || '';
-    const oldName = order.customerName || order.customer || '';
     const oldAddress = order.address || order.Address || '';
     
-    // Try to find customer by phone (most reliable)
-    if (phone) {
-      const byPhone = (customers || []).find(c => c.phone === phone);
-      if (byPhone) return byPhone.address || oldAddress;
+    // Try to find customer by ID (most reliable)
+    if (customerId) {
+      const byId = (customers || []).find(c => String(c.id) === String(customerId));
+      if (byId) return byId.address || oldAddress;
     }
     
     // Try to find by code matching old name
     const byCode = (customers || []).find(c => c.code === oldName || c.name === oldName);
     if (byCode) return byCode.address || oldAddress;
+    
+    // Try to find by phone + customerName to disambiguate
+    if (phone && oldName) {
+      const byPhoneAndName = (customers || []).find(c => c.phone === phone && c.name === oldName);
+      if (byPhoneAndName) return byPhoneAndName.address || oldAddress;
+    }
     
     // Fallback to stored address
     return oldAddress || '';
@@ -584,14 +598,15 @@ const PrintOrder = () => {
   // Get current customer printIn (STT in) from customers list (to reflect updated values)
   const getCurrentCustomerPrintIn = (order) => {
     if (!order) return 0;
+    const customerId = order.customer || order.Customer || '';
+    const oldName = order.customerName || order.CustomerName || customerId || '';
     const phone = order.phone || order.Phone || '';
-    const oldName = order.customerName || order.customer || '';
     
-    // Try to find customer by phone (most reliable)
-    if (phone) {
-      const byPhone = (customers || []).find(c => c.phone === phone);
-      if (byPhone) {
-        const val = byPhone.printIn;
+    // Try to find customer by ID (most reliable)
+    if (customerId) {
+      const byId = (customers || []).find(c => String(c.id) === String(customerId));
+      if (byId) {
+        const val = byId.printIn;
         if (val !== undefined && val !== null && String(val).trim() !== '') {
           const parsed = parseInt(val, 10);
           if (!isNaN(parsed)) return parsed;
@@ -1209,9 +1224,10 @@ const PrintOrder = () => {
             // Add quantity
             const qty = parseFloat(item.quantity) || 0;
             itemsMap[productKey].quantity1 += qty;
-            // Calculate base quantity using conversionToBase
-            const conversionToBase = parseFloat(itemsMap[productKey].conversionToBase) || 1;
-            itemsMap[productKey].baseQuantity += qty * conversionToBase;
+            // Calculate base quantity using each item's own conversion (not the stored one,
+            // because different items for the same product may use different units, e.g. THUNG vs GOI)
+            const itemConversion = parseFloat(item.conversion) || 1;
+            itemsMap[productKey].baseQuantity += qty * itemConversion;
           });
         });
 
@@ -1297,6 +1313,7 @@ const PrintOrder = () => {
             <thead>
               <tr>
                 <th rowspan="2" style="width: 40px;">STT</th>
+                <th rowspan="2" style="width: 85px;">Mã hàng</th>
                 <th rowspan="2" style="width: 85px;">Mã vạch</th>
                 <th rowspan="2" style="width: 440px;">Tên hàng</th>
                 <th colspan="2" style="text-align: center;">Đơn vị 1</th>
@@ -1321,7 +1338,7 @@ const PrintOrder = () => {
         // Group header row
         printContent += `
           <tr class="group-header">
-            <td colspan="8"><strong>Nhóm khách hàng: ${groupName}</strong></td>
+            <td colspan="9"><strong>Nhóm khách hàng: ${groupName}</strong></td>
           </tr>
         `;
 
@@ -1330,6 +1347,7 @@ const PrintOrder = () => {
           printContent += `
             <tr>
               <td class="text-center">${index + 1}</td>
+              <td>${item.productCode}</td>
               <td>${item.barcode}</td>
               <td class="product-name">${item.productName}</td>
               <td class="text-center">${getUnitLabel(item.unit1)}</td>
@@ -1846,7 +1864,9 @@ const PrintOrder = () => {
         { header: 'Đơn vị gốc', key: 'baseUnit', width: 14 },
         { header: 'Số lượng ĐVT gốc', key: 'slgoc', width: 20 },
         { header: 'Mô tả', key: 'description', width: 36 },
-        { header: 'SL bán theo ĐVT Gốc', key: 'sl_sell_base', width: 22 }
+        { header: 'SL bán theo ĐVT Gốc', key: 'sl_sell_base', width: 22 },
+        { header: 'Quy đổi', key: 'conversion', width: 12 },
+        { header: 'Loại hàng', key: 'productCategory', width: 22 }
       ];
 
       // Sheet 2: thông tin
@@ -1858,7 +1878,8 @@ const PrintOrder = () => {
         { header: 'Tên khách hàng', key: 'customerName', width: 40 },
         { header: 'Tổng tiền', key: 'totalAmount', width: 18 },
         { header: 'Tổng tiền sau giảm', key: 'totalAfterDiscount', width: 22 },
-        { header: 'NV Sale', key: 'salesStaff', width: 18 }
+        { header: 'NV Sale', key: 'salesStaff', width: 18 },
+        { header: 'Loại hàng', key: 'productType', width: 22 }
       ];
 
       // Fetch product list for unit/conversion lookup
@@ -1951,7 +1972,7 @@ const PrintOrder = () => {
         sheet2.getRow(5).getCell(1).alignment = { horizontal: 'center' };
       } catch (e) {}
 
-      // Build rows for sheet1: one row per aggregated product per order
+      // Build rows for sheet1: aggregate products across orders
       // Helper to format quantity: integer without decimal, decimal with decimal point
       const formatQtyExcel = (v) => {
         const n = Number(v) || 0;
@@ -1959,30 +1980,67 @@ const PrintOrder = () => {
         return Math.round(n * 1000) / 1000; // up to 3 decimal places
       };
 
-      // Following sample: list by order then items
+      // Helper to get last 3 chars of order number
+      const getShortOrderNumber = (orderNum) => {
+        const s = String(orderNum || '');
+        return s.slice(-3);
+      };
+
+      // Aggregate items by product (barcode or productCode)
+      const productMap = new Map();
       orderDetails.forEach(od => {
         const order = od.order;
         const items = [...(od.items || []), ...(od.promotionItems || [])];
         items.forEach(item => {
           const product = products.find(p => p.barcode === item.barcode || p.code === item.productCode || p.name === item.productName) || {};
+          const key = item.barcode || item.productCode || item.productName;
           const conversionToBase = parseFloat(item.conversion) || parseFloat(product.conversion1) || 1;
           const convUnit1 = parseFloat(product.conversion1) || parseFloat(item.conversion) || 1;
           const baseQty = (parseFloat(item.quantity) || 0) * conversionToBase;
-          const sl1 = Math.floor(baseQty / convUnit1);
-          const baseRemaining = baseQty - (sl1 * convUnit1);
+          const shortOrderNum = getShortOrderNumber(order.orderNumber);
 
-          sheet1.addRow({
-            orderNumber: order.orderNumber || '',
-            barcode: item.barcode || '',
-            productCode: item.productCode || '',
-            productName: item.productName || '' ,
-            unit1: product.unit1 || product.defaultUnit || item.unit || '',
-            sl1: sl1,
-            baseUnit: product.baseUnit || '',
-            slgoc: formatQtyExcel(baseRemaining),
-            description: item.description || '',
-            sl_sell_base: formatQtyExcel(baseQty)
-          });
+          if (productMap.has(key)) {
+            const existing = productMap.get(key);
+            // Add order number if not already present
+            if (!existing.orderNumbers.includes(shortOrderNum)) {
+              existing.orderNumbers.push(shortOrderNum);
+            }
+            existing.totalBaseQty += baseQty;
+          } else {
+            productMap.set(key, {
+              orderNumbers: [shortOrderNum],
+              barcode: item.barcode || '',
+              productCode: item.productCode || '',
+              productName: item.productName || '',
+              unit1: product.unit1 || product.defaultUnit || item.unit || '',
+              baseUnit: product.baseUnit || '',
+              description: item.description || '',
+              convUnit1: convUnit1,
+              totalBaseQty: baseQty,
+              productCategory: product.category || ''
+            });
+          }
+        });
+      });
+
+      // Create rows from aggregated data
+      productMap.forEach((data) => {
+        const sl1 = Math.floor(data.totalBaseQty / data.convUnit1);
+        const baseRemaining = data.totalBaseQty - (sl1 * data.convUnit1);
+
+        sheet1.addRow({
+          orderNumber: data.orderNumbers.join(', '),
+          barcode: data.barcode,
+          productCode: data.productCode,
+          productName: data.productName,
+          unit1: data.unit1,
+          sl1: sl1,
+          baseUnit: data.baseUnit,
+          slgoc: formatQtyExcel(baseRemaining),
+          description: data.description,
+          sl_sell_base: formatQtyExcel(data.totalBaseQty),
+          conversion: formatQtyExcel(data.convUnit1),
+          productCategory: data.productCategory || ''
         });
       });
 
@@ -1996,13 +2054,23 @@ const PrintOrder = () => {
           const nvSalesSet = new Set(items.map(i => i.nvSales || i.NvSales).filter(Boolean));
           salesStaffValue = Array.from(nvSalesSet).join(', ');
         }
+        // Build productType from items' product categories (to get all types, not just the stored one)
+        const categorySet = new Set();
+        items.forEach(item => {
+          const product = products.find(p => p.barcode === item.barcode || p.code === item.productCode || p.name === item.productName);
+          if (product && product.category) {
+            categorySet.add(product.category);
+          }
+        });
+        const productTypeValue = categorySet.size > 0 ? Array.from(categorySet).join(', ') : (order.productType || order.ProductType || '');
         sheet2.addRow({
           idx: idx + 1,
           orderNumber: order.orderNumber || '',
           customerName: getCurrentCustomerName(order),
           totalAmount: order.totalAmount || 0,
           totalAfterDiscount: order.totalAfterDiscount || 0,
-          salesStaff: salesStaffValue
+          salesStaff: salesStaffValue,
+          productType: productTypeValue
         });
       });
 
@@ -2056,8 +2124,8 @@ const PrintOrder = () => {
       try { sheet1.getColumn('sl1').numFmt = '#,##0'; } catch {}
       try { sheet1.getColumn('slgoc').numFmt = 'General'; } catch {}
       try { sheet1.getColumn('sl_sell_base').numFmt = 'General'; } catch {}
-      try { sheet2.getColumn('totalAmount').numFmt = '#,##0.00'; } catch {}
-      try { sheet2.getColumn('totalAfterDiscount').numFmt = '#,##0.00'; } catch {}
+      try { sheet2.getColumn('totalAmount').numFmt = '#,##0'; } catch {}
+      try { sheet2.getColumn('totalAfterDiscount').numFmt = '#,##0'; } catch {}
 
       const buffer = await workbook.xlsx.writeBuffer();
       const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
