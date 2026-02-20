@@ -35,6 +35,9 @@ namespace QlnppApi.Data
         public DbSet<WarehouseTransferItem> WarehouseTransferItems { get; set; }
         public DbSet<Export> Exports { get; set; }
         public DbSet<ExportItem> ExportItems { get; set; }
+        public DbSet<BangKeTong> BangKeTongs { get; set; }
+        public DbSet<BangKeTongItem> BangKeTongItems { get; set; }
+        public DbSet<BangKeTongHoaDon> BangKeTongHoaDons { get; set; }
         
         // Permission tables
         public DbSet<PermissionGroup> PermissionGroups { get; set; }
@@ -515,6 +518,31 @@ namespace QlnppApi.Data
                       .WithMany()
                       .HasForeignKey(pcp => pcp.ProductCategoryId)
                       .OnDelete(DeleteBehavior.Cascade);
+            });
+
+            // BangKeTong configuration
+            modelBuilder.Entity<BangKeTong>(entity =>
+            {
+                entity.HasKey(b => b.Id);
+                entity.Property(b => b.ImportNumber).IsRequired().HasMaxLength(100);
+                entity.Property(b => b.TotalAmount).HasPrecision(18, 2);
+                entity.HasMany(b => b.Items).WithOne(i => i.BangKeTong).HasForeignKey(i => i.BangKeTongId).OnDelete(DeleteBehavior.Cascade);
+                entity.HasMany(b => b.HoaDons).WithOne(h => h.BangKeTong).HasForeignKey(h => h.BangKeTongId).OnDelete(DeleteBehavior.Cascade);
+            });
+
+            modelBuilder.Entity<BangKeTongItem>(entity =>
+            {
+                entity.HasKey(i => i.Id);
+                entity.Property(i => i.SoLuongDVT1).HasPrecision(18, 3);
+                entity.Property(i => i.SoLuongDVTGoc).HasPrecision(18, 3);
+                entity.Property(i => i.SlBanTheoDVTGoc).HasPrecision(18, 3);
+                entity.Property(i => i.QuyDoi).HasPrecision(18, 3);
+            });
+
+            modelBuilder.Entity<BangKeTongHoaDon>(entity =>
+            {
+                entity.HasKey(h => h.Id);
+                entity.Property(h => h.TongTien).HasPrecision(18, 2);
             });
         }
     }

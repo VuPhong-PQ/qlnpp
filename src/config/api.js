@@ -28,6 +28,7 @@ export const API_ENDPOINTS = {
   vehicles: `${API_BASE_URL}/vehicles`,
   orders: `${API_BASE_URL}/orders`,
   geocoding: `${API_BASE_URL}/geocoding`,
+  bangKeTongs: `${API_BASE_URL}/bangketongs`,
   
   // Permissions - Phân quyền
   permissionGroups: `${API_BASE_URL}/permissiongroups`,

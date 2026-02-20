@@ -120,3 +120,8 @@ button:focus-visible {
     background-color: #f9f9f9;
   }
 }
+
+/* Ensure Ant Design DatePicker dropdown appears above modals */
+.ant-picker-dropdown {
+  z-index: 10002 !important;
+}

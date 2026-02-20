@@ -75,8 +75,8 @@ const InBangKeTong = () => {
   const [dateDraft, setDateDraft] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchCode, setSearchCode] = useState('');
-  const [dateFrom, setDateFrom] = useState('2025-01-01');
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0]);
+  const [dateFrom, setDateFrom] = useState(() => dayjs().startOf('month').format('YYYY-MM-DD'));
+  const [dateTo, setDateTo] = useState(() => dayjs().add(1, 'month').endOf('month').format('YYYY-MM-DD'));
   const [importType, setImportType] = useState('');
   const [employee, setEmployee] = useState('');
 
@@ -126,9 +126,13 @@ const InBangKeTong = () => {
       case 'createdDate': return record.createdDate || '';
       case 'employee': return record.employee || record.Employee || '';
       case 'total': {
-        const total = (record.totalAmount !== undefined && record.totalAmount !== null)
-          ? Number(record.totalAmount)
-          : (record.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+        // Prefer sum of tongTienSauGiam from dsHoaDonItems when available
+        const totalFromHoaDons = (record.dsHoaDonItems || []).reduce((s, h) => s + (Number(h.tongTienSauGiam ?? h.tongTien ?? 0) || 0), 0);
+        const total = (totalFromHoaDons && totalFromHoaDons > 0)
+          ? totalFromHoaDons
+          : ((record.totalAmount !== undefined && record.totalAmount !== null)
+              ? Number(record.totalAmount)
+              : (record.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0));
         return (Number(total) || 0).toLocaleString('vi-VN');
       }
       case 'note': return record.note || '';
@@ -174,16 +178,28 @@ const InBangKeTong = () => {
   const [dsHoaDons, setDsHoaDons] = useState([]);
   const [activeTab, setActiveTab] = useState('bangKeTong'); // 'bangKeTong' or 'dsHoaDon'
 
+  // Order selection modal state
+  const [showOrderSelectModal, setShowOrderSelectModal] = useState(false);
+  const [orderSelectDateRange, setOrderSelectDateRange] = useState([dayjs().startOf('month'), dayjs().endOf('month')]);
+  const [ordersForSelect, setOrdersForSelect] = useState([]);
+  const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
+  const [loadingOrders, setLoadingOrders] = useState(false);
+
   // ===== Column management for Bảng kê tổng tab =====
-  const BKT_COL_KEY = 'bktColumnSettings';
+  const BKT_COL_KEY = 'bktColumnSettings_v2';
   const defaultBktColumns = [
-    { id: 'stt', label: 'Số TT', width: 50, visible: true, align: 'center' },
-    { id: 'maPhieu', label: 'Mã phiếu', width: 120, visible: true, align: 'center' },
-    { id: 'tenKhachHang', label: 'Tên khách hàng', width: 200, visible: true, align: 'left' },
-    { id: 'tongTien', label: 'Tổng tiền', width: 130, visible: true, align: 'right' },
-    { id: 'tongTienSauGiam', label: 'Tổng tiền sau giảm', width: 150, visible: true, align: 'right' },
-    { id: 'nvSale', label: 'NV Sale', width: 120, visible: true, align: 'center' },
-    { id: 'loaiHang', label: 'Loại hàng', width: 120, visible: true, align: 'center' },
+    { id: 'maPhieu', label: 'Mã phiếu', width: 140, visible: true, align: 'left' },
+    { id: 'maVach', label: 'Mã vạch', width: 130, visible: true, align: 'left' },
+    { id: 'maHang', label: 'Mã hàng', width: 140, visible: true, align: 'left' },
+    { id: 'tenHang', label: 'Tên hàng', width: 280, visible: true, align: 'left' },
+    { id: 'donViTinh1', label: 'Đơn vị tính 1', width: 100, visible: true, align: 'center' },
+    { id: 'soLuongDVT1', label: 'Số lượng ĐVT 1', width: 120, visible: true, align: 'right' },
+    { id: 'donViGoc', label: 'Đơn vị gốc', width: 100, visible: true, align: 'center' },
+    { id: 'soLuongDVTGoc', label: 'Số lượng ĐVT gốc', width: 130, visible: true, align: 'right' },
+    { id: 'moTa', label: 'Mô tả', width: 200, visible: true, align: 'left' },
+    { id: 'slBanTheoDVTGoc', label: 'SL bán theo ĐVT Gốc', width: 150, visible: true, align: 'right' },
+    { id: 'quyDoi', label: 'Quy đổi', width: 80, visible: true, align: 'right' },
+    { id: 'loaiHang', label: 'Loại hàng', width: 150, visible: true, align: 'left' },
   ];
   const [bktColumns, setBktColumns] = useState(() => {
     try { const s = localStorage.getItem(BKT_COL_KEY); return s ? JSON.parse(s) : defaultBktColumns; } catch { return defaultBktColumns; }
@@ -197,14 +213,15 @@ const InBangKeTong = () => {
   const [bktColumnFilters, setBktColumnFilters] = useState({});
 
   // ===== Column management for DS hóa đơn tab =====
-  const DSHD_COL_KEY = 'dshdColumnSettings';
+  const DSHD_COL_KEY = 'dshdColumnSettings_v2';
   const defaultDshdColumns = [
-    { id: 'stt', label: 'Số TT', width: 50, visible: true, align: 'center' },
-    { id: 'soHoaDon', label: 'Số hóa đơn', width: 120, visible: true, align: 'center' },
-    { id: 'ngayHoaDon', label: 'Ngày hóa đơn', width: 110, visible: true, align: 'center' },
+    { id: 'stt', label: 'Số TT', width: 60, visible: true, align: 'center' },
+    { id: 'maPhieu', label: 'Mã phiếu', width: 120, visible: true, align: 'center' },
     { id: 'tenKhachHang', label: 'Tên khách hàng', width: 200, visible: true, align: 'left' },
     { id: 'tongTien', label: 'Tổng tiền', width: 130, visible: true, align: 'right' },
-    { id: 'trangThai', label: 'Trạng thái', width: 120, visible: true, align: 'center' },
+    { id: 'tongTienSauGiam', label: 'Tổng tiền sau giảm', width: 150, visible: true, align: 'right' },
+    { id: 'nvSale', label: 'NV Sale', width: 120, visible: true, align: 'left' },
+    { id: 'loaiHang', label: 'Loại hàng', width: 120, visible: true, align: 'left' },
   ];
   const [dshdColumns, setDshdColumns] = useState(() => {
     try { const s = localStorage.getItem(DSHD_COL_KEY); return s ? JSON.parse(s) : defaultDshdColumns; } catch { return defaultDshdColumns; }
@@ -261,15 +278,73 @@ const InBangKeTong = () => {
   const bktH = makeColHandlers(setBktColumns, setBktDragColumn, setBktSettingsDrag);
   const dshdH = makeColHandlers(setDshdColumns, setDshdDragColumn, setDshdSettingsDrag);
 
+  // Helper: aggregate bangKeTongItems – group by product key, merge maPhieu (last 3 chars), sum slBanTheoDVTGoc
+  const aggregateBktItems = (rawItems) => {
+    const getShort = (maPhieu) => String(maPhieu || '').slice(-3);
+    const productMap = new Map();
+    (rawItems || []).forEach(item => {
+      const key = item.maVach || item.maHang || item.tenHang;
+      if (!key) return;
+      const short = getShort(item.maPhieu);
+      const conv = parseFloat(item.quyDoi) || 1;
+      const baseQty = parseFloat(item.slBanTheoDVTGoc) || ((parseFloat(item.soLuongDVT1) || 0) * conv + (parseFloat(item.soLuongDVTGoc) || 0));
+      if (productMap.has(key)) {
+        const existing = productMap.get(key);
+        if (short && !existing.orderNumbers.includes(short)) {
+          existing.orderNumbers.push(short);
+        }
+        existing.totalBaseQty += baseQty;
+      } else {
+        productMap.set(key, {
+          orderNumbers: short ? [short] : [],
+          maVach: item.maVach || '',
+          maHang: item.maHang || '',
+          tenHang: item.tenHang || '',
+          donViTinh1: item.donViTinh1 || '',
+          donViGoc: item.donViGoc || '',
+          moTa: item.moTa || '',
+          conv: conv,
+          totalBaseQty: baseQty,
+          loaiHang: item.loaiHang || '',
+        });
+      }
+    });
+    const result = [];
+    productMap.forEach((data) => {
+      const sl1 = Math.floor(data.totalBaseQty / data.conv);
+      const baseRemaining = data.totalBaseQty - (sl1 * data.conv);
+      result.push({
+        maPhieu: data.orderNumbers.join(', '),
+        maVach: data.maVach,
+        maHang: data.maHang,
+        tenHang: data.tenHang,
+        donViTinh1: data.donViTinh1,
+        soLuongDVT1: sl1,
+        donViGoc: data.donViGoc,
+        soLuongDVTGoc: Math.round(baseRemaining * 1000) / 1000,
+        moTa: data.moTa,
+        slBanTheoDVTGoc: Math.round(data.totalBaseQty * 1000) / 1000,
+        quyDoi: Math.round(data.conv * 1000) / 1000,
+        loaiHang: data.loaiHang,
+      });
+    });
+    return result;
+  };
+
   // BKT cell renderer
   const renderBktCell = (item, key, idx) => {
     switch (key) {
-      case 'stt': return idx + 1;
       case 'maPhieu': return item.maPhieu || '';
-      case 'tenKhachHang': return item.tenKhachHang || '';
-      case 'tongTien': return formatCurrency(item.tongTien);
-      case 'tongTienSauGiam': return formatCurrency(item.tongTienSauGiam);
-      case 'nvSale': return item.nvSale || '';
+      case 'maVach': return item.maVach || '';
+      case 'maHang': return item.maHang || '';
+      case 'tenHang': return item.tenHang || '';
+      case 'donViTinh1': return item.donViTinh1 || '';
+      case 'soLuongDVT1': return item.soLuongDVT1 != null ? Number(item.soLuongDVT1).toLocaleString('vi-VN') : '';
+      case 'donViGoc': return item.donViGoc || '';
+      case 'soLuongDVTGoc': return item.soLuongDVTGoc != null ? Number(item.soLuongDVTGoc).toLocaleString('vi-VN') : '';
+      case 'moTa': return item.moTa || '';
+      case 'slBanTheoDVTGoc': return item.slBanTheoDVTGoc != null ? Number(item.slBanTheoDVTGoc).toLocaleString('vi-VN') : '';
+      case 'quyDoi': return item.quyDoi != null ? Number(item.quyDoi).toLocaleString('vi-VN') : '';
       case 'loaiHang': return item.loaiHang || '';
       default: return '';
     }
@@ -279,11 +354,12 @@ const InBangKeTong = () => {
   const renderDshdCell = (item, key, idx) => {
     switch (key) {
       case 'stt': return idx + 1;
-      case 'soHoaDon': return item.soHoaDon || '';
-      case 'ngayHoaDon': return item.ngayHoaDon || '';
+      case 'maPhieu': return item.maPhieu || '';
       case 'tenKhachHang': return item.tenKhachHang || '';
       case 'tongTien': return formatCurrency(item.tongTien);
-      case 'trangThai': return item.trangThai || '';
+      case 'tongTienSauGiam': return formatCurrency(item.tongTienSauGiam);
+      case 'nvSale': return item.nvSale || '';
+      case 'loaiHang': return item.loaiHang || '';
       default: return '';
     }
   };
@@ -2080,49 +2156,100 @@ const InBangKeTong = () => {
   };
 
   const handleDelete = async (id, e) => {
-    e.stopPropagation();
-    if (!window.confirm('Bạn có chắc chắn muốn xóa phiếu nhập này?')) return;
+    if (e && typeof e.stopPropagation === 'function') e.stopPropagation();
+    if (!window.confirm('Bạn có chắc chắn muốn xóa bảng kê tổng này?')) return;
     try {
-      // Deletion via server is disabled for this page. Perform no-op and notify user.
-      alert('Xóa phiếu nhập đã bị vô hiệu hóa trên trang In bảng kê tổng.');
+      // If temp import, just remove locally
+      if (String(id).startsWith('temp_')) {
+        setImports(prev => prev.filter(i => i.id !== id));
+        if (selectedImport && selectedImport.id === id) { setSelectedImport(null); setShowRightContent(false); }
+        return;
+      }
+      await api.delete(API_ENDPOINTS.bangKeTongs, id);
+      setImports(prev => prev.filter(i => i.id !== id));
+      if (selectedImport && selectedImport.id === id) { setSelectedImport(null); setShowRightContent(false); }
     } catch (err) {
-      alert('Xóa phiếu nhập thất bại');
+      alert('Xóa bảng kê tổng thất bại');
     }
   };
 
-  // Load imports list: API disabled for this page — use local empty list
+  // Load imports list from backend
   const loadImports = async (autoSelectFirst = true) => {
-    // Do not call backend from this page. Keep list empty/local-only.
     try {
-      setImports([]);
-      setSelectedImport(null);
+      const data = await api.get(API_ENDPOINTS.bangKeTongs);
+      const mapped = (data || []).map(b => ({
+        id: b.id,
+        importNumber: b.importNumber,
+        createdDate: b.createdDate ? dayjs(b.createdDate).format('DD/MM/YYYY') : '',
+        date: b.createdDate,
+        employee: b.employee,
+        importType: b.importType,
+        dsHoaDon: b.dsHoaDon,
+        note: b.note,
+        totalAmount: (b.hoaDons || []).reduce((s, h) => s + (Number(h.tongTienSauGiam ?? h.tongTien ?? 0) || 0), 0),
+        bangKeTongItems: (b.items || []).map(i => ({
+          maPhieu: i.maPhieu,
+          maVach: i.maVach,
+          maHang: i.maHang,
+          tenHang: i.tenHang,
+          donViTinh1: i.donViTinh1,
+          soLuongDVT1: i.soLuongDVT1,
+          donViGoc: i.donViGoc,
+          soLuongDVTGoc: i.soLuongDVTGoc,
+          moTa: i.moTa,
+          slBanTheoDVTGoc: i.slBanTheoDVTGoc,
+          quyDoi: i.quyDoi,
+          loaiHang: i.loaiHang,
+        })),
+        dsHoaDonItems: (b.hoaDons || []).map(h => ({
+          maPhieu: h.maPhieu,
+          tenKhachHang: h.tenKhachHang,
+          tongTien: h.tongTien,
+          tongTienSauGiam: h.tongTienSauGiam,
+          nvSale: h.nvSale,
+          loaiHang: h.loaiHang,
+        })),
+      }));
+      setImports(mapped);
+      if (autoSelectFirst && mapped.length > 0 && !suppressAutoSelectRef.current) {
+        handleSelectImport(mapped[0]);
+      }
     } catch (e) {
-      console.warn('loadImports stub error', e);
+      console.warn('loadImports error', e);
+      setImports([]);
     }
   };
 
   // Load products list from backend
   const loadProducts = async () => {
-    // API disabled for this page — keep products empty and avoid network calls
-    try { setProducts([]); } catch (e) { console.warn('loadProducts stub', e); }
+    try {
+      const data = await api.get(API_ENDPOINTS.products);
+      setProducts(data || []);
+    } catch (e) { console.warn('loadProducts error', e); setProducts([]); }
   };
 
   // Load warehouses list from backend
   const loadWarehouses = async () => {
-    // API disabled for this page — keep warehouses empty locally
-    try { setWarehouses([]); } catch (e) { console.warn('loadWarehouses stub', e); }
+    try {
+      const data = await api.get(API_ENDPOINTS.warehouses);
+      setWarehouses(data || []);
+    } catch (e) { console.warn('loadWarehouses error', e); setWarehouses([]); }
   };
 
   // Load transaction contents list from backend
   const loadTransactionContents = async () => {
-    // API disabled for this page — keep transactionContents empty
-    try { setTransactionContents([]); } catch (e) { console.warn('loadTransactionContents stub', e); }
+    try {
+      const data = await api.get(API_ENDPOINTS.transactionContents);
+      setTransactionContents(data || []);
+    } catch (e) { console.warn('loadTransactionContents error', e); setTransactionContents([]); }
   };
 
   // Load employees/users list from backend
   const loadEmployees = async () => {
-    // API disabled for this page — keep employees list empty
-    try { setEmployeesList([]); } catch (e) { console.warn('loadEmployees stub', e); }
+    try {
+      const data = await api.get(API_ENDPOINTS.users);
+      setEmployeesList((data || []).map(u => ({ id: u.id, name: u.username || u.name || u.email || '' })));
+    } catch (e) { console.warn('loadEmployees error', e); setEmployeesList([]); }
   };
 
   // Export Excel template for imports
@@ -2143,42 +2270,149 @@ const InBangKeTong = () => {
   };
 
   const loadImportDetails = async (id) => {
-    // Disabled: avoid fetching details from backend on this page
     try {
-      // Clear selection or keep local selection if id matches current
-      if (selectedImport && selectedImport.id === id) return;
-      setSelectedImport(null);
-      setItems([]);
-      setIsEditing(false);
-      setShowRightContent(false);
-      alert('Tải chi tiết từ server đã bị vô hiệu hóa cho trang In bảng kê tổng.');
-    } catch (e) { console.warn('loadImportDetails stub', e); }
+      const data = await api.get(`${API_ENDPOINTS.bangKeTongs}/${id}`);
+      if (data) {
+        const mapped = {
+          id: data.id,
+          importNumber: data.importNumber,
+          createdDate: data.createdDate ? dayjs(data.createdDate).format('DD/MM/YYYY') : '',
+          date: data.createdDate,
+          employee: data.employee,
+          importType: data.importType,
+          dsHoaDon: data.dsHoaDon,
+          note: data.note,
+          totalAmount: data.totalAmount,
+          bangKeTongItems: (data.items || []).map(i => ({
+            maPhieu: i.maPhieu,
+            maVach: i.maVach,
+            maHang: i.maHang,
+            tenHang: i.tenHang,
+            donViTinh1: i.donViTinh1,
+            soLuongDVT1: i.soLuongDVT1,
+            donViGoc: i.donViGoc,
+            soLuongDVTGoc: i.soLuongDVTGoc,
+            moTa: i.moTa,
+            slBanTheoDVTGoc: i.slBanTheoDVTGoc,
+            quyDoi: i.quyDoi,
+            loaiHang: i.loaiHang,
+          })),
+          dsHoaDonItems: (data.hoaDons || []).map(h => ({
+            maPhieu: h.maPhieu,
+            tenKhachHang: h.tenKhachHang,
+            tongTien: h.tongTien,
+            tongTienSauGiam: h.tongTienSauGiam,
+            nvSale: h.nvSale,
+            loaiHang: h.loaiHang,
+          })),
+        };
+        setSelectedImport(mapped);
+        setFormData({
+          createdDate: data.createdDate ? dayjs(data.createdDate).format('YYYY-MM-DD') : '',
+          employee: data.employee || '',
+          importType: data.importType || '',
+          importNumber: data.importNumber || '',
+          dsHoaDon: data.dsHoaDon || '',
+          note: data.note || '',
+        });
+        setShowRightContent(true);
+        setIsEditMode(false);
+        setIsEditing(false);
+      }
+    } catch (e) { console.warn('loadImportDetails error', e); }
   };
 
   // Wrapper to trigger edit (explicitly load details and show right content)
   const editImport = async (importItem) => {
-    // Editing via server is disabled — open in local edit mode if importItem provided
     if (!importItem) return;
-    alert('Chỉnh sửa từ server đã bị vô hiệu hóa trên trang này. Mở chế độ xem cục bộ.');
-    setSelectedImport(importItem);
-    setShowRightContent(true);
-    setIsEditMode(false);
-    setIsEditing(false);
+    try {
+      if (importItem.id && !String(importItem.id).startsWith('temp_')) {
+        await loadImportDetails(importItem.id);
+      } else {
+        setSelectedImport(importItem);
+        setShowRightContent(true);
+      }
+      setIsEditMode(true);
+      setIsEditing(true);
+    } catch (e) {
+      console.warn('editImport error', e);
+      setSelectedImport(importItem);
+      setShowRightContent(true);
+      setIsEditMode(false);
+      setIsEditing(false);
+    }
   };
 
   const createNewImport = async () => {
-    // Creating via backend disabled — use local temporary import flow
     try {
       resetFormForNewImport();
-      alert('Tạo phiếu mới ở chế độ cục bộ (không lưu server).');
-    } catch (e) { console.warn('createNewImport stub', e); }
+    } catch (e) { console.warn('createNewImport error', e); }
   };
 
   const saveImport = async () => {
-    // Saving to backend disabled for this page
-    alert('Lưu dữ liệu tới server đã bị vô hiệu hóa cho trang In bảng kê tổng. Các thay đổi chỉ tồn tại cục bộ.');
-    // mark as editing locally
-    setIsEditing(true);
+    try {
+      // Build items from "Bảng kê tổng" tab (headerRows or selectedImport.bangKeTongItems)
+      const bktItems = (selectedImport?.bangKeTongItems || [])
+        .filter(r => r.maPhieu || r.maHang || r.tenHang)
+        .map(r => ({
+          maPhieu: r.maPhieu || '',
+          maVach: r.maVach || '',
+          maHang: r.maHang || '',
+          tenHang: r.tenHang || '',
+          donViTinh1: r.donViTinh1 || '',
+          soLuongDVT1: parseFloat(r.soLuongDVT1) || 0,
+          donViGoc: r.donViGoc || '',
+          soLuongDVTGoc: parseFloat(r.soLuongDVTGoc) || 0,
+          moTa: r.moTa || '',
+          slBanTheoDVTGoc: parseFloat(r.slBanTheoDVTGoc) || 0,
+          quyDoi: parseFloat(r.quyDoi) || 1,
+          loaiHang: r.loaiHang || '',
+        }));
+
+      // Build hoa dons from "DS hóa đơn" tab (dsHoaDons state or selectedImport)
+      const hoaDonItems = (selectedImport?.dsHoaDonItems || []).map(h => ({
+        maPhieu: h.maPhieu || '',
+        tenKhachHang: h.tenKhachHang || '',
+        tongTien: parseFloat(h.tongTien) || 0,
+        tongTienSauGiam: parseFloat(h.tongTienSauGiam) || 0,
+        nvSale: h.nvSale || '',
+        loaiHang: h.loaiHang || '',
+      }));
+
+      const payload = {
+        importNumber: formData.importNumber || generateImportNumber(),
+        createdDate: formData.createdDate ? dayjs(formData.createdDate).toISOString() : new Date().toISOString(),
+        employee: formData.employee || '',
+        importType: formData.importType || '',
+        dsHoaDon: formData.dsHoaDon || '',
+        note: formData.note || '',
+        totalAmount: hoaDonItems.reduce((s, h) => s + (Number(h.tongTienSauGiam || h.tongTien || 0) || 0), 0),
+        items: bktItems,
+        hoaDons: hoaDonItems,
+      };
+
+      const isNew = !selectedImport || !selectedImport.id || String(selectedImport.id).startsWith('temp_');
+
+      if (isNew) {
+        const created = await api.post(API_ENDPOINTS.bangKeTongs, payload);
+        alert('Lưu bảng kê tổng thành công!');
+        suppressAutoSelectRef.current = true;
+        await loadImports(false);
+        // Select the newly created record
+        const found = imports.find(i => i.importNumber === payload.importNumber) || created;
+        if (found) handleSelectImport(found);
+        suppressAutoSelectRef.current = false;
+      } else {
+        payload.id = selectedImport.id;
+        await api.put(API_ENDPOINTS.bangKeTongs, selectedImport.id, payload);
+        alert('Cập nhật bảng kê tổng thành công!');
+        await loadImports(false);
+      }
+      setIsEditing(false);
+    } catch (err) {
+      console.error('saveImport error', err);
+      alert('Lưu bảng kê tổng thất bại: ' + (err.message || err));
+    }
   };
 
   // Item modal helpers
@@ -2752,60 +2986,256 @@ const InBangKeTong = () => {
 
   // (history view removed) 
 
+  // Load orders for selection modal
+  const loadOrdersForSelect = async (startDate, endDate) => {
+    setLoadingOrders(true);
+    try {
+      const start = dayjs(startDate).format('YYYY-MM-DD');
+      const end = dayjs(endDate).format('YYYY-MM-DD');
+      const response = await api.get(`${API_ENDPOINTS.orders}/by-date-range?startDate=${start}&endDate=${end}`);
+      // Filter only "đã duyệt" status
+      const approvedOrders = (response || []).filter(o => 
+        o.status && o.status.toLowerCase().includes('đã duyệt')
+      );
+      setOrdersForSelect(approvedOrders);
+    } catch (e) {
+      console.error('Error loading orders:', e);
+      setOrdersForSelect([]);
+    } finally {
+      setLoadingOrders(false);
+    }
+  };
+
+  // Show order selection modal when clicking "Tạo mới"
+  const handleShowOrderSelectModal = () => {
+    setSelectedOrderIds(new Set());
+    setOrderSelectDateRange([dayjs().startOf('month'), dayjs().endOf('month')]);
+    setShowOrderSelectModal(true);
+    // Load orders for the default date range
+    loadOrdersForSelect(dayjs().startOf('month'), dayjs().endOf('month'));
+  };
+
+  // Toggle order selection
+  const toggleOrderSelect = (orderId) => {
+    setSelectedOrderIds(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(orderId)) {
+        newSet.delete(orderId);
+      } else {
+        newSet.add(orderId);
+      }
+      return newSet;
+    });
+  };
+
+  // Select/deselect all orders
+  const toggleSelectAllOrders = (checked) => {
+    if (checked) {
+      setSelectedOrderIds(new Set(ordersForSelect.map(o => o.id)));
+    } else {
+      setSelectedOrderIds(new Set());
+    }
+  };
+
+  // Confirm selection and create bảng kê tổng from selected orders
+  const handleConfirmOrderSelection = async () => {
+    if (selectedOrderIds.size === 0) {
+      alert('Vui lòng chọn ít nhất một đơn hàng');
+      return;
+    }
+
+    try {
+      const selectedOrders = ordersForSelect.filter(o => selectedOrderIds.has(o.id));
+      
+      // Fetch order details with items for each selected order
+      const ordersWithItems = await Promise.all(
+        selectedOrders.map(async (order) => {
+          try {
+            const response = await api.get(`${API_ENDPOINTS.orders}/${order.id}`);
+            return { order: response.order || order, items: response.items || [], promotionItems: response.promotionItems || [] };
+          } catch (e) {
+            console.error(`Error fetching order ${order.id}:`, e);
+            return { order, items: [], promotionItems: [] };
+          }
+        })
+      );
+      
+      // Generate new import number
+      const newImportNumber = generateImportNumber();
+      
+      // Build bangKeTongItems from order items – aggregate by product (inherited from PrintOrder "xuất hàng tổng hợp")
+      // Helper: last 3 chars of order number
+      const getShortOrderNumber = (orderNum) => String(orderNum || '').slice(-3);
+
+      // Aggregate items by product key (barcode > productCode > productName)
+      const productMap = new Map();
+      ordersWithItems.forEach(({ order, items, promotionItems }) => {
+        const allItems = [...(items || []), ...(promotionItems || [])];
+        allItems.forEach((item) => {
+          const product = products.find(p => p.barcode === item.barcode || p.code === item.productCode || p.name === item.productName) || {};
+          const key = item.barcode || item.productCode || item.productName;
+          if (!key) return;
+          const conversionToBase = parseFloat(item.conversion) || parseFloat(product.conversion1) || 1;
+          const convUnit1 = parseFloat(product.conversion1) || parseFloat(item.conversion) || 1;
+          const baseQty = (parseFloat(item.quantity) || 0) * conversionToBase;
+          const shortOrderNum = getShortOrderNumber(order.orderNumber);
+
+          if (productMap.has(key)) {
+            const existing = productMap.get(key);
+            if (!existing.orderNumbers.includes(shortOrderNum)) {
+              existing.orderNumbers.push(shortOrderNum);
+            }
+            existing.totalBaseQty += baseQty;
+          } else {
+            productMap.set(key, {
+              orderNumbers: [shortOrderNum],
+              barcode: item.barcode || '',
+              productCode: item.productCode || '',
+              productName: item.productName || '',
+              unit1: product.unit1 || product.defaultUnit || item.unit || '',
+              baseUnit: product.baseUnit || item.baseUnit || item.unit || '',
+              description: item.description || '',
+              convUnit1: convUnit1,
+              totalBaseQty: baseQty,
+              productCategory: product.category || item.productType || order.productType || '',
+            });
+          }
+        });
+      });
+
+      // Convert aggregated map to bangKeTongItems array
+      const bangKeTongItems = [];
+      let bktIdx = 0;
+      productMap.forEach((data) => {
+        const sl1 = Math.floor(data.totalBaseQty / data.convUnit1);
+        const baseRemaining = data.totalBaseQty - (sl1 * data.convUnit1);
+        bangKeTongItems.push({
+          id: `bkt_${bktIdx}_${Date.now()}`,
+          maPhieu: data.orderNumbers.join(', '),
+          maVach: data.barcode,
+          maHang: data.productCode,
+          tenHang: data.productName,
+          donViTinh1: data.unit1,
+          soLuongDVT1: sl1,
+          donViGoc: data.baseUnit,
+          soLuongDVTGoc: Math.round(baseRemaining * 1000) / 1000,
+          moTa: data.description,
+          slBanTheoDVTGoc: Math.round(data.totalBaseQty * 1000) / 1000,
+          quyDoi: Math.round(data.convUnit1 * 1000) / 1000,
+          loaiHang: data.productCategory,
+        });
+        bktIdx++;
+      });
+
+      // Build dsHoaDonItems from selected orders (include promotion items for nvSale/loaiHang like PrintOrder)
+      const dsHoaDonItems = ordersWithItems.map(({ order, items, promotionItems }) => {
+        const allItems = [...(items || []), ...(promotionItems || [])];
+        // Get salesStaff from items' nvSales if order doesn't have it
+        let nvSaleValue = order.salesStaff || order.salesEmployee || order.employee || '';
+        if (!nvSaleValue && allItems.length > 0) {
+          const nvSet = new Set(allItems.map(i => i.nvSales || i.salesStaff).filter(Boolean));
+          nvSaleValue = Array.from(nvSet).join(', ');
+        }
+        // Get productType from items' product categories
+        const catSet = new Set();
+        allItems.forEach(item => {
+          const product = products.find(p => p.barcode === item.barcode || p.code === item.productCode || p.name === item.productName);
+          if (product && product.category) catSet.add(product.category);
+        });
+        const loaiHangValue = catSet.size > 0 ? Array.from(catSet).join(', ') : (order.productType || '');
+        return {
+          id: `dshd_${order.id}_${Date.now()}`,
+          maPhieu: order.orderNumber || '',
+          tenKhachHang: order.customerName || order.customer || '',
+          tongTien: order.totalAmount || 0,
+          tongTienSauGiam: order.totalAfterDiscount || order.totalAmount || 0,
+          nvSale: nvSaleValue,
+          loaiHang: loaiHangValue,
+        };
+      });
+
+      // Calculate total as sum of tongTienSauGiam from dsHoaDonItems
+      const totalAmount = dsHoaDonItems.reduce((s, h) => s + (Number(h.tongTienSauGiam || h.tongTien || 0) || 0), 0);
+
+      // Create new temp import
+      const newTempImport = {
+        id: `temp_${Date.now()}`,
+        receiptNumber: newImportNumber,
+        importNumber: newImportNumber,
+        importDate: dayjs().format('YYYY-MM-DD'),
+        createdDate: dayjs().format('DD/MM/YYYY'),
+        date: dayjs().format('YYYY-MM-DD'),
+        totalAmount: totalAmount,
+        supplierName: '',
+        employee: 'admin 66',
+        importType: '',
+        note: '',
+        isTemp: true,
+        items: [],
+        bangKeTongItems: bangKeTongItems,
+        dsHoaDonItems: dsHoaDonItems,
+      };
+
+      const newFormData = {
+        createdDate: dayjs().format('YYYY-MM-DD'),
+        employee: 'admin 66',
+        importType: '',
+        importNumber: newImportNumber,
+        supplier: '',
+        invoice: '',
+        invoiceDate: new Date().toISOString(),
+        totalWeight: 0,
+        totalVolume: 0,
+        note: ''
+      };
+
+      // Add to imports list at the top
+      setImports(prev => [newTempImport, ...prev]);
+      
+      // Set selected import and form data
+      setSelectedImport(newTempImport);
+      setFormData(newFormData);
+      setItems([]);
+      // Set header rows from bangKeTongItems
+      setHeaderRows(bangKeTongItems.map((item, idx) => ({
+        id: `row_${idx}_${Date.now()}`,
+        values: {
+          maPhieu: item.maPhieu,
+          maVach: item.maVach,
+          maHang: item.maHang,
+          tenHang: item.tenHang,
+          donViTinh1: item.donViTinh1,
+          soLuongDVT1: item.soLuongDVT1,
+          donViGoc: item.donViGoc,
+          soLuongDVTGoc: item.soLuongDVTGoc,
+          moTa: item.moTa,
+          slBanTheoDVTGoc: item.slBanTheoDVTGoc,
+          quyDoi: item.quyDoi,
+          loaiHang: item.loaiHang,
+        }
+      })));
+      setIsEditing(true);
+      setShowRightContent(true);
+      setIsEditMode(true);
+      
+      // Reset filters
+      setSearchTerm('');
+      setSearchCode('');
+      setImportType('');
+      setEmployee('');
+      
+      // Close modal
+      setShowOrderSelectModal(false);
+      setSelectedOrderIds(new Set());
+    } catch (e) {
+      console.error('Error creating bảng kê tổng:', e);
+      alert('Có lỗi xảy ra khi tạo bảng kê tổng');
+    }
+  };
+
   const resetFormForNewImport = () => {
-    const newImportNumber = generateImportNumber();
-    
-    // Create a temporary new import for the left list
-    const newTempImport = {
-      id: `temp_${Date.now()}`,
-      receiptNumber: newImportNumber,
-      importNumber: newImportNumber,
-      importDate: dayjs().format('YYYY-MM-DD'),
-      createdDate: dayjs().format('DD/MM/YYYY'),
-      date: dayjs().format('YYYY-MM-DD'),
-      totalAmount: 0,
-      supplierName: 'Chưa chọn',
-      employee: 'admin 66',
-      importType: '',
-      note: '',
-      isTemp: true, // Mark as temporary
-      items: []
-    };
-    
-    const newFormData = {
-      createdDate: dayjs().format('YYYY-MM-DD'),
-      employee: 'admin 66',
-      importType: '',
-      importNumber: newImportNumber,
-      supplier: '',
-      invoice: '',
-      invoiceDate: new Date().toISOString(),
-      totalWeight: 0,
-      totalVolume: 0,
-      note: ''
-    };
-    
-
-    
-    // Add to imports list at the top
-    setImports(prev => [newTempImport, ...prev]);
-    
-    // Auto-select this new import and enter edit mode
-    setSelectedImport(newTempImport);
-    setFormData(newFormData);
-    setItems([]);
-    setHeaderRows([{ id: Date.now(), values: { warehouse: getDefaultWarehouseName() } }]);
-    setIsEditing(true);
-    setShowRightContent(true);
-    setIsEditMode(true); // Auto enter edit mode for new import
-    
-    // Reset filters để đảm bảo có thể thấy phiếu mới
-    setSearchTerm('');
-    setSearchCode('');
-    setImportType('');
-    setEmployee('');
-    
-
+    // Show order selection modal instead of creating empty form
+    handleShowOrderSelectModal();
   };
 
   // Function này không còn sử dụng vì đã thay đổi cơ chế
@@ -2849,6 +3279,10 @@ const InBangKeTong = () => {
                     }
                   }}
                   format="YYYY-MM-DD"
+                  placeholder={["Start date", "End date"]}
+                  allowClear
+                  separator=" — "
+                  classNames={{ popup: { root: 'custom-date-picker-dropdown' } }}
                   style={{ width: '100%' }}
                 />
               </div>
@@ -3190,7 +3624,6 @@ const InBangKeTong = () => {
                             style={{
                               padding:'6px 4px',
                               cursor:'pointer',
-                              color: isCurrentMonth ? '#000' : '#ccc',
                               background: isSelected ? '#1890ff' : isToday ? '#e6f7ff' : 'transparent',
                               color: isSelected ? '#fff' : isCurrentMonth ? '#000' : '#ccc',
                               borderRadius:2,
@@ -4286,6 +4719,137 @@ const InBangKeTong = () => {
           </div>
         );
       })()}
+
+      {/* Order Selection Modal */}
+      {showOrderSelectModal && (
+        <div className="search-modal-overlay" onClick={() => setShowOrderSelectModal(false)} style={{ zIndex: 9999 }}>
+          <div className="search-modal order-select-modal-fullscreen" onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 0, width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', boxShadow: 'none', overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0 }}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', background: '#f8f9fa', borderBottom: '1px solid #e9ecef' }}>
+              <h3 style={{ margin: 0, fontSize: 16 }}>📋 Chọn đơn hàng để tạo bảng kê tổng</h3>
+              <button onClick={() => setShowOrderSelectModal(false)} style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#666' }}>×</button>
+            </div>
+            
+            {/* Date range picker */}
+            <div style={{ padding: '12px 20px', borderBottom: '1px solid #eee', display: 'flex', alignItems: 'center', gap: 12, position: 'relative', zIndex: 10 }}>
+              <span style={{ fontSize: 13 }}>Chọn khoảng thời gian:</span>
+              <DatePicker.RangePicker
+                value={orderSelectDateRange}
+                onChange={(dates) => {
+                  setOrderSelectDateRange(dates);
+                  if (dates && dates[0] && dates[1]) {
+                    loadOrdersForSelect(dates[0], dates[1]);
+                  }
+                }}
+                format="DD/MM/YYYY"
+                placeholder={['Từ ngày', 'Đến ngày']}
+                style={{ width: 280 }}
+                popupStyle={{ zIndex: 10001 }}
+                getPopupContainer={(trigger) => trigger.parentElement}
+              />
+              <span style={{ fontSize: 12, color: '#888' }}>
+                (Chỉ hiển thị đơn hàng đã duyệt)
+              </span>
+            </div>
+            
+            {/* Orders table */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px' }}>
+              {loadingOrders ? (
+                <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Đang tải danh sách đơn hàng...</div>
+              ) : ordersForSelect.length === 0 ? (
+                <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Không có đơn hàng đã duyệt trong khoảng thời gian này</div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                  <thead>
+                    <tr style={{ background: '#f0f5ff' }}>
+                      <th style={{ border: '1px solid #d9d9d9', padding: '8px', width: 40 }}>
+                        <input 
+                          type="checkbox" 
+                          checked={selectedOrderIds.size === ordersForSelect.length && ordersForSelect.length > 0}
+                          onChange={(e) => toggleSelectAllOrders(e.target.checked)}
+                        />
+                      </th>
+                      <th style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: 'left' }}>Số đơn hàng</th>
+                      <th style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: 'center' }}>Ngày đặt</th>
+                      <th style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: 'left' }}>Khách hàng</th>
+                      <th style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: 'right' }}>Tổng tiền</th>
+                      <th style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: 'left' }}>NV Sale</th>
+                      <th style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: 'center' }}>Trạng thái</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {ordersForSelect.map((order) => (
+                      <tr 
+                        key={order.id} 
+                        style={{ background: selectedOrderIds.has(order.id) ? '#e3f2fd' : 'transparent', cursor: 'pointer' }}
+                        onClick={() => toggleOrderSelect(order.id)}
+                      >
+                        <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>
+                          <input 
+                            type="checkbox" 
+                            checked={selectedOrderIds.has(order.id)}
+                            onChange={() => toggleOrderSelect(order.id)}
+                            onClick={(e) => e.stopPropagation()}
+                          />
+                        </td>
+                        <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.orderNumber || ''}</td>
+                        <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>
+                          {order.orderDate ? dayjs(order.orderDate).format('DD/MM/YYYY') : ''}
+                        </td>
+                        <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.customerName || order.customer || ''}</td>
+                        <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'right' }}>
+                          {(order.totalAmount || 0).toLocaleString('vi-VN')}
+                        </td>
+                        <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.salesStaff || order.createdBy || ''}</td>
+                        <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>
+                          <span style={{ 
+                            padding: '2px 8px', 
+                            borderRadius: 4, 
+                            fontSize: 11,
+                            background: order.status?.toLowerCase().includes('đã duyệt') ? '#d4edda' : '#f8d7da',
+                            color: order.status?.toLowerCase().includes('đã duyệt') ? '#155724' : '#721c24'
+                          }}>
+                            {order.status || ''}
+                          </span>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+            
+            {/* Footer with selected count and buttons */}
+            <div style={{ padding: '12px 20px', borderTop: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center', background: '#f8f9fa' }}>
+              <span style={{ fontSize: 13, color: '#666' }}>
+                Đã chọn: <strong>{selectedOrderIds.size}</strong> / {ordersForSelect.length} đơn hàng
+              </span>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button 
+                  onClick={() => setShowOrderSelectModal(false)} 
+                  style={{ padding: '10px 20px', background: '#fff', color: '#333', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', fontSize: 14 }}
+                >
+                  Hủy
+                </button>
+                <button 
+                  onClick={handleConfirmOrderSelection} 
+                  disabled={selectedOrderIds.size === 0}
+                  style={{ 
+                    padding: '10px 20px', 
+                    background: selectedOrderIds.size === 0 ? '#ccc' : '#667eea', 
+                    color: '#fff', 
+                    border: 'none', 
+                    borderRadius: 4, 
+                    cursor: selectedOrderIds.size === 0 ? 'default' : 'pointer', 
+                    fontSize: 14 
+                  }}
+                >
+                  ✓ Xác nhận ({selectedOrderIds.size} đơn)
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 };
