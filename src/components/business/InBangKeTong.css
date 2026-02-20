@@ -1058,11 +1058,80 @@ button[title="Cài đặt cột"] {
   box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
   z-index: 1000 !important;
 }
-  background-color: #f0f8ff !important;
-}
 
 .temp-import:hover {
   background-color: #e6f3ff !important;
+}
+
+/* ===== BKT FORM ROWS - RESPONSIVE ===== */
+.bkt-form-top-row,
+.bkt-form-second-row {
+  box-sizing: border-box;
+  max-width: 100%;
+}
+
+.bkt-form-top-row select,
+.bkt-form-top-row input,
+.bkt-form-second-row select,
+.bkt-form-second-row input {
+  width: 100% !important;
+  box-sizing: border-box;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Detail form should not overflow */
+.detail-form {
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.detail-content {
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+/* Tab table containers */
+.in-bang-ke-tong-page .order-items-section {
+  max-width: 100%;
+  overflow: hidden;
+  box-sizing: border-box;
+}
+
+.in-bang-ke-tong-page .order-items-table-container {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+}
+
+.in-bang-ke-tong-page .order-items-table {
+  min-width: 0;
+}
+
+/* Order tabs responsive */
+.in-bang-ke-tong-page .order-tabs {
+  max-width: 100%;
+  overflow-x: auto;
+  box-sizing: border-box;
+}
+
+/* Ensure detail-actions buttons don't overflow */
+.in-bang-ke-tong-page .detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+/* Panel header with action buttons responsive */
+.in-bang-ke-tong-page .panel-header {
+  flex-wrap: wrap;
+  gap: 8px;
 }
 
 /* ===== RESPONSIVE DESIGN ===== */
@@ -1198,6 +1267,25 @@ button[title="Cài đặt cột"] {
     width: 100% !important;
   }
   
+  /* Stack form rows on tablet */
+  .bkt-form-top-row {
+    flex-wrap: wrap !important;
+  }
+  
+  .bkt-form-top-row > div {
+    flex: 1 1 45% !important;
+    min-width: 140px !important;
+  }
+  
+  .bkt-form-second-row {
+    flex-wrap: wrap !important;
+  }
+  
+  .bkt-form-second-row > div {
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+  }
+  
   /* Fix pagination position for mobile */
   .items-table-container > div:first-child > div:last-child {
     position: relative !important;
@@ -1243,6 +1331,25 @@ button[title="Cài đặt cột"] {
     font-size: 13px !important;
   }
   
+  /* Stack all form fields vertically */
+  .bkt-form-top-row {
+    flex-direction: column !important;
+  }
+  
+  .bkt-form-top-row > div {
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+  }
+  
+  .bkt-form-second-row {
+    flex-direction: column !important;
+  }
+  
+  .bkt-form-second-row > div {
+    flex: 1 1 100% !important;
+    min-width: 0 !important;
+  }
+  
   /* Stack pagination controls vertically on very small screens */
   .items-table-container > div:first-child {
     flex-direction: column !important;
@@ -1276,4 +1383,234 @@ button[title="Cài đặt cột"] {
   .items-table {
     min-width: 800px !important;
   }
+}
+
+/* ===== BKT/DSHD Dynamic Table Column Features ===== */
+.bkt-dynamic-table th {
+  position: relative;
+  user-select: none;
+  white-space: nowrap;
+}
+
+.bkt-dynamic-table th.dragging {
+  opacity: 0.5;
+  background: #e3f2fd !important;
+}
+
+.bkt-dynamic-table th .resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 6px;
+  cursor: col-resize;
+  z-index: 2;
+  background: transparent;
+}
+
+.bkt-dynamic-table th .resize-handle:hover {
+  background: rgba(102, 126, 234, 0.3);
+}
+
+.bkt-dynamic-table th .col-search-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+  padding: 1px 2px;
+  line-height: 1;
+}
+
+.bkt-dynamic-table th .col-search-btn:hover {
+  opacity: 1;
+}
+
+.bkt-dynamic-table th .col-clear-btn {
+  background: none;
+  border: none;
+  cursor: pointer;
+  font-size: 11px;
+  color: #c9302c;
+  opacity: 0.8;
+  padding: 1px 2px;
+  line-height: 1;
+}
+
+.bkt-dynamic-table th .col-clear-btn:hover {
+  opacity: 1;
+}
+
+/* Settings modal overlay (reuse from BusinessPage.css where possible) */
+.search-modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.4);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1100;
+}
+
+.column-settings-item {
+  transition: background 0.15s;
+}
+
+.column-settings-item:hover {
+  background: #f5f5f5 !important;
+}
+
+.column-settings-item.dragging {
+  opacity: 0.5;
+  background: #e3f2fd !important;
+}
+
+/* Additional mobile fixes to improve responsiveness on small phones */
+@media (max-width: 768px) {
+  .in-bang-ke-tong-page { align-items: stretch !important; }
+  .search-panel { padding: 12px !important; margin-right: 0 !important; }
+  .import-detail-panel { padding: 10px !important; }
+
+  /* Make search controls stack nicely */
+  .search-controls-grid { grid-template-columns: 1fr !important; grid-template-rows: auto auto !important; }
+  .search-panel-button { grid-column: 1 / -1 !important; grid-row: auto !important; width: 100% !important; }
+
+  /* Reduce table min-width so horizontal scrolling is less severe on phones */
+  .items-table { min-width: 650px !important; }
+
+  /* Allow the items container to grow and not create extra whitespace */
+  .items-table-container { max-height: none !important; }
+
+  /* Make floating controls (pagination) inline below table on small screens */
+  .items-table-container > div:first-child > div:last-child {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    margin-top: 8px !important;
+    right: auto !important;
+    top: auto !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  /* Ensure both left search panel and right detail panel span full width and align */
+  .in-bang-ke-tong-page, .in-bang-ke-tong-page > * {
+    width: 100% !important;
+    max-width: 100% !important;
+    box-sizing: border-box !important;
+  }
+  .in-bang-ke-tong-page .search-panel,
+  .in-bang-ke-tong-page .import-detail-panel {
+    margin: 0 !important;
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+    align-self: stretch !important;
+  }
+
+  /* Allow the right detail panel to expand/scroll vertically on mobile */
+  .in-bang-ke-tong-page .import-detail-panel {
+    overflow-y: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+  }
+
+  /* Remove sticky positioning for header wrappers that may cover content on mobile */
+  .items-table-container > div:first-child {
+    position: static !important;
+  }
+  .items-table-container { overflow-y: visible !important; }
+}
+
+/* Ensure dialogs/tabs inside the right panel are not clipped on small screens */
+@media (max-width: 768px) {
+  .in-bang-ke-tong-page .import-detail-panel,
+  .in-bang-ke-tong-page .detail-content,
+  .in-bang-ke-tong-page .order-tabs,
+  .in-bang-ke-tong-page .order-items-section,
+  .in-bang-ke-tong-page .order-items-table-container,
+  .items-table-container {
+    overflow: visible !important;
+    max-height: none !important;
+  }
+
+  /* Some inner wrappers used for sticky headers can create new stacking contexts; allow overflow visible */
+  .in-bang-ke-tong-page .import-detail-panel > * {
+    overflow: visible !important;
+  }
+
+  /* Ensure AntD tab panels and dropdowns appear above other content */
+  .in-bang-ke-tong-page .ant-tabs, .in-bang-ke-tong-page .ant-tabs .ant-tabs-content-holder {
+    overflow: visible !important;
+  }
+
+  /* If any element uses transform, it may create a stacking context; remove transforms on small screens */
+  .in-bang-ke-tong-page .import-detail-panel, .in-bang-ke-tong-page .search-panel {
+    transform: none !important;
+  }
+}
+
+@media (max-width: 480px) {
+  .in-bang-ke-tong-page { padding: 6px !important; gap: 6px !important; }
+  .search-panel { border-radius: 6px !important; padding: 10px !important; }
+  .import-detail-panel { border-radius: 6px !important; padding: 10px !important; }
+
+  /* Stack search controls vertically and make buttons full width */
+  .search-controls-grid { grid-template-columns: 1fr !important; gap: 6px !important; }
+  .search-panel-button { width: 100% !important; height: auto !important; min-height: 44px !important; }
+
+  /* Further reduce table min-width for small phones */
+  .items-table { min-width: 520px !important; }
+
+  /* Avoid very tall empty right column spacing */
+  .import-detail-panel, .search-panel { min-height: 0 !important; }
+
+  /* Make pagination controls inline and compact */
+  .items-table-container > div:first-child, .items-table-container > div:first-child > div:last-child {
+    position: relative !important;
+    right: auto !important;
+    top: auto !important;
+    box-shadow: none !important;
+  }
+
+  /* Make floating controls (pagination) inline below table on very small screens */
+  .items-table-container > div:first-child > div:last-child {
+    display: block !important;
+    position: static !important;
+    width: 100% !important;
+    margin-top: 6px !important;
+    right: auto !important;
+    top: auto !important;
+    box-shadow: none !important;
+    background: transparent !important;
+    padding: 0 !important;
+  }
+
+  /* Force full-width panels and remove centering offsets on very small screens */
+  .in-bang-ke-tong-page, .in-bang-ke-tong-page > * {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .in-bang-ke-tong-page .search-panel,
+  .in-bang-ke-tong-page .import-detail-panel {
+    margin: 0 !important;
+    padding-left: 6px !important;
+    padding-right: 6px !important;
+  }
+
+  /* Ensure detail panel content is visible and scrollable on very small screens */
+  .in-bang-ke-tong-page .import-detail-panel {
+    overflow-y: auto !important;
+    max-height: none !important;
+    min-height: 0 !important;
+  }
+
+  .items-table-container > div:first-child {
+    position: static !important;
+  }
+  .items-table-container { overflow-y: visible !important; }
 }

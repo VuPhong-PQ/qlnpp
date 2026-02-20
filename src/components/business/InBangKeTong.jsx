@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import ExcelJS from 'exceljs';
 import { Menu } from 'antd';
 import './BusinessPage.css';
@@ -67,29 +67,9 @@ const InBangKeTong = () => {
     }
   }, [contextMenu.visible]);
 
-  // Load column order from localStorage
-  React.useEffect(() => {
-    try {
-      const savedColOrder = localStorage.getItem('import_leftColOrder');
-      if (savedColOrder) {
-        let parsedOrder = JSON.parse(savedColOrder);
-        if (Array.isArray(parsedOrder) && !parsedOrder.includes('employee')) {
-          const idx = parsedOrder.indexOf('createdDate');
-          const newOrder = [...parsedOrder];
-          const insertPos = Math.min(Math.max(idx + 2, 3), newOrder.length);
-          newOrder.splice(insertPos, 0, 'employee');
-          parsedOrder = newOrder;
-          try { localStorage.setItem('import_leftColOrder', JSON.stringify(parsedOrder)); } catch {}
-        }
-        if (Array.isArray(parsedOrder)) setLeftColOrder(parsedOrder);
-      }
-    } catch (error) {
-      console.error('Failed to load column order:', error);
-    }
-  }, []);
+
 
   const [showModal, setShowModal] = useState(false);
-  const [showSearchModal, setShowSearchModal] = useState(false);
   const [selectedImport, setSelectedImport] = useState(null);
   const [showDatePickerModal, setShowDatePickerModal] = useState(false);
   const [dateDraft, setDateDraft] = useState(null);
@@ -101,108 +81,87 @@ const InBangKeTong = () => {
   const [employee, setEmployee] = useState('');
 
   // Column visibility & header filters for left table
-  const IMPORT_LEFT_COLS_KEY = 'import_goods_left_cols_v1';
-  const defaultLeftCols = ['checkbox','importNumber','createdDate','total','note','employee','actions'];
-  const [leftVisibleCols, setLeftVisibleCols] = useState(() => {
+  const LEFT_COL_KEY = 'bkt_leftColumnSettings';
+  const defaultLeftColumns = [
+    { id: 'importNumber', label: 'Số bảng kê tổng', width: 140, visible: true, align: 'left' },
+    { id: 'createdDate', label: 'Ngày nhập', width: 110, visible: true, align: 'center' },
+    { id: 'employee', label: 'Người lập', width: 120, visible: true, align: 'left' },
+    { id: 'total', label: 'Tổng tiền', width: 110, visible: true, align: 'right' },
+    { id: 'note', label: 'Ghi chú', width: 180, visible: true, align: 'left' },
+  ];
+  const [leftColumns, setLeftColumns] = useState(() => {
     try {
-      const v = JSON.parse(localStorage.getItem(IMPORT_LEFT_COLS_KEY));
-      if (Array.isArray(v)) {
-        if (!v.includes('employee')) {
-          const idx = v.indexOf('createdDate');
-          const newV = [...v];
-          // insert employee near the end (before actions) if possible
-          const insertPos = Math.min(Math.max(idx + 2, 3), newV.length);
-          newV.splice(insertPos, 0, 'employee');
-          try { localStorage.setItem(IMPORT_LEFT_COLS_KEY, JSON.stringify(newV)); } catch {}
-          return newV;
+      const s = localStorage.getItem(LEFT_COL_KEY);
+      if (s) {
+        const parsed = JSON.parse(s);
+        if (Array.isArray(parsed)) {
+          return parsed.map(c => c && c.id === 'importNumber' ? { ...c, label: 'Số bảng kê tổng' } : c);
         }
-        return v;
       }
-    } catch {}
-    return defaultLeftCols;
+      return defaultLeftColumns;
+    } catch {
+      return defaultLeftColumns;
+    }
   });
-  const [leftFilters, setLeftFilters] = useState({ importNumber: '', createdDate: '', total: '', note: '', employee: '' });
-  // modal-based column filters (lists of selected values)
-  const [leftFilterLists, setLeftFilterLists] = useState({ importNumber: [], createdDate: [], note: [], total: [], employee: [] });
-  const [activeHeaderModalColumn, setActiveHeaderModalColumn] = useState(null);
-  const [modalSearchTerm, setModalSearchTerm] = useState('');
-  const [modalSelections, setModalSelections] = useState([]);
-  const [modalAvailableItems, setModalAvailableItems] = useState([]);
+  const [showLeftColSettings, setShowLeftColSettings] = useState(false);
+  const [leftDragColumn, setLeftDragColumn] = useState(null);
+  const [leftSettingsDrag, setLeftSettingsDrag] = useState(null);
+  const [showLeftSearchModal, setShowLeftSearchModal] = useState(false);
+  const [leftSearchColumn, setLeftSearchColumn] = useState(null);
+  const [leftSearchQuery, setLeftSearchQuery] = useState('');
+  const [leftColumnFilters, setLeftColumnFilters] = useState({});
+  const [leftSelectedRows, setLeftSelectedRows] = useState(new Set());
+
   const [leftPageSize, setLeftPageSize] = useState(() => {
     try { const v = parseInt(localStorage.getItem('import_left_page_size')||'10',10); return isNaN(v)?10:v; } catch { return 10; }
   });
 
-  // Drag & drop for columns
-  const [draggedColumnIndex, setDraggedColumnIndex] = useState(null);
-  const [leftColOrder, setLeftColOrder] = useState(defaultLeftCols);
+  // Save left column settings
+  useEffect(() => { try { localStorage.setItem(LEFT_COL_KEY, JSON.stringify(leftColumns)); } catch {} }, [leftColumns]);
 
-  // Left table column widths (resizable)
-  const [leftColWidths, setLeftColWidths] = useState(() => {
-    try {
-      const saved = localStorage.getItem('import_left_col_widths');
-      if (saved) return JSON.parse(saved);
-    } catch (e) {}
-    return {
-      checkbox: 40,
-      importNumber: 160,
-      createdDate: 120,
-      employee: 140,
-      total: 120,
-      note: 220,
-      actions: 100
-    };
-  });
-  const resizingLeftRef = useRef({ col: null, startX: 0, startWidth: 0 });
-
-  const resetLeftSettings = () => {
-    const defaultWidths = {
-      checkbox: 40,
-      importNumber: 160,
-      createdDate: 120,
-      employee: 140,
-      total: 120,
-      note: 220,
-      actions: 100
-    };
-    setLeftVisibleCols(defaultLeftCols);
-    setLeftColOrder(defaultLeftCols);
-    setLeftColWidths(defaultWidths);
-    try { localStorage.setItem(IMPORT_LEFT_COLS_KEY, JSON.stringify(defaultLeftCols)); } catch {}
-    try { localStorage.setItem('import_leftColOrder', JSON.stringify(defaultLeftCols)); } catch {}
-    try { localStorage.setItem('import_left_col_widths', JSON.stringify(defaultWidths)); } catch {}
-  };
-
-  // Drag & drop handlers
-  const handleColumnDragStart = (e, index) => {
-    // drag start
-    setDraggedColumnIndex(index);
-    e.dataTransfer.effectAllowed = 'move';
-    e.dataTransfer.setData('text/plain', index.toString());
-  };
-
-  const handleColumnDragOver = (e) => {
-    e.preventDefault();
-    e.dataTransfer.dropEffect = 'move';
-  };
-
-  const handleColumnDrop = (e, targetIndex) => {
-    e.preventDefault();
-    // handle drop
-    
-    if (draggedColumnIndex === null || draggedColumnIndex === targetIndex) {
-      setDraggedColumnIndex(null);
-      return;
+  // Left cell renderer
+  const renderLeftCell = (record, key) => {
+    switch (key) {
+      case 'importNumber': return record.importNumber || '';
+      case 'createdDate': return record.createdDate || '';
+      case 'employee': return record.employee || record.Employee || '';
+      case 'total': {
+        const total = (record.totalAmount !== undefined && record.totalAmount !== null)
+          ? Number(record.totalAmount)
+          : (record.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
+        return (Number(total) || 0).toLocaleString('vi-VN');
+      }
+      case 'note': return record.note || '';
+      default: return '';
     }
+  };
 
-    const newOrder = [...leftColOrder];
-    const draggedItem = newOrder[draggedColumnIndex];
-    newOrder.splice(draggedColumnIndex, 1);
-    newOrder.splice(targetIndex, 0, draggedItem);
-    setLeftColOrder(newOrder);
-    setDraggedColumnIndex(null);
-    try {
-      localStorage.setItem('import_leftColOrder', JSON.stringify(newOrder));
-    } catch (error) {}
+  // Left unique values for search
+  const getLeftUniqueValues = (colId) => {
+    const values = new Set();
+    (filteredImports || []).forEach(record => {
+      const v = String(renderLeftCell(record, colId) || '').trim();
+      if (v) values.add(v);
+    });
+    return Array.from(values).sort((a, b) => a.localeCompare(b, 'vi'));
+  };
+
+  // Left search modal functions
+  const openLeftSearch = (colId, colLabel) => { setLeftSearchColumn({ id: colId, label: colLabel }); setLeftSearchQuery(leftColumnFilters[colId] || ''); setShowLeftSearchModal(true); };
+  const closeLeftSearch = () => { setShowLeftSearchModal(false); setLeftSearchColumn(null); setLeftSearchQuery(''); };
+  const applyLeftSearch = () => {
+    const nf = { ...leftColumnFilters };
+    if (leftSearchQuery.trim()) nf[leftSearchColumn.id] = leftSearchQuery.trim(); else delete nf[leftSearchColumn.id];
+    setLeftColumnFilters(nf); setShowLeftSearchModal(false);
+  };
+  const clearLeftFilter = (colId) => { const nf = { ...leftColumnFilters }; delete nf[colId]; setLeftColumnFilters(nf); };
+
+  // Left select all/single row
+  const handleLeftSelectAll = (checked, rows) => {
+    if (checked) { setLeftSelectedRows(new Set(rows.map(r => r.id))); } else { setLeftSelectedRows(new Set()); }
+  };
+  const handleLeftSelectRow = (id) => {
+    setLeftSelectedRows(prev => { const n = new Set(prev); if (n.has(id)) n.delete(id); else n.add(id); return n; });
   };
 
   // Core data state
@@ -212,6 +171,453 @@ const InBangKeTong = () => {
   const [warehouses, setWarehouses] = useState([]);
   const [transactionContents, setTransactionContents] = useState([]);
   const [employeesList, setEmployeesList] = useState([]);
+  const [dsHoaDons, setDsHoaDons] = useState([]);
+  const [activeTab, setActiveTab] = useState('bangKeTong'); // 'bangKeTong' or 'dsHoaDon'
+
+  // ===== Column management for Bảng kê tổng tab =====
+  const BKT_COL_KEY = 'bktColumnSettings';
+  const defaultBktColumns = [
+    { id: 'stt', label: 'Số TT', width: 50, visible: true, align: 'center' },
+    { id: 'maPhieu', label: 'Mã phiếu', width: 120, visible: true, align: 'center' },
+    { id: 'tenKhachHang', label: 'Tên khách hàng', width: 200, visible: true, align: 'left' },
+    { id: 'tongTien', label: 'Tổng tiền', width: 130, visible: true, align: 'right' },
+    { id: 'tongTienSauGiam', label: 'Tổng tiền sau giảm', width: 150, visible: true, align: 'right' },
+    { id: 'nvSale', label: 'NV Sale', width: 120, visible: true, align: 'center' },
+    { id: 'loaiHang', label: 'Loại hàng', width: 120, visible: true, align: 'center' },
+  ];
+  const [bktColumns, setBktColumns] = useState(() => {
+    try { const s = localStorage.getItem(BKT_COL_KEY); return s ? JSON.parse(s) : defaultBktColumns; } catch { return defaultBktColumns; }
+  });
+  const [showBktSettings, setShowBktSettings] = useState(false);
+  const [bktDragColumn, setBktDragColumn] = useState(null);
+  const [bktSettingsDrag, setBktSettingsDrag] = useState(null);
+  const [showBktSearchModal, setShowBktSearchModal] = useState(false);
+  const [bktSearchColumn, setBktSearchColumn] = useState(null);
+  const [bktSearchQuery, setBktSearchQuery] = useState('');
+  const [bktColumnFilters, setBktColumnFilters] = useState({});
+
+  // ===== Column management for DS hóa đơn tab =====
+  const DSHD_COL_KEY = 'dshdColumnSettings';
+  const defaultDshdColumns = [
+    { id: 'stt', label: 'Số TT', width: 50, visible: true, align: 'center' },
+    { id: 'soHoaDon', label: 'Số hóa đơn', width: 120, visible: true, align: 'center' },
+    { id: 'ngayHoaDon', label: 'Ngày hóa đơn', width: 110, visible: true, align: 'center' },
+    { id: 'tenKhachHang', label: 'Tên khách hàng', width: 200, visible: true, align: 'left' },
+    { id: 'tongTien', label: 'Tổng tiền', width: 130, visible: true, align: 'right' },
+    { id: 'trangThai', label: 'Trạng thái', width: 120, visible: true, align: 'center' },
+  ];
+  const [dshdColumns, setDshdColumns] = useState(() => {
+    try { const s = localStorage.getItem(DSHD_COL_KEY); return s ? JSON.parse(s) : defaultDshdColumns; } catch { return defaultDshdColumns; }
+  });
+  const [showDshdSettings, setShowDshdSettings] = useState(false);
+  const [dshdDragColumn, setDshdDragColumn] = useState(null);
+  const [dshdSettingsDrag, setDshdSettingsDrag] = useState(null);
+  const [showDshdSearchModal, setShowDshdSearchModal] = useState(false);
+  const [dshdSearchColumn, setDshdSearchColumn] = useState(null);
+  const [dshdSearchQuery, setDshdSearchQuery] = useState('');
+  const [dshdColumnFilters, setDshdColumnFilters] = useState({});
+
+  // Save column settings to localStorage
+  useEffect(() => { try { localStorage.setItem(BKT_COL_KEY, JSON.stringify(bktColumns)); } catch {} }, [bktColumns]);
+  useEffect(() => { try { localStorage.setItem(DSHD_COL_KEY, JSON.stringify(dshdColumns)); } catch {} }, [dshdColumns]);
+
+  // Generic column handlers (factory functions)
+  const makeColHandlers = (setCols, setDragCol, setSettingsDrag) => ({
+    toggleVisibility: (id) => setCols(prev => prev.map(c => c.id === id ? { ...c, visible: !c.visible } : c)),
+    resetCols: (defaults) => setCols(defaults),
+    // Settings modal drag
+    settingsDragStart: (e, index) => { setSettingsDrag(index); e.dataTransfer.effectAllowed = 'move'; },
+    settingsDragOver: (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; },
+    settingsDrop: (e, index, settingsDragItem) => {
+      e.preventDefault();
+      setCols(prev => { const arr = [...prev]; const item = arr.splice(settingsDragItem, 1)[0]; arr.splice(index, 0, item); return arr; });
+      setSettingsDrag(null);
+    },
+    settingsDragEnd: () => setSettingsDrag(null),
+    // Header drag reorder
+    colDragStart: (e, id) => { setDragCol(id); e.dataTransfer.effectAllowed = 'move'; },
+    colDragOver: (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; },
+    colDrop: (e, id, dragCol) => {
+      e.preventDefault();
+      if (!dragCol || dragCol === id) return;
+      setCols(prev => { const arr = [...prev]; const from = arr.findIndex(c => c.id === dragCol); const to = arr.findIndex(c => c.id === id); if (from < 0 || to < 0) return prev; const [item] = arr.splice(from, 1); arr.splice(to, 0, item); return arr; });
+      setDragCol(null);
+    },
+    colDragEnd: () => setDragCol(null),
+    // Resize
+    resizeStart: (e, id, cols) => {
+      e.preventDefault();
+      const sX = e.clientX;
+      const col = cols.find(c => c.id === id);
+      const sW = col ? col.width : 120;
+      const onMove = (ev) => { const dx = ev.clientX - sX; setCols(prev => prev.map(c => c.id === id ? { ...c, width: Math.max(60, sW + dx) } : c)); };
+      const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+      document.addEventListener('mousemove', onMove);
+      document.addEventListener('mouseup', onUp);
+    },
+  });
+
+  const leftH = makeColHandlers(setLeftColumns, setLeftDragColumn, setLeftSettingsDrag);
+  const bktH = makeColHandlers(setBktColumns, setBktDragColumn, setBktSettingsDrag);
+  const dshdH = makeColHandlers(setDshdColumns, setDshdDragColumn, setDshdSettingsDrag);
+
+  // BKT cell renderer
+  const renderBktCell = (item, key, idx) => {
+    switch (key) {
+      case 'stt': return idx + 1;
+      case 'maPhieu': return item.maPhieu || '';
+      case 'tenKhachHang': return item.tenKhachHang || '';
+      case 'tongTien': return formatCurrency(item.tongTien);
+      case 'tongTienSauGiam': return formatCurrency(item.tongTienSauGiam);
+      case 'nvSale': return item.nvSale || '';
+      case 'loaiHang': return item.loaiHang || '';
+      default: return '';
+    }
+  };
+
+  // DSHD cell renderer
+  const renderDshdCell = (item, key, idx) => {
+    switch (key) {
+      case 'stt': return idx + 1;
+      case 'soHoaDon': return item.soHoaDon || '';
+      case 'ngayHoaDon': return item.ngayHoaDon || '';
+      case 'tenKhachHang': return item.tenKhachHang || '';
+      case 'tongTien': return formatCurrency(item.tongTien);
+      case 'trangThai': return item.trangThai || '';
+      default: return '';
+    }
+  };
+
+  // Get unique values for column search
+  const getBktUniqueValues = (colId) => {
+    const items = selectedImport?.bangKeTongItems || [];
+    const values = new Set();
+    items.forEach(item => {
+      const v = String(renderBktCell(item, colId, 0) || '').trim();
+      if (v && v !== '0') values.add(v);
+    });
+    return Array.from(values).sort((a, b) => a.localeCompare(b, 'vi'));
+  };
+
+  const getDshdUniqueValues = (colId) => {
+    const items = selectedImport?.dsHoaDonItems || [];
+    const values = new Set();
+    items.forEach(item => {
+      const v = String(renderDshdCell(item, colId, 0) || '').trim();
+      if (v && v !== '0') values.add(v);
+    });
+    return Array.from(values).sort((a, b) => a.localeCompare(b, 'vi'));
+  };
+
+  // Open/close search modals
+  const openBktSearch = (colId, colLabel) => { setBktSearchColumn({ id: colId, label: colLabel }); setBktSearchQuery(bktColumnFilters[colId] || ''); setShowBktSearchModal(true); };
+  const closeBktSearch = () => { setShowBktSearchModal(false); setBktSearchColumn(null); setBktSearchQuery(''); };
+  const applyBktSearch = () => {
+    const nf = { ...bktColumnFilters };
+    if (bktSearchQuery.trim()) nf[bktSearchColumn.id] = bktSearchQuery.trim(); else delete nf[bktSearchColumn.id];
+    setBktColumnFilters(nf); setShowBktSearchModal(false);
+  };
+  const clearBktFilter = (colId) => { const nf = { ...bktColumnFilters }; delete nf[colId]; setBktColumnFilters(nf); };
+
+  const openDshdSearch = (colId, colLabel) => { setDshdSearchColumn({ id: colId, label: colLabel }); setDshdSearchQuery(dshdColumnFilters[colId] || ''); setShowDshdSearchModal(true); };
+  const closeDshdSearch = () => { setShowDshdSearchModal(false); setDshdSearchColumn(null); setDshdSearchQuery(''); };
+  const applyDshdSearch = () => {
+    const nf = { ...dshdColumnFilters };
+    if (dshdSearchQuery.trim()) nf[dshdSearchColumn.id] = dshdSearchQuery.trim(); else delete nf[dshdSearchColumn.id];
+    setDshdColumnFilters(nf); setShowDshdSearchModal(false);
+  };
+  const clearDshdFilter = (colId) => { const nf = { ...dshdColumnFilters }; delete nf[colId]; setDshdColumnFilters(nf); };
+
+  // Filter items by column filters
+  const filterBktItems = (items) => {
+    if (!items || Object.keys(bktColumnFilters).length === 0) return items;
+    return items.filter(item => {
+      return Object.entries(bktColumnFilters).every(([colId, query]) => {
+        const val = String(renderBktCell(item, colId, 0) || '').toLowerCase();
+        return val.includes(query.toLowerCase());
+      });
+    });
+  };
+  const filterDshdItems = (items) => {
+    if (!items || Object.keys(dshdColumnFilters).length === 0) return items;
+    return items.filter(item => {
+      return Object.entries(dshdColumnFilters).every(([colId, query]) => {
+        const val = String(renderDshdCell(item, colId, 0) || '').toLowerCase();
+        return val.includes(query.toLowerCase());
+      });
+    });
+  };
+
+  // Helper to render a dynamic table for tab (reusable for both branches)
+  const renderTabTable = (tabType, dataItems) => {
+    const isBkt = tabType === 'bkt';
+    const cols = isBkt ? bktColumns : dshdColumns;
+    const dragCol = isBkt ? bktDragColumn : dshdDragColumn;
+    const h = isBkt ? bktH : dshdH;
+    const colFilters = isBkt ? bktColumnFilters : dshdColumnFilters;
+    const openSearch = isBkt ? openBktSearch : openDshdSearch;
+    const clearFilter = isBkt ? clearBktFilter : clearDshdFilter;
+    const renderCell = isBkt ? renderBktCell : renderDshdCell;
+    const filterItems = isBkt ? filterBktItems : filterDshdItems;
+    const setShowSettings = isBkt ? setShowBktSettings : setShowDshdSettings;
+    const tabLabel = isBkt ? 'Bảng kê tổng' : 'DS hóa đơn';
+    const noDataMsg = isBkt ? 'Không có dữ liệu bảng kê tổng' : 'Không có dữ liệu DS hóa đơn';
+    const visibleCols = cols.filter(c => c.visible);
+    const filteredItems = filterItems(dataItems || []);
+
+    return (
+      <div className="order-items-section">
+        <div className="order-items-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+          <span className="items-total">{tabLabel}</span>
+          <button
+            className="action-btn btn-settings"
+            title="Cài đặt cột"
+            onClick={() => setShowSettings(true)}
+            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}
+          >
+            ⚙️
+          </button>
+        </div>
+        <div className="order-items-table-container" style={{ overflowX: 'auto' }}>
+          <table className="order-items-table bkt-dynamic-table" style={{ borderCollapse: 'collapse', fontSize: 13, tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+            <thead>
+              <tr style={{ background: '#f0f5ff' }}>
+                {visibleCols.map(col => (
+                  <th
+                    key={col.id}
+                    style={{
+                      border: '1px solid #d9d9d9', padding: '6px 8px', textAlign: col.align || 'center',
+                      fontWeight: 600, width: col.width + 'px', minWidth: col.width + 'px', position: 'relative',
+                      cursor: dragCol === col.id ? 'grabbing' : 'grab', userSelect: 'none',
+                    }}
+                    draggable
+                    onDragStart={(e) => h.colDragStart(e, col.id)}
+                    onDragOver={h.colDragOver}
+                    onDrop={(e) => h.colDrop(e, col.id, dragCol)}
+                    onDragEnd={h.colDragEnd}
+                    className={dragCol === col.id ? 'dragging' : ''}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                      <span style={{ flex: 1 }}>{col.label}</span>
+                      {col.id !== 'stt' && (
+                        <React.Fragment>
+                          <button
+                            className="col-search-btn"
+                            onClick={(e) => { e.stopPropagation(); openSearch(col.id, col.label); }}
+                            title={`Tìm kiếm theo ${col.label}`}
+                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, opacity: 0.6, padding: '1px 2px' }}
+                          >🔍</button>
+                          {colFilters[col.id] && (
+                            <button
+                              className="col-clear-btn"
+                              onClick={(e) => { e.stopPropagation(); clearFilter(col.id); }}
+                              title="Xóa bộ lọc"
+                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#c9302c', padding: '1px 2px' }}
+                            >✖</button>
+                          )}
+                        </React.Fragment>
+                      )}
+                    </div>
+                    {col.id !== 'stt' && (
+                      <div
+                        className="resize-handle"
+                        onMouseDown={(e) => { e.stopPropagation(); h.resizeStart(e, col.id, cols); }}
+                        style={{ position: 'absolute', right: '-2px', top: 0, bottom: 0, width: '6px', cursor: 'col-resize', zIndex: 2 }}
+                      />
+                    )}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filteredItems.length > 0 ? (
+                filteredItems.map((item, idx) => (
+                  <tr key={idx} style={{ background: idx % 2 === 0 ? '#fff' : '#fafafa' }}>
+                    {visibleCols.map(col => (
+                      <td key={col.id} style={{ border: '1px solid #d9d9d9', padding: '5px 8px', textAlign: col.align || 'center' }}>
+                        {renderCell(item, col.id, idx)}
+                      </td>
+                    ))}
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={visibleCols.length} style={{ border: '1px solid #d9d9d9', padding: '20px', textAlign: 'center', color: '#999' }}>
+                    {noDataMsg}
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderTop: '1px solid #eee', fontSize: 12 }}>
+          <span style={{ color: '#888' }}>Trang {rightCurrentPage}/{rightTotalPages || 1}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => setRightCurrentPage(p => Math.max(1, p - 1))} disabled={rightCurrentPage <= 1} style={{ padding: '2px 8px', border: '1px solid #ddd', borderRadius: 3, cursor: rightCurrentPage <= 1 ? 'default' : 'pointer', background: '#fff', fontSize: 11 }}>‹</button>
+            <button onClick={() => setRightCurrentPage(p => Math.min(rightTotalPages, p + 1))} disabled={rightCurrentPage >= rightTotalPages} style={{ padding: '2px 8px', border: '1px solid #ddd', borderRadius: 3, cursor: rightCurrentPage >= rightTotalPages ? 'default' : 'pointer', background: '#fff', fontSize: 11 }}>›</button>
+            <select
+              value={(rightTotal && rightItemsPerPage >= rightTotal) ? 'all' : rightItemsPerPage}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === 'all') {
+                  setRightItemsPerPage(rightTotal || 1);
+                  setRightCurrentPage(1);
+                } else {
+                  setRightItemsPerPage(parseInt(v, 10));
+                  setRightCurrentPage(1);
+                }
+              }}
+              style={{ padding: '2px 4px', border: '1px solid #ddd', borderRadius: 3, fontSize: 11 }}
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={200}>200</option>
+              <option value={500}>500</option>
+              <option value={1000}>1000</option>
+              <option value={5000}>5000</option>
+              <option value={10000}>10000</option>
+              <option value="all">Tất cả</option>
+            </select>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Helper to render column settings modal
+  const renderColumnSettingsModal = (tabType) => {
+    const isBkt = tabType === 'bkt';
+    const show = isBkt ? showBktSettings : showDshdSettings;
+    const setShow = isBkt ? setShowBktSettings : setShowDshdSettings;
+    const cols = isBkt ? bktColumns : dshdColumns;
+    const defaults = isBkt ? defaultBktColumns : defaultDshdColumns;
+    const h = isBkt ? bktH : dshdH;
+    const settingsDrag = isBkt ? bktSettingsDrag : dshdSettingsDrag;
+    const tabLabel = isBkt ? 'Bảng kê tổng' : 'DS hóa đơn';
+
+    if (!show) return null;
+    return (
+      <div className="search-modal-overlay" onClick={() => setShow(false)}>
+        <div className="column-settings-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="search-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f8f9fa', borderBottom: '1px solid #e9ecef' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button onClick={() => h.resetCols(defaults)} title="Reset về mặc định" style={{ padding: '6px 10px', fontSize: 13, borderRadius: 6, border: '1px solid #e6eefc', background: '#f5f8ff', color: '#2b6cb0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>🔄</span>
+                <span>Reset về mặc định</span>
+              </button>
+              <h3 style={{ margin: 0, fontSize: 15 }}>⚙️ Cài đặt cột - {tabLabel}</h3>
+            </div>
+            <button className="search-modal-close" onClick={() => setShow(false)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#666' }}>×</button>
+          </div>
+          <div className="column-settings-body" style={{ padding: '12px 16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 10 }}>
+              <span style={{ fontSize: 12, color: '#888' }}>Hiển thị {cols.filter(c => c.visible).length}/{cols.length} cột</span>
+            </div>
+            <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>💡 Kéo thả để sắp xếp, tick/untick để ẩn/hiện cột</div>
+            <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+              {cols.map((column, index) => (
+                <div
+                  key={column.id}
+                  className={`column-settings-item ${settingsDrag === index ? 'dragging' : ''}`}
+                  draggable
+                  onDragStart={(e) => h.settingsDragStart(e, index)}
+                  onDragOver={h.settingsDragOver}
+                  onDrop={(e) => h.settingsDrop(e, index, settingsDrag)}
+                  onDragEnd={h.settingsDragEnd}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px', borderBottom: '1px solid #f0f0f0', cursor: 'grab', background: settingsDrag === index ? '#e3f2fd' : 'transparent' }}
+                >
+                  <span style={{ cursor: 'grab', color: '#aaa', fontSize: 14, userSelect: 'none' }}>⋮⋮</span>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={column.visible} onChange={() => h.toggleVisibility(column.id)} style={{ accentColor: '#667eea' }} />
+                    <span style={{ fontSize: 13 }}>{column.label}</span>
+                  </label>
+                  <span style={{ fontSize: 11, color: '#aaa' }}>{column.width}px</span>
+                  {!column.visible && <span style={{ fontSize: 10, color: '#f5222d', background: '#fff1f0', padding: '1px 6px', borderRadius: 8 }}>Ẩn</span>}
+                </div>
+              ))}
+            </div>
+            <div style={{ textAlign: 'right', marginTop: 10 }}>
+              <button className="apply-settings-btn" onClick={() => setShow(false)} style={{ padding: '6px 18px', background: '#667eea', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13 }}>
+                ✓ Áp dụng
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  // Helper to render column search modal
+  const renderColumnSearchModal = (tabType) => {
+    const isBkt = tabType === 'bkt';
+    const show = isBkt ? showBktSearchModal : showDshdSearchModal;
+    const searchCol = isBkt ? bktSearchColumn : dshdSearchColumn;
+    const query = isBkt ? bktSearchQuery : dshdSearchQuery;
+    const setQuery = isBkt ? setBktSearchQuery : setDshdSearchQuery;
+    const closeModal = isBkt ? closeBktSearch : closeDshdSearch;
+    const applySearch = isBkt ? applyBktSearch : applyDshdSearch;
+    const getUniqueValues = isBkt ? getBktUniqueValues : getDshdUniqueValues;
+    const setFilters = isBkt ? setBktColumnFilters : setDshdColumnFilters;
+
+    if (!show || !searchCol) return null;
+    const uniqueValues = getUniqueValues(searchCol.id).filter(v => {
+      if (!query.trim()) return true;
+      return v.toLowerCase().includes(query.toLowerCase());
+    }).slice(0, 50);
+
+    return (
+      <div className="search-modal-overlay" onClick={closeModal}>
+        <div className="search-modal" onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 10, width: 380, maxWidth: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f8f9fa', borderBottom: '1px solid #e9ecef' }}>
+            <h3 style={{ margin: 0, fontSize: 15 }}>🔍 Tìm kiếm theo "{searchCol.label}"</h3>
+            <button onClick={closeModal} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#666' }}>×</button>
+          </div>
+          <div style={{ padding: '12px 16px' }}>
+            <input
+              type="text"
+              placeholder="Nhập từ khóa tìm kiếm..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              autoFocus
+              style={{ width: '100%', padding: '8px 12px', border: '1px solid #dde2e8', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
+            />
+          </div>
+          <div style={{ maxHeight: 250, overflowY: 'auto', padding: '0 16px' }}>
+            <div style={{ fontSize: 11, color: '#999', marginBottom: 6 }}>Các giá trị có trong cột (click để chọn):</div>
+            {uniqueValues.length === 0 ? (
+              <div style={{ padding: 10, color: '#999', textAlign: 'center' }}>Không có dữ liệu</div>
+            ) : (
+              uniqueValues.map((value, i) => (
+                <div
+                  key={i}
+                  onClick={() => { setQuery(value); }}
+                  style={{ padding: '7px 10px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', background: query === value ? '#e3f2fd' : 'transparent', fontSize: 13 }}
+                  onMouseEnter={(e) => { e.target.style.background = '#f5f5f5'; }}
+                  onMouseLeave={(e) => { e.target.style.background = query === value ? '#e3f2fd' : 'transparent'; }}
+                >
+                  {value}
+                </div>
+              ))
+            )}
+          </div>
+          <div style={{ padding: '10px 16px', borderTop: '1px solid #eee', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+            <button onClick={() => { setQuery(''); setFilters({}); closeModal(); }} style={{ padding: '6px 14px', background: '#6c757d', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+              Xóa bộ lọc
+            </button>
+            <button onClick={applySearch} style={{ padding: '6px 14px', background: '#667eea', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+              Áp dụng
+            </button>
+            <button onClick={closeModal} style={{ padding: '6px 14px', background: '#fff', color: '#333', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+              Đóng
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   const [selectedProducts, setSelectedProducts] = useState({});
   const [selectedDates, setSelectedDates] = useState({});
   const [formData, setFormData] = useState(() => {
@@ -222,10 +628,11 @@ const InBangKeTong = () => {
     const timestamp = Date.now().toString().slice(-4);
     
     return { 
-      importNumber: `PN-${day}${month}${year}-${timestamp}`, 
+      importNumber: `BKT-${day}${month}${year}-${timestamp}`, 
       createdDate: new Date().toISOString().split('T')[0], 
       employee: 'admin 66', 
       importType: '', 
+      dsHoaDon: '',
       totalWeight: 0, 
       totalVolume: 0, 
       note: '' 
@@ -236,7 +643,7 @@ const InBangKeTong = () => {
   const ensureImportTypeSelected = () => {
     const it = (selectedImport && selectedImport.importType) || formData.importType;
     if (!it || String(it).trim() === '') {
-      Modal.warning({ title: 'Chưa chọn loại nhập', content: 'vui lòng chọn loại nhập trước khi thao tác' });
+      Modal.warning({ title: 'Chưa chọn bảng kê tổng', content: 'vui lòng chọn bảng kê tổng trước khi thao tác' });
       return false;
     }
     return true;
@@ -265,7 +672,6 @@ const InBangKeTong = () => {
   // Control edit mode - true: show full edit with products table, false: show basic info only
   const [isEditMode, setIsEditMode] = useState(false);
   const [leftPage, setLeftPage] = useState(1);
-  const [showLeftSettings, setShowLeftSettings] = useState(false);
   const [showRightSettings, setShowRightSettings] = useState(false);
   const itemsTableRef = useRef(null);
   const productSelectRefs = useRef({});
@@ -284,31 +690,6 @@ const InBangKeTong = () => {
       const delta = e.clientX - startX;
       const newWidth = Math.max(40, startWidth + delta);
       setRightColWidths(prev => ({ ...prev, [colKey]: newWidth }));
-    };
-
-    const handleMouseUp = () => {
-      document.removeEventListener('mousemove', handleMouseMove);
-      document.removeEventListener('mouseup', handleMouseUp);
-      document.body.style.cursor = '';
-    };
-
-    document.body.style.cursor = 'col-resize';
-    document.addEventListener('mousemove', handleMouseMove);
-    document.addEventListener('mouseup', handleMouseUp);
-  };
-
-  // Left table resize handler (for the left panel table)
-  const handleLeftThMouseDown = (e, colKey) => {
-    e.preventDefault();
-    e.stopPropagation();
-
-    const startX = e.clientX;
-    const startWidth = leftColWidths[colKey] || 100;
-
-    const handleMouseMove = (e) => {
-      const delta = e.clientX - startX;
-      const newWidth = Math.max(40, startWidth + delta);
-      setLeftColWidths(prev => ({ ...prev, [colKey]: newWidth }));
     };
 
     const handleMouseUp = () => {
@@ -349,80 +730,49 @@ const InBangKeTong = () => {
   };
 
   // Helper function to format currency (with comma separators)
+  const formatCurrency = (value) => {
+    if (value === null || value === undefined || value === '') return '0';
+    const num = Number(value) || 0;
+    // No decimal places for display, use grouping separators
+    try {
+      return num.toLocaleString('en-US', { maximumFractionDigits: 0 });
+    } catch (e) {
+      return String(Math.round(num));
+    }
+  };
+
+  // Helper to format weight (3 decimal places, simple rounding)
+  const formatWeight = (w) => {
+    if (w === null || w === undefined || w === '') return '0.000';
+    const num = Number(w) || 0;
+    return num.toFixed(3);
+  };
+
   // Helper function to get product weight/volume/price/conversion based on selected unit
   const getProductDataByUnit = (product, unitName) => {
     if (!product || !unitName) return { weight: 0, volume: 0, price: 0, conversion: 1 };
-    
-    const baseUnit = product.baseUnit || product.defaultUnit || product.DefaultUnit || product.unit || '';
+
     const baseWeight = parseFloat(product.weight) || 0;
     const baseVolume = parseFloat(product.volume) || 0;
-    
-    // If selected unit is base unit, use base data
-    if (unitName === baseUnit) {
-      return {
-        weight: baseWeight, // weight gốc × 1
-        volume: baseVolume, // volume gốc × 1  
-        price: parseFloat(product.price) || 0,
-        conversion: 1
-      };
-    }
-    
-    // Check unit1 (ĐVT 1) - try different field name patterns
-    const unit1Name = product.unit1Name || product.unit1 || product.unitName1 || product.dvt1Name;
-    if (unit1Name && unitName === unit1Name) {
-      const unit1Conversion = parseFloat(product.unit1Conversion || product.conversion1 || product.dvt1Conversion) || 1;
-      return {
-        weight: baseWeight * unit1Conversion, // weight gốc × quy đổi 1
-        volume: baseVolume * unit1Conversion, // volume gốc × quy đổi 1
-        price: parseFloat(product.unit1Price || product.price1 || product.dvt1Price) || 0,
-        conversion: unit1Conversion
-      };
-    }
-    
-    // Check unit2 (ĐVT 2) 
-    const unit2Name = product.unit2Name || product.unit2 || product.unitName2 || product.dvt2Name;
-    if (unit2Name && unitName === unit2Name) {
-      const unit2Conversion = parseFloat(product.unit2Conversion || product.conversion2 || product.dvt2Conversion) || 1;
-      return {
-        weight: baseWeight * unit2Conversion, // weight gốc × quy đổi 2
-        volume: baseVolume * unit2Conversion, // volume gốc × quy đổi 2
-        price: parseFloat(product.unit2Price || product.price2 || product.dvt2Price) || 0,
-        conversion: unit2Conversion
-      };
-    }
-    
-    // Fallback to base unit if unit not found
+    // Build unit list with conversions
+    const units = [];
+    const baseUnit = product.baseUnit || product.defaultUnit || product.DefaultUnit || product.unit;
+    if (baseUnit) units.push({ name: baseUnit, conv: 1 });
+    if (product.unit1) units.push({ name: product.unit1, conv: Number(product.conversion1) || 1 });
+    if (product.unit2) units.push({ name: product.unit2, conv: Number(product.conversion2) || 1 });
+    if (product.unit3) units.push({ name: product.unit3, conv: Number(product.conversion3) || 1 });
+    if (product.unit4) units.push({ name: product.unit4, conv: Number(product.conversion4) || 1 });
+
+    // Find matching unit
+    const u = units.find(x => String(x.name) === String(unitName));
+    const conversion = u ? (Number(u.conv) || 1) : 1;
+
     return {
-      weight: baseWeight,
-      volume: baseVolume,
-      price: parseFloat(product.price) || 0,
-      conversion: 1
+      weight: baseWeight * conversion,
+      volume: baseVolume * conversion,
+      price: (parseFloat(product.unitPrice) || parseFloat(product.price) || 0) * conversion,
+      conversion: conversion
     };
-  };
-
-  const formatCurrency = (amount) => {
-    if (amount === null || amount === undefined || amount === '') return '0';
-    const num = Number(amount) || 0;
-    return new Intl.NumberFormat('vi-VN').format(num);
-  };
-
-  // Helper function to format weight (2 decimal places)
-  const formatWeight = (weight) => {
-    if (weight === null || weight === undefined || weight === '') return '0';
-    const num = Number(weight) || 0;
-    if (num === 0) return '0';
-    
-    // Chuyển thành string và cắt bớt chữ số thập phân (không làm tròn)
-    const str = num.toString();
-    const dotIndex = str.indexOf('.');
-    
-    if (dotIndex === -1) {
-      // Không có chữ số thập phân
-      return str;
-    }
-    
-    // Chỉ lấy 2 chữ số thập phân đầu tiên (cắt bớt, không làm tròn)
-    return str.substring(0, dotIndex + 3);
   };
 
   // Helper function to format volume (4 decimal places)
@@ -1085,9 +1435,9 @@ const InBangKeTong = () => {
               
               targetRow.values.conversion = newConversion.toString();
               
-              // Đơn giản: Phiếu đã lưu = có số phiếu hợp lệ (PN-...)
+              // Đơn giản: Phiếu đã lưu = có số phiếu hợp lệ (BKT-...)
               const currentImportNumber = formData?.importNumber || '';
-              const isSavedImport = currentImportNumber.startsWith('PN-') && !currentImportNumber.includes('temp_');
+              const isSavedImport = currentImportNumber.startsWith('BKT-') && !currentImportNumber.includes('temp_');
               
               const currentPrice = parseFloat(targetRow.values.unitPrice) || 0;
               const currentTransport = parseFloat(targetRow.values.transportCost) || 0;
@@ -1163,8 +1513,7 @@ const InBangKeTong = () => {
     setSelectedDates({});
     setRightFilters({});
     setRightFilterPopup({ column: null, term: '' });
-    setModalSearchTerm('');
-    setModalSelections([]);
+
     setHeaderFilter(null);
   };
 
@@ -1368,7 +1717,7 @@ const InBangKeTong = () => {
 
   // Cập nhật số phiếu sau khi imports được load (chỉ khi đang tạo mới)
   React.useEffect(() => {
-    if (imports && imports.length > 0 && !selectedImport && formData.importNumber.includes('PN-')) {
+    if (imports && imports.length > 0 && !selectedImport && formData.importNumber.includes('BKT-')) {
       const newImportNumber = generateImportNumber();
       setFormData(prev => ({
         ...prev,
@@ -1451,16 +1800,6 @@ const InBangKeTong = () => {
     }, 300); // Save after 300ms of no changes
     return () => clearTimeout(timeoutId);
   }, [rightColWidths]);
-
-  // Save left column widths to localStorage when they change (debounced)
-  React.useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      try {
-        localStorage.setItem('import_left_col_widths', JSON.stringify(leftColWidths));
-      } catch (e) {}
-    }, 300);
-    return () => clearTimeout(timeoutId);
-  }, [leftColWidths]);
 
   // Use event delegation for resize - re-attach whenever items/selectedImport change
   React.useEffect(() => {
@@ -1981,24 +2320,21 @@ const InBangKeTong = () => {
     return matchesSearch && matchesType && matchesEmployee && matchesCode && matchesDate;
   });
 
-  // apply header filters for left table (modal-driven list filters)
-  const filteredLeft = filteredImports.filter(i => {
-    const importMatch = leftFilterLists.importNumber && leftFilterLists.importNumber.length > 0
-      ? leftFilterLists.importNumber.includes(i.importNumber)
-      : true;
-    const dateMatch = leftFilterLists.createdDate && leftFilterLists.createdDate.length > 0
-      ? leftFilterLists.createdDate.includes(i.createdDate)
-      : true;
-    const totalValue = String((i.items||[]).reduce((s,it)=>s+(it.total||0),0));
-    const totalMatch = leftFilterLists.total && leftFilterLists.total.length > 0
-      ? leftFilterLists.total.includes(totalValue)
-      : true;
-    return importMatch && dateMatch && totalMatch;
+  // apply column filters for left table
+  const filteredLeft = filteredImports.filter(record => {
+    if (Object.keys(leftColumnFilters).length === 0) return true;
+    return Object.entries(leftColumnFilters).every(([colId, query]) => {
+      const val = String(renderLeftCell(record, colId) || '').toLowerCase();
+      return val.includes(query.toLowerCase());
+    });
   });
 
-  React.useEffect(() => {
-    localStorage.setItem(IMPORT_LEFT_COLS_KEY, JSON.stringify(leftVisibleCols));
-  }, [leftVisibleCols]);
+  // Left table pagination
+  const paginatedLeft = (() => {
+    const start = (leftPage - 1) * leftPageSize;
+    return filteredLeft.slice(start, start + leftPageSize);
+  })();
+  const leftTotalPages = Math.ceil(filteredLeft.length / leftPageSize);
 
   React.useEffect(() => {
     localStorage.setItem('import_left_page_size', String(leftPageSize));
@@ -2129,11 +2465,11 @@ const InBangKeTong = () => {
                 <div class="company" style="margin:0; padding:0;">${companyName}</div>
                 <div class="small" style="margin:0; padding:0;">Địa chỉ: ${companyAddressDynamic || ''}</div>
                 <div class="small" style="margin:0; padding:0;">Điện thoại: ${companyPhoneDynamic || ''}</div>
-                <div class="small" style="margin-top:8px; padding:0;"><strong>Ghi chú PN:</strong> ${formData.note || (selectedImport && (selectedImport.note || '')) || ''}</div>
+                <div class="small" style="margin-top:8px; padding:0;"><strong>Ghi chú bảng kê:</strong> ${formData.note || (selectedImport && (selectedImport.note || '')) || ''}</div>
               </td>
               <td style="border:none; vertical-align:top; padding:0; width:35%; text-align:right;">
-                <div style="display:inline-block; text-align:right; white-space:nowrap;">
-                  <div class="small" style="margin:0; padding:0;">Số phiếu: <strong>${importNumber}</strong></div>
+                  <div style="display:inline-block; text-align:right; white-space:nowrap;">
+                  <div class="small" style="margin:0; padding:0;">Số bảng kê tổng: <strong>${importNumber}</strong></div>
                   <div class="small" style="margin:0; padding:0;">Ngày lập: <strong>${printedAt}</strong></div>
                   <div class="small" style="margin:0; padding:0;">Nhân viên: <strong>${employeeName}</strong></div>
                   <div class="small" style="margin:0; padding:0;">Loại nhập: <strong>${importTypeName}</strong></div>
@@ -2323,7 +2659,7 @@ const InBangKeTong = () => {
               <div class="small">Điện thoại: ${companyPhoneDynamic || ''}</div>
             </div>
             <div style="text-align:right">
-              <div class="small">Số phiếu: <strong>${importNumber}</strong></div>
+              <div class="small">Số bảng kê tổng: <strong>${importNumber}</strong></div>
               <div class="small">Ngày lập: <strong>${printedAt}</strong></div>
               <div class="small">Nhân viên: <strong>${employeeName}</strong></div>
               <div class="small">Loại nhập: <strong>${importTypeName}</strong></div>
@@ -2333,7 +2669,7 @@ const InBangKeTong = () => {
 
           <div class="title">PHIẾU NHẬP HÀNG</div>
           <div style="text-align:left;margin-bottom:8px;font-size:12px">
-            <strong>Ghi chú PN:</strong>
+            <strong>Ghi chú bảng kê:</strong>
             <span style="margin-left:8px">${(formData.note && formData.note) || (selectedImport && (selectedImport.note || selectedImport.description)) || ''}</span>
           </div>
 
@@ -2486,227 +2822,11 @@ const InBangKeTong = () => {
     const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
     const uniqueId = timestamp + random.slice(-1); // 4 digits unique
     
-    return `PN-${day}${month}${year}-${uniqueId}`;
-  };
-
-  // Table row selection
-  const [selectedRowKeys, setSelectedRowKeys] = useState([]);
-  const rowSelection = {
-    selectedRowKeys,
-    onChange: (newSelectedRowKeys) => {
-      setSelectedRowKeys(newSelectedRowKeys);
-      // Optional: select import in detail panel if only 1 row selected
-      if (newSelectedRowKeys.length === 1) {
-        const found = filteredImports.find(i => i.id === newSelectedRowKeys[0]);
-        if (found) setSelectedImport(found);
-      }
-    },
+    return `BKT-${day}${month}${year}-${uniqueId}`;
   };
 
   // Modal tìm kiếm số phiếu
   const searchInputRef = useRef();
-
-  const openHeaderModal = (colKey) => {
-    setActiveHeaderModalColumn(colKey);
-    setModalSearchTerm('');
-    setModalSelections(leftFilterLists[colKey] ? [...leftFilterLists[colKey]] : []);
-    // prepare available values from current filteredImports
-    let items = [];
-    if (colKey === 'importNumber') items = Array.from(new Set(filteredImports.map(i => i.importNumber)));
-    else if (colKey === 'createdDate') items = Array.from(new Set(filteredImports.map(i => i.createdDate)));
-    else if (colKey === 'note') items = Array.from(new Set(filteredImports.map(i => i.note || '')));
-    else if (colKey === 'total') items = Array.from(new Set(filteredImports.map(i => String((i.items||[]).reduce((s,it)=>s+(it.total||0),0)))));
-    else if (colKey === 'employee') items = Array.from(new Set(filteredImports.map(i => i.employee || i.Employee || '')));
-    setModalAvailableItems(items);
-    setShowSearchModal(true);
-  };
-
-  // Create columns with drag & drop support
-  const createDraggableColumn = (config, index) => ({
-    ...(() => {
-      const keyName = config.key || config.dataIndex;
-      const isActions = keyName === 'actions' || keyName === 'checkbox';
-      const width = leftColWidths[keyName] || config.width;
-      const titleNode = (
-        <div style={{position: 'relative', display: 'inline-block', width: '100%'}}>
-          {config.title}
-          {!isActions && (
-            <div
-              onMouseDown={(e) => { e.stopPropagation(); handleLeftThMouseDown(e, keyName); }}
-              style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 8, cursor: 'col-resize', zIndex: 20 }}
-              aria-hidden
-            />
-          )}
-        </div>
-      );
-
-      return { ...config, title: titleNode, width };
-    })(),
-    onHeaderCell: () => ({
-      draggable: true,
-      onDragStart: (e) => {
-        e.dataTransfer.effectAllowed = 'move';
-        handleColumnDragStart(e, index);
-        e.currentTarget.classList.add('being-dragged');
-      },
-      onDragOver: (e) => {
-        e.preventDefault();
-        e.dataTransfer.dropEffect = 'move';
-        handleColumnDragOver(e);
-        e.currentTarget.classList.add('drag-over');
-      },
-      onDragEnter: (e) => {
-        e.preventDefault();
-        e.currentTarget.classList.add('drag-over');
-      },
-      onDragLeave: (e) => {
-        e.currentTarget.classList.remove('drag-over');
-      },
-      onDrop: (e) => {
-        e.preventDefault();
-        e.stopPropagation();
-        handleColumnDrop(e, index);
-        e.currentTarget.classList.remove('drag-over');
-      },
-      onDragEnd: (e) => {
-        handleColumnDragEnd(e);
-        e.currentTarget.classList.remove('being-dragged');
-        document.querySelectorAll('.ant-table-thead th').forEach(th => {
-          th.classList.remove('drag-over');
-        });
-      },
-      style: {
-        cursor: draggedColumnIndex === index ? 'grabbing' : 'grab',
-        backgroundColor: draggedColumnIndex === index ? '#f0f0f0' : 'transparent',
-        userSelect: 'none'
-      }
-    })
-  });
-
-  const columns = [
-    createDraggableColumn({
-      title: '',
-      dataIndex: 'checkbox',
-      key: 'checkbox',
-      width: 40,
-      render: (_, record) => null,
-    }, 0),
-    createDraggableColumn({
-      title: (
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span>⋮⋮ Số phiếu</span>
-          <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('importNumber')} />
-          {leftFilterLists.importNumber && leftFilterLists.importNumber.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.importNumber.length})</span>}
-        </div>
-      ),
-      dataIndex: 'importNumber',
-      key: 'importNumber',
-      render: (text, record) => (
-        <span 
-          style={{
-            fontWeight: selectedImport?.id === record.id ? 600 : 400, 
-            cursor:'pointer',
-            fontStyle: record.isTemp ? 'italic' : 'normal',
-            color: record.isTemp ? '#1677ff' : 'inherit'
-          }} 
-          onClick={() => handleSelectImport(record)}
-        >
-          {text}
-          {record.isTemp && <span style={{fontSize: '11px', marginLeft: '4px'}}>(Mới)</span>}
-        </span>
-      ),
-      sorter: (a, b) => a.importNumber.localeCompare(b.importNumber),
-    }, 1),
-    createDraggableColumn({
-      title: (
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span>⋮⋮ Ngày nhập</span>
-          <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('createdDate')} />
-          {leftFilterLists.createdDate && leftFilterLists.createdDate.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.createdDate.length})</span>}
-        </div>
-      ),
-      dataIndex: 'createdDate',
-      key: 'createdDate',
-      render: (text) => text,
-      sorter: (a, b) => a.createdDate.localeCompare(b.createdDate),
-    }, 2),
-    createDraggableColumn({
-      title: (
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span>⋮⋮ Người lập</span>
-          <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('employee')} />
-          {leftFilterLists.employee && leftFilterLists.employee.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.employee.length})</span>}
-        </div>
-      ),
-      dataIndex: 'employee',
-      key: 'employee',
-      render: (text, record) => (record.employee || record.Employee || ''),
-      sorter: (a, b) => ((a.employee || a.Employee || '')).toString().localeCompare((b.employee || b.Employee || '')),
-    }, 3),
-    createDraggableColumn({
-      title: (
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span>⋮⋮ Tổng tiền</span>
-          <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('total')} />
-          {leftFilterLists.total && leftFilterLists.total.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.total.length})</span>}
-        </div>
-      ),
-      dataIndex: 'total',
-      key: 'total',
-      render: (_, record) => {
-        const total = (record.totalAmount !== undefined && record.totalAmount !== null)
-          ? Number(record.totalAmount)
-          : (record.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0);
-        return (Number(total) || 0).toLocaleString('vi-VN');
-      },
-      sorter: (a, b) => {
-        const ta = Number(a.totalAmount !== undefined && a.totalAmount !== null ? a.totalAmount : (a.items||[]).reduce((s,it)=>s+(Number(it.total)||0),0)) || 0;
-        const tb = Number(b.totalAmount !== undefined && b.totalAmount !== null ? b.totalAmount : (b.items||[]).reduce((s,it)=>s+(Number(it.total)||0),0)) || 0;
-        return ta - tb;
-      }
-    }, 4),
-    createDraggableColumn({
-      title: (
-        <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span>⋮⋮ Ghi chú</span>
-          <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('note')} />
-          {leftFilterLists.note && leftFilterLists.note.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.note.length})</span>}
-        </div>
-      ),
-      dataIndex: 'note',
-      key: 'note',
-      render: (text) => (
-        <span style={{maxWidth:220,overflow:'hidden',textOverflow:'ellipsis'}} title={text}>{text}</span>
-      ),
-      sorter: (a, b) => (a.note || '').localeCompare(b.note || ''),
-    }, 5),
-    createDraggableColumn({
-      title: (<div style={{textAlign: 'center'}}>⋮⋮ Thao tác</div>),
-      key: 'actions',
-      width: 100,
-      render: (_, record) => (
-        <div style={{display: 'flex', justifyContent: 'center'}}>
-          <Space>
-            <Button icon={<EditOutlined />} size="small" onClick={e => { e.stopPropagation(); editImport(record); }} title="Sửa" />
-            {!record.isTemp && (
-              <Popconfirm title="Bạn có chắc chắn muốn xóa phiếu nhập này?" onConfirm={e => handleDelete(record.id, e)} okText="Có" cancelText="Không">
-                <Button icon={<DeleteOutlined />} danger size="small" onClick={e => e.stopPropagation()} title="Xóa" />
-              </Popconfirm>
-            )}
-          </Space>
-        </div>
-      )
-    }, 6)
-  ];
-
-  // Apply column order and visibility
-  const orderedColumns = leftColOrder
-    .map(colKey => {
-      const columnIndex = columns.findIndex(col => col.key === colKey || col.dataIndex === colKey);
-      return columnIndex !== -1 ? columns[columnIndex] : null;
-    })
-    .filter(Boolean)
-    .filter(col => leftVisibleCols.includes(col.key || col.dataIndex));
 
   return (
     <div className="in-bang-ke-tong-page">
@@ -2718,13 +2838,23 @@ const InBangKeTong = () => {
         <div className="search-panel-controls">
           <div className="search-controls-grid">
             <div className="search-left">
-              <div className="search-panel-date-row">
-                <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} />
-                <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} />
+              <div className="search-panel-date-row" style={{ display: 'flex', gap: 8 }}>
+                <DatePicker.RangePicker
+                  value={[dateFrom ? dayjs(dateFrom) : null, dateTo ? dayjs(dateTo) : null]}
+                  onChange={(dates, dateStrings) => {
+                    if (!dates) {
+                      setDateFrom(''); setDateTo('');
+                    } else {
+                      setDateFrom(dateStrings[0]); setDateTo(dateStrings[1]);
+                    }
+                  }}
+                  format="YYYY-MM-DD"
+                  style={{ width: '100%' }}
+                />
               </div>
               <div className="search-panel-select-row">
                 <select value={importType} onChange={e=>setImportType(e.target.value)}>
-                  <option value="">số phiếu</option>
+                  <option value="">Số bảng kê tổng</option>
                   {transactionContents.map(tc => (
                     <option key={tc.id} value={tc.name}>{tc.name}</option>
                   ))}
@@ -2744,8 +2874,7 @@ const InBangKeTong = () => {
         <div className="search-panel-total" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span>Tổng {filteredLeft.length} phiếu</span>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <Button className="xuatsd-btn" size="small" onClick={exportSelectedImportsList} title="Xuất DS PN">Xuất DS PN</Button>
-            {/* template import/export buttons moved to right detail panel */}
+            <Button className="xuatsd-btn" size="small" onClick={exportSelectedImportsList} title="Xuất DS BK">Xuất DS BK</Button>
             <input 
               id="template-file-input"
               type="file" 
@@ -2753,54 +2882,113 @@ const InBangKeTong = () => {
               style={{display:'none'}} 
               onChange={handleTemplateUpload} 
             />
-            <button style={{background:'transparent',border:'none',cursor:'pointer'}} title="Cài đặt bảng" onClick={()=>setShowLeftSettings(true)}>⚙</button>
+            <button style={{background:'transparent',border:'none',cursor:'pointer',fontSize:16}} title="Cài đặt cột" onClick={()=>setShowLeftColSettings(true)}>⚙️</button>
           </div>
         </div>
-        <div className="table-scroll-x" style={{ position: 'relative' }}>
-          <Table
-            rowKey="id"
-            columns={orderedColumns}
-            dataSource={filteredLeft}
-            rowSelection={{
-              type: 'checkbox',
-              ...rowSelection,
-              columnTitle: '',
-              columnWidth: 40,
-            }}
-            pagination={{
-              current: leftPage,
-              pageSize: leftPageSize,
-              total: filteredLeft.length,
-              showSizeChanger: true,
-              pageSizeOptions: ['10','20','50','100','200','500','1000'],
-              onShowSizeChange: (page, size) => { setLeftPageSize(size); },
-              onChange: (page, size) => { setLeftPage(page); setLeftPageSize(size); }
-            }}
-            onRow={(record) => ({
-              onClick: () => handleSelectImport(record),
-              onContextMenu: (event) => handleTableContextMenu(event, record),
-            })}
-            size="small"
-            rowClassName={record => {
-              let className = selectedImport?.id === record.id ? 'selected' : '';
-              if (record.isTemp) className += ' temp-import';
-              return className;
-            }}
-            style={{minWidth:600}}
-          />
+        <div className="table-scroll-x" style={{ position: 'relative', overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 320px)' }}>
+          <table className="bkt-dynamic-table left-panel-table" style={{ borderCollapse: 'collapse', fontSize: 12, tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
+            <thead>
+              <tr style={{ background: '#fafafa', position: 'sticky', top: 0, zIndex: 5 }}>
+                <th style={{ border: '1px solid #e8e8e8', padding: '6px 4px', width: 36, textAlign: 'center' }}>
+                  <input type="checkbox" checked={leftSelectedRows.size === paginatedLeft.length && paginatedLeft.length > 0} onChange={(e) => handleLeftSelectAll(e.target.checked, paginatedLeft)} style={{ accentColor: '#667eea' }} />
+                </th>
+                {leftColumns.filter(c => c.visible).map(col => (
+                  <th
+                    key={col.id}
+                    style={{
+                      border: '1px solid #e8e8e8', padding: '6px 6px', textAlign: col.align || 'left',
+                      fontWeight: 600, fontSize: 12, width: col.width + 'px', minWidth: col.width + 'px', position: 'relative',
+                      cursor: leftDragColumn === col.id ? 'grabbing' : 'grab', userSelect: 'none', whiteSpace: 'nowrap',
+                    }}
+                    draggable
+                    onDragStart={(e) => leftH.colDragStart(e, col.id)}
+                    onDragOver={leftH.colDragOver}
+                    onDrop={(e) => leftH.colDrop(e, col.id, leftDragColumn)}
+                    onDragEnd={leftH.colDragEnd}
+                    className={leftDragColumn === col.id ? 'dragging' : ''}
+                  >
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 3 }}>
+                      <span style={{ flex: 1, overflow: 'hidden', textOverflow: 'ellipsis' }}>{col.label}</span>
+                      <button
+                        className="col-search-btn"
+                        onClick={(e) => { e.stopPropagation(); openLeftSearch(col.id, col.label); }}
+                        title={`Tìm kiếm theo ${col.label}`}
+                        style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, opacity: 0.5, padding: '1px 2px', lineHeight: 1 }}
+                      >🔍</button>
+                      {leftColumnFilters[col.id] && (
+                        <button
+                          className="col-clear-btn"
+                          onClick={(e) => { e.stopPropagation(); clearLeftFilter(col.id); }}
+                          title="Xóa bộ lọc"
+                          style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 10, color: '#c9302c', padding: '1px 2px', lineHeight: 1 }}
+                        >✖</button>
+                      )}
+                    </div>
+                    <div
+                      className="resize-handle"
+                      onMouseDown={(e) => { e.stopPropagation(); leftH.resizeStart(e, col.id, leftColumns); }}
+                      style={{ position: 'absolute', right: '-2px', top: 0, bottom: 0, width: '5px', cursor: 'col-resize', zIndex: 2 }}
+                    />
+                  </th>
+                ))}
+                <th style={{ border: '1px solid #e8e8e8', padding: '6px 4px', width: 70, textAlign: 'center', fontWeight: 600, fontSize: 12 }}>
+                  Thao tác
+                </th>
+              </tr>
+            </thead>
+            <tbody>
+              {paginatedLeft.length > 0 ? (
+                paginatedLeft.map((record, idx) => (
+                  <tr
+                    key={record.id}
+                    style={{ background: selectedImport?.id === record.id ? '#e6f7ff' : (idx % 2 === 0 ? '#fff' : '#fafafa'), cursor: 'pointer' }}
+                    onClick={() => handleSelectImport(record)}
+                    onContextMenu={(e) => handleTableContextMenu(e, record)}
+                  >
+                    <td style={{ border: '1px solid #e8e8e8', padding: '4px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                      <input type="checkbox" checked={leftSelectedRows.has(record.id)} onChange={() => handleLeftSelectRow(record.id)} style={{ accentColor: '#667eea' }} />
+                    </td>
+                    {leftColumns.filter(c => c.visible).map(col => (
+                      <td key={col.id} style={{ border: '1px solid #e8e8e8', padding: '4px 6px', textAlign: col.align || 'left', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: col.width }}>
+                        {col.id === 'importNumber' ? (
+                          <span style={{ fontWeight: selectedImport?.id === record.id ? 600 : 400, color: record.isTemp ? '#1677ff' : 'inherit', fontStyle: record.isTemp ? 'italic' : 'normal' }}>
+                            {record.importNumber}{record.isTemp && <span style={{fontSize:10,marginLeft:3}}>(Mới)</span>}
+                          </span>
+                        ) : (
+                          renderLeftCell(record, col.id)
+                        )}
+                      </td>
+                    ))}
+                    <td style={{ border: '1px solid #e8e8e8', padding: '4px', textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
+                      <Space size={2}>
+                        <Button icon={<EditOutlined />} size="small" onClick={() => editImport(record)} title="Sửa" style={{fontSize:11}} />
+                        {!record.isTemp && (
+                          <Popconfirm title="Bạn có chắc chắn muốn xóa?" onConfirm={() => handleDelete(record.id)} okText="Có" cancelText="Không">
+                            <Button icon={<DeleteOutlined />} danger size="small" title="Xóa" style={{fontSize:11}} />
+                          </Popconfirm>
+                        )}
+                      </Space>
+                    </td>
+                  </tr>
+                ))
+              ) : (
+                <tr>
+                  <td colSpan={leftColumns.filter(c => c.visible).length + 2} style={{ border: '1px solid #e8e8e8', padding: 20, textAlign: 'center', color: '#999' }}>
+                    Không có dữ liệu
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
           {contextMenu.visible && (
             <Menu
               style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 9999, boxShadow: '0 2px 8px rgba(0,0,0,0.15)' }}
               onClick={(info) => {
                 if (info.key === 'view') {
-                  if (contextMenu.record) {
-                    editImport(contextMenu.record);
-                  }
+                  if (contextMenu.record) editImport(contextMenu.record);
                 } else if (info.key === 'delete') {
                   if (contextMenu.record && !contextMenu.record.isTemp) {
-                    if (window.confirm('Bạn có chắc chắn muốn xóa phiếu nhập này?')) {
-                      handleDelete(contextMenu.record.id);
-                    }
+                    if (window.confirm('Bạn có chắc chắn muốn xóa phiếu nhập này?')) handleDelete(contextMenu.record.id);
                   }
                 }
                 setContextMenu(c => ({ ...c, visible: false }));
@@ -2813,119 +3001,62 @@ const InBangKeTong = () => {
             </Menu>
           )}
         </div>
-        {/* Modal for column header filters (reused for different columns) */}
-        <Modal
-          open={showSearchModal}
-          onCancel={()=>setShowSearchModal(false)}
-          onOk={()=>setShowSearchModal(false)}
-          title={
-            activeHeaderModalColumn === 'importNumber' ? 'Tìm kiếm theo số phiếu'
-            : activeHeaderModalColumn === 'createdDate' ? 'Lọc theo ngày nhập'
-            : activeHeaderModalColumn === 'total' ? 'Lọc theo tổng tiền'
-            : activeHeaderModalColumn === 'employee' ? 'Tìm theo người lập'
-            : 'Tìm kiếm'
-          }
-          footer={null}
-        >
-          <Input
-            placeholder={
-              activeHeaderModalColumn === 'importNumber' ? 'Tìm kiếm theo mã'
-              : activeHeaderModalColumn === 'createdDate' ? 'Tìm ngày (DD/MM/YYYY)'
-              : activeHeaderModalColumn === 'employee' ? 'Tìm người lập'
-              : 'Tìm...'
-            }
-            value={modalSearchTerm}
-            onChange={e=>setModalSearchTerm(e.target.value)}
-            allowClear
-            style={{marginBottom:12}}
-            onPressEnter={()=>{}}
-          />
-          <div style={{maxHeight:240, overflowY:'auto', paddingRight:8}}>
-            {modalAvailableItems.filter(v => {
-              if (!modalSearchTerm) return true;
-              return removeVietnameseTones(String(v).toLowerCase()).includes(removeVietnameseTones(modalSearchTerm.toLowerCase()));
-            }).map(v => (
-              <div key={v} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0'}}>
-                <input type="checkbox" checked={modalSelections.includes(v)} onChange={() => {
-                  setModalSelections(prev => prev.includes(v) ? prev.filter(x=>x!==v) : [...prev, v]);
-                }} />
-                <div style={{flex:1, wordBreak:'break-word'}}>{v}</div>
-              </div>
-            ))}
-            {modalAvailableItems.filter(v => {
-              if (!modalSearchTerm) return true;
-              return removeVietnameseTones(String(v).toLowerCase()).includes(removeVietnameseTones(modalSearchTerm.toLowerCase()));
-            }).length === 0 && <div style={{color:'#bbb'}}>Không có dữ liệu</div>}
+        {/* Left pagination */}
+        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderTop: '1px solid #eee', fontSize: 12 }}>
+          <span style={{ color: '#888' }}>Trang {leftPage}/{leftTotalPages || 1}</span>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+            <button onClick={() => setLeftPage(p => Math.max(1, p - 1))} disabled={leftPage <= 1} style={{ padding: '2px 8px', border: '1px solid #ddd', borderRadius: 3, cursor: leftPage <= 1 ? 'default' : 'pointer', background: '#fff', fontSize: 11 }}>‹</button>
+            <button onClick={() => setLeftPage(p => Math.min(leftTotalPages, p + 1))} disabled={leftPage >= leftTotalPages} style={{ padding: '2px 8px', border: '1px solid #ddd', borderRadius: 3, cursor: leftPage >= leftTotalPages ? 'default' : 'pointer', background: '#fff', fontSize: 11 }}>›</button>
+            <select
+              value={(filteredLeft && filteredLeft.length > 0 && leftPageSize >= filteredLeft.length) ? 'all' : leftPageSize}
+              onChange={(e) => {
+                const v = e.target.value;
+                if (v === 'all') {
+                  const total = (filteredLeft && filteredLeft.length) || (imports && imports.length) || 0;
+                  setLeftPageSize(total || 1);
+                  setLeftPage(1);
+                } else {
+                  setLeftPageSize(parseInt(v, 10));
+                  setLeftPage(1);
+                }
+              }}
+              style={{ padding: '2px 4px', border: '1px solid #ddd', borderRadius: 3, fontSize: 11 }}
+            >
+              <option value={10}>10</option>
+              <option value={20}>20</option>
+              <option value={50}>50</option>
+              <option value={100}>100</option>
+              <option value={200}>200</option>
+              <option value={500}>500</option>
+              <option value={1000}>1000</option>
+              <option value={5000}>5000</option>
+              <option value={10000}>10000</option>
+              <option value="all">Tất cả</option>
+            </select>
           </div>
-          <div style={{display:'flex',justifyContent:'space-between',marginTop:12}}>
-            <div>
-              <button className="btn btn-link" onClick={()=>{ setModalSearchTerm(''); }}>Xem tất cả</button>
-              <button className="btn btn-link" onClick={()=>{ setModalSelections([]); }}>Bỏ chọn</button>
-            </div>
-            <div style={{display:'flex',gap:8}}>
-              <button className="btn btn-secondary" onClick={()=>{ setModalSelections([]); setLeftFilterLists(prev=>({ ...prev, [activeHeaderModalColumn]: [] })); setShowSearchModal(false); }}>Xóa bộ lọc</button>
-              <button className="btn btn-primary" onClick={()=>{
-                setLeftFilterLists(prev=>({ ...prev, [activeHeaderModalColumn]: modalSelections }));
-                setShowSearchModal(false);
-              }}>Tìm</button>
-            </div>
-          </div>
-        </Modal>
-        {/* Left table settings modal */}
-        <Modal
-          open={showLeftSettings}
-          onCancel={()=>setShowLeftSettings(false)}
-          title="Cài đặt hiển thị cột"
-          footer={null}
-        >
-          <div style={{display:'flex',flexDirection:'column',gap:8}}>
-            {defaultLeftCols.map(colKey=>{
-              const label = colKey==='checkbox' ? ''
-                : colKey==='importNumber' ? 'Số phiếu'
-                : colKey==='createdDate' ? 'Ngày nhập'
-                : colKey==='note' ? 'Ghi chú PN'
-                : colKey==='total' ? 'Tổng tiền'
-                : colKey==='employee' ? 'Người lập'
-                : colKey==='actions' ? 'Thao tác' : colKey;
-              return (
-                <label key={colKey} style={{display:'flex',alignItems:'center',gap:8}}>
-                  <input type="checkbox" checked={leftVisibleCols.includes(colKey)} onChange={()=>{
-                    setLeftVisibleCols(prev=> prev.includes(colKey)? prev.filter(k=>k!==colKey) : [...prev, colKey]);
-                  }} />
-                  <span>{label}</span>
-                </label>
-              );
-            })}
-            <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:12}}>
-              <button onClick={()=>{ resetLeftSettings(); }} className="btn btn-secondary">Làm lại</button>
-              <button onClick={()=>setShowLeftSettings(false)} className="btn btn-primary">Đóng</button>
-            </div>
-          </div>
-        </Modal>
+        </div>
       </div>
 
       {/* Right Panel - Import Details */}
   <div className="import-detail-panel">
         <div className="detail-header">
-          <h2>THÔNG TIN NHẬP HÀNG</h2>
+          <h2>THÔNG TIN BẢNG KÊ TỔNG</h2>
           <div className="header-actions">
             <button className="btn btn-primary" onClick={resetFormForNewImport}>
               + Tạo mới
             </button>
-            <button className="btn btn-success" onClick={handleAddItem} title="Click để thêm hàng hóa | Ctrl+Click để mở tab mới">
-              📦 Thêm hàng hóa
-            </button>
+            {/* Thêm hàng hóa button removed per request */}
             {/* Removed redundant "Xem lịch sử nhập hàng" button */}
           </div>
         </div>
         {selectedImport && showRightContent ? (
-          <>
+          <React.Fragment>
 
             <div className="detail-content">
               <div className="detail-form" style={{display:'flex',flexDirection:'column',gap:12}}>
-                {/* Top row: Ngày lập, Nhân viên, Loại nhập, Tổng số kg, Tổng số khối (each 20%) */}
-                <div style={{display:'flex',gap:12}}>
-                  <div style={{flex:'0 0 20%'}}>
+                {/* Top row: Ngày lập, Nhân viên, Bảng kê tổng, DS hóa đơn */}
+                <div className="bkt-form-top-row" style={{display:'flex',gap:12}}>
+                  <div style={{flex:'1 1 0', minWidth:0}}>
                       <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Ngày lập</label>
                       <input
                         type="date"
@@ -2941,7 +3072,7 @@ const InBangKeTong = () => {
                         readOnly={!isEditMode}
                       />
                   </div>
-                  <div style={{flex:'0 0 20%'}}>
+                  <div style={{flex:'1 1 0', minWidth:0}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Nhân viên lập</label>
                     <select style={{width:'100%'}} value={formData.employee || selectedImport.employee || ''} onChange={(e)=>{
                       if (!isEditMode) return;
@@ -2956,10 +3087,10 @@ const InBangKeTong = () => {
                       ))}
                     </select>
                   </div>
-                  <div style={{flex:'0 0 20%'}}>
-                    <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Loại nhập</label>
+                  <div style={{flex:'1 1 0', minWidth:0}}>
+                    <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Bảng kê tổng</label>
                     <select 
-                      value={formData.importType || selectedImport.importType || ''}
+                      value={formData.importType || selectedImport?.importType || ''}
                       onChange={(e) => {
                         if (!isEditMode) return;
                         const v = e.target.value;
@@ -2970,49 +3101,31 @@ const InBangKeTong = () => {
                       style={{width:'100%'}}
                       disabled={!isEditMode}
                     >
-                      <option value="">Chọn loại nhập</option>
+                      <option value="">Chọn bảng kê</option>
                       {transactionContents.map(tc => (
                         <option key={tc.id} value={tc.name}>{tc.name}</option>
                       ))}
                     </select>
                   </div>
-                  <div style={{flex:'0 0 20%'}}>
-                    <label style={{display:'block',fontSize:12,fontWeight:600}}>Tổng số kg</label>
-                    <input 
-                      type="text" 
-                      value={(() => {
-                        // Get totals from current items
-                        const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
-                        const itemsTotals = calculateTotals(currentItems);
-                        
-                        // If there are any editable header rows, use their totals (user is editing);
-                        // otherwise use saved items totals. This avoids double-counting.
-                        const headerWeight = memoizedHeaderTotals.validRows.length ? memoizedHeaderTotals.totalWeight : 0;
-                        const sourceWeight = headerWeight || itemsTotals.totalWeight || 0;
-                        return formatWeight(sourceWeight); // Không làm tròn, giữ nguyên độ chính xác
-                      })()} 
-                      readOnly 
-                      style={{width:'100%', background: '#f5f5f5'}} 
-                    />
-                  </div>
-                  <div style={{flex:'0 0 20%'}}>
-                    <label style={{display:'block',fontSize:12,fontWeight:600}}>Tổng số khối</label>
-                    <input 
-                      type="text" 
-                      value={(() => {
-                        // Get totals from current items
-                        const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
-                        const itemsTotals = calculateTotals(currentItems);
-                        
-                        // If there are any editable header rows, use their totals (user is editing);
-                        // otherwise use saved items totals. This avoids double-counting.
-                        const headerVolume = memoizedHeaderTotals.validRows.length ? memoizedHeaderTotals.totalVolume : 0;
-                        const sourceVolume = headerVolume || itemsTotals.totalVolume || 0;
-                        return formatVolume(sourceVolume); // Không làm tròn, giữ nguyên độ chính xác
-                      })()} 
-                      readOnly 
-                      style={{width:'100%', background: '#f5f5f5'}} 
-                    />
+                  <div style={{flex:'1 1 0', minWidth:0}}>
+                    <label style={{display:'block',fontSize:12,fontWeight:600}}>DS hóa đơn</label>
+                    <select
+                      value={formData.dsHoaDon || selectedImport?.dsHoaDon || ''}
+                      onChange={(e) => {
+                        if (!isEditMode) return;
+                        const v = e.target.value;
+                        setFormData(fd => ({ ...fd, dsHoaDon: v }));
+                        setSelectedImport(si => si ? ({ ...si, dsHoaDon: v }) : si);
+                        setIsEditing(true);
+                      }}
+                      style={{width:'100%'}}
+                      disabled={!isEditMode}
+                    >
+                      <option value="">-- Chọn DS hóa đơn --</option>
+                      {dsHoaDons.map(d => (
+                        <option key={d.id || d} value={d.name || d}>{d.name || d}</option>
+                      ))}
+                    </select>
                   </div>
                 </div>
 
@@ -3126,10 +3239,9 @@ const InBangKeTong = () => {
                   </div>
                 </Modal>
 
-                {/* Second row: Số phiếu (30%) and Ghi chú (70%) */}
-                <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
-                  <div style={{flex:'0 0 20%'}}>
-                    <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Số phiếu</label>
+                <div className="bkt-form-second-row" style={{display:'flex',gap:12,alignItems:'flex-start'}}>
+                  <div style={{flex:'1 1 0', minWidth:0}}>
+                    <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Số bảng kê tổng</label>
                     <div className="input-with-status">
                       <input
                         type="text"
@@ -3145,8 +3257,8 @@ const InBangKeTong = () => {
                       <span className="status-icon">✓</span>
                     </div>
                   </div>
-                  <div style={{flex:'1 1 80%'}}>
-                    <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú PN</label>
+                  <div style={{flex:'3 1 0', minWidth:0}}>
+                    <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú bảng kê</label>
                     <input
                       type="text"
                       value={formData.note || ''}
@@ -3157,419 +3269,32 @@ const InBangKeTong = () => {
                         setIsEditing(true);
                       }}
                       style={{width:'100%'}}
-                      placeholder="Nhập ghi chú cho phiếu nhập"
+                      placeholder="nhập ghi chú bảng kê"
                       readOnly={!isEditMode}
                     />
                   </div>
                 </div>
               </div>
 
-              {isEditMode && (
-                <div className="items-section">
+              {/* Tabs: Bảng kê tổng / DS hóa đơn */}
+              <div className="order-tabs" style={{marginTop: 12}}>
+                <button
+                  className={`tab-btn ${activeTab === 'bangKeTong' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('bangKeTong')}
+                >
+                  📋 Bảng kê tổng
+                </button>
+                <button
+                  className={`tab-btn ${activeTab === 'dsHoaDon' ? 'active' : ''}`}
+                  onClick={() => setActiveTab('dsHoaDon')}
+                >
+                  📄 DS hóa đơn
+                </button>
+              </div>
 
-                  <div className="items-table-container" ref={itemsTableRef}>
-                  <div style={{margin: '8px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 14}}>
-                    <span>Tổng {rightTotal} mặt hàng ({rightStart}-{rightEnd})</span>
-                    <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
-                      <button className="icon-btn settings-btn" onClick={()=>setShowRightSettings(true)} title="Cài đặt hiển thị cột" style={{border: 'none', background: '#333', color: 'white', borderRadius: 4, width: 28, height: 28, fontWeight: 'bold'}}>
-                        <span>⚙</span>
-                      </button>
-                      <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.max(1, p - 1))}>{'<'}</button>
-                      <span style={{fontWeight: 600}}>{rightCurrentPage}</span>
-                      <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.min(rightTotalPages, p + 1))}>{'>'}</button>
-                      <select value={rightItemsPerPage} onChange={(e) => { const size = parseInt(e.target.value, 10); setRightItemsPerPage(size); const newMaxPage = Math.max(1, Math.ceil(rightTotal / size)); setRightCurrentPage(p => Math.min(p, newMaxPage)); }} style={{marginLeft: 8, borderRadius: 4, border: '1px solid #e5e7eb', padding: '2px 8px'}}>
-                        <option value={10}>10 / trang</option>
-                        <option value={20}>20 / trang</option>
-                        <option value={50}>50 / trang</option>
-                        <option value={100}>100 / trang</option>
-                        <option value={200}>200 / trang</option>
-                        <option value={500}>500 / trang</option>
-                        <option value={1000}>1000 / trang</option>
-                        <option value={5000}>5000 / trang</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  <table className="items-table">
-                    <colgroup>
-                      {rightColOrder.map(key => {
-                        if (!rightVisibleCols.includes(key)) return null;
-                        const w = rightColWidths[key] || 100;
-                        return <col key={key} style={{ width: w + 'px' }} data-col={key} />;
-                      })}
-                    </colgroup>
-                    <thead>
-                      <tr>
-                        {rightColOrder.map((key, index) => {
-                          if (!rightVisibleCols.includes(key)) return null;
-                          
-                          const isActions = key === 'actions';
-                          const resizeProps = isActions ? {} : {
-                            'data-resizable': 'true',
-                            'data-col-key': key,
-                            onMouseDown: (e) => handleThMouseDown(e, key),
-                            style: {
-                              textAlign: 'center',
-                              cursor: 'col-resize',
-                              userSelect: 'none',
-                              position: 'relative'
-                            }
-                          };
-                          
-                          if (key === 'barcode') return (
-                            <th key="barcode" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}>
-                              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-                                <span>Mã vạch</span>
-                                <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
-                                  if (!ensureImportTypeSelected()) return;
-                                  setProductModalColumn('barcode'); setProductModalRowIndex(null); setProductModalSearch(''); setModalCurrentPage(1); setSelectedModalProducts([]); setProductModalScope('currentImport'); setShowProductModal(true);
-                                }} />
-                              </div>
-                            </th>
-                          );
-                          if (key === 'productCode') return (
-                            <th key="productCode" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}>
-                              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-                                <span>Mã hàng</span>
-                                <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
-                                  if (!ensureImportTypeSelected()) return;
-                                  setProductModalColumn('productCode'); setProductModalRowIndex(null); setProductModalSearch(''); setModalCurrentPage(1); setSelectedModalProducts([]); setProductModalScope('currentImport'); setShowProductModal(true);
-                                }} />
-                              </div>
-                            </th>
-                          );
-                          if (key === 'productName') return (
-                            <th key="productName" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}>
-                              <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:8}}>
-                                <span>Hàng hóa</span>
-                                <SearchOutlined style={{color:'#888',cursor:'pointer'}} onClick={() => {
-                                  if (!ensureImportTypeSelected()) return;
-                                  setProductModalColumn('productName'); setProductModalRowIndex(null); setProductModalSearch(''); setModalCurrentPage(1); setSelectedModalProducts([]); setProductModalScope('currentImport'); setShowProductModal(true);
-                                }} />
-                              </div>
-                            </th>
-                          );
-                          if (key === 'unit') return <th key="unit" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Đơn vị tính</span></th>;
-                          if (key === 'quantity') return <th key="quantity" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Số lượng</span></th>;
-                          if (key === 'unitPrice') return <th key="unitPrice" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Đơn giá</span></th>;
-                          if (key === 'transportCost') return <th key="transportCost" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Tiền vận chuyển</span></th>;
-                          if (key === 'noteDate') return <th key="noteDate" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Ghi chú date PN</span></th>;
-                          if (key === 'total') return <th key="total" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Thành tiền</span></th>;
-                          if (key === 'totalTransport') return <th key="totalTransport" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>TT vận chuyển</span></th>;
-                          if (key === 'weight') return <th key="weight" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Số kg</span></th>;
-                          if (key === 'volume') return <th key="volume" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Số khối</span></th>;
-                          if (key === 'warehouse') return <th key="warehouse" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Kho hàng</span></th>;
-                          if (key === 'description') return <th key="description" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Mô tả</span></th>;
-                          if (key === 'conversion') return <th key="conversion" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Quy đổi</span></th>;
-                          if (key === 'actions') return (
-                            <th key="actions" style={{textAlign: 'center', verticalAlign: 'middle'}}>
-                              <span>Thao tác</span>
-                            </th>
-                          );
-                          return null;
-                        })}
-                      </tr>
-                      {/* Additional header input rows inserted under the main header */}
-                      {paginatedHeaderRows.map((row, rIdx) => (
-                        <tr key={row.id} className="header-input-row" style={row.id === highlightRowId ? { background: '#fff7e6', boxShadow: 'inset 0 0 0 2px #ffd666' } : {}}>
-                          {rightColOrder.map((colKey, index) => {
-                            
-                            if (colKey === 'actions') {
-                              if (!rightVisibleCols.includes('actions')) return null;
-                              return (
-                                <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
-                                  <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'4px'}}>
-                                    {/* Reset button removed as requested */}
-                                    {/* Show Xóa button for rows that have product data */}
-                                    {(row.values.productName || row.values.productCode || row.values.barcode) && (
-                                      <button 
-                                        onClick={() => setHeaderRows(prev => prev.filter((_,i)=>i!==rIdx))} 
-                                        style={{
-                                          padding:'4px 8px',
-                                          fontSize:12,
-                                          backgroundColor:'#6c757d',
-                                          color:'white',
-                                          border:'none',
-                                          borderRadius:'3px',
-                                          cursor:'pointer'
-                                        }}
-                                      >
-                                        Xóa
-                                      </button>
-                                    )}
-                                  </div>
-                                </td>
-                              );
-                            }
-
-                            // Product-related columns
-                            if (['productCode','productName','barcode'].includes(colKey)) {
-                              if (!rightVisibleCols.includes(colKey)) return null;
-                              return (
-                                <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
-                                  {colKey === 'productName' ? (
-                                        <button
-                                      onClick={() => {
-                                        if (!ensureImportTypeSelected()) return;
-
-                                        setProductModalColumn(colKey);
-                                        setProductModalRowIndex(rIdx);  // This is key - set the row index
-                                        setProductModalSearch('');
-                                        setModalCurrentPage(1);
-                                        setSelectedModalProducts(row.values[colKey] ? [row.values[colKey]] : []);
-                                        setShowProductModal(true);
-                                      }}
-                                      style={{
-                                          width: '100%',
-                                          padding: '4px 8px',
-                                          border: '1px solid #d9d9d9',
-                                          borderRadius: '4px',
-                                          background: '#fff',
-                                          textAlign: 'left',
-                                          cursor: 'pointer',
-                                          fontSize: '12px'
-                                        }}
-                                    >
-                                      {row.values[colKey] || `-- Chọn ${colKey} --`}
-                                    </button>
-                                  ) : (
-                                    <Select
-                                      value={row.values[colKey] || undefined}
-                                      onChange={(val) => handleHeaderRowProductSelect(rIdx, colKey, val)}
-                                      placeholder={`-- Chọn ${colKey} --`}
-                                      size="small"
-                                      showSearch
-                                      allowClear
-                                      style={{ width: '100%' }}
-                                      popupStyle={{ 
-                                        maxHeight: 400, 
-                                        overflow: 'auto',
-                                        zIndex: 9999
-                                      }}
-                                      popupMatchSelectWidth={false}
-                                      classNames={{ popup: { root: 'product-select-dropdown' } }}
-                                      optionLabelProp={colKey === 'productName' ? 'children' : 'label'}
-                                      filterOption={(input, option) => {
-                                        const p = products.find(pp => pp.id.toString() === option.value);
-                                        if (!p) return false;
-                                        const txt = `${p.code||''} ${p.name||''} ${p.barcode||''}`.toLowerCase();
-                                        return txt.includes((input||'').toLowerCase());
-                                      }}
-                                    >
-                                      {products.map(p => (
-                                        <Select.Option 
-                                          key={p.id} 
-                                          value={p.id.toString()}
-                                          label={colKey === 'productName' ? p.name : getProductOptionLabel(p)}
-                                        >
-                                          {colKey === 'productName' ? (
-                                            <div style={{fontSize:12, fontWeight:600}}>{getProductOptionLabel(p)}</div>
-                                          ) : (
-                                            <div style={{fontSize:12, fontWeight:600}}>{getProductOptionLabel(p)}</div>
-                                          )}
-                                        </Select.Option>
-                                      ))}
-                                    </Select>
-                                  )}
-                                </td>
-                              );
-                            }
-
-                            if (colKey === 'warehouse') {
-                              return (
-                                <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
-                                  <Select
-                                      value={row.values[colKey] ? String(row.values[colKey]) : undefined}
-                                      onChange={(val) => handleHeaderRowChange(rIdx, colKey, val ? String(val) : null)}
-                                      placeholder="-- Chọn kho --"
-                                      size="small"
-                                      allowClear
-                                      style={{ width: '100%' }}
-                                    >
-                                      {warehouses.map(w => (
-                                        <Select.Option key={w.id} value={String(w.id)}>{w.name}</Select.Option>
-                                      ))}
-                                    </Select>
-                                </td>
-                              );
-                            }
-
-                            if (colKey === 'noteDate') {
-                              return (
-                                <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
-                                  <DatePicker
-                                    value={row.values[colKey] ? dayjs(row.values[colKey]) : null}
-                                    onChange={(d) => handleHeaderRowChange(rIdx, colKey, d ? d.format('YYYY-MM-DD') : null)}
-                                    format="DD/MM/YYYY"
-                                    placeholder="Chọn ngày"
-                                    size="small"
-                                    style={{ width: '100%' }}
-                                    showToday={true}
-                                    allowClear={true}
-                                    picker="date"
-                                    changeOnBlur={false}
-                                    open={undefined}
-                                    inputReadOnly={false}
-                                    classNames={{ popup: { root: 'calendar-dropdown' } }}
-                                  />
-                                </td>
-                              );
-                            }
-
-                            if (colKey === 'unit') {
-                                return (
-                                  <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
-                                  {(() => {
-                                    try {
-                                      const rowValues = row.values || {};
-                                      const prodId = rowValues.productName_id || rowValues.productCode_id || rowValues.barcode_id || null;
-                                      let prod = null;
-                                      if (prodId && products && products.length > 0) prod = products.find(p => String(p.id) === String(prodId));
-                                      if (!prod) {
-                                        const keyMatch = rowValues.productCode || rowValues.barcode || rowValues.productName || '';
-                                        if (keyMatch) prod = products.find(p => p.code === keyMatch || p.barcode === keyMatch || p.name === keyMatch);
-                                      }
-                                      const opts = [];
-                                      if (prod) {
-                                        const base = prod.baseUnit || prod.defaultUnit || prod.DefaultUnit || prod.unit || '';
-                                        if (base) opts.push({ name: base, conv: 1 });
-                                        if (prod.unit1) opts.push({ name: prod.unit1, conv: Number(prod.conversion1) || 1 });
-                                        if (prod.unit2) opts.push({ name: prod.unit2, conv: Number(prod.conversion2) || 1 });
-                                        if (prod.unit3) opts.push({ name: prod.unit3, conv: Number(prod.conversion3) || 1 });
-                                        if (prod.unit4) opts.push({ name: prod.unit4, conv: Number(prod.conversion4) || 1 });
-                                      }
-                                      // unique by name
-                                      const uniq = [];
-                                      opts.forEach(o => { if (o.name && !uniq.find(u=>u.name===o.name)) uniq.push(o); });
-
-                                      return (
-                                        <Select
-                                          value={row.values.unit || undefined}
-                                          onChange={(val) => handleHeaderRowChange(rIdx, 'unit', val ? String(val) : null)}
-                                          placeholder="-- Chọn đơn vị --"
-                                          size="small"
-                                          allowClear
-                                          style={{ width: '100%' }}
-                                        >
-                                          {uniq.map(u => <Select.Option key={u.name} value={u.name}>{u.name}</Select.Option>)}
-                                        </Select>
-                                      );
-                                    } catch (e) {
-                                      return <Input value={row.values.unit || ''} onChange={(e)=>handleHeaderRowChange(rIdx,'unit',e.target.value)} size="small" />;
-                                    }
-                                  })()}
-                                </td>
-                              );
-                            }
-
-                            // Default: text / numeric inputs
-                            return (
-                              <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
-                                <Input
-                                  value={(() => {
-                                    const rawValue = row.values[colKey] || '';
-                                    if (rawValue === '') return '';
-                                    
-                                    // For currency fields - show formatted only when not editing
-                                    if (['unitPrice', 'transportCost'].includes(colKey)) {
-                                      // For user input fields, show with minimal formatting to allow easy editing
-                                      const numValue = parseFloat(rawValue) || 0;
-                                      return numValue === 0 ? '' : formatCurrency(numValue);
-                                    }
-                                    // For calculated fields (total, totalTransport) - always show formatted
-                                    if (['total', 'totalTransport'].includes(colKey)) {
-                                      return formatInputDisplay(rawValue, 'currency');
-                                    }
-                                    // Format weight fields  
-                                    if (colKey === 'weight') {
-                                      // Số kg = số kg sản phẩm × số lượng (auto-calculated)
-                                      return formatInputDisplay(rawValue, 'weight');
-                                    }
-                                    // For volume allow free typing (do not force formatted value)
-                                    if (colKey === 'volume') {
-                                      // Volume is auto-filled from product data, display only
-                                      return formatInputDisplay(rawValue, 'volume');
-                                    }
-                                    // Default - return as is
-                                    return rawValue;
-                                  })()}
-                                  onChange={(e) => {
-                                    const inputValue = e.target.value;
-                                    
-                                    // For currency fields, allow user to type freely but parse for calculation
-                                    if (['unitPrice', 'transportCost', 'total', 'totalTransport'].includes(colKey)) {
-                                      // Allow only digits and comma
-                                      const sanitizedValue = inputValue.replace(/[^0-9,]/g, '');
-                                      // Store the raw value (without formatting) for calculation
-                                      const rawValue = sanitizedValue.replace(/,/g, '');
-                                      handleHeaderRowChange(rIdx, colKey, rawValue);
-                                    } else if (colKey === 'volume') {
-                                      // Volume is read-only, no changes allowed
-                                      return;
-                                    } else if (colKey === 'weight') {
-                                      // Số kg is auto-calculated (số kg sản phẩm × số lượng), no manual changes allowed
-                                      return;
-                                    } else {
-                                      handleHeaderRowChange(rIdx, colKey, inputValue);
-                                    }
-                                  }}
-                                  size="small"
-                                  style={{ width: '100%' }}
-                                  readOnly={['total', 'totalTransport', 'volume', 'weight'].includes(colKey)}
-                                  placeholder={['total', 'totalTransport'].includes(colKey) ? 'Tự động tính' : colKey === 'volume' ? 'Lấy từ sản phẩm' : colKey === 'weight' ? 'Số kg SP × Số lượng' : ''}
-                                />
-                              </td>
-                            );
-                          })}
-                        </tr>
-                      ))}
-                    </thead>
-                    {(() => {
-                      const hasHeaderProducts = headerRows.some(r => r && r.values && (r.values.productName || r.values.productCode || r.values.barcode));
-                      const hasItems = (items && items.length > 0) || ((selectedImport && selectedImport.items && selectedImport.items.length > 0));
-                      if (!hasHeaderProducts && !hasItems) {
-                        return (
-                          <tbody>
-                            <tr>
-                              <td colSpan={rightVisibleCols.length || 1} className="no-data">
-                                <div className="empty-state">
-                                  <div className="empty-icon">📋</div>
-                                  <div>Nhập sản phẩm ở các ô phía trên</div>
-                                  <div style={{fontSize: 12, color: '#666', marginTop: 4}}>Sử dụng các dropdown và input để thêm/sửa sản phẩm</div>
-                                </div>
-                              </td>
-                            </tr>
-                          </tbody>
-                        );
-                      }
-                      return null;
-                    })()}
-                  </table>
-                </div>
-
-                <div className="table-summary">
-                  <span>Tổng tiền: <strong>{(() => {
-                    if (isEditMode) {
-                      // In edit mode, use memoized header totals
-                      return formatCurrency(memoizedHeaderTotals.totalAmount);
-                    } else {
-                      // In view mode, only count existing items
-                      const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
-                      const itemsTotal = currentItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
-                      return formatCurrency(itemsTotal);
-                    }
-                  })()}</strong> ({(() => {
-                    if (isEditMode) {
-                      return numberToVietnameseText(memoizedHeaderTotals.totalAmount);
-                    } else {
-                      const currentItems = (items && items.length > 0) ? items : (selectedImport?.items || []);
-                      const itemsTotal = currentItems.reduce((sum, item) => sum + (parseFloat(item.total) || 0), 0);
-                      return numberToVietnameseText(itemsTotal);
-                    }
-                  })()})</span>
-                </div>
-                </div>
-              )}
+              {/* Tab Content */}
+              {activeTab === 'bangKeTong' && renderTabTable('bkt', selectedImport?.bangKeTongItems)}
+              {activeTab === 'dsHoaDon' && renderTabTable('dshd', selectedImport?.dsHoaDonItems)}
 
               {/* Right-side column settings modal */}
               <Modal
@@ -3583,7 +3308,7 @@ const InBangKeTong = () => {
                     const fixedRight = defaultRightCols.filter(c => c === 'actions');
                     const normalCols = defaultRightCols.filter(c => c !== 'actions');
                     return (
-                      <>
+                      <React.Fragment>
                         <div style={{fontSize:13,color:'#888',marginBottom:6}}>Chưa cố định</div>
                         <div>
                           {rightColOrder.filter(key => !fixedRight.includes(key)).map((key, idx) => {
@@ -3642,11 +3367,11 @@ const InBangKeTong = () => {
                             </div>
                           ))}
                         </div>
-                      </>
+                      </React.Fragment>
                     );
                   })()}
                   <div style={{display:'flex',justifyContent:'flex-end',gap:8,marginTop:12}}>
-                    <button className="btn btn-secondary" onClick={()=>{ setRightVisibleCols(defaultRightCols); setRightColOrder(defaultRightCols); }}>Làm lại</button>
+                    <button className="btn btn-secondary" onClick={()=>{ setRightVisibleCols(defaultRightCols); setRightColOrder(defaultRightCols); }} title="reset mặc định">reset mặc định</button>
                     <button className="btn btn-primary" onClick={()=>setShowRightSettings(false)}>Đóng</button>
                   </div>
                 </div>
@@ -3681,16 +3406,16 @@ const InBangKeTong = () => {
                 </button>
               </div>
             </div>
-          </>
+                      </React.Fragment>
         ) : selectedImport && !showRightContent ? (
           <div style={{padding:20, color:'#777'}}>Chọn phiếu bên trái rồi bấm <strong>Sửa</strong> để xem hoặc chỉnh sửa chi tiết ở bên phải.</div>
         ) : (
           // Default view for new import - show form and table
           <div className="detail-content">
             <div className="detail-form" style={{display:'flex',flexDirection:'column',gap:12}}>
-              {/* Top row: Ngày lập, Nhân viên, Loại nhập, Tổng số kg, Tổng số khối (each 20%) */}
-              <div style={{display:'flex',gap:12}}>
-                <div style={{flex:'0 0 20%'}}>
+              {/* Top row: Ngày lập, Nhân viên, Bảng kê tổng, DS hóa đơn */}
+              <div className="bkt-form-top-row" style={{display:'flex',gap:12}}>
+                <div style={{flex:'1 1 0', minWidth:0}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Ngày lập</label>
                     <input
                       type="date"
@@ -3703,7 +3428,7 @@ const InBangKeTong = () => {
                       style={{width:'100%'}}
                     />
                 </div>
-                <div style={{flex:'0 0 20%'}}>
+                <div style={{flex:'1 1 0', minWidth:0}}>
                   <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Nhân viên lập</label>
                   <select 
                     value={formData.employee || 'admin 66'}
@@ -3718,8 +3443,8 @@ const InBangKeTong = () => {
                     <option value="user 01">user 01</option>
                   </select>
                 </div>
-                <div style={{flex:'0 0 20%'}}>
-                  <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Loại nhập</label>
+                <div style={{flex:'1 1 0', minWidth:0}}>
+                  <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Bảng kê tổng</label>
                   <select 
                     value={formData.importType || ''}
                     onChange={(e) => {
@@ -3729,50 +3454,34 @@ const InBangKeTong = () => {
                     }}
                     style={{width:'100%'}}
                   >
-                    <option value="">Chọn loại nhập</option>
+                    <option value="">Chọn bảng kê</option>
                     {transactionContents.map(tc => (
                       <option key={tc.id} value={tc.name}>{tc.name}</option>
                     ))}
                   </select>
                 </div>
-                <div style={{flex:'0 0 20%'}}>
-                  <label style={{display:'block',fontSize:12,fontWeight:600}}>Tổng số kg</label>
-                  <input 
-                    type="text" 
-                    value={(() => {
-                      const headerTotals = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
-                        .reduce((sum, row) => {
-                          const weight = parseFloat(row.values.weight) || 0;
-                          return sum + weight; // Không làm tròn, giữ nguyên độ chính xác
-                        }, 0);
-                      return formatWeight(headerTotals);
-                    })()} 
-                    readOnly 
-                    style={{width:'100%', background: '#f5f5f5'}} 
-                  />
-                </div>
-                <div style={{flex:'0 0 20%'}}>
-                  <label style={{display:'block',fontSize:12,fontWeight:600}}>Tổng số khối</label>
-                  <input 
-                    type="text" 
-                    value={(() => {
-                      const headerTotals = headerRows.filter(row => row.values.productName || row.values.productCode || row.values.barcode)
-                        .reduce((sum, row) => {
-                          const volume = parseFloat(row.values.volume) || 0;
-                          return sum + volume; // Không làm tròn, giữ nguyên độ chính xác
-                        }, 0);
-                      return formatVolume(headerTotals);
-                    })()} 
-                    readOnly 
-                    style={{width:'100%', background: '#f5f5f5'}} 
-                  />
+                <div style={{flex:'1 1 0', minWidth:0}}>
+                  <label style={{display:'block',fontSize:12,fontWeight:600}}>DS hóa đơn</label>
+                  <select
+                    value={formData.dsHoaDon || ''}
+                    onChange={(e) => {
+                      const v = e.target.value;
+                      setFormData(fd => ({ ...fd, dsHoaDon: v }));
+                      setIsEditing(true);
+                    }}
+                    style={{width:'100%'}}
+                  >
+                    <option value="">-- Chọn DS hóa đơn --</option>
+                    {dsHoaDons.map(d => (
+                      <option key={d.id || d} value={d.name || d}>{d.name || d}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
-              {/* Second row: Số phiếu (20%) and Ghi chú (80%) */}
-              <div style={{display:'flex',gap:12,alignItems:'flex-start'}}>
-                <div style={{flex:'0 0 20%'}}>
-                  <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Số phiếu</label>
+              <div className="bkt-form-second-row" style={{display:'flex',gap:12,alignItems:'flex-start'}}>
+                <div style={{flex:'1 1 0', minWidth:0}}>
+                  <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Số bảng kê tổng</label>
                   <div className="input-with-status">
                     <input
                       type="text"
@@ -3784,8 +3493,8 @@ const InBangKeTong = () => {
                     <span className="status-icon">✓</span>
                   </div>
                 </div>
-                <div style={{flex:'1 1 80%'}}>
-                  <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú PN</label>
+                <div style={{flex:'3 1 0', minWidth:0}}>
+                  <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú bảng kê</label>
                   <input
                     type="text"
                     value={formData.note || ''}
@@ -3795,367 +3504,30 @@ const InBangKeTong = () => {
                       setIsEditing(true);
                     }}
                     style={{width:'100%'}}
-                    placeholder="Nhập ghi chú cho phiếu nhập"
+                    placeholder="nhập ghi chú bảng kê"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="items-section">
-              <div className="items-table-container" ref={itemsTableRef}>
-                <div style={{margin: '8px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 14}}>
-                  <span>Tổng {rightTotal} mặt hàng ({rightStart}-{rightEnd})</span>
-                  <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
-                    <button className="icon-btn settings-btn" onClick={()=>setShowRightSettings(true)} title="Cài đặt hiển thị cột" style={{border: 'none', background: '#333', color: 'white', borderRadius: 4, width: 28, height: 28, fontWeight: 'bold'}}>
-                      <span>⚙</span>
-                    </button>
-                    <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.max(1, p - 1))}>{'<'}</button>
-                    <span style={{fontWeight: 600}}>{rightCurrentPage}</span>
-                    <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.min(rightTotalPages, p + 1))}>{'>'}</button>
-                    <select value={rightItemsPerPage} onChange={(e) => { const size = parseInt(e.target.value, 10); setRightItemsPerPage(size); const newMaxPage = Math.max(1, Math.ceil(rightTotal / size)); setRightCurrentPage(p => Math.min(p, newMaxPage)); }} style={{marginLeft: 8, borderRadius: 4, border: '1px solid #e5e7eb', padding: '2px 8px'}}>
-                      <option value={10}>10 / trang</option>
-                      <option value={20}>20 / trang</option>
-                      <option value={50}>50 / trang</option>
-                      <option value={100}>100 / trang</option>
-                      <option value={200}>200 / trang</option>
-                      <option value={500}>500 / trang</option>
-                      <option value={1000}>1000 / trang</option>
-                      <option value={5000}>5000 / trang</option>
-                    </select>
-                  </div>
-                </div>
-
-                <table className="items-table">
-                  <colgroup>
-                    {rightColOrder.map(key => rightVisibleCols.includes(key) ? (
-                      <col key={key} style={{ width: `${rightColWidths[key] || 100}px` }} />
-                    ) : null)}
-                  </colgroup>
-                  <thead>
-                    <tr>
-                      {rightColOrder.map((key, index) => {
-                        if (!rightVisibleCols.includes(key)) return null;
-                        
-                        // Generic resizable header for ALL columns
-                        const columnNames = {
-                          barcode: 'Mã vạch',
-                          productCode: 'Mã hàng', 
-                          productName: 'Hàng hóa',
-                          unit: 'Đơn vị tính',
-                          quantity: 'Số lượng',
-                          unitPrice: 'Đơn giá',
-                          transportCost: 'Tiền vận chuyển',
-                          noteDate: 'Ghi chú date PN',
-                          total: 'Thành tiền',
-                          totalTransport: 'TT vận chuyển',
-                          weight: 'Số kg',
-                          volume: 'Số khối',
-                          warehouse: 'Kho hàng',
-                          description: 'Mô tả',
-                          conversion: 'Quy đổi',
-                          actions: 'Thao tác'
-                        };
-                        
-                        const colName = columnNames[key] || key;
-                        const isActions = key === 'actions';
-                        
-                        return (
-                          <th key={key} 
-                              style={{
-                                width: rightColWidths[key] + 'px',
-                                minWidth: '80px',
-                                textAlign: 'center',
-                                position: 'relative',
-                                cursor: isActions ? 'default' : 'col-resize',
-                                userSelect: 'none',
-                                padding: '8px 4px',
-                                border: '1px solid #d9d9d9',
-                                background: isActions ? '#f5f5f5' : '#fafafa',
-                                fontWeight: 'bold',
-                                fontSize: '13px'
-                              }}
-                              onMouseDown={isActions ? undefined : (e) => handleThMouseDown(e, key)}
-                              data-resizable={isActions ? undefined : "true"}
-                              data-col-key={key}
-                              title={isActions ? undefined : `Click and drag to resize ${colName}`}>
-                            <span>{colName}</span>
-                          </th>
-                        );
-                      })}
-                    </tr>
-                    {/* Header input rows for new entries */}
-                    {paginatedHeaderRows.map((row, rIdx) => (
-                      <tr key={row.id} className="header-input-row" style={row.id === highlightRowId ? { background: '#fff7e6', boxShadow: 'inset 0 0 0 2px #ffd666' } : {}}>
-                        {rightColOrder.map((colKey, index) => {
-                          
-                          
-                          if (colKey === 'actions') {
-                            if (!rightVisibleCols.includes('actions')) return null;
-                            return (
-                              <td key={colKey} style={{paddingTop:6,paddingBottom:6}}>
-                                <div style={{display:'flex',alignItems:'center',justifyContent:'center',gap:'4px'}}>
-                                  {/* Reset button removed as requested */}
-                                  {/* Show Xóa button for rows that have product data */}
-                                  {(row.values.productName || row.values.productCode || row.values.barcode) && (
-                                    <button 
-                                      onClick={() => setHeaderRows(prev => prev.filter((_,i)=>i!==rIdx))} 
-                                      style={{
-                                        padding:'4px 8px',
-                                        fontSize:12,
-                                        backgroundColor:'#6c757d',
-                                        color:'white',
-                                        border:'none',
-                                        borderRadius:'3px',
-                                        cursor:'pointer'
-                                      }}
-                                    >
-                                      Xóa
-                                    </button>
-                                  )}
-                                </div>
-                              </td>
-                            );
-                          }
-
-                          if (['productCode','productName','barcode'].includes(colKey)) {
-                            if (!rightVisibleCols.includes(colKey)) return null;
-                            return (
-                              <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
-                                {colKey === 'productName' ? (
-                                  <button
-                                      onClick={() => {
-                                      if (!ensureImportTypeSelected()) return;
-                                      setProductModalColumn(colKey);
-                                      setProductModalRowIndex(rIdx);
-                                      setProductModalSearch('');
-                                      setModalCurrentPage(1);
-                                      setSelectedModalProducts(row.values[colKey] ? [row.values[colKey]] : []);
-                                        setProductModalScope('all');
-                                        setShowProductModal(true);
-                                    }}
-                                    style={{
-                                      width: '100%',
-                                      padding: '4px 8px',
-                                      border: '1px solid #d9d9d9',
-                                      borderRadius: '4px',
-                                      background: '#fff',
-                                      textAlign: 'left',
-                                      cursor: 'pointer',
-                                      fontSize: '12px'
-                                    }}
-                                  >
-                                    {row.values[colKey] || `-- Chọn ${colKey} --`}
-                                  </button>
-                                ) : (
-                                  <Select
-                                    value={row.values[colKey] || undefined}
-                                    onChange={(val) => handleHeaderRowProductSelect(rIdx, colKey, val)}
-                                    placeholder={`-- Chọn ${colKey} --`}
-                                    size="small"
-                                    showSearch
-                                    allowClear
-                                    style={{ width: '100%' }}
-                                    popupStyle={{ 
-                                      maxHeight: 400, 
-                                      overflow: 'auto',
-                                      zIndex: 9999
-                                    }}
-                                    popupMatchSelectWidth={false}
-                                    classNames={{ popup: { root: 'product-select-dropdown' } }}
-                                    optionLabelProp={colKey === 'productName' ? 'children' : 'label'}
-                                    filterOption={(input, option) => {
-                                      const p = products.find(pp => pp.id.toString() === option.value);
-                                      if (!p) return false;
-                                      const txt = `${p.code||''} ${p.name||''} ${p.barcode||''}`.toLowerCase();
-                                      return txt.includes((input||'').toLowerCase());
-                                    }}
-                                  >
-                                    {products.map(p => (
-                                      <Select.Option 
-                                        key={p.id} 
-                                        value={p.id.toString()}
-                                        label={colKey === 'productName' ? p.name : getProductOptionLabel(p)}
-                                      >
-                                        {colKey === 'productName' ? (
-                                          <div style={{fontSize:12, fontWeight:600}}>{getProductOptionLabel(p)}</div>
-                                        ) : (
-                                          <div style={{fontSize:12, fontWeight:600}}>{getProductOptionLabel(p)}</div>
-                                        )}
-                                      </Select.Option>
-                                    ))}
-                                  </Select>
-                                )}
-                              </td>
-                            );
-                          }
-
-                          if (colKey === 'warehouse') {
-                            if (!rightVisibleCols.includes(colKey)) return null;
-                            return (
-                              <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
-                                <Select
-                                  value={row.values[colKey] ? String(row.values[colKey]) : undefined}
-                                  onChange={(val) => handleHeaderRowChange(rIdx, colKey, val ? String(val) : null)}
-                                  placeholder="-- Chọn kho --"
-                                  size="small"
-                                  allowClear
-                                  style={{ width: '100%' }}
-                                >
-                                  {warehouses.map(w => (
-                                    <Select.Option key={w.id} value={String(w.id)}>{w.name}</Select.Option>
-                                  ))}
-                                </Select>
-                              </td>
-                            );
-                          }
-
-                          if (colKey === 'noteDate') {
-                            if (!rightVisibleCols.includes(colKey)) return null;
-                            return (
-                              <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
-                                <DatePicker
-                                  value={row.values[colKey] ? dayjs(row.values[colKey]) : null}
-                                  onChange={(d) => handleHeaderRowChange(rIdx, colKey, d ? d.format('YYYY-MM-DD') : null)}
-                                  format="DD/MM/YYYY"
-                                  placeholder="Chọn ngày"
-                                  size="small"
-                                  style={{ width: '100%' }}
-                                  showToday={true}
-                                  allowClear={true}
-                                  picker="date"
-                                />
-                              </td>
-                            );
-                          }
-
-                            if (colKey === 'unit') {
-                              if (!rightVisibleCols.includes(colKey)) return null;
-                              return (
-                                <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
-                                  {(() => {
-                                    try {
-                                      const rowValues = row.values || {};
-                                      const prodId = rowValues.productName_id || rowValues.productCode_id || rowValues.barcode_id || null;
-                                      let prod = null;
-                                      if (prodId && products && products.length > 0) prod = products.find(p => String(p.id) === String(prodId));
-                                      if (!prod) {
-                                        const keyMatch = rowValues.productCode || rowValues.barcode || rowValues.productName || '';
-                                        if (keyMatch) prod = products.find(p => p.code === keyMatch || p.barcode === keyMatch || p.name === keyMatch);
-                                      }
-                                      const opts = [];
-                                      if (prod) {
-                                        const base = prod.baseUnit || prod.defaultUnit || prod.DefaultUnit || prod.unit || '';
-                                        if (base) opts.push({ name: base, conv: 1 });
-                                        if (prod.unit1) opts.push({ name: prod.unit1, conv: Number(prod.conversion1) || 1 });
-                                        if (prod.unit2) opts.push({ name: prod.unit2, conv: Number(prod.conversion2) || 1 });
-                                        if (prod.unit3) opts.push({ name: prod.unit3, conv: Number(prod.conversion3) || 1 });
-                                        if (prod.unit4) opts.push({ name: prod.unit4, conv: Number(prod.conversion4) || 1 });
-                                      }
-                                      const uniq = [];
-                                      opts.forEach(o => { if (o.name && !uniq.find(u=>u.name===o.name)) uniq.push(o); });
-
-                                      return (
-                                        <Select
-                                          value={row.values.unit || undefined}
-                                          onChange={(val) => handleHeaderRowChange(rIdx, 'unit', val ? String(val) : null)}
-                                          placeholder="-- Chọn đơn vị --"
-                                          size="small"
-                                          allowClear
-                                          style={{ width: '100%' }}
-                                        >
-                                          {uniq.map(u => <Select.Option key={u.name} value={u.name}>{u.name}</Select.Option>)}
-                                        </Select>
-                                      );
-                                    } catch (e) {
-                                      return <Input value={row.values.unit || ''} onChange={(e)=>handleHeaderRowChange(rIdx,'unit',e.target.value)} size="small" />;
-                                    }
-                                  })()}
-                                </td>
-                              );
-                            }
-
-                          if (!rightVisibleCols.includes(colKey)) return null;
-                          return (
-                            <td key={colKey} style={{paddingTop:6,paddingBottom:6,textAlign:'center'}}>
-                              <Input
-                                value={(() => {
-                                  const rawValue = row.values[colKey] || '';
-                                  if (rawValue === '') return '';
-                                  
-                                  if (['unitPrice', 'transportCost'].includes(colKey)) {
-                                    const numValue = parseFloat(rawValue) || 0;
-                                    return numValue === 0 ? '' : formatCurrency(numValue);
-                                  }
-                                  if (['total', 'totalTransport'].includes(colKey)) {
-                                    return formatInputDisplay(rawValue, 'currency');
-                                  }
-                                  if (colKey === 'weight') {
-                                    // Số kg = số kg sản phẩm × số lượng (auto-calculated)
-                                    return formatInputDisplay(rawValue, 'weight');
-                                  }
-                                  if (colKey === 'volume') {
-                                    // Volume is auto-filled from product data, display only
-                                    return formatInputDisplay(rawValue, 'volume');
-                                  }
-                                  return rawValue;
-                                })()}
-                                onChange={(e) => {
-                                  // Skip onChange for read-only fields like volume
-                                  if (['total', 'totalTransport', 'volume'].includes(colKey)) {
-                                    return;
-                                  }
-                                  
-                                  const inputValue = e.target.value;
-                                  
-                                  // For currency fields, allow user to type freely but parse for calculation
-                                  if (['unitPrice', 'transportCost'].includes(colKey)) {
-                                    // Allow only digits and comma
-                                    const sanitizedValue = inputValue.replace(/[^0-9,]/g, '');
-                                    // Store the raw value (without formatting) for calculation
-                                    const rawValue = sanitizedValue.replace(/,/g, '');
-                                    handleHeaderRowChange(rIdx, colKey, rawValue);
-                                  } else {
-                                    handleHeaderRowChange(rIdx, colKey, inputValue);
-                                  }
-                                }}
-                                size="small"
-                                style={{ width: '100%' }}
-                                readOnly={['total', 'totalTransport', 'volume', 'weight'].includes(colKey)}
-                                placeholder={['total', 'totalTransport'].includes(colKey) ? 'Tự động tính' : colKey === 'volume' ? 'Lấy từ sản phẩm' : colKey === 'weight' ? 'Số kg SP × Số lượng' : ''}
-                              />
-                            </td>
-                          );
-                        })}
-                      </tr>
-                    ))}
-                  </thead>
-                  {(() => {
-                    const hasHeaderProducts = headerRows.some(r => r && r.values && (r.values.productName || r.values.productCode || r.values.barcode));
-                    const hasItems = (items && items.length > 0) || ((selectedImport && selectedImport.items && selectedImport.items.length > 0));
-                    if (!hasHeaderProducts && !hasItems) {
-                      return (
-                        <tbody>
-                          <tr>
-                            <td colSpan={rightVisibleCols.length || 1} className="no-data">
-                              <div className="empty-state">
-                                <div className="empty-icon">📋</div>
-                                <div>Chưa có hàng hóa nào</div>
-                                <div style={{fontSize: 12, color: '#666', marginTop: 4}}>Nhấn "Thêm hàng hóa" hoặc chọn sản phẩm từ các ô input phía trên</div>
-                              </div>
-                            </td>
-                          </tr>
-                        </tbody>
-                      );
-                    }
-                    return null;
-                  })()}
-                </table>
-              </div>
-
-              <div className="table-summary">
-                <span>Tổng tiền: <strong>{formatCurrency(memoizedHeaderTotals.totalAmount)}</strong> ({numberToVietnameseText(memoizedHeaderTotals.totalAmount)})</span>
-              </div>
+            {/* Tabs: Bảng kê tổng / DS hóa đơn (default view) */}
+            <div className="order-tabs" style={{marginTop: 12}}>
+              <button
+                className={`tab-btn ${activeTab === 'bangKeTong' ? 'active' : ''}`}
+                onClick={() => setActiveTab('bangKeTong')}
+              >
+                📋 Bảng kê tổng
+              </button>
+              <button
+                className={`tab-btn ${activeTab === 'dsHoaDon' ? 'active' : ''}`}
+                onClick={() => setActiveTab('dsHoaDon')}
+              >
+                📄 DS hóa đơn
+              </button>
             </div>
+
+            {activeTab === 'bangKeTong' && renderTabTable('bkt', [])}
+            {activeTab === 'dsHoaDon' && renderTabTable('dshd', [])}
 
             <div className="detail-actions">
               <button className="btn btn-info" onClick={saveImport} disabled={!isEditing}>
@@ -4186,7 +3558,7 @@ const InBangKeTong = () => {
                 <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '8px'}}>
                   <div>
                     <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4}}>
-                      <span style={{color: 'red', marginRight: 4}}>*</span>Số phiếu
+                      <span style={{color: 'red', marginRight: 4}}>*</span>Số bảng kê tổng
                     </label>
                     <input
                       type="text"
@@ -4241,7 +3613,7 @@ const InBangKeTong = () => {
                       type="text"
                       value={formData.note}
                       onChange={(e) => setFormData(prev => ({...prev, note: e.target.value}))}
-                      placeholder="Nhập ghi chú cho phiếu nhập"
+                      placeholder="nhập ghi chú bảng kê"
                       style={{width: '100%', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
                     />
                   </div>
@@ -4803,6 +4175,117 @@ const InBangKeTong = () => {
         })()
         }
       </Modal>
+
+      {/* Column settings & search modals for BKT and DSHD tabs */}
+      {renderColumnSettingsModal('bkt')}
+      {renderColumnSettingsModal('dshd')}
+      {renderColumnSearchModal('bkt')}
+      {renderColumnSearchModal('dshd')}
+
+      {/* Left panel column settings modal */}
+      {showLeftColSettings && (
+        <div className="search-modal-overlay" onClick={() => setShowLeftColSettings(false)}>
+          <div className="column-settings-modal" onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f8f9fa', borderBottom: '1px solid #e9ecef' }}>
+              <h3 style={{ margin: 0, fontSize: 15 }}>⚙️ Cài đặt cột - Bảng trái</h3>
+              <button onClick={() => setShowLeftColSettings(false)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#666' }}>×</button>
+            </div>
+            <div style={{ padding: '12px 16px' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 10 }}>
+                <button onClick={() => leftH.resetCols(defaultLeftColumns)} style={{ padding: '4px 12px', fontSize: 12, cursor: 'pointer', borderRadius: 4, border: '1px solid #ddd', background: '#fff' }}>
+                  🔄 Reset về mặc định
+                </button>
+                <span style={{ fontSize: 12, color: '#888' }}>Hiển thị {leftColumns.filter(c => c.visible).length}/{leftColumns.length} cột</span>
+              </div>
+              <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>💡 Kéo thả để sắp xếp, tick/untick để ẩn/hiện cột</div>
+              <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+                {leftColumns.map((column, index) => (
+                  <div
+                    key={column.id}
+                    draggable
+                    onDragStart={(e) => leftH.settingsDragStart(e, index)}
+                    onDragOver={leftH.settingsDragOver}
+                    onDrop={(e) => leftH.settingsDrop(e, index, leftSettingsDrag)}
+                    onDragEnd={leftH.settingsDragEnd}
+                    style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px', borderBottom: '1px solid #f0f0f0', cursor: 'grab', background: leftSettingsDrag === index ? '#e3f2fd' : 'transparent' }}
+                    className={`column-settings-item ${leftSettingsDrag === index ? 'dragging' : ''}`}
+                  >
+                    <span style={{ cursor: 'grab', color: '#aaa', fontSize: 14, userSelect: 'none' }}>⋮⋮</span>
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, cursor: 'pointer' }}>
+                      <input type="checkbox" checked={column.visible} onChange={() => leftH.toggleVisibility(column.id)} style={{ accentColor: '#667eea' }} />
+                      <span style={{ fontSize: 13 }}>{column.label}</span>
+                    </label>
+                    <span style={{ fontSize: 11, color: '#aaa' }}>{column.width}px</span>
+                    {!column.visible && <span style={{ fontSize: 10, color: '#f5222d', background: '#fff1f0', padding: '1px 6px', borderRadius: 8 }}>Ẩn</span>}
+                  </div>
+                ))}
+              </div>
+              <div style={{ textAlign: 'right', marginTop: 10 }}>
+                <button onClick={() => setShowLeftColSettings(false)} style={{ padding: '6px 18px', background: '#667eea', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13 }}>
+                  ✓ Áp dụng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Left panel column search modal */}
+      {showLeftSearchModal && leftSearchColumn && (() => {
+        const uniqueValues = getLeftUniqueValues(leftSearchColumn.id).filter(v => {
+          if (!leftSearchQuery.trim()) return true;
+          return v.toLowerCase().includes(leftSearchQuery.toLowerCase());
+        }).slice(0, 50);
+        return (
+          <div className="search-modal-overlay" onClick={closeLeftSearch}>
+            <div className="search-modal" onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 10, width: 380, maxWidth: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f8f9fa', borderBottom: '1px solid #e9ecef' }}>
+                <h3 style={{ margin: 0, fontSize: 15 }}>🔍 Tìm kiếm theo "{leftSearchColumn.label}"</h3>
+                <button onClick={closeLeftSearch} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#666' }}>×</button>
+              </div>
+              <div style={{ padding: '12px 16px' }}>
+                <input
+                  type="text"
+                  placeholder="Nhập từ khóa tìm kiếm..."
+                  value={leftSearchQuery}
+                  onChange={(e) => setLeftSearchQuery(e.target.value)}
+                  autoFocus
+                  style={{ width: '100%', padding: '8px 12px', border: '1px solid #dde2e8', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
+                />
+              </div>
+              <div style={{ maxHeight: 250, overflowY: 'auto', padding: '0 16px' }}>
+                <div style={{ fontSize: 11, color: '#999', marginBottom: 6 }}>Các giá trị có trong cột (click để chọn):</div>
+                {uniqueValues.length === 0 ? (
+                  <div style={{ padding: 10, color: '#999', textAlign: 'center' }}>Không có dữ liệu</div>
+                ) : (
+                  uniqueValues.map((value, i) => (
+                    <div
+                      key={i}
+                      onClick={() => setLeftSearchQuery(value)}
+                      style={{ padding: '7px 10px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', background: leftSearchQuery === value ? '#e3f2fd' : 'transparent', fontSize: 13 }}
+                      onMouseEnter={(e) => { e.target.style.background = '#f5f5f5'; }}
+                      onMouseLeave={(e) => { e.target.style.background = leftSearchQuery === value ? '#e3f2fd' : 'transparent'; }}
+                    >
+                      {value}
+                    </div>
+                  ))
+                )}
+              </div>
+              <div style={{ padding: '10px 16px', borderTop: '1px solid #eee', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                <button onClick={() => { setLeftSearchQuery(''); setLeftColumnFilters({}); closeLeftSearch(); }} style={{ padding: '6px 14px', background: '#6c757d', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+                  Xóa bộ lọc
+                </button>
+                <button onClick={applyLeftSearch} style={{ padding: '6px 14px', background: '#667eea', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+                  Áp dụng
+                </button>
+                <button onClick={closeLeftSearch} style={{ padding: '6px 14px', background: '#fff', color: '#333', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+                  Đóng
+                </button>
+              </div>
+            </div>
+          </div>
+        );
+      })()}
     </div>
   );
 };
