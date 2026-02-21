@@ -599,6 +599,29 @@ const CreateOrderForm = () => {
     }
   };
 
+  // Load order by orderNumber (fallback when orderId is not available)
+  const loadOrderByNumber = async (orderNumber) => {
+    try {
+      // First, fetch all orders and find the one matching orderNumber
+      const response = await fetch(`${API_BASE_URL}/Orders`);
+      if (response.ok) {
+        const orders = await response.json();
+        const found = orders.find(o => o.orderNumber === orderNumber);
+        if (found && found.id) {
+          // Load the full order detail using the found id
+          loadOrderDetail(found.id);
+        } else {
+          alert('Không tìm thấy đơn hàng với mã phiếu: ' + orderNumber);
+        }
+      } else {
+        alert('Không thể tải danh sách đơn hàng');
+      }
+    } catch (error) {
+      console.error('Error loading order by number:', error);
+      alert('Lỗi khi tải đơn hàng: ' + error.message);
+    }
+  };
+
   // Auto-calculate totals for orderItems (hàng bán)
   useEffect(() => {
     const totalKg = orderItems.reduce((sum, item) => sum + (parseFloat(item.weight) || 0), 0);
@@ -639,8 +662,12 @@ const CreateOrderForm = () => {
   // Load order from URL param if present (edit mode)
   useEffect(() => {
     const orderId = searchParams.get('id');
+    const orderNumber = searchParams.get('orderNumber');
     if (orderId) {
       loadOrderDetail(parseInt(orderId));
+    } else if (orderNumber) {
+      // Load order by orderNumber (fallback for old records without orderId)
+      loadOrderByNumber(orderNumber);
     }
   }, [searchParams]);
 

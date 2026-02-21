@@ -16,6 +16,9 @@ namespace QlnppApi.Models
         [JsonIgnore]
         public BangKeTong? BangKeTong { get; set; }
 
+        // Reference to the original Order (nullable for backward compatibility)
+        public int? OrderId { get; set; }
+
         [MaxLength(200)]
         public string MaPhieu { get; set; } = string.Empty;
 

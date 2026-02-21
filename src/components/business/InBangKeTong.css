@@ -1604,6 +1604,42 @@ button[title="Cài đặt cột"] {
   line-height: 1;
 }
 
+/* Order-select modal table header drag/resize styles */
+.order-select-modal table th {
+  position: relative;
+  user-select: none;
+  white-space: nowrap;
+}
+.order-select-modal table th[draggable="true"] {
+  cursor: grab;
+}
+.order-select-modal table th[draggable="true"]:active {
+  cursor: grabbing;
+}
+.order-select-modal table th .resize-handle {
+  position: absolute;
+  right: -2px;
+  top: 0;
+  bottom: 0;
+  width: 8px;
+  cursor: col-resize;
+  z-index: 30;
+  background: transparent;
+}
+.order-select-modal table th .resize-handle:hover {
+  background: rgba(102,126,234,0.12);
+}
+/* Allow wrapping when columns are narrowed in the order-select modal */
+.order-select-modal table th,
+.order-select-modal table td {
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+}
+.order-select-modal table td > * {
+  white-space: normal !important;
+}
+
 .bkt-dynamic-table th .col-clear-btn:hover {
   opacity: 1;
 }
@@ -1812,4 +1848,119 @@ button[title="Cài đặt cột"] {
 /* Force popup container to render above modal */
 .ant-picker-dropdown {
   z-index: 10002 !important;
+}
+
+/* Compact two-month calendar style for the order-select modal RangePicker */
+.order-select-range-popup .ant-picker-panels {
+  display: flex !important;
+  gap: 8px !important;
+}
+
+.order-select-range-popup .ant-picker-panel {
+  min-width: 220px !important;
+  max-width: 280px !important;
+  font-size: 12px !important;
+  padding: 2px 4px !important;
+}
+
+.order-select-range-popup .ant-picker-header {
+  padding: 4px 8px !important;
+  font-size: 12px !important;
+}
+
+.order-select-range-popup .ant-picker-cell-in-view .ant-picker-cell-inner,
+.order-select-range-popup .ant-picker-cell-inner {
+  padding: 6px 6px !important;
+  line-height: 20px !important;
+  font-size: 12px !important;
+}
+
+.order-select-range-popup .ant-picker-footer {
+  padding: 6px !important;
+}
+
+.order-select-range-popup .ant-picker-range-separator {
+  display: none !important;
+}
+
+/* Make sure popup appears above fullscreen modal */
+.order-select-modal-fullscreen .order-select-range-popup {
+  z-index: 10005 !important;
+}
+
+/* Hide footer / extra controls so calendar is minimal like sample */
+.order-select-range-popup .ant-picker-footer,
+.order-select-range-popup .ant-picker-range-presets,
+.order-select-range-popup .ant-picker-extra-footer {
+  display: none !important;
+}
+
+/* Reduce header controls (hide dropdown arrows if present) */
+.order-select-range-popup .ant-picker-header-select {
+  display: none !important;
+}
+
+/* Tighten calendar cell spacing to compact view */
+.order-select-range-popup .ant-picker-content th,
+.order-select-range-popup .ant-picker-content td {
+  padding: 4px 6px !important;
+  min-width: 26px !important;
+  width: 26px !important;
+}
+
+.order-select-range-popup .ant-picker-cell-inner {
+  padding: 4px 2px !important;
+}
+
+/* Ensure the popup uses table layout for calendar cells (override earlier generic rules) */
+.order-select-range-popup .ant-picker-panels {
+  display: flex !important;
+  flex-direction: row !important;
+  align-items: flex-start !important;
+}
+
+.order-select-range-popup .ant-picker-panel {
+  display: block !important;
+}
+
+.order-select-range-popup .ant-picker-content,
+.order-select-range-popup .ant-picker-date-panel,
+.order-select-range-popup .ant-picker-body {
+  display: block !important;
+}
+
+.order-select-range-popup .ant-picker-content table {
+  display: table !important;
+  width: auto !important;
+  border-collapse: collapse !important;
+}
+
+.order-select-range-popup .ant-picker-content thead,
+.order-select-range-popup .ant-picker-content tbody {
+  display: table-header-group !important;
+}
+
+.order-select-range-popup .ant-picker-content tr {
+  display: table-row !important;
+}
+
+.order-select-range-popup .ant-picker-content th,
+.order-select-range-popup .ant-picker-content td {
+  display: table-cell !important;
+  padding: 6px 6px !important;
+  text-align: center !important;
+  min-width: 28px !important;
+  width: 28px !important;
+}
+
+.order-select-range-popup .ant-picker-cell-inner {
+  display: inline-block !important;
+  width: 100% !important;
+}
+
+/* Weekday header sizing and alignment */
+.order-select-range-popup .ant-picker-week-panel .ant-picker-cell-inner,
+.order-select-range-popup .ant-picker-content thead th {
+  font-size: 12px !important;
+  padding: 6px 4px !important;
 }

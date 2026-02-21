@@ -188,9 +188,62 @@ const InBangKeTong = () => {
   // Modal table pagination and filtering
   const [orderSelectPageSize, setOrderSelectPageSize] = useState(50);
   const [orderSelectCurrentPage, setOrderSelectCurrentPage] = useState(1);
+  // Modal-specific column settings (allow drag/resize inside order-select modal)
+  const defaultOrderSelectCols = [
+    { id: 'orderDate', label: 'Ngày lập', width: 110, visible: true, align: 'center' },
+    { id: 'maPhieu', label: 'Số phiếu', width: 140, visible: true, align: 'left' },
+    { id: 'tenKhachHang', label: 'Khách hàng', width: 200, visible: true, align: 'left' },
+    { id: 'tongTienSauGiam', label: 'Tổng tiền sau giảm', width: 140, visible: true, align: 'right' },
+    { id: 'status', label: 'Trạng thái', width: 110, visible: true, align: 'center' },
+    { id: 'createdBy', label: 'Nhân viên lập', width: 140, visible: true, align: 'left' },
+    { id: 'taxRates', label: 'Thuế suất', width: 100, visible: true, align: 'left' },
+    { id: 'loaiHang', label: 'Loại hàng', width: 120, visible: true, align: 'left' },
+    { id: 'nvSale', label: 'Nhân viên sale', width: 140, visible: true, align: 'left' },
+    { id: 'customerGroup', label: 'Nhóm khách hàng', width: 120, visible: true, align: 'left' },
+    { id: 'salesSchedule', label: 'Lịch bán hàng', width: 140, visible: true, align: 'left' },
+    { id: 'tongTien', label: 'Tổng tiền', width: 120, visible: true, align: 'right' },
+    { id: 'totalKg', label: 'Tổng số kg', width: 100, visible: true, align: 'right' },
+    { id: 'totalM3', label: 'Tổng số khối', width: 100, visible: true, align: 'right' },
+    { id: 'printOrder', label: 'STT in', width: 80, visible: true, align: 'center' },
+    { id: 'vehicle', label: 'Xe', width: 140, visible: true, align: 'left' },
+    { id: 'deliveryVehicle', label: 'Xe giao hàng', width: 140, visible: true, align: 'left' },
+    { id: 'printStatus', label: 'Trạng thái in', width: 120, visible: true, align: 'center' },
+    { id: 'printCount', label: 'Số lần in', width: 90, visible: true, align: 'center' },
+    { id: 'printDate', label: 'Ngày in', width: 110, visible: true, align: 'center' },
+    { id: 'actions', label: 'Thao tác', width: 110, visible: true, align: 'center' }
+  ];
+  const [modalDshdColumns, setModalDshdColumns] = useState(() => {
+    try { const s = localStorage.getItem('order_select_cols_v1'); return s ? JSON.parse(s) : defaultOrderSelectCols; } catch { return defaultOrderSelectCols; }
+  });
+  const [modalDshdDragColumn, setModalDshdDragColumn] = useState(null);
+  const [modalDshdSettingsDrag, setModalDshdSettingsDrag] = useState(null);
+  // map of customer group code/id -> group name for display in order-select modal
+  const [customerGroupsMap, setCustomerGroupsMap] = useState({});
+  
 
   // current logged-in user and permissions
   const { user, permissions } = useAuth();
+
+  // Load customer groups mapping for displaying group names in modal
+  useEffect(() => {
+    let mounted = true;
+    const loadGroups = async () => {
+      try {
+        const groups = await api.get(API_ENDPOINTS.customerGroups);
+        if (!mounted || !groups) return;
+        const map = {};
+        groups.forEach(g => {
+          if (g.id) map[g.id] = g.name || g.title || g.code || '';
+          if (g.code) map[g.code] = g.name || g.title || g.code || '';
+        });
+        setCustomerGroupsMap(map);
+      } catch (e) {
+        console.error('Failed to load customer groups for modal:', e);
+      }
+    };
+    loadGroups();
+    return () => { mounted = false; };
+  }, []);
 
   // determine admin-like users: username/name 'admin' or 'superadmin', or explicit admin permission
   const isAdminUser = (() => {
@@ -244,6 +297,8 @@ const InBangKeTong = () => {
   const [showDshdSettings, setShowDshdSettings] = useState(false);
   const [dshdDragColumn, setDshdDragColumn] = useState(null);
   const [dshdSettingsDrag, setDshdSettingsDrag] = useState(null);
+  // Modal-specific settings visibility
+  const [showModalDshdSettings, setShowModalDshdSettings] = useState(false);
   const [showDshdSearchModal, setShowDshdSearchModal] = useState(false);
   const [dshdSearchColumn, setDshdSearchColumn] = useState(null);
   const [dshdSearchQuery, setDshdSearchQuery] = useState('');
@@ -275,7 +330,7 @@ const InBangKeTong = () => {
     },
     settingsDragEnd: () => setSettingsDrag(null),
     // Header drag reorder
-    colDragStart: (e, id) => { setDragCol(id); e.dataTransfer.effectAllowed = 'move'; },
+    colDragStart: (e, id) => { setDragCol(id); try { e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', String(id)); } catch (ex) { /* ignore for browsers that restrict setData */ } },
     colDragOver: (e) => { e.preventDefault(); e.dataTransfer.dropEffect = 'move'; },
     colDrop: (e, id, dragCol) => {
       e.preventDefault();
@@ -290,8 +345,13 @@ const InBangKeTong = () => {
       const sX = e.clientX;
       const col = cols.find(c => c.id === id);
       const sW = col ? col.width : 120;
+      // prevent text selection while resizing
+      const prevUserSelect = document.body.style.userSelect;
+      const prevCursor = document.body.style.cursor;
+      document.body.style.userSelect = 'none';
+      document.body.style.cursor = 'col-resize';
       const onMove = (ev) => { const dx = ev.clientX - sX; setCols(prev => prev.map(c => c.id === id ? { ...c, width: Math.max(60, sW + dx) } : c)); };
-      const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); };
+      const onUp = () => { document.removeEventListener('mousemove', onMove); document.removeEventListener('mouseup', onUp); document.body.style.userSelect = prevUserSelect || ''; document.body.style.cursor = prevCursor || ''; };
       document.addEventListener('mousemove', onMove);
       document.addEventListener('mouseup', onUp);
     },
@@ -300,6 +360,8 @@ const InBangKeTong = () => {
   const leftH = makeColHandlers(setLeftColumns, setLeftDragColumn, setLeftSettingsDrag);
   const bktH = makeColHandlers(setBktColumns, setBktDragColumn, setBktSettingsDrag);
   const dshdH = makeColHandlers(setDshdColumns, setDshdDragColumn, setDshdSettingsDrag);
+  // modal column handlers (must be created after makeColHandlers is defined)
+  const modalH = makeColHandlers(setModalDshdColumns, setModalDshdDragColumn, setModalDshdSettingsDrag);
 
   // Helper: aggregate bangKeTongItems – group by product key, merge maPhieu (last 3 chars), sum slBanTheoDVTGoc
   const aggregateBktItems = (rawItems) => {
@@ -377,7 +439,22 @@ const InBangKeTong = () => {
   const renderDshdCell = (item, key, idx) => {
     switch (key) {
       case 'stt': return idx + 1;
-      case 'maPhieu': return item.maPhieu || '';
+      case 'maPhieu': {
+        const code = item.maPhieu || '';
+        // Only use orderId (the actual Order table id) for id-based link
+        const orderId = item.orderId || null;
+        if (!code) return '';
+        // If we have the real orderId, use ?id=, otherwise fall back to ?orderNumber=
+        const href = orderId ? `/business/sales/create-order-form?id=${encodeURIComponent(orderId)}` : `/business/sales/create-order-form?orderNumber=${encodeURIComponent(code)}`;
+        return (
+          <a
+            href={`#${href}`}
+            onClick={(e) => { e.preventDefault(); try { window.open(href, '_blank'); } catch (err) { console.error(err); } }}
+            style={{ color: '#1677ff', textDecoration: 'underline', cursor: 'pointer' }}
+            title="Mở chi tiết đơn hàng trong tab mới"
+          >{code}</a>
+        );
+      }
       case 'tenKhachHang': return item.tenKhachHang || '';
       case 'tongTien': return formatCurrency(item.tongTien);
       case 'tongTienSauGiam': return formatCurrency(item.tongTienSauGiam);
@@ -409,20 +486,72 @@ const InBangKeTong = () => {
   };
 
   // Open/close search modals
-  const openBktSearch = (colId, colLabel) => { setBktSearchColumn({ id: colId, label: colLabel }); setBktSearchQuery(bktColumnFilters[colId] || ''); setShowBktSearchModal(true); };
+  const openBktSearch = (colId, colLabel) => {
+    setBktSearchColumn({ id: colId, label: colLabel });
+    const existing = bktColumnFilters[colId];
+    setBktSearchQuery(existing && typeof existing === 'object' && existing.type === 'exact' ? existing.value : (existing || ''));
+    setShowBktSearchModal(true);
+  };
   const closeBktSearch = () => { setShowBktSearchModal(false); setBktSearchColumn(null); setBktSearchQuery(''); };
   const applyBktSearch = () => {
     const nf = { ...bktColumnFilters };
-    if (bktSearchQuery.trim()) nf[bktSearchColumn.id] = bktSearchQuery.trim(); else delete nf[bktSearchColumn.id];
+    const q = bktSearchQuery.trim();
+    if (q) {
+      // if the query exactly matches one of the unique values, treat as exact match
+      const uniques = getBktUniqueValues(bktSearchColumn.id) || [];
+      const foundExact = uniques.find(u => String(u) === q);
+      if (foundExact) nf[bktSearchColumn.id] = { type: 'exact', value: q }; else nf[bktSearchColumn.id] = q;
+    } else {
+      delete nf[bktSearchColumn.id];
+    }
     setBktColumnFilters(nf); setShowBktSearchModal(false);
   };
   const clearBktFilter = (colId) => { const nf = { ...bktColumnFilters }; delete nf[colId]; setBktColumnFilters(nf); };
 
-  const openDshdSearch = (colId, colLabel) => { setDshdSearchColumn({ id: colId, label: colLabel }); setDshdSearchQuery(dshdColumnFilters[colId] || ''); setShowDshdSearchModal(true); };
+  const openDshdSearch = (colId, colLabel) => {
+    setDshdSearchColumn({ id: colId, label: colLabel });
+    const existing = dshdColumnFilters[colId];
+    setDshdSearchQuery(existing && typeof existing === 'object' && existing.type === 'exact' ? existing.value : (existing || ''));
+    setShowDshdSearchModal(true);
+  };
   const closeDshdSearch = () => { setShowDshdSearchModal(false); setDshdSearchColumn(null); setDshdSearchQuery(''); resetDshdSearchSource(); };
   const applyDshdSearch = () => {
     const nf = { ...dshdColumnFilters };
-    if (dshdSearchQuery.trim()) nf[dshdSearchColumn.id] = dshdSearchQuery.trim(); else delete nf[dshdSearchColumn.id];
+    const q = dshdSearchQuery.trim();
+    if (q) {
+      // derive unique values depending on source
+      let uniques = [];
+      if (dshdSearchSource === 'orderSelect' && Array.isArray(dshdSearchSourceRows)) {
+        const vals = new Set();
+        dshdSearchSourceRows.forEach(order => {
+          let v = '';
+          switch (dshdSearchColumn.id) {
+            case 'maPhieu': v = order.orderNumber || order.orderNo || ''; break;
+            case 'tenKhachHang': v = order.customerName || order.customer || ''; break;
+            case 'tongTien': v = String(order.totalAmount || order.total || ''); break;
+            case 'tongTienSauGiam': v = String(order.totalAfterDiscount || order.totalAmount || ''); break;
+            case 'nvSale': v = order.salesStaff || order.createdBy || ''; break;
+            case 'loaiHang': v = order.productType || order.ProductType || ''; break;
+            case 'orderDate': v = order.orderDate ? dayjs(order.orderDate).format('DD/MM/YYYY') : ''; break;
+            case 'customerName': v = order.customerName || ''; break;
+            case 'totalAfterDiscount': v = String(order.totalAfterDiscount || order.totalAmount || ''); break;
+            case 'taxRates': v = order.taxRates || order.TaxRates || ''; break;
+            case 'totalKg': v = String(order.totalKg || order.kg || ''); break;
+            case 'totalM3': v = String(order.totalM3 || order.m3 || ''); break;
+            default: v = String(order[dshdSearchColumn.id] || '');
+          }
+          v = (v || '').toString().trim();
+          if (v && v !== '0') vals.add(v);
+        });
+        uniques = Array.from(vals);
+      } else {
+        uniques = getDshdUniqueValues(dshdSearchColumn.id) || [];
+      }
+      const foundExact = uniques.find(u => String(u) === q);
+      if (foundExact) nf[dshdSearchColumn.id] = { type: 'exact', value: q }; else nf[dshdSearchColumn.id] = q;
+    } else {
+      delete nf[dshdSearchColumn.id];
+    }
     setDshdColumnFilters(nf); setShowDshdSearchModal(false); resetDshdSearchSource();
   };
   // Open DSHD search modal but use orders list as source (when opened from order-select modal)
@@ -434,6 +563,9 @@ const InBangKeTong = () => {
     setShowDshdSearchModal(true);
   };
   const resetDshdSearchSource = () => { setDshdSearchSource('selectedImport'); setDshdSearchSourceRows([]); };
+
+  // Save modal column settings to localStorage when changed
+  useEffect(() => { try { localStorage.setItem('order_select_cols_v1', JSON.stringify(modalDshdColumns)); } catch {} }, [modalDshdColumns]);
   const clearDshdFilter = (colId) => { const nf = { ...dshdColumnFilters }; delete nf[colId]; setDshdColumnFilters(nf); };
 
   // Filter items by column filters
@@ -442,7 +574,10 @@ const InBangKeTong = () => {
     return items.filter(item => {
       return Object.entries(bktColumnFilters).every(([colId, query]) => {
         const val = String(renderBktCell(item, colId, 0) || '').toLowerCase();
-        return val.includes(query.toLowerCase());
+        if (query && typeof query === 'object' && query.type === 'exact') {
+          return val === String(query.value).toLowerCase();
+        }
+        return val.includes(String(query).toLowerCase());
       });
     });
   };
@@ -451,7 +586,10 @@ const InBangKeTong = () => {
     return items.filter(item => {
       return Object.entries(dshdColumnFilters).every(([colId, query]) => {
         const val = String(renderDshdCell(item, colId, 0) || '').toLowerCase();
-        return val.includes(query.toLowerCase());
+        if (query && typeof query === 'object' && query.type === 'exact') {
+          return val === String(query.value).toLowerCase();
+        }
+        return val.includes(String(query).toLowerCase());
       });
     });
   };
@@ -461,7 +599,8 @@ const InBangKeTong = () => {
     if (!orders || Object.keys(dshdColumnFilters).length === 0) return orders;
     return orders.filter(order => {
       return Object.entries(dshdColumnFilters).every(([colId, query]) => {
-        const q = String(query || '').toLowerCase();
+        const qObj = query;
+        const q = String((typeof query === 'object' && query.type === 'exact') ? query.value : (query || '')).toLowerCase();
         let val = '';
         switch (colId) {
           case 'maPhieu': val = order.orderNumber || order.orderNo || '' ; break;
@@ -478,6 +617,19 @@ const InBangKeTong = () => {
           case 'totalM3': val = String(order.totalM3 || order.m3 || ''); break;
           default:
             val = String(order[colId] || '').toLowerCase();
+        }
+        if (qObj && typeof qObj === 'object' && qObj.type === 'exact') {
+          return String(val).toLowerCase() === q;
+        }
+        // If the user typed a numeric-only query (e.g., "42"), match against numeric suffixes like "...-000042"
+        if (colId === 'maPhieu' && /^\d+$/.test(q)) {
+          try {
+            const digits = (String(val).match(/\d+/g) || []).pop() || '';
+            const digitsNoZero = digits.replace(/^0+/, '') || digits;
+            return String(val).toLowerCase().includes(q) || String(digitsNoZero).includes(q);
+          } catch (e) {
+            return String(val).toLowerCase().includes(q);
+          }
         }
         return String(val).toLowerCase().includes(q);
       });
@@ -686,6 +838,68 @@ const InBangKeTong = () => {
     );
   };
 
+  // Column settings modal specifically for the Order Select modal
+  const renderModalColumnSettingsModal = () => {
+    const show = showModalDshdSettings;
+    const setShow = setShowModalDshdSettings;
+    const cols = modalDshdColumns;
+    const defaults = defaultOrderSelectCols;
+    const h = modalH;
+    const settingsDrag = modalDshdSettingsDrag;
+    const tabLabel = 'DS hóa đơn (Chọn đơn hàng)';
+
+    if (!show) return null;
+    return (
+      <div className="search-modal-overlay" onClick={() => setShow(false)}>
+        <div className="column-settings-modal" onClick={(e) => e.stopPropagation()}>
+          <div className="search-modal-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f8f9fa', borderBottom: '1px solid #e9ecef' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+              <button onClick={() => h.resetCols(defaults)} title="Reset về mặc định" style={{ padding: '6px 10px', fontSize: 13, borderRadius: 6, border: '1px solid #e6eefc', background: '#f5f8ff', color: '#2b6cb0', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 8 }}>
+                <span style={{ fontSize: 16 }}>🔄</span>
+                <span>Reset về mặc định</span>
+              </button>
+              <h3 style={{ margin: 0, fontSize: 15 }}>⚙️ Cài đặt cột - {tabLabel}</h3>
+            </div>
+            <button className="search-modal-close" onClick={() => setShow(false)} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#666' }}>×</button>
+          </div>
+          <div className="column-settings-body" style={{ padding: '12px 16px' }}>
+            <div style={{ display: 'flex', justifyContent: 'flex-end', alignItems: 'center', marginBottom: 10 }}>
+              <span style={{ fontSize: 12, color: '#888' }}>Hiển thị {cols.filter(c => c.visible).length}/{cols.length} cột</span>
+            </div>
+            <div style={{ fontSize: 11, color: '#999', marginBottom: 8 }}>💡 Kéo thả để sắp xếp, tick/untick để ẩn/hiện cột</div>
+            <div style={{ maxHeight: 300, overflowY: 'auto' }}>
+              {cols.map((column, index) => (
+                <div
+                  key={column.id}
+                  className={`column-settings-item ${settingsDrag === index ? 'dragging' : ''}`}
+                  draggable
+                  onDragStart={(e) => h.settingsDragStart(e, index)}
+                  onDragOver={h.settingsDragOver}
+                  onDrop={(e) => h.settingsDrop(e, index, settingsDrag)}
+                  onDragEnd={h.settingsDragEnd}
+                  style={{ display: 'flex', alignItems: 'center', gap: 8, padding: '6px 4px', borderBottom: '1px solid #f0f0f0', cursor: 'grab', background: settingsDrag === index ? '#e3f2fd' : 'transparent' }}
+                >
+                  <span style={{ cursor: 'grab', color: '#aaa', fontSize: 14, userSelect: 'none' }}>⋮⋮</span>
+                  <label style={{ display: 'flex', alignItems: 'center', gap: 6, flex: 1, cursor: 'pointer' }}>
+                    <input type="checkbox" checked={column.visible} onChange={() => h.toggleVisibility(column.id)} style={{ accentColor: '#667eea' }} />
+                    <span style={{ fontSize: 13 }}>{column.label}</span>
+                  </label>
+                  <span style={{ fontSize: 11, color: '#aaa' }}>{column.width}px</span>
+                  {!column.visible && <span style={{ fontSize: 10, color: '#f5222d', background: '#fff1f0', padding: '1px 6px', borderRadius: 8 }}>Ẩn</span>}
+                </div>
+              ))}
+            </div>
+            <div style={{ textAlign: 'right', marginTop: 10 }}>
+              <button className="apply-settings-btn" onClick={() => setShow(false)} style={{ padding: '6px 18px', background: '#667eea', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 13 }}>
+                ✓ Áp dụng
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
   // Helper to render column search modal
   const renderColumnSearchModal = (tabType) => {
     const isBkt = tabType === 'bkt';
@@ -725,6 +939,25 @@ const InBangKeTong = () => {
         if (v && v !== '0') vals.add(v);
       });
       uniqueValues = Array.from(vals).sort((a, b) => a.localeCompare(b, 'vi'));
+      // filter suggestions by query (support numeric-only queries matching numeric suffixes)
+      const q = (query || '').toString().trim();
+      if (q) {
+        if (/^\d+$/.test(q)) {
+          uniqueValues = uniqueValues.filter(v => {
+            try {
+              const digits = (String(v).match(/\d+/g) || []).pop() || '';
+              const digitsNoZero = digits.replace(/^0+/, '') || digits;
+              return String(v).toLowerCase().includes(q.toLowerCase()) || String(digitsNoZero).includes(q);
+            } catch (e) {
+              return String(v).toLowerCase().includes(q.toLowerCase());
+            }
+          }).slice(0, 50);
+        } else {
+          uniqueValues = uniqueValues.filter(v => String(v).toLowerCase().includes(q.toLowerCase())).slice(0, 50);
+        }
+      } else {
+        uniqueValues = uniqueValues.slice(0, 50);
+      }
     } else {
       uniqueValues = getUniqueValues(searchCol.id).filter(v => {
         if (!query.trim()) return true;
@@ -2291,6 +2524,7 @@ const InBangKeTong = () => {
           loaiHang: i.loaiHang,
         })),
         dsHoaDonItems: (b.hoaDons || []).map(h => ({
+          orderId: h.orderId || null,
           maPhieu: h.maPhieu,
           tenKhachHang: h.tenKhachHang,
           tongTien: h.tongTien,
@@ -2387,6 +2621,7 @@ const InBangKeTong = () => {
             loaiHang: i.loaiHang,
           })),
           dsHoaDonItems: (data.hoaDons || []).map(h => ({
+            orderId: h.orderId || null,
             maPhieu: h.maPhieu,
             tenKhachHang: h.tenKhachHang,
             tongTien: h.tongTien,
@@ -2460,6 +2695,7 @@ const InBangKeTong = () => {
 
       // Build hoa dons from "DS hóa đơn" tab (dsHoaDons state or selectedImport)
       const hoaDonItems = (selectedImport?.dsHoaDonItems || []).map(h => ({
+        orderId: h.orderId || null,
         maPhieu: h.maPhieu || '',
         tenKhachHang: h.tenKhachHang || '',
         tongTien: parseFloat(h.tongTien) || 0,
@@ -2676,186 +2912,215 @@ const InBangKeTong = () => {
   }, [leftPageSize]);
 
   const handleExport = async () => {
+    if (!selectedImport) {
+      alert('Vui lòng chọn một bảng kê tổng để xuất');
+      return;
+    }
     try {
-      const headerRowsData = (memoizedHeaderTotals.validRows || []).map(r => ({ ...r.values }));
-      const itemsData = (items && items.length > 0) ? items.map(it => ({
-        barcode: it.barcode || it.Barcode || '',
-        productCode: it.productCode || it.code || it.productCode || '',
-        productName: it.productName || it.name || it.productNameVat || '',
-        unit: it.unit || it.defaultUnit || it.unitName || it.unit1Name || '',
-        quantity: it.quantity || it.qty || '',
-        unitPrice: it.unitPrice || it.importPrice || it.price || 0,
-        transportCost: it.transportCost || 0,
-        noteDate: it.noteDate || it.note || '',
-        total: it.total || ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)),
-        totalTransport: it.totalTransport || 0,
-        weight: it.weight || 0,
-        volume: it.volume || 0,
-        warehouse: it.warehouse || (it.warehouseName || ''),
-        description: it.description || it.note || '',
-        conversion: it.conversion || ''
-      })) : [];
+      const workbook = new ExcelJS.Workbook();
 
-      const headerMapped = headerRowsData.map(h => ({
-        barcode: h.barcode || '',
-        productCode: h.productCode || h.productCode || '',
-        productName: h.productName || h.productName || '',
-        unit: h.unit || h.defaultUnit || '',
-        quantity: h.quantity || h.qty || '',
-        unitPrice: h.unitPrice || 0,
-        transportCost: h.transportCost || 0,
-        noteDate: h.noteDate || '',
-        total: h.total || 0,
-        totalTransport: h.totalTransport || 0,
-        weight: h.weight || 0,
-        volume: h.volume || 0,
-        warehouse: h.warehouse || '',
-        description: h.description || '',
-        conversion: h.conversion || ''
-      }));
+      // Sheet 1: xuất hàng tổng hợp (from bangKeTongItems)
+      const sheet1 = workbook.addWorksheet('xuất hàng tổng hợp');
+      sheet1.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true };
 
-      const combined = itemsData.length > 0 ? itemsData : headerMapped;
+      sheet1.columns = [
+        { header: 'Mã phiếu', key: 'maPhieu', width: 20 },
+        { header: 'Mã vạch', key: 'maVach', width: 18 },
+        { header: 'Mã hàng', key: 'maHang', width: 18 },
+        { header: 'Tên hàng', key: 'tenHang', width: 52 },
+        { header: 'Đơn vị tính 1', key: 'donViTinh1', width: 16 },
+        { header: 'Số lượng ĐVT 1', key: 'soLuongDVT1', width: 18 },
+        { header: 'Đơn vị gốc', key: 'donViGoc', width: 14 },
+        { header: 'Số lượng ĐVT gốc', key: 'soLuongDVTGoc', width: 20 },
+        { header: 'Mô tả', key: 'moTa', width: 36 },
+        { header: 'SL bán theo ĐVT Gốc', key: 'slBanTheoDVTGoc', width: 22 },
+        { header: 'Quy đổi', key: 'quyDoi', width: 12 },
+        { header: 'Loại hàng', key: 'loaiHang', width: 22 }
+      ];
 
-      const rowsHtml = combined.map((v, idx) => {
-        let noteDate = v.noteDate || '';
-        try { if (noteDate) noteDate = dayjs(noteDate).format('DD/MM/YYYY'); } catch (e) {}
-        // Use raw numeric values for Excel and let mso-number-format style them.
-        const unitPriceRaw = v.unitPrice ? Number(v.unitPrice) : 0;
-        const transportRaw = v.transportCost ? Number(v.transportCost) : 0;
-        const amountRaw = v.total ? Number(v.total) : ((Number(v.quantity)||0) * (Number(v.unitPrice)||0));
-        const totalTransportRaw = v.totalTransport ? Number(v.totalTransport) : 0;
-        const weightRaw = v.weight ? Number(v.weight) : 0;
-        const volumeRaw = v.volume ? Number(v.volume) : 0;
-        const unitPrice = unitPriceRaw;
-        const transport = transportRaw;
-        const amount = amountRaw;
-        const totalTransport = totalTransportRaw;
-        const weight = weightRaw;
-        const volume = volumeRaw;
-        const warehouseName = (() => {
-          try {
-            if (warehouses && warehouses.length > 0 && v.warehouse) {
-              const found = warehouses.find(w => String(w.id) === String(v.warehouse) || String(w.id) === String(v.warehouse));
-              if (found) return found.name || v.warehouse;
+      // Sheet 2: thông tin (from dsHoaDonItems)
+      const sheet2 = workbook.addWorksheet('thông tin');
+      sheet2.pageSetup = { paperSize: 9, orientation: 'portrait', fitToPage: true };
+      sheet2.columns = [
+        { header: 'Số TT', key: 'stt', width: 8 },
+        { header: 'Mã phiếu', key: 'maPhieu', width: 22 },
+        { header: 'Tên khách hàng', key: 'tenKhachHang', width: 40 },
+        { header: 'Tổng tiền', key: 'tongTien', width: 18 },
+        { header: 'Tổng tiền sau giảm', key: 'tongTienSauGiam', width: 22 },
+        { header: 'NV Sale', key: 'nvSale', width: 18 },
+        { header: 'Loại hàng', key: 'loaiHang', width: 22 }
+      ];
+
+      // Fetch company info
+      let compName = 'CÔNG TY';
+      let compAddr = '';
+      let compPhone = '';
+      try {
+        const compData = await api.get(API_ENDPOINTS.companyInfos);
+        if (compData && compData.length > 0) {
+          compName = compData[0].companyName || compData[0].name || 'CÔNG TY';
+          compAddr = compData[0].address || '';
+          compPhone = compData[0].phone || '';
+        }
+      } catch (e) {}
+
+      const printedAt = formData.createdDate || selectedImport.createdDate || dayjs().format('DD/MM/YYYY');
+      const importNumber = formData.importNumber || selectedImport.importNumber || '';
+
+      // Insert top info rows for sheet1 (xuất hàng tổng hợp)
+      try {
+        sheet1.insertRow(1, [compName]);
+        sheet1.mergeCells(1, 1, 1, sheet1.columns.length);
+        sheet1.getRow(1).font = { bold: true, size: 14 };
+        sheet1.getRow(1).getCell(1).alignment = { horizontal: 'left' };
+
+        sheet1.insertRow(2, [`Địa chỉ: ${compAddr}    Điện thoại: ${compPhone}`]);
+        sheet1.mergeCells(2, 1, 2, sheet1.columns.length);
+        sheet1.getRow(2).font = { italic: true, size: 10 };
+        sheet1.getRow(2).getCell(1).alignment = { horizontal: 'left' };
+
+        sheet1.insertRow(3, ['PHIẾU XUẤT HÀNG TỔNG HỢP']);
+        sheet1.mergeCells(3, 1, 3, sheet1.columns.length);
+        sheet1.getRow(3).font = { bold: true, size: 12, color: { argb: 'FF0066CC' } };
+        sheet1.getRow(3).getCell(1).alignment = { horizontal: 'center' };
+
+        sheet1.insertRow(4, [`Số bảng kê: ${importNumber}`]);
+        sheet1.mergeCells(4, 1, 4, sheet1.columns.length);
+        sheet1.getRow(4).font = { size: 10 };
+        sheet1.getRow(4).getCell(1).alignment = { horizontal: 'center' };
+
+        sheet1.insertRow(5, [`Ngày lập: ${printedAt}`]);
+        sheet1.mergeCells(5, 1, 5, sheet1.columns.length);
+        sheet1.getRow(5).font = { size: 10 };
+        sheet1.getRow(5).getCell(1).alignment = { horizontal: 'center' };
+      } catch (e) {}
+
+      // Insert top info rows for sheet2 (thông tin)
+      try {
+        sheet2.insertRow(1, [compName]);
+        sheet2.mergeCells(1, 1, 1, sheet2.columns.length);
+        sheet2.getRow(1).font = { bold: true, size: 14 };
+        sheet2.getCell('A1').alignment = { horizontal: 'left' };
+
+        sheet2.insertRow(2, [`Địa chỉ: ${compAddr}    Điện thoại: ${compPhone}`]);
+        sheet2.mergeCells(2, 1, 2, sheet2.columns.length);
+        sheet2.getRow(2).font = { italic: true, size: 10 };
+        sheet2.getCell('A2').alignment = { horizontal: 'left' };
+
+        sheet2.insertRow(3, ['PHIẾU XUẤT HÀNG TỔNG HỢP - THÔNG TIN']);
+        sheet2.mergeCells(3, 1, 3, sheet2.columns.length);
+        sheet2.getRow(3).font = { bold: true, size: 12, color: { argb: 'FF0066CC' } };
+        sheet2.getRow(3).getCell(1).alignment = { horizontal: 'center' };
+
+        sheet2.insertRow(4, [`Số bảng kê: ${importNumber}`]);
+        sheet2.mergeCells(4, 1, 4, sheet2.columns.length);
+        sheet2.getRow(4).font = { size: 10 };
+        sheet2.getRow(4).getCell(1).alignment = { horizontal: 'center' };
+
+        sheet2.insertRow(5, [`Ngày lập: ${printedAt}`]);
+        sheet2.mergeCells(5, 1, 5, sheet2.columns.length);
+        sheet2.getRow(5).font = { size: 10 };
+        sheet2.getRow(5).getCell(1).alignment = { horizontal: 'center' };
+      } catch (e) {}
+
+      // Helper to format quantity: integer without decimal, decimal with decimal point
+      const formatQtyExcel = (v) => {
+        const n = Number(v) || 0;
+        if (Math.abs(n - Math.round(n)) < 1e-9) return Math.round(n);
+        return Math.round(n * 1000) / 1000;
+      };
+
+      // Build rows for sheet1 from bangKeTongItems
+      const bktItems = selectedImport.bangKeTongItems || [];
+      bktItems.forEach((item) => {
+        sheet1.addRow({
+          maPhieu: item.maPhieu || '',
+          maVach: item.maVach || '',
+          maHang: item.maHang || '',
+          tenHang: item.tenHang || '',
+          donViTinh1: item.donViTinh1 || '',
+          soLuongDVT1: formatQtyExcel(item.soLuongDVT1),
+          donViGoc: item.donViGoc || '',
+          soLuongDVTGoc: formatQtyExcel(item.soLuongDVTGoc),
+          moTa: item.moTa || '',
+          slBanTheoDVTGoc: formatQtyExcel(item.slBanTheoDVTGoc),
+          quyDoi: formatQtyExcel(item.quyDoi),
+          loaiHang: item.loaiHang || ''
+        });
+      });
+
+      // Build rows for sheet2 from dsHoaDonItems
+      const hoaDonItems = selectedImport.dsHoaDonItems || [];
+      hoaDonItems.forEach((item, idx) => {
+        sheet2.addRow({
+          stt: idx + 1,
+          maPhieu: item.maPhieu || '',
+          tenKhachHang: item.tenKhachHang || '',
+          tongTien: item.tongTien || 0,
+          tongTienSauGiam: item.tongTienSauGiam || 0,
+          nvSale: item.nvSale || '',
+          loaiHang: item.loaiHang || ''
+        });
+      });
+
+      // Style headers for both sheets
+      const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
+      const headerFontColor = { argb: 'FFFFFFFF' };
+      const borderThin = { style: 'thin', color: { argb: 'FFBFBFBF' } };
+      const allBorder = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
+
+      [sheet1, sheet2].forEach(s => {
+        const headerRowIndex = 6;
+        const hdr = s.getRow(headerRowIndex);
+        hdr.height = 20;
+        hdr.font = { bold: true, color: headerFontColor };
+        hdr.alignment = { vertical: 'middle', horizontal: 'center' };
+        hdr.eachCell((cell) => {
+          cell.fill = headerFill;
+          cell.border = allBorder;
+        });
+
+        s.views = [{ state: 'frozen', ySplit: headerRowIndex }];
+
+        s.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+          if (rowNumber <= headerRowIndex) return;
+          row.eachCell((cell, colNumber) => {
+            cell.border = allBorder;
+            const key = s.getColumn(colNumber).key;
+            if (['soLuongDVT1', 'soLuongDVTGoc', 'slBanTheoDVTGoc', 'tongTien', 'tongTienSauGiam'].includes(key)) {
+              cell.alignment = { horizontal: 'right', vertical: 'top' };
+            } else if (key === 'tenHang' || key === 'moTa' || key === 'tenKhachHang') {
+              cell.alignment = { wrapText: true, vertical: 'top', horizontal: 'left' };
+            } else {
+              cell.alignment = { vertical: 'top', horizontal: 'left' };
             }
-          } catch(e) {}
-          return v.warehouse || '';
-        })();
-        return `<tr>
-          <td style="border:1px solid #ccc;padding:6px 8px;text-align:center">${idx+1}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px; mso-number-format:'\\@';">${v.barcode||''}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px; mso-number-format:'\\@';">${v.productCode||''}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px">${v.productName||''}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px">${v.unit||''}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0'">${v.quantity || 0}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0'">${unitPrice}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0'">${transport}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;text-align:center">${noteDate}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0'">${amount}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0'">${totalTransport}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0.00'">${weight}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0.0000'">${volume}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px">${warehouseName}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px">${v.description||''}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px">${v.conversion||''}</td>
-        </tr>`;
-      }).join('');
+          });
+        });
 
-      // Fetch company info dynamically so exported file always reflects company-info page
-      let companyNameDynamic = '';
-      let companyAddressDynamic = '';
-      let companyPhoneDynamic = '';
-      // Company info fetch disabled for this page; use defaults instead.
+        try {
+          const lastCol = s.columns.length;
+          s.autoFilter = { from: { row: headerRowIndex, column: 1 }, to: { row: headerRowIndex, column: lastCol } };
+        } catch (e) {}
+      });
 
-      const companyName = companyNameDynamic || 'NPP THỊNH PHÚ QUỐC';
-      const printedAt = formData.createdDate || new Date().toISOString().split('T')[0];
-      const importNumber = formData.importNumber || (selectedImport && selectedImport.importNumber) || '';
-      const supplierName = (selectedImport && (selectedImport.supplierName || selectedImport.supplier)) || '';
-      const employeeName = formData.employee || (selectedImport && (selectedImport.employee || '')) || '';
-      const importTypeName = formData.importType || (selectedImport && (selectedImport.importType || '')) || '';
+      // Numeric formatting
+      try { sheet1.getColumn('soLuongDVT1').numFmt = '#,##0'; } catch {}
+      try { sheet1.getColumn('soLuongDVTGoc').numFmt = 'General'; } catch {}
+      try { sheet1.getColumn('slBanTheoDVTGoc').numFmt = 'General'; } catch {}
+      try { sheet2.getColumn('tongTien').numFmt = '#,##0'; } catch {}
+      try { sheet2.getColumn('tongTienSauGiam').numFmt = '#,##0'; } catch {}
 
-      const html = `
-        <!doctype html>
-        <html>
-        <head>
-          <meta charset="utf-8" />
-          <title>Phiếu nhập</title>
-          <style>
-            /* A4-like print/export styles (default font-size 10px) */
-            html, body { font-family: 'Times New Roman', Times, serif; font-size:10pt; }
-            table { border-collapse:collapse; font-family: 'Times New Roman', Times, serif; font-size:10pt; }
-            th, td { border:1px solid #000; padding:6px 8px; font-size:10pt; }
-            th { background:#f7f7f7; }
-            .company { font-weight:800; font-size:14pt; font-family: 'Times New Roman', Times, serif; }
-            .small { font-size:10pt; }
-            .header { display:flex; justify-content:space-between; align-items:flex-start; }
-            /* signature area removed per request */
-          </style>
-        </head>
-        <body>
-          <table style="width:100%; border:none; margin-bottom:6px;">
-            <tr>
-              <td style="border:none; vertical-align:top; padding:0; width:65%;">
-                <div class="company" style="margin:0; padding:0;">${companyName}</div>
-                <div class="small" style="margin:0; padding:0;">Địa chỉ: ${companyAddressDynamic || ''}</div>
-                <div class="small" style="margin:0; padding:0;">Điện thoại: ${companyPhoneDynamic || ''}</div>
-                <div class="small" style="margin-top:8px; padding:0;"><strong>Ghi chú bảng kê:</strong> ${formData.note || (selectedImport && (selectedImport.note || '')) || ''}</div>
-              </td>
-              <td style="border:none; vertical-align:top; padding:0; width:35%; text-align:right;">
-                  <div style="display:inline-block; text-align:right; white-space:nowrap;">
-                  <div class="small" style="margin:0; padding:0;">Số bảng kê tổng: <strong>${importNumber}</strong></div>
-                  <div class="small" style="margin:0; padding:0;">Ngày lập: <strong>${printedAt}</strong></div>
-                  <div class="small" style="margin:0; padding:0;">Nhân viên: <strong>${employeeName}</strong></div>
-                  <div class="small" style="margin:0; padding:0;">Loại nhập: <strong>${importTypeName}</strong></div>
-                </div>
-              </td>
-            </tr>
-          </table>
+      const buffer = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = `Phieu_Xuat_Hang_Tong_Hop_${importNumber || dayjs().format('YYYYMMDD_HHmmss')}.xlsx`;
+      link.click();
+      window.URL.revokeObjectURL(url);
 
-          <h3 style="text-align:center;margin:12px 0">PHIẾU NHẬP HÀNG</h3>
-
-          <table>
-            <thead>
-              <tr>
-                <th>STT</th>
-                <th>Mã vạch</th>
-                <th>Mã hàng</th>
-                <th>Hàng hóa</th>
-                <th>Đơn vị tính</th>
-                <th>Số lượng</th>
-                <th>Đơn giá</th>
-                <th>Tiền vận chuyển</th>
-                <th>Ghi chú date PN</th>
-                <th>Thành tiền</th>
-                <th>TT vận chuyển</th>
-                <th>Số kg</th>
-                <th>Số khối</th>
-                <th>Kho hàng</th>
-                <th>Mô tả</th>
-                <th>Quy đổi</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${rowsHtml}
-            </tbody>
-          </table>
-
-          <!-- signature area removed -->
-        </body>
-        </html>
-      `;
-
-      const blob = new Blob([html], { type: 'application/vnd.ms-excel' });
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      const fileName = `Phieu_Nhap_${(formData.importNumber || (selectedImport && selectedImport.importNumber) || dayjs().format('YYYYMMDD_HHmmss'))}.xls`;
-      a.download = fileName;
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-      URL.revokeObjectURL(url);
     } catch (e) {
+      console.error('Error exporting Excel:', e);
       alert('Xuất Excel thất bại');
     }
   };
@@ -2865,210 +3130,140 @@ const InBangKeTong = () => {
   };
 
   const handlePrint = async () => {
+    if (!selectedImport) {
+      alert('Vui lòng chọn một bảng kê tổng để in');
+      return;
+    }
+
     try {
-      // Load company info dynamically (only need first record)
-      let companyNameDynamic = '';
-      let companyAddressDynamic = '';
-      let companyPhoneDynamic = '';
-      // Company info fetch disabled for this page; use defaults instead.
-      // Build combined row list (items if present, otherwise header rows)
-      const headerRowsData = (memoizedHeaderTotals.validRows || []).map(r => ({ ...r.values }));
-      const itemsData = (items && items.length > 0) ? items.map(it => ({
-        barcode: it.barcode || it.Barcode || '',
-        productCode: it.productCode || it.code || it.productCode || '',
-        productName: it.productName || it.name || it.productNameVat || '',
-        unit: it.unit || it.defaultUnit || it.unitName || it.unit1Name || '',
-        quantity: it.quantity || it.qty || '',
-        unitPrice: it.unitPrice || it.importPrice || it.price || 0,
-        transportCost: it.transportCost || 0,
-        noteDate: it.noteDate || it.note || '',
-        total: it.total || ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)),
-        totalTransport: it.totalTransport || 0,
-        weight: it.weight || 0,
-        volume: it.volume || 0,
-        warehouse: it.warehouse || (it.warehouseName || ''),
-        description: it.description || it.note || '',
-        conversion: it.conversion || ''
-      })) : [];
+      // Fetch company info
+      let compName = 'CÔNG TY';
+      let compAddr = '';
+      let compPhone = '';
+      try {
+        const compData = await api.get(API_ENDPOINTS.companyInfos);
+        if (compData && compData.length > 0) {
+          compName = compData[0].companyName || compData[0].name || 'CÔNG TY';
+          compAddr = compData[0].address || '';
+          compPhone = compData[0].phone || '';
+        }
+      } catch (e) {}
 
-      // Ensure headerRowsData entries use consistent keys
-      const headerMapped = headerRowsData.map(h => ({
-        barcode: h.barcode || '',
-        productCode: h.productCode || h.productCode || '',
-        productName: h.productName || h.productName || '',
-        unit: h.unit || h.defaultUnit || '',
-        quantity: h.quantity || h.qty || '',
-        unitPrice: h.unitPrice || 0,
-        transportCost: h.transportCost || 0,
-        noteDate: h.noteDate || '',
-        total: h.total || 0,
-        totalTransport: h.totalTransport || 0,
-        weight: h.weight || 0,
-        volume: h.volume || 0,
-        warehouse: h.warehouse || '',
-        description: h.description || '',
-        conversion: h.conversion || ''
-      }));
+      const printedAt = formData.createdDate || selectedImport.createdDate || dayjs().format('DD/MM/YYYY');
+      const importNumber = formData.importNumber || selectedImport.importNumber || '';
 
-      const combined = itemsData.length > 0 ? itemsData : headerMapped;
+      // Get bangKeTongItems for product list (already aggregated)
+      const bktItems = selectedImport.bangKeTongItems || [];
 
-      const totalAmount = combined.reduce((s, r) => s + (Number(r.total) || 0), 0) || memoizedHeaderTotals.totalAmount || 0;
-      const totalWeight = combined.reduce((s, r) => s + (Number(r.weight) || 0), 0) || memoizedHeaderTotals.totalWeight || 0;
-      const totalVolume = combined.reduce((s, r) => s + (Number(r.volume) || 0), 0) || memoizedHeaderTotals.totalVolume || 0;
+      // Format quantities: show integer without decimals, otherwise show up to 3 decimals trimmed
+      const formatQty = (v) => {
+        const n = Number(v) || 0;
+        if (Math.abs(n - Math.round(n)) < 1e-9) return String(Math.round(n));
+        let s = n.toFixed(3);
+        s = s.replace(/\.?(0+)$/,'');
+        s = s.replace(/\.$/, '');
+        return s;
+      };
 
-      const htmlRows = combined.map((v, idx) => {
-        const qty = v.quantity || '';
-        const unitPrice = v.unitPrice ? formatCurrency(Number(v.unitPrice)) : '';
-        const transport = v.transportCost ? formatCurrency(Number(v.transportCost)) : '';
-        let noteDate = v.noteDate || '';
-        try {
-          if (noteDate) noteDate = dayjs(noteDate).format('DD/MM/YYYY');
-        } catch (e) { }
-        const amount = v.total ? formatCurrency(Number(v.total)) : '';
-        const totalTransport = v.totalTransport ? formatCurrency(Number(v.totalTransport)) : '';
-        const weight = v.weight ? formatWeight(Number(v.weight)) : '';
-        const volume = v.volume ? formatVolume(Number(v.volume)) : '';
-        // Resolve warehouse name if warehouses list available
-        let warehouseName = v.warehouse || '';
-        try {
-          if (warehouses && warehouses.length > 0 && warehouseName) {
-            const found = warehouses.find(w => String(w.id) === String(warehouseName) || String(w.id) === String(v.warehouse));
-            if (found) warehouseName = found.name || warehouseName;
-          }
-        } catch (e) { }
-
-        return `
-          <tr>
-            <td style="text-align:center;padding:4px;border:1px solid #000">${idx + 1}</td>
-            <td style="text-align:left;padding:4px;border:1px solid #000">${v.barcode || ''}</td>
-            <td style="text-align:left;padding:4px;border:1px solid #000">${v.productCode || ''}</td>
-            <td style="text-align:left;padding:4px;border:1px solid #000">${v.productName || ''}</td>
-            <td style="text-align:center;padding:4px;border:1px solid #000">${v.unit || ''}</td>
-            <td style="text-align:center;padding:4px;border:1px solid #000">${qty}</td>
-            <td style="text-align:right;padding:4px;border:1px solid #000">${unitPrice}</td>
-            <td style="text-align:right;padding:4px;border:1px solid #000">${transport}</td>
-            <td style="text-align:center;padding:4px;border:1px solid #000">${noteDate}</td>
-            <td style="text-align:right;padding:4px;border:1px solid #000">${amount}</td>
-            <td style="text-align:right;padding:4px;border:1px solid #000">${totalTransport}</td>
-            <td style="text-align:right;padding:4px;border:1px solid #000">${weight}</td>
-            <td style="text-align:right;padding:4px;border:1px solid #000">${volume}</td>
-            <td style="text-align:left;padding:4px;border:1px solid #000">${warehouseName || ''}</td>
-            <td style="text-align:left;padding:4px;border:1px solid #000">${v.description || ''}</td>
-            <td style="text-align:left;padding:4px;border:1px solid #000">${v.conversion || ''}</td>
-          </tr>
-        `;
-      }).join('');
-
-      const companyName = companyNameDynamic || 'NPP THỊNH PHÚ QUỐC';
-      const printedAt = formData.createdDate || new Date().toISOString().split('T')[0];
-      const importNumber = formData.importNumber || '';
-      const supplierName = (selectedImport && (selectedImport.supplierName || selectedImport.supplier)) || '';
-      const employeeName = formData.employee || '';
-      const importTypeName = formData.importType || '';
-
-      const html = `
-        <!doctype html>
+      // Build print HTML
+      let printContent = `
+        <!DOCTYPE html>
         <html>
         <head>
-          <meta charset="utf-8" />
-          <title>In A4 - Ngang</title>
+          <meta charset="utf-8">
+          <title>Phiếu Xuất Hàng Tổng Hợp</title>
           <style>
-            @page { size: A4 landscape; margin: 12mm; }
-            body { font-family: 'Times New Roman', Times, serif; font-size: 11px; color: #000; }
-            .header { display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:8px }
-            .company { font-weight:800; font-size:16px; }
-            .title { text-align:center; font-weight:800; font-size:14px; margin:6px 0; }
-            table { width:100%; border-collapse:collapse; font-size:10.5px }
-            th, td { border:1px solid #000; padding:4px; vertical-align:top }
-            thead th { background:#f5f5f5; }
-            .small { font-size:10pt; color:#333 }
-            .footer-sign { display:flex; justify-content:space-around; margin-top:28px }
+            @page { size: A4 portrait; margin: 8mm; }
+            @media print {
+              body { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+            }
+            * { box-sizing: border-box; }
+            body { font-family: Arial, sans-serif; font-size: 11px; margin: 0; padding: 15px; }
+            .header { margin-bottom: 15px; }
+            .company-name { font-weight: bold; font-size: 14px; }
+            .company-info { font-size: 11px; }
+            .title { text-align: center; font-size: 16px; font-weight: bold; color: #0066cc; margin: 15px 0 10px; }
+            .subtitle { text-align: center; margin-bottom: 15px; font-style: italic; }
+            table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
+            th, td { border: 1px solid #000; padding: 5px 8px; }
+            th { background-color: #d9e1f2; font-weight: bold; text-align: center; }
+            td { vertical-align: top; }
+            td.text-center { text-align: center; }
+            td.text-right { text-align: right; }
+            .product-name { white-space: normal; word-wrap: break-word; text-align: center; }
           </style>
         </head>
         <body>
           <div class="header">
-            <div>
-              <div class="company">${companyName}</div>
-              <div class="small">Địa chỉ: ${companyAddressDynamic || ''}</div>
-              <div class="small">Điện thoại: ${companyPhoneDynamic || ''}</div>
-            </div>
-            <div style="text-align:right">
-              <div class="small">Số bảng kê tổng: <strong>${importNumber}</strong></div>
-              <div class="small">Ngày lập: <strong>${printedAt}</strong></div>
-              <div class="small">Nhân viên: <strong>${employeeName}</strong></div>
-              <div class="small">Loại nhập: <strong>${importTypeName}</strong></div>
-              <div class="small">Nhà cung cấp: <strong>${supplierName}</strong></div>
-            </div>
+            <div class="company-name">${compName}</div>
+            <div class="company-info">Địa chỉ: ${compAddr}</div>
+            <div class="company-info">Điện thoại: ${compPhone}</div>
           </div>
-
-          <div class="title">PHIẾU NHẬP HÀNG</div>
-          <div style="text-align:left;margin-bottom:8px;font-size:12px">
-            <strong>Ghi chú bảng kê:</strong>
-            <span style="margin-left:8px">${(formData.note && formData.note) || (selectedImport && (selectedImport.note || selectedImport.description)) || ''}</span>
-          </div>
-
+          
+          <div class="title">PHIẾU XUẤT HÀNG TỔNG HỢP</div>
+          <div class="subtitle">Số bảng kê: ${importNumber} - Ngày lập: ${printedAt}</div>
+          
           <table>
             <thead>
               <tr>
-                <th style="width:3%">STT</th>
-                <th style="width:6%">Mã vạch</th>
-                <th style="width:6%">Mã hàng</th>
-                <th style="width:12%">Hàng hóa</th>
-                <th style="width:6%">Đơn vị tính</th>
-                <th style="width:4%">Số lượng</th>
-                <th style="width:6%">Đơn giá</th>
-                <th style="width:6%">Tiền vận chuyển</th>
-                <th style="width:7%">Ghi chú date PN</th>
-                <th style="width:7%">Thành tiền</th>
-                <th style="width:5%">TT vận chuyển</th>
-                <th style="width:4%">Số kg</th>
-                <th style="width:4%">Số khối</th>
-                <th style="width:6%">Kho hàng</th>
-                <th style="width:18%">Mô tả</th>
-                <th style="width:11%">Quy đổi</th>
+                <th rowspan="2" style="width: 40px;">STT</th>
+                <th rowspan="2" style="width: 85px;">Mã hàng</th>
+                <th rowspan="2" style="width: 85px;">Mã vạch</th>
+                <th rowspan="2" style="width: 440px;">Tên hàng</th>
+                <th colspan="2" style="text-align: center;">Đơn vị 1</th>
+                <th colspan="2" style="text-align: center;">Đơn vị gốc</th>
+                <th rowspan="2" style="width: 90px;">Ghi chú</th>
+              </tr>
+              <tr>
+                <th style="width: 60px;">Đơn vị 1</th>
+                <th style="width: 45px;">SL 1</th>
+                <th style="width: 60px;">Đơn vị gốc</th>
+                <th style="width: 45px;">SL gốc</th>
               </tr>
             </thead>
             <tbody>
-              ${htmlRows}
-              <tr>
-                <td colspan="5" style="text-align:left;padding:6px">Tổng tiền bằng chữ: <strong>${numberToVietnameseText(Math.round(totalAmount))}</strong></td>
-                <td style="text-align:center;padding:6px"></td>
-                <td style="text-align:right;padding:6px"><strong>Tổng</strong></td>
-                <td style="text-align:right;padding:6px">${formatCurrency(combined.reduce((s,r)=>s+(Number(r.transportCost)||0),0))}</td>
-                <td style="text-align:center;padding:6px"></td>
-                <td style="text-align:right;padding:6px"><strong>${formatCurrency(totalAmount)}</strong></td>
-                <td style="text-align:right;padding:6px">${formatCurrency(combined.reduce((s,r)=>s+(Number(r.totalTransport)||0),0))}</td>
-                <td style="text-align:right;padding:6px">${formatWeight(totalWeight)}</td>
-                <td style="text-align:right;padding:6px">${formatVolume(totalVolume)}</td>
-                <td colspan="3" style="text-align:left;padding:6px"></td>
-              </tr>
+      `;
+
+      // Add rows from bangKeTongItems
+      bktItems.forEach((item, index) => {
+        printContent += `
+          <tr>
+            <td class="text-center">${index + 1}</td>
+            <td>${item.maHang || ''}</td>
+            <td>${item.maVach || ''}</td>
+            <td class="product-name">${item.tenHang || ''}</td>
+            <td class="text-center">${item.donViTinh1 || ''}</td>
+            <td class="text-right">${formatQty(item.soLuongDVT1)}</td>
+            <td class="text-center">${item.donViGoc || ''}</td>
+            <td class="text-right">${formatQty(item.soLuongDVTGoc)}</td>
+            <td>${item.moTa || ''}</td>
+          </tr>
+        `;
+      });
+
+      printContent += `
             </tbody>
           </table>
-
-          <div class="footer-sign">
-            <div style="text-align:center">Người giao hàng<br/><br/><br/>_______________</div>
-            <div style="text-align:center">Người nhận<br/><br/><br/>_______________</div>
-            <div style="text-align:center">Người lập phiếu<br/><br/><br/>${employeeName}</div>
-          </div>
-
         </body>
         </html>
       `;
 
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) {
+      // Open print window
+      const printWindow = window.open('', '_blank', 'width=1200,height=800');
+      if (printWindow) {
+        printWindow.document.write(printContent);
+        printWindow.document.close();
+        printWindow.focus();
+        setTimeout(() => {
+          printWindow.print();
+        }, 500);
+      } else {
         alert('Không thể mở cửa sổ in. Vui lòng cho phép popup.');
-        return;
       }
-      printWindow.document.open();
-      printWindow.document.write(html);
-      printWindow.document.close();
-      printWindow.focus();
-      setTimeout(() => {
-        try { printWindow.print(); } catch (e) { }
-      }, 700);
-    } catch (e) {
-      alert('Lỗi khi tạo bản in A4');
+
+    } catch (error) {
+      console.error('Error printing summary:', error);
+      alert('Có lỗi xảy ra khi in phiếu tổng hợp');
     }
   };
 
@@ -3297,6 +3492,7 @@ const InBangKeTong = () => {
         const loaiHangValue = catSet.size > 0 ? Array.from(catSet).join(', ') : (order.productType || '');
         return {
           id: `dshd_${order.id}_${Date.now()}`,
+          orderId: order.id,
           maPhieu: order.orderNumber || '',
           tenKhachHang: order.customerName || order.customer || '',
           tongTien: order.totalAmount || 0,
@@ -4583,6 +4779,7 @@ const InBangKeTong = () => {
       {/* Column settings & search modals for BKT and DSHD tabs */}
       {renderColumnSettingsModal('bkt')}
       {renderColumnSettingsModal('dshd')}
+      {renderModalColumnSettingsModal()}
       {renderColumnSearchModal('bkt')}
       {renderColumnSearchModal('dshd')}
 
@@ -4711,11 +4908,13 @@ const InBangKeTong = () => {
                     loadOrdersForSelect(dates[0], dates[1]);
                   }
                 }}
-                format="DD/MM/YYYY"
-                placeholder={['Từ ngày', 'Đến ngày']}
+                format="YYYY-MM-DD"
+                placeholder={["Start date", "End date"]}
+                allowClear
+                separator=" — "
+                classNames={{ popup: { root: 'custom-date-picker-dropdown' } }}
                 style={{ width: 280 }}
-                popupStyle={{ zIndex: 10001 }}
-                getPopupContainer={(trigger) => trigger.parentElement}
+                getPopupContainer={(trigger) => trigger && trigger.parentElement ? trigger.parentElement : document.body}
               />
               <span style={{ fontSize: 12, color: '#888' }}>
                 (Chỉ hiển thị đơn hàng đã duyệt)
@@ -4743,7 +4942,7 @@ const InBangKeTong = () => {
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
                         <div />
                         <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                          <button title="Cài đặt cột" onClick={() => setShowDshdSettings(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>⚙️</button>
+                          <button title="Cài đặt cột" onClick={() => setShowModalDshdSettings(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>⚙️</button>
                         </div>
                       </div>
 
@@ -4758,30 +4957,16 @@ const InBangKeTong = () => {
                                   onChange={(e) => toggleSelectAllOrders(e.target.checked)}
                                 />
                               </th>
-                              {[
-                                { id: 'orderDate', label: 'Ngày lập' },
-                                { id: 'maPhieu', label: 'Số phiếu' },
-                                { id: 'tenKhachHang', label: 'Khách hàng' },
-                                { id: 'tongTienSauGiam', label: 'Tổng tiền sau giảm' },
-                                { id: 'status', label: 'Trạng thái' },
-                                { id: 'createdBy', label: 'Nhân viên lập' },
-                                { id: 'taxRates', label: 'Thuế suất' },
-                                { id: 'loaiHang', label: 'Loại hàng' },
-                                { id: 'nvSale', label: 'Nhân viên sale' },
-                                { id: 'customerGroup', label: 'Nhóm khách hàng' },
-                                { id: 'salesSchedule', label: 'Lịch bán hàng' },
-                                { id: 'tongTien', label: 'Tổng tiền' },
-                                { id: 'totalKg', label: 'Tổng số kg' },
-                                { id: 'totalM3', label: 'Tổng số khối' },
-                                { id: 'printOrder', label: 'STT in' },
-                                { id: 'vehicle', label: 'Xe' },
-                                { id: 'deliveryVehicle', label: 'Xe giao hàng' },
-                                { id: 'printStatus', label: 'Trạng thái in' },
-                                { id: 'printCount', label: 'Số lần in' },
-                                { id: 'printDate', label: 'Ngày in' },
-                                { id: 'actions', label: 'Thao tác' }
-                              ].map(col => (
-                                <th key={col.id} style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: 'left' }}>
+                              {modalDshdColumns.filter(c => c.visible).map(col => (
+                                <th
+                                  key={col.id}
+                                  draggable
+                                  onDragStart={(e) => modalH.colDragStart(e, col.id)}
+                                  onDragOver={modalH.colDragOver}
+                                  onDrop={(e) => modalH.colDrop(e, col.id, modalDshdDragColumn)}
+                                  onDragEnd={modalH.colDragEnd}
+                                  style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: col.align || 'left', position: 'relative', width: col.width + 'px', minWidth: col.width + 'px' }}
+                                >
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                     <span style={{ flex: 1 }}>{col.label}</span>
                                     {col.id !== 'actions' && (
@@ -4793,6 +4978,13 @@ const InBangKeTong = () => {
                                       </>
                                     )}
                                   </div>
+                                  {col.id !== 'actions' && (
+                                    <div
+                                      className="resize-handle"
+                                      onMouseDown={(e) => { e.stopPropagation(); modalH.resizeStart(e, col.id, modalDshdColumns); }}
+                                      style={{ position: 'absolute', right: '-2px', top: 0, bottom: 0, width: '6px', cursor: 'col-resize', zIndex: 2 }}
+                                    />
+                                  )}
                                 </th>
                               ))}
                             </tr>
@@ -4812,33 +5004,39 @@ const InBangKeTong = () => {
                                     onClick={(e) => e.stopPropagation()}
                                   />
                                 </td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>{order.orderDate ? dayjs(order.orderDate).format('DD/MM/YYYY') : ''}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.orderNumber || ''}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.customerName || order.customer || ''}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'right' }}>{(order.totalAfterDiscount || order.totalAmount || 0).toLocaleString('vi-VN')}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>
-                                  <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, background: order.status?.toLowerCase().includes('đã duyệt') ? '#d4edda' : '#f8d7da', color: order.status?.toLowerCase().includes('đã duyệt') ? '#155724' : '#721c24' }}>{order.status || ''}</span>
-                                </td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.createdBy || ''}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.taxRates || order.TaxRates || ''}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.productType || ''}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.salesStaff || order.salesEmployee || ''}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.customerGroup || ''}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.salesSchedule || ''}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'right' }}>{(order.totalAmount || 0).toLocaleString('vi-VN')}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'right' }}>{Number(order.totalKg || 0).toLocaleString('vi-VN')}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'right' }}>{Number(order.totalM3 || 0).toLocaleString('vi-VN')}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.printOrder || ''}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.vehicle || ''}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.deliveryVehicle || ''}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>
-                                  <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, background: (order.printCount || 0) > 0 ? '#d4edda' : '#f8d7da', color: (order.printCount || 0) > 0 ? '#155724' : '#721c24' }}>{(order.printCount || 0) > 0 ? 'Đã in' : 'Chưa in'}</span>
-                                </td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>{order.printCount || 0}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>{order.printDate ? dayjs(order.printDate).format('DD/MM/YYYY') : ''}</td>
-                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>
-                                  <button onClick={(e) => { e.stopPropagation(); handleViewOrderDetail && handleViewOrderDetail(order.id); }} style={{ padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', cursor: 'pointer' }}>Chi tiết</button>
-                                </td>
+                                {modalDshdColumns.filter(c => c.visible).map((col) => (
+                                  <td key={col.id} style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: col.align || 'center' }}>
+                                    {(() => {
+                                      switch (col.id) {
+                                        case 'orderDate': return order.orderDate ? dayjs(order.orderDate).format('DD/MM/YYYY') : '';
+                                        case 'maPhieu': return order.orderNumber || '';
+                                        case 'tenKhachHang': return order.customerName || order.customer || '';
+                                        case 'tongTienSauGiam': return (order.totalAfterDiscount || order.totalAmount || 0).toLocaleString('vi-VN');
+                                        case 'status': return (<span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, background: order.status?.toLowerCase().includes('đã duyệt') ? '#d4edda' : '#f8d7da', color: order.status?.toLowerCase().includes('đã duyệt') ? '#155724' : '#721c24' }}>{order.status || ''}</span>);
+                                        case 'createdBy': return order.createdBy || '';
+                                        case 'taxRates': return order.taxRates || order.TaxRates || '';
+                                        case 'loaiHang': return order.productType || '';
+                                        case 'nvSale': return order.salesStaff || order.salesEmployee || '';
+                                        case 'customerGroup': {
+                                          const key = order.customerGroup || order.customerGroupId || order.customerGroupCode || (order.customerGroup || '').toString();
+                                          return customerGroupsMap[key] || order.customerGroupName || order.customerGroup || '';
+                                        }
+                                        case 'salesSchedule': return order.salesSchedule || '';
+                                        case 'tongTien': return (order.totalAmount || 0).toLocaleString('vi-VN');
+                                        case 'totalKg': return Number(order.totalKg || 0).toLocaleString('vi-VN');
+                                        case 'totalM3': return Number(order.totalM3 || 0).toLocaleString('vi-VN');
+                                        case 'printOrder': return order.printOrder || '';
+                                        case 'vehicle': return order.vehicle || '';
+                                        case 'deliveryVehicle': return order.deliveryVehicle || '';
+                                        case 'printStatus': return (<span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, background: (order.printCount || 0) > 0 ? '#d4edda' : '#f8d7da', color: (order.printCount || 0) > 0 ? '#155724' : '#721c24' }}>{(order.printCount || 0) > 0 ? 'Đã in' : 'Chưa in'}</span>);
+                                        case 'printCount': return order.printCount || 0;
+                                        case 'printDate': return order.printDate ? dayjs(order.printDate).format('DD/MM/YYYY') : '';
+                                        case 'actions': return (<button onClick={(e) => { e.stopPropagation(); handleViewOrderDetail && handleViewOrderDetail(order.id); }} style={{ padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', cursor: 'pointer' }}>Chi tiết</button>);
+                                        default: return order[col.id] || '';
+                                      }
+                                    })()}
+                                  </td>
+                                ))}
                               </tr>
                             ))}
                           </tbody>
