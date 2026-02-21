@@ -37,6 +37,7 @@ const PERMISSION_GROUPS = [
       { key: 'sale_management', name: 'Quản lý bán hàng (User)' },
       { key: 'order_management', name: 'Quản lý đơn hàng (Admin)' },
       { key: 'print_order', name: 'In đơn hàng' },
+      { key: 'in-bang-ke-tong', name: 'In bảng kê tổng' },
       { key: 'mo_khoa_ngay_lap', name: 'Mở khóa ngày lập đơn hàng' },
       { key: 'chon_nhan_vien_sale', name: 'Chọn nhân viên bán hàng' },
       { key: 'receipt_voucher', name: 'Phiếu thu' },

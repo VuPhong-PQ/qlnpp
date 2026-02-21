@@ -386,6 +386,20 @@
   overflow-x: auto;
 }
 
+/* Make the date range picker stretch to the panel edge for balanced layout */
+.in-bang-ke-tong-page .search-panel .search-panel-date-row {
+  padding-left: 4px;
+  padding-right: 4px;
+  margin-left: -4px;
+  margin-right: -4px;
+}
+.in-bang-ke-tong-page .search-panel .search-panel-date-row .ant-picker,
+.in-bang-ke-tong-page .search-panel .search-panel-date-row .ant-picker-range,
+.in-bang-ke-tong-page .search-panel .search-panel-date-row .ant-picker-range .ant-picker-input {
+  width: 100% !important;
+  box-sizing: border-box !important;
+}
+
 .in-bang-ke-tong-page .import-detail-panel {
   flex: 0 0 80%;
   max-width: 80%;
@@ -393,7 +407,7 @@
   background: #fff;
   border-radius: 12px;
   box-shadow: 0 1px 6px rgba(0,0,0,0.05);
-  padding: 12px 14px;
+  padding: 4px 10px 6px 10px;
   overflow-x: auto;
   display: flex;
   flex-direction: column;
@@ -829,6 +843,44 @@
   position: relative;
   z-index: 1001;
 }
+
+/* Ensure search / settings modals inside this page appear above the full-screen order-select modal */
+.in-bang-ke-tong-page .search-modal-overlay {
+  position: fixed !important;
+  top: 0 !important;
+  left: 0 !important;
+  width: 100% !important;
+  height: 100% !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: rgba(0,0,0,0.15) !important;
+  z-index: 2147483000 !important; /* very high to ensure it overlays fullscreen modal */
+  pointer-events: auto !important;
+}
+.in-bang-ke-tong-page .search-modal {
+  position: fixed !important;
+  z-index: 2147483001 !important;
+  max-width: 420px !important;
+  width: auto !important;
+}
+.in-bang-ke-tong-page .column-settings-modal {
+  position: fixed !important;
+  z-index: 2147483002 !important;
+}
+
+/* Fullscreen order-select overlay/modal (keep under popup modals) */
+.in-bang-ke-tong-page .order-select-overlay {
+  position: fixed !important;
+  top: 0; left: 0; width: 100%; height: 100%;
+  background: rgba(0,0,0,0.15);
+  z-index: 9998 !important; /* below popup modals */
+}
+.in-bang-ke-tong-page .order-select-modal-fullscreen {
+  position: fixed !important;
+  top: 0; left: 0; width: 100vw; height: 100vh;
+  z-index: 9999 !important;
+}
 .popup-arrow {
   position: absolute;
   top: -12px;
@@ -937,6 +989,17 @@ button[title="Cài đặt cột"] {
   gap: 8px;
   align-items: start;
 }
+
+/* Expand date picker to visually reach panel edges by countering panel padding */
+.in-bang-ke-tong-page .search-panel .search-controls-grid {
+  padding-left: 0;
+  padding-right: 0;
+}
+
+.in-bang-ke-tong-page .search-panel .search-left {
+  padding-left: 0;
+  padding-right: 0;
+}
 .search-left {
   grid-column: 1 / 2;
   display: flex;
@@ -954,6 +1017,15 @@ button[title="Cài đặt cột"] {
 .search-panel-select-row {
   display: flex;
   gap: 8px;
+}
+.in-bang-ke-tong-page .search-panel .search-panel-date-row {
+  margin-left: -16px;
+  margin-right: -16px;
+  padding-left: 12px;
+  padding-right: 12px;
+}
+.in-bang-ke-tong-page .search-panel .search-panel-date-row .ant-picker {
+  width: calc(100% + 32px) !important;
 }
 .search-panel-date-row input[type="date"],
 .search-panel-select-row select {
@@ -1079,6 +1151,21 @@ button[title="Cài đặt cột"] {
   max-width: 100%;
   overflow: hidden;
   text-overflow: ellipsis;
+  /* unified control sizing for consistent alignment */
+  height: 34px !important;
+  padding: 6px 8px !important;
+  line-height: 20px !important;
+  font-size: 13px !important;
+  border-radius: 4px !important;
+}
+
+/* ensure native selects align with inputs visually */
+.bkt-form-top-row select {
+  -webkit-appearance: none !important;
+  -moz-appearance: none !important;
+  appearance: none !important;
+  background-position: calc(100% - 10px) center !important;
+  background-repeat: no-repeat !important;
 }
 
 /* Detail form should not overflow */
@@ -1086,6 +1173,8 @@ button[title="Cài đặt cột"] {
   max-width: 100%;
   overflow: hidden;
   box-sizing: border-box;
+  margin-bottom: 0 !important;
+  padding-bottom: 0 !important;
 }
 
 .detail-content {
@@ -1117,6 +1206,34 @@ button[title="Cài đặt cột"] {
   max-width: 100%;
   overflow-x: auto;
   box-sizing: border-box;
+}
+
+.in-bang-ke-tong-page .order-tabs {
+  margin-top: 2px !important;
+  margin-bottom: 0 !important;
+}
+.bkt-form-top-row {
+  margin-bottom: 0 !important;
+}
+.in-bang-ke-tong-page .order-items-section {
+  margin-top: -8px !important;
+  padding-top: 0 !important;
+}
+
+/* Tighten internal tab/header spacing */
+.order-items-header {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+.in-bang-ke-tong-page .order-items-table-container {
+  margin-top: 0 !important;
+  padding-top: 0 !important;
+}
+
+/* Reduce any extra top spacing inside detail content */
+.in-bang-ke-tong-page .detail-content {
+  padding-top: 0 !important;
 }
 
 /* Ensure detail-actions buttons don't overflow */
@@ -1225,6 +1342,55 @@ button[title="Cài đặt cột"] {
 
 /* Specific handling for 100% browser zoom */
 @media (min-resolution: 96dpi) {
+    /* Normalize the top-row controls so the 'Nhân viên lập' select
+       matches the 'Ngày lập' date picker input border and height */
+    .import-detail-panel .bkt-form-top-row .ant-select .ant-select-selector,
+    .import-detail-panel .bkt-form-top-row .ant-picker,
+    .import-detail-panel .bkt-form-top-row input,
+    .import-detail-panel .bkt-form-top-row .ant-input {
+      height: 34px;
+      padding: 4px 11px;
+      border: 1px solid #d9d9d9;
+      box-shadow: none;
+      border-radius: 4px;
+      line-height: 20px;
+      background-color: #fff;
+    }
+
+    .import-detail-panel .bkt-form-top-row .ant-select .ant-select-selector {
+      display: flex;
+      align-items: center;
+      height: 34px;
+    }
+
+    .import-detail-panel .bkt-form-top-row .ant-select.ant-select-focused .ant-select-selector,
+    .import-detail-panel .bkt-form-top-row .ant-picker-focused,
+    .import-detail-panel .bkt-form-top-row input:focus,
+    .import-detail-panel .bkt-form-top-row .ant-input:focus {
+      box-shadow: 0 0 0 2px rgba(24,144,255,0.12);
+      border-color: #40a9ff;
+    }
+
+    /* Make the select container use the same single light border as the date input
+       and remove internal selector border/shadow that made it look darker */
+    .import-detail-panel .bkt-form-top-row .ant-select {
+      border: 1px solid #d9d9d9;
+      border-radius: 4px;
+      background: #fff;
+      padding: 0;
+      box-shadow: none;
+    }
+
+    .import-detail-panel .bkt-form-top-row .ant-select .ant-select-selector {
+      border: none;
+      box-shadow: none;
+      padding: 0 11px;
+    }
+
+    .import-detail-panel .bkt-form-top-row .ant-select .ant-select-selection-item,
+    .import-detail-panel .bkt-form-top-row .ant-select .ant-select-placeholder {
+      line-height: 20px;
+    }
   .in-bang-ke-tong-page {
     width: calc(100% - 20px);
     max-width: calc(100% - 20px);

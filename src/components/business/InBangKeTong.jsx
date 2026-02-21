@@ -10,6 +10,7 @@ import dayjs from 'dayjs';
 import 'dayjs/locale/vi';
 import { API_ENDPOINTS, api } from '../../config/api';
 import { removeVietnameseTones } from '../../utils/searchUtils';
+import { useAuth } from '../../contexts/AuthContext';
 
 // Set Vietnamese locale for dayjs
 dayjs.locale('vi');
@@ -184,6 +185,20 @@ const InBangKeTong = () => {
   const [ordersForSelect, setOrdersForSelect] = useState([]);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
   const [loadingOrders, setLoadingOrders] = useState(false);
+  // Modal table pagination and filtering
+  const [orderSelectPageSize, setOrderSelectPageSize] = useState(50);
+  const [orderSelectCurrentPage, setOrderSelectCurrentPage] = useState(1);
+
+  // current logged-in user and permissions
+  const { user, permissions } = useAuth();
+
+  // determine admin-like users: username/name 'admin' or 'superadmin', or explicit admin permission
+  const isAdminUser = (() => {
+    const name = (user?.username || user?.name || user?.role || '').toString().toLowerCase();
+    if (name === 'admin' || name === 'superadmin' || user?.isSuperAdmin === true) return true;
+    if (Array.isArray(permissions) && permissions.includes('admin:full-access')) return true;
+    return false;
+  })();
 
   // ===== Column management for Bảng kê tổng tab =====
   const BKT_COL_KEY = 'bktColumnSettings_v2';
@@ -233,10 +248,18 @@ const InBangKeTong = () => {
   const [dshdSearchColumn, setDshdSearchColumn] = useState(null);
   const [dshdSearchQuery, setDshdSearchQuery] = useState('');
   const [dshdColumnFilters, setDshdColumnFilters] = useState({});
+  // Source for DSHD column-search: 'selectedImport' (default) or 'orderSelect'
+  const [dshdSearchSource, setDshdSearchSource] = useState('selectedImport');
+  const [dshdSearchSourceRows, setDshdSearchSourceRows] = useState([]);
 
   // Save column settings to localStorage
   useEffect(() => { try { localStorage.setItem(BKT_COL_KEY, JSON.stringify(bktColumns)); } catch {} }, [bktColumns]);
   useEffect(() => { try { localStorage.setItem(DSHD_COL_KEY, JSON.stringify(dshdColumns)); } catch {} }, [dshdColumns]);
+
+  // Reset modal pagination when orders, filters or page size change
+  React.useEffect(() => {
+    setOrderSelectCurrentPage(1);
+  }, [ordersForSelect, dshdColumnFilters, orderSelectPageSize]);
 
   // Generic column handlers (factory functions)
   const makeColHandlers = (setCols, setDragCol, setSettingsDrag) => ({
@@ -396,12 +419,21 @@ const InBangKeTong = () => {
   const clearBktFilter = (colId) => { const nf = { ...bktColumnFilters }; delete nf[colId]; setBktColumnFilters(nf); };
 
   const openDshdSearch = (colId, colLabel) => { setDshdSearchColumn({ id: colId, label: colLabel }); setDshdSearchQuery(dshdColumnFilters[colId] || ''); setShowDshdSearchModal(true); };
-  const closeDshdSearch = () => { setShowDshdSearchModal(false); setDshdSearchColumn(null); setDshdSearchQuery(''); };
+  const closeDshdSearch = () => { setShowDshdSearchModal(false); setDshdSearchColumn(null); setDshdSearchQuery(''); resetDshdSearchSource(); };
   const applyDshdSearch = () => {
     const nf = { ...dshdColumnFilters };
     if (dshdSearchQuery.trim()) nf[dshdSearchColumn.id] = dshdSearchQuery.trim(); else delete nf[dshdSearchColumn.id];
-    setDshdColumnFilters(nf); setShowDshdSearchModal(false);
+    setDshdColumnFilters(nf); setShowDshdSearchModal(false); resetDshdSearchSource();
   };
+  // Open DSHD search modal but use orders list as source (when opened from order-select modal)
+  const openDshdSearchFromOrderSelect = (colId, colLabel, rows) => {
+    setDshdSearchSource('orderSelect');
+    setDshdSearchSourceRows(Array.isArray(rows) ? rows : []);
+    setDshdSearchColumn({ id: colId, label: colLabel });
+    setDshdSearchQuery(dshdColumnFilters[colId] || '');
+    setShowDshdSearchModal(true);
+  };
+  const resetDshdSearchSource = () => { setDshdSearchSource('selectedImport'); setDshdSearchSourceRows([]); };
   const clearDshdFilter = (colId) => { const nf = { ...dshdColumnFilters }; delete nf[colId]; setDshdColumnFilters(nf); };
 
   // Filter items by column filters
@@ -420,6 +452,34 @@ const InBangKeTong = () => {
       return Object.entries(dshdColumnFilters).every(([colId, query]) => {
         const val = String(renderDshdCell(item, colId, 0) || '').toLowerCase();
         return val.includes(query.toLowerCase());
+      });
+    });
+  };
+
+  // Filter ordersForSelect according to dshdColumnFilters (used in selection modal)
+  const filterOrdersForSelect = (orders) => {
+    if (!orders || Object.keys(dshdColumnFilters).length === 0) return orders;
+    return orders.filter(order => {
+      return Object.entries(dshdColumnFilters).every(([colId, query]) => {
+        const q = String(query || '').toLowerCase();
+        let val = '';
+        switch (colId) {
+          case 'maPhieu': val = order.orderNumber || order.orderNo || '' ; break;
+          case 'tenKhachHang': val = order.customerName || order.customer || '' ; break;
+          case 'tongTien': val = String(order.totalAmount || order.total || ''); break;
+          case 'tongTienSauGiam': val = String(order.totalAfterDiscount || order.totalAmount || ''); break;
+          case 'nvSale': val = order.salesStaff || order.createdBy || '' ; break;
+          case 'loaiHang': val = order.productType || order.ProductType || '' ; break;
+          case 'orderNumber': val = order.orderNumber || '' ; break;
+          case 'customerName': val = order.customerName || '' ; break;
+          case 'totalAfterDiscount': val = String(order.totalAfterDiscount || order.totalAmount || ''); break;
+          case 'taxRates': val = order.taxRates || order.TaxRates || ''; break;
+          case 'totalKg': val = String(order.totalKg || order.kg || ''); break;
+          case 'totalM3': val = String(order.totalM3 || order.m3 || ''); break;
+          default:
+            val = String(order[colId] || '').toLowerCase();
+        }
+        return String(val).toLowerCase().includes(q);
       });
     });
   };
@@ -557,6 +617,7 @@ const InBangKeTong = () => {
               <option value="all">Tất cả</option>
             </select>
           </div>
+          
         </div>
       </div>
     );
@@ -638,10 +699,38 @@ const InBangKeTong = () => {
     const setFilters = isBkt ? setBktColumnFilters : setDshdColumnFilters;
 
     if (!show || !searchCol) return null;
-    const uniqueValues = getUniqueValues(searchCol.id).filter(v => {
-      if (!query.trim()) return true;
-      return v.toLowerCase().includes(query.toLowerCase());
-    }).slice(0, 50);
+    // If DSHD search was opened from order-select, use the provided rows as source
+    let uniqueValues = [];
+    if (!isBkt && dshdSearchSource === 'orderSelect' && Array.isArray(dshdSearchSourceRows)) {
+      // derive unique values from orders list
+      const vals = new Set();
+      dshdSearchSourceRows.forEach(order => {
+        let v = '';
+        switch (searchCol.id) {
+          case 'maPhieu': v = order.orderNumber || order.orderNo || ''; break;
+          case 'tenKhachHang': v = order.customerName || order.customer || ''; break;
+          case 'tongTien': v = String(order.totalAmount || order.total || ''); break;
+          case 'tongTienSauGiam': v = String(order.totalAfterDiscount || order.totalAmount || ''); break;
+          case 'nvSale': v = order.salesStaff || order.createdBy || ''; break;
+          case 'loaiHang': v = order.productType || order.ProductType || ''; break;
+          case 'orderDate': v = order.orderDate ? dayjs(order.orderDate).format('DD/MM/YYYY') : ''; break;
+          case 'customerName': v = order.customerName || ''; break;
+          case 'totalAfterDiscount': v = String(order.totalAfterDiscount || order.totalAmount || ''); break;
+          case 'taxRates': v = order.taxRates || order.TaxRates || ''; break;
+          case 'totalKg': v = String(order.totalKg || order.kg || ''); break;
+          case 'totalM3': v = String(order.totalM3 || order.m3 || ''); break;
+          default: v = String(order[searchCol.id] || '');
+        }
+        v = (v || '').toString().trim();
+        if (v && v !== '0') vals.add(v);
+      });
+      uniqueValues = Array.from(vals).sort((a, b) => a.localeCompare(b, 'vi'));
+    } else {
+      uniqueValues = getUniqueValues(searchCol.id).filter(v => {
+        if (!query.trim()) return true;
+        return v.toLowerCase().includes(query.toLowerCase());
+      }).slice(0, 50);
+    }
 
     return (
       <div className="search-modal-overlay" onClick={closeModal}>
@@ -679,7 +768,7 @@ const InBangKeTong = () => {
             )}
           </div>
           <div style={{ padding: '10px 16px', borderTop: '1px solid #eee', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => { setQuery(''); setFilters({}); closeModal(); }} style={{ padding: '6px 14px', background: '#6c757d', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+            <button onClick={() => { setQuery(''); setFilters({}); closeModal(); resetDshdSearchSource(); }} style={{ padding: '6px 14px', background: '#6c757d', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
               Xóa bộ lọc
             </button>
             <button onClick={applySearch} style={{ padding: '6px 14px', background: '#667eea', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
@@ -706,7 +795,7 @@ const InBangKeTong = () => {
     return { 
       importNumber: `BKT-${day}${month}${year}-${timestamp}`, 
       createdDate: new Date().toISOString().split('T')[0], 
-      employee: 'admin 66', 
+      employee: '', 
       importType: '', 
       dsHoaDon: '',
       totalWeight: 0, 
@@ -2570,6 +2659,17 @@ const InBangKeTong = () => {
   })();
   const leftTotalPages = Math.ceil(filteredLeft.length / leftPageSize);
 
+  // Sum of 'total' for all filtered left imports (uses same logic as renderLeftCell total)
+  const leftTotalSum = (filteredLeft || []).reduce((acc, record) => {
+    const totalFromHoaDons = (record.dsHoaDonItems || []).reduce((s, h) => s + (Number(h.tongTienSauGiam ?? h.tongTien ?? 0) || 0), 0);
+    const total = (totalFromHoaDons && totalFromHoaDons > 0)
+      ? totalFromHoaDons
+      : ((record.totalAmount !== undefined && record.totalAmount !== null)
+          ? Number(record.totalAmount)
+          : (record.items || []).reduce((sum, item) => sum + (Number(item.total) || 0), 0));
+    return acc + (Number(total) || 0);
+  }, 0);
+
   React.useEffect(() => {
     localStorage.setItem('import_left_page_size', String(leftPageSize));
     setLeftPage(1);
@@ -2997,7 +3097,50 @@ const InBangKeTong = () => {
       const approvedOrders = (response || []).filter(o => 
         o.status && o.status.toLowerCase().includes('đã duyệt')
       );
-      setOrdersForSelect(approvedOrders);
+
+      // Enrich each order by fetching its detailed info so modal can show full columns
+      const enriched = await Promise.all(approvedOrders.map(async (order) => {
+        try {
+          const detail = await api.get(`${API_ENDPOINTS.orders}/${order.id}`);
+          const detailOrder = (detail && detail.order) ? detail.order : order;
+          const items = detail && detail.items ? detail.items : [];
+          const promotionItems = detail && detail.promotionItems ? detail.promotionItems : [];
+          const allItems = [...items, ...promotionItems];
+
+          const totalKg = allItems.reduce((s, it) => s + (Number(it.kg) || Number(it.weight) || 0), 0);
+          const totalM3 = allItems.reduce((s, it) => s + (Number(it.m3) || Number(it.cbm) || 0), 0);
+
+          let productType = detailOrder.productType || detailOrder.ProductType || '';
+          if (!productType && allItems.length > 0) {
+            const set = new Set(allItems.map(i => i.productType || i.category || '').filter(Boolean));
+            productType = Array.from(set).join(', ');
+          }
+
+          let salesStaff = detailOrder.salesStaff || detailOrder.SalesStaff || detailOrder.createdBy || '';
+          if (!salesStaff && allItems.length > 0) {
+            const sset = new Set(allItems.map(i => i.nvSales || i.salesStaff || '').filter(Boolean));
+            salesStaff = Array.from(sset).join(', ');
+          }
+
+          const taxRates = detailOrder.taxRates || detailOrder.TaxRates || '';
+
+          return {
+            ...order,
+            ...detailOrder,
+            items: allItems,
+            promotionItems,
+            totalKg,
+            totalM3,
+            productType,
+            salesStaff,
+            taxRates
+          };
+        } catch (e) {
+          return order;
+        }
+      }));
+
+      setOrdersForSelect(enriched);
     } catch (e) {
       console.error('Error loading orders:', e);
       setOrdersForSelect([]);
@@ -3034,6 +3177,15 @@ const InBangKeTong = () => {
       setSelectedOrderIds(new Set(ordersForSelect.map(o => o.id)));
     } else {
       setSelectedOrderIds(new Set());
+    }
+  };
+
+  // Open order detail (reuse PrintOrder behavior)
+  const handleViewOrderDetail = (orderId) => {
+    try {
+      window.open(`/business/sales/create-order-form?id=${orderId}`, '_blank');
+    } catch (e) {
+      console.error('Failed to open order detail', e);
     }
   };
 
@@ -3167,7 +3319,7 @@ const InBangKeTong = () => {
         date: dayjs().format('YYYY-MM-DD'),
         totalAmount: totalAmount,
         supplierName: '',
-        employee: 'admin 66',
+        employee: (user && (user.username || user.name)) || '',
         importType: '',
         note: '',
         isTemp: true,
@@ -3178,7 +3330,7 @@ const InBangKeTong = () => {
 
       const newFormData = {
         createdDate: dayjs().format('YYYY-MM-DD'),
-        employee: 'admin 66',
+        employee: (user && (user.username || user.name)) || '',
         importType: '',
         importNumber: newImportNumber,
         supplier: '',
@@ -3235,6 +3387,8 @@ const InBangKeTong = () => {
 
   const resetFormForNewImport = () => {
     // Show order selection modal instead of creating empty form
+    // prefill formData.employee with current user when opening create flow
+    setFormData(fd => ({ ...fd, employee: (user && (user.username || user.name)) || fd.employee }));
     handleShowOrderSelectModal();
   };
 
@@ -3286,20 +3440,7 @@ const InBangKeTong = () => {
                   style={{ width: '100%' }}
                 />
               </div>
-              <div className="search-panel-select-row">
-                <select value={importType} onChange={e=>setImportType(e.target.value)}>
-                  <option value="">Số bảng kê tổng</option>
-                  {transactionContents.map(tc => (
-                    <option key={tc.id} value={tc.name}>{tc.name}</option>
-                  ))}
-                </select>
-                <select value={employee} onChange={e=>setEmployee(e.target.value)}>
-                  <option value="">người lập</option>
-                  {employeesList.map(emp => (
-                    <option key={emp.id} value={emp.name}>{emp.name}</option>
-                  ))}
-                </select>
-              </div>
+              {/* Removed quick filters: 'Số bảng kê tổng' and 'Người lập' per request */}
               {/* removed manual Total / Note filters - not required */}
             </div>
             {/* search button removed (redundant) */}
@@ -3469,6 +3610,10 @@ const InBangKeTong = () => {
             </select>
           </div>
         </div>
+        <div style={{padding: '8px 12px', borderTop: '1px dashed #eee', marginTop: 8, color: '#333', fontSize: 13}}>
+          <strong>Tổng tiền của tất cả các phiếu là: </strong>
+          <span style={{color: '#000', fontWeight: 700}}>{(Number(leftTotalSum) || 0).toLocaleString('vi-VN')}</span>
+        </div>
       </div>
 
       {/* Right Panel - Import Details */}
@@ -3487,10 +3632,10 @@ const InBangKeTong = () => {
           <React.Fragment>
 
             <div className="detail-content">
-              <div className="detail-form" style={{display:'flex',flexDirection:'column',gap:12}}>
+              <div className="detail-form" style={{display:'flex',flexDirection:'column',gap:2}}>
                 {/* Top row: Ngày lập, Nhân viên, Bảng kê tổng, DS hóa đơn */}
-                <div className="bkt-form-top-row" style={{display:'flex',gap:12}}>
-                  <div style={{flex:'1 1 0', minWidth:0}}>
+                <div className="bkt-form-top-row" style={{display:'flex',gap:8}}>
+                  <div style={{flex:'0 0 120px', minWidth:'120px'}}>
                       <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Ngày lập</label>
                       <input
                         type="date"
@@ -3506,7 +3651,7 @@ const InBangKeTong = () => {
                         readOnly={!isEditMode}
                       />
                   </div>
-                  <div style={{flex:'1 1 0', minWidth:0}}>
+                  <div style={{flex:'0 0 120px', minWidth:'120px'}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Nhân viên lập</label>
                     <select style={{width:'100%'}} value={formData.employee || selectedImport.employee || ''} onChange={(e)=>{
                       if (!isEditMode) return;
@@ -3514,191 +3659,42 @@ const InBangKeTong = () => {
                       setFormData(fd => ({ ...fd, employee: v }));
                       setSelectedImport(si => si ? ({ ...si, employee: v }) : si);
                       setIsEditing(true);
-                    }} disabled={!isEditMode}>
+                    }} disabled={!isEditMode || !isAdminUser}>
                       <option value="">-- Chọn nhân viên --</option>
                       {employeesList.map(emp => (
                         <option key={emp.id} value={emp.name}>{emp.name}</option>
                       ))}
                     </select>
                   </div>
-                  <div style={{flex:'1 1 0', minWidth:0}}>
-                    <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Bảng kê tổng</label>
-                    <select 
-                      value={formData.importType || selectedImport?.importType || ''}
-                      onChange={(e) => {
-                        if (!isEditMode) return;
-                        const v = e.target.value;
-                        setFormData(fd => ({ ...fd, importType: v }));
-                        setSelectedImport(si => si ? ({ ...si, importType: v }) : si);
-                        setIsEditing(true);
-                      }}
-                      style={{width:'100%'}}
-                      disabled={!isEditMode}
-                    >
-                      <option value="">Chọn bảng kê</option>
-                      {transactionContents.map(tc => (
-                        <option key={tc.id} value={tc.name}>{tc.name}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div style={{flex:'1 1 0', minWidth:0}}>
-                    <label style={{display:'block',fontSize:12,fontWeight:600}}>DS hóa đơn</label>
-                    <select
-                      value={formData.dsHoaDon || selectedImport?.dsHoaDon || ''}
-                      onChange={(e) => {
-                        if (!isEditMode) return;
-                        const v = e.target.value;
-                        setFormData(fd => ({ ...fd, dsHoaDon: v }));
-                        setSelectedImport(si => si ? ({ ...si, dsHoaDon: v }) : si);
-                        setIsEditing(true);
-                      }}
-                      style={{width:'100%'}}
-                      disabled={!isEditMode}
-                    >
-                      <option value="">-- Chọn DS hóa đơn --</option>
-                      {dsHoaDons.map(d => (
-                        <option key={d.id || d} value={d.name || d}>{d.name || d}</option>
-                      ))}
-                    </select>
-                  </div>
-                </div>
-
-                {/* Date picker modal for Ngày lập */}
-                <Modal
-                  open={showDatePickerModal}
-                  onCancel={() => setShowDatePickerModal(false)}
-                  title={null}
-                  width={280}
-                  footer={null}
-                  styles={{ body: { padding: 0 } }}
-                >
-                  <div style={{padding:16}}>
-                    <div style={{marginBottom:16}}>
-                      <select 
-                        value={dateDraft ? dateDraft.format('MMMM YYYY') : dayjs().format('MMMM YYYY')}
-                        onChange={(e) => {
-                          const [month, year] = e.target.value.split(' ');
-                          const newDate = dayjs().month(dayjs().month(month)).year(parseInt(year));
-                          setDateDraft(newDate);
-                        }}
-                        style={{width:'60%',border:'none',background:'transparent',fontWeight:'bold'}}
-                      >
-                        {Array.from({length:12}, (_, i) => {
-                          const date = dayjs().month(i);
-                          return (
-                            <option key={i} value={date.format('MMMM YYYY')}>
-                              {date.format('MMMM YYYY')}
-                            </option>
-                          );
-                        })}
-                      </select>
-                      <div style={{float:'right'}}>
-                        <button style={{border:'none',background:'transparent',cursor:'pointer',fontSize:18}} onClick={() => {
-                          const prev = (dateDraft || dayjs()).subtract(1, 'month');
-                          setDateDraft(prev);
-                        }}>‹</button>
-                        <button style={{border:'none',background:'transparent',cursor:'pointer',fontSize:18}} onClick={() => {
-                          const next = (dateDraft || dayjs()).add(1, 'month');
-                          setDateDraft(next);
-                        }}>›</button>
-                      </div>
-                    </div>
-                    
-                    <div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:2,textAlign:'center',fontSize:12}}>
-                      {['Su','Mo','Tu','We','Th','Fr','Sa'].map(day => (
-                        <div key={day} style={{padding:4,color:'#999',fontWeight:'bold'}}>{day}</div>
-                      ))}
-                      
-                      {Array.from({length:42}, (_, i) => {
-                        const startOfMonth = (dateDraft || dayjs()).startOf('month');
-                        const startOfWeek = startOfMonth.startOf('week');
-                        const date = startOfWeek.add(i, 'day');
-                        const isCurrentMonth = date.month() === (dateDraft || dayjs()).month();
-                        const isToday = date.isSame(dayjs(), 'day');
-                        const isSelected = dateDraft && date.isSame(dateDraft, 'day');
-                        
-                        return (
-                          <div
-                            key={i}
-                            onClick={() => setDateDraft(date)}
-                            style={{
-                              padding:'6px 4px',
-                              cursor:'pointer',
-                              background: isSelected ? '#1890ff' : isToday ? '#e6f7ff' : 'transparent',
-                              color: isSelected ? '#fff' : isCurrentMonth ? '#000' : '#ccc',
-                              borderRadius:2,
-                              fontSize:13
-                            }}
-                          >
-                            {date.date()}
-                          </div>
-                        );
-                      })}
-                    </div>
-                    
-                    <div style={{display:'flex',justifyContent:'space-between',marginTop:16,borderTop:'1px solid #f0f0f0',paddingTop:12}}>
-                      <button 
-                        style={{background:'transparent',border:'none',color:'#1890ff',cursor:'pointer'}} 
-                        onClick={()=>{setDateDraft(null); setShowDatePickerModal(false);}}>
-                        Clear
-                      </button>
-                      <button 
-                        style={{background:'transparent',border:'none',color:'#1890ff',cursor:'pointer'}} 
-                        onClick={()=>{setDateDraft(dayjs());}}>
-                        Today
-                      </button>
-                    </div>
-                    
-                    {dateDraft && (
-                      <div style={{textAlign:'center',marginTop:8}}>
-                        <button 
-                          className="btn btn-primary" 
-                          style={{width:'100%'}}
-                          onClick={() => {
-                            if (!ensureImportTypeSelected()) return;
-                            setProductModalColumn(colKey);
-                            setProductModalRowIndex(rIdx);  // This is key - set the row index
-                            setProductModalSearch('');
-                            setModalCurrentPage(1);
-                            setSelectedModalProducts(row.values[colKey] ? [row.values[colKey]] : []);
-                            setProductModalScope('all');
-                            setShowProductModal(true);
-                          }}
-                        >
-                          OK
-                        </button>
-                      </div>
-                    )}
-                  </div>
-                </Modal>
-
-                <div className="bkt-form-second-row" style={{display:'flex',gap:12,alignItems:'flex-start'}}>
-                  <div style={{flex:'1 1 0', minWidth:0}}>
+                  <div style={{flex:'0 0 156px', minWidth:'156px'}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Số bảng kê tổng</label>
                     <div className="input-with-status">
                       <input
                         type="text"
-                        value={formData.importNumber || generateImportNumber()}
+                        value={formData.importNumber || selectedImport?.importNumber || generateImportNumber()}
                         onChange={(e) => {
                           if (!isEditMode) return;
-                          setFormData(fd => ({ ...fd, importNumber: e.target.value }));
+                          const v = e.target.value;
+                          setFormData(fd => ({ ...fd, importNumber: v }));
+                          setSelectedImport(si => si ? ({ ...si, importNumber: v }) : si);
+                          setIsEditing(true);
                         }}
                         style={{width:'100%'}}
                         placeholder="Tự động tạo"
                         readOnly={!isEditMode}
                       />
-                      <span className="status-icon">✓</span>
                     </div>
                   </div>
-                  <div style={{flex:'3 1 0', minWidth:0}}>
+                  <div style={{flex:'1 1 0', minWidth:0}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú bảng kê</label>
                     <input
                       type="text"
-                      value={formData.note || ''}
+                      value={formData.note || selectedImport?.note || ''}
                       onChange={(e) => {
                         if (!isEditMode) return;
                         const v = e.target.value;
                         setFormData(fd => ({ ...fd, note: v }));
+                        setSelectedImport(si => si ? ({ ...si, note: v }) : si);
                         setIsEditing(true);
                       }}
                       style={{width:'100%'}}
@@ -3710,7 +3706,7 @@ const InBangKeTong = () => {
               </div>
 
               {/* Tabs: Bảng kê tổng / DS hóa đơn */}
-              <div className="order-tabs" style={{marginTop: 12}}>
+              <div className="order-tabs">
                 <button
                   className={`tab-btn ${activeTab === 'bangKeTong' ? 'active' : ''}`}
                   onClick={() => setActiveTab('bangKeTong')}
@@ -3845,10 +3841,10 @@ const InBangKeTong = () => {
         ) : (
           // Default view for new import - show form and table
           <div className="detail-content">
-            <div className="detail-form" style={{display:'flex',flexDirection:'column',gap:12}}>
+            <div className="detail-form" style={{display:'flex',flexDirection:'column',gap:2}}>
               {/* Top row: Ngày lập, Nhân viên, Bảng kê tổng, DS hóa đơn */}
-              <div className="bkt-form-top-row" style={{display:'flex',gap:12}}>
-                <div style={{flex:'1 1 0', minWidth:0}}>
+                <div className="bkt-form-top-row" style={{display:'flex',gap:8,alignItems:'flex-start'}}>
+                <div style={{flex:'0 0 120px', minWidth:'120px'}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Ngày lập</label>
                     <input
                       type="date"
@@ -3861,72 +3857,43 @@ const InBangKeTong = () => {
                       style={{width:'100%'}}
                     />
                 </div>
-                <div style={{flex:'1 1 0', minWidth:0}}>
+                <div style={{flex:'0 0 120px', minWidth:'120px'}}>
                   <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Nhân viên lập</label>
                   <select 
-                    value={formData.employee || 'admin 66'}
+                    value={formData.employee || ((user && (user.username || user.name)) || '')}
                     onChange={(e) => {
                       const v = e.target.value;
                       setFormData(fd => ({ ...fd, employee: v }));
                       setIsEditing(true);
                     }}
                     style={{width:'100%'}}
+                    disabled={!isAdminUser}
                   >
-                    <option value="admin 66">admin 66</option>
+                    <option value="">-- Chọn nhân viên --</option>
+                    {user && (user.username || user.name) ? (
+                      <option value={(user.username || user.name)}>{(user.name || user.username)}</option>
+                    ) : null}
                     <option value="user 01">user 01</option>
                   </select>
                 </div>
-                <div style={{flex:'1 1 0', minWidth:0}}>
-                  <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Bảng kê tổng</label>
-                  <select 
-                    value={formData.importType || ''}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setFormData(fd => ({ ...fd, importType: v }));
-                      setIsEditing(true);
-                    }}
-                    style={{width:'100%'}}
-                  >
-                    <option value="">Chọn bảng kê</option>
-                    {transactionContents.map(tc => (
-                      <option key={tc.id} value={tc.name}>{tc.name}</option>
-                    ))}
-                  </select>
-                </div>
-                <div style={{flex:'1 1 0', minWidth:0}}>
-                  <label style={{display:'block',fontSize:12,fontWeight:600}}>DS hóa đơn</label>
-                  <select
-                    value={formData.dsHoaDon || ''}
-                    onChange={(e) => {
-                      const v = e.target.value;
-                      setFormData(fd => ({ ...fd, dsHoaDon: v }));
-                      setIsEditing(true);
-                    }}
-                    style={{width:'100%'}}
-                  >
-                    <option value="">-- Chọn DS hóa đơn --</option>
-                    {dsHoaDons.map(d => (
-                      <option key={d.id || d} value={d.name || d}>{d.name || d}</option>
-                    ))}
-                  </select>
-                </div>
-              </div>
-
-              <div className="bkt-form-second-row" style={{display:'flex',gap:12,alignItems:'flex-start'}}>
-                <div style={{flex:'1 1 0', minWidth:0}}>
+                <div style={{flex:'0 0 156px', minWidth:'156px'}}>
                   <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Số bảng kê tổng</label>
                   <div className="input-with-status">
                     <input
                       type="text"
                       value={formData.importNumber || generateImportNumber()}
-                      onChange={(e) => setFormData(fd => ({ ...fd, importNumber: e.target.value }))}
+                      onChange={(e) => {
+                        const v = e.target.value;
+                        setFormData(fd => ({ ...fd, importNumber: v }));
+                        setIsEditing(true);
+                      }}
                       style={{width:'100%'}}
-                      placeholder="Tự động tạo" 
+                      placeholder="Tự động tạo"
+                      readOnly={!isEditMode}
                     />
-                    <span className="status-icon">✓</span>
                   </div>
                 </div>
-                <div style={{flex:'3 1 0', minWidth:0}}>
+                <div style={{flex:'1 1 0', minWidth:0}}>
                   <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú bảng kê</label>
                   <input
                     type="text"
@@ -3938,13 +3905,14 @@ const InBangKeTong = () => {
                     }}
                     style={{width:'100%'}}
                     placeholder="nhập ghi chú bảng kê"
-                  />
+                    readOnly={!isEditMode}
+                    />
                 </div>
               </div>
             </div>
 
             {/* Tabs: Bảng kê tổng / DS hóa đơn (default view) */}
-            <div className="order-tabs" style={{marginTop: 12}}>
+            <div className="order-tabs">
               <button
                 className={`tab-btn ${activeTab === 'bangKeTong' ? 'active' : ''}`}
                 onClick={() => setActiveTab('bangKeTong')}
@@ -4016,12 +3984,15 @@ const InBangKeTong = () => {
                       <span style={{color: 'red', marginRight: 4}}>*</span>Nhân viên lập
                     </label>
                     <select
-                      value={formData.employee}
+                      value={formData.employee || ((user && (user.username || user.name)) || '')}
                       onChange={(e) => setFormData(prev => ({...prev, employee: e.target.value}))}
                       style={{width: '100%', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
+                      disabled={!isAdminUser}
                     >
                       <option value="">-- Chọn nhân viên --</option>
-                      <option value="admin 66">admin 66</option>
+                      {user && (user.username || user.name) ? (
+                        <option value={(user.username || user.name)}>{(user.name || user.username)}</option>
+                      ) : null}
                       <option value="user 01">user 01</option>
                     </select>
                   </div>
@@ -4722,8 +4693,8 @@ const InBangKeTong = () => {
 
       {/* Order Selection Modal */}
       {showOrderSelectModal && (
-        <div className="search-modal-overlay" onClick={() => setShowOrderSelectModal(false)} style={{ zIndex: 9999 }}>
-          <div className="search-modal order-select-modal-fullscreen" onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 0, width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', boxShadow: 'none', overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0 }}>
+        <div className="order-select-overlay" onClick={() => setShowOrderSelectModal(false)} style={{ zIndex: 9998 }}>
+          <div className="order-select-modal order-select-modal-fullscreen" onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 0, width: '100vw', height: '100vh', maxWidth: '100vw', maxHeight: '100vh', boxShadow: 'none', overflow: 'hidden', display: 'flex', flexDirection: 'column', position: 'fixed', top: 0, left: 0 }}>
             <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 20px', background: '#f8f9fa', borderBottom: '1px solid #e9ecef' }}>
               <h3 style={{ margin: 0, fontSize: 16 }}>📋 Chọn đơn hàng để tạo bảng kê tổng</h3>
               <button onClick={() => setShowOrderSelectModal(false)} style={{ background: 'none', border: 'none', fontSize: 24, cursor: 'pointer', color: '#666' }}>×</button>
@@ -4751,70 +4722,155 @@ const InBangKeTong = () => {
               </span>
             </div>
             
-            {/* Orders table */}
-            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px' }}>
+            {/* Orders table (with header search + pagination + column settings) */}
+            <div style={{ flex: 1, overflowY: 'auto', padding: '12px 20px', display: 'flex', flexDirection: 'column' }}>
               {loadingOrders ? (
                 <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Đang tải danh sách đơn hàng...</div>
               ) : ordersForSelect.length === 0 ? (
                 <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Không có đơn hàng đã duyệt trong khoảng thời gian này</div>
               ) : (
-                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-                  <thead>
-                    <tr style={{ background: '#f0f5ff' }}>
-                      <th style={{ border: '1px solid #d9d9d9', padding: '8px', width: 40 }}>
-                        <input 
-                          type="checkbox" 
-                          checked={selectedOrderIds.size === ordersForSelect.length && ordersForSelect.length > 0}
-                          onChange={(e) => toggleSelectAllOrders(e.target.checked)}
-                        />
-                      </th>
-                      <th style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: 'left' }}>Số đơn hàng</th>
-                      <th style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: 'center' }}>Ngày đặt</th>
-                      <th style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: 'left' }}>Khách hàng</th>
-                      <th style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: 'right' }}>Tổng tiền</th>
-                      <th style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: 'left' }}>NV Sale</th>
-                      <th style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: 'center' }}>Trạng thái</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {ordersForSelect.map((order) => (
-                      <tr 
-                        key={order.id} 
-                        style={{ background: selectedOrderIds.has(order.id) ? '#e3f2fd' : 'transparent', cursor: 'pointer' }}
-                        onClick={() => toggleOrderSelect(order.id)}
-                      >
-                        <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>
-                          <input 
-                            type="checkbox" 
-                            checked={selectedOrderIds.has(order.id)}
-                            onChange={() => toggleOrderSelect(order.id)}
-                            onClick={(e) => e.stopPropagation()}
-                          />
-                        </td>
-                        <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.orderNumber || ''}</td>
-                        <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>
-                          {order.orderDate ? dayjs(order.orderDate).format('DD/MM/YYYY') : ''}
-                        </td>
-                        <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.customerName || order.customer || ''}</td>
-                        <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'right' }}>
-                          {(order.totalAmount || 0).toLocaleString('vi-VN')}
-                        </td>
-                        <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.salesStaff || order.createdBy || ''}</td>
-                        <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>
-                          <span style={{ 
-                            padding: '2px 8px', 
-                            borderRadius: 4, 
-                            fontSize: 11,
-                            background: order.status?.toLowerCase().includes('đã duyệt') ? '#d4edda' : '#f8d7da',
-                            color: order.status?.toLowerCase().includes('đã duyệt') ? '#155724' : '#721c24'
-                          }}>
-                            {order.status || ''}
-                          </span>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
+                (() => {
+                  const filtered = filterOrdersForSelect(ordersForSelect);
+                  const total = filtered.length;
+                  const pageSize = orderSelectPageSize;
+                  const totalPages = pageSize === 'All' ? 1 : Math.max(1, Math.ceil(total / pageSize));
+                  const currentPage = Math.min(orderSelectCurrentPage, totalPages);
+                  const start = (currentPage - 1) * pageSize;
+                  const pageItems = pageSize === 'All' ? filtered : filtered.slice(start, start + pageSize);
+
+                  return (
+                    <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                        <div />
+                        <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+                          <button title="Cài đặt cột" onClick={() => setShowDshdSettings(true)} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16 }}>⚙️</button>
+                        </div>
+                      </div>
+
+                      <div style={{ overflowX: 'auto' }}>
+                        <table style={{ width: '100%', minWidth: 1200, borderCollapse: 'collapse', fontSize: 13 }}>
+                          <thead>
+                            <tr style={{ background: '#f0f5ff' }}>
+                              <th style={{ border: '1px solid #d9d9d9', padding: '8px', width: 40 }}>
+                                <input 
+                                  type="checkbox" 
+                                  checked={selectedOrderIds.size === ordersForSelect.length && ordersForSelect.length > 0}
+                                  onChange={(e) => toggleSelectAllOrders(e.target.checked)}
+                                />
+                              </th>
+                              {[
+                                { id: 'orderDate', label: 'Ngày lập' },
+                                { id: 'maPhieu', label: 'Số phiếu' },
+                                { id: 'tenKhachHang', label: 'Khách hàng' },
+                                { id: 'tongTienSauGiam', label: 'Tổng tiền sau giảm' },
+                                { id: 'status', label: 'Trạng thái' },
+                                { id: 'createdBy', label: 'Nhân viên lập' },
+                                { id: 'taxRates', label: 'Thuế suất' },
+                                { id: 'loaiHang', label: 'Loại hàng' },
+                                { id: 'nvSale', label: 'Nhân viên sale' },
+                                { id: 'customerGroup', label: 'Nhóm khách hàng' },
+                                { id: 'salesSchedule', label: 'Lịch bán hàng' },
+                                { id: 'tongTien', label: 'Tổng tiền' },
+                                { id: 'totalKg', label: 'Tổng số kg' },
+                                { id: 'totalM3', label: 'Tổng số khối' },
+                                { id: 'printOrder', label: 'STT in' },
+                                { id: 'vehicle', label: 'Xe' },
+                                { id: 'deliveryVehicle', label: 'Xe giao hàng' },
+                                { id: 'printStatus', label: 'Trạng thái in' },
+                                { id: 'printCount', label: 'Số lần in' },
+                                { id: 'printDate', label: 'Ngày in' },
+                                { id: 'actions', label: 'Thao tác' }
+                              ].map(col => (
+                                <th key={col.id} style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: 'left' }}>
+                                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                                    <span style={{ flex: 1 }}>{col.label}</span>
+                                    {col.id !== 'actions' && (
+                                      <>
+                                        <button onClick={(e) => { e.stopPropagation(); openDshdSearchFromOrderSelect(col.id, col.label, filtered); }} title={`Tìm kiếm theo ${col.label}`} style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, opacity: 0.6 }}>🔍</button>
+                                        {dshdColumnFilters[col.id] && (
+                                          <button onClick={(e) => { e.stopPropagation(); clearDshdFilter(col.id); }} title="Xóa bộ lọc" style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 12, color: '#c9302c' }}>✖</button>
+                                        )}
+                                      </>
+                                    )}
+                                  </div>
+                                </th>
+                              ))}
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {pageItems.map((order) => (
+                              <tr 
+                                key={order.id} 
+                                style={{ background: selectedOrderIds.has(order.id) ? '#e3f2fd' : 'transparent', cursor: 'pointer' }}
+                                onClick={() => toggleOrderSelect(order.id)}
+                              >
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>
+                                  <input 
+                                    type="checkbox" 
+                                    checked={selectedOrderIds.has(order.id)}
+                                    onChange={() => toggleOrderSelect(order.id)}
+                                    onClick={(e) => e.stopPropagation()}
+                                  />
+                                </td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>{order.orderDate ? dayjs(order.orderDate).format('DD/MM/YYYY') : ''}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.orderNumber || ''}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.customerName || order.customer || ''}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'right' }}>{(order.totalAfterDiscount || order.totalAmount || 0).toLocaleString('vi-VN')}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>
+                                  <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, background: order.status?.toLowerCase().includes('đã duyệt') ? '#d4edda' : '#f8d7da', color: order.status?.toLowerCase().includes('đã duyệt') ? '#155724' : '#721c24' }}>{order.status || ''}</span>
+                                </td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.createdBy || ''}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.taxRates || order.TaxRates || ''}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.productType || ''}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.salesStaff || order.salesEmployee || ''}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.customerGroup || ''}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.salesSchedule || ''}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'right' }}>{(order.totalAmount || 0).toLocaleString('vi-VN')}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'right' }}>{Number(order.totalKg || 0).toLocaleString('vi-VN')}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'right' }}>{Number(order.totalM3 || 0).toLocaleString('vi-VN')}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.printOrder || ''}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.vehicle || ''}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px' }}>{order.deliveryVehicle || ''}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>
+                                  <span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, background: (order.printCount || 0) > 0 ? '#d4edda' : '#f8d7da', color: (order.printCount || 0) > 0 ? '#155724' : '#721c24' }}>{(order.printCount || 0) > 0 ? 'Đã in' : 'Chưa in'}</span>
+                                </td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>{order.printCount || 0}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>{order.printDate ? dayjs(order.printDate).format('DD/MM/YYYY') : ''}</td>
+                                <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>
+                                  <button onClick={(e) => { e.stopPropagation(); handleViewOrderDetail && handleViewOrderDetail(order.id); }} style={{ padding: '6px 8px', borderRadius: 4, border: '1px solid #ddd', background: '#fff', cursor: 'pointer' }}>Chi tiết</button>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+
+                      {/* Pagination controls */}
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', paddingTop: 8 }}>
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <span style={{ fontSize: 13 }}>Hiển thị:</span>
+                          <select value={orderSelectPageSize} onChange={(e) => { const v = e.target.value === 'all' ? 'All' : parseInt(e.target.value, 10); setOrderSelectPageSize(v); setOrderSelectCurrentPage(1); }} style={{ padding: '4px', fontSize: 13 }}>
+                            <option value={10}>10</option>
+                            <option value={20}>20</option>
+                            <option value={50}>50</option>
+                            <option value={100}>100</option>
+                            <option value={200}>200</option>
+                            <option value={500}>500</option>
+                            <option value={1000}>1000</option>
+                            <option value="all">Tất cả</option>
+                          </select>
+                        </div>
+
+                        <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                          <button onClick={() => setOrderSelectCurrentPage(p => Math.max(1, p - 1))} disabled={orderSelectCurrentPage <= 1} style={{ padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: 4 }}>Trước</button>
+                          <span>Trang {currentPage} / {totalPages}</span>
+                          <button onClick={() => setOrderSelectCurrentPage(p => Math.min(totalPages, p + 1))} disabled={orderSelectCurrentPage >= totalPages} style={{ padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: 4 }}>Sau</button>
+                          <span style={{ fontSize: 12, color: '#666' }}> ({total} đơn)</span>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })()
               )}
             </div>
             
