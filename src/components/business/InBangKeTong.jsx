@@ -224,6 +224,9 @@ const InBangKeTong = () => {
   // current logged-in user and permissions
   const { user, permissions } = useAuth();
 
+  // map: normalized customer name → customerGroup code (loaded from Customers API)
+  const [customerNameToGroupMap, setCustomerNameToGroupMap] = useState({});
+
   // Load customer groups mapping for displaying group names in modal
   useEffect(() => {
     let mounted = true;
@@ -235,6 +238,8 @@ const InBangKeTong = () => {
         groups.forEach(g => {
           if (g.id) map[g.id] = g.name || g.title || g.code || '';
           if (g.code) map[g.code] = g.name || g.title || g.code || '';
+          // Also map by name for reverse lookup
+          if (g.name) map[g.name] = g.name;
         });
         setCustomerGroupsMap(map);
       } catch (e) {
@@ -242,6 +247,27 @@ const InBangKeTong = () => {
       }
     };
     loadGroups();
+    return () => { mounted = false; };
+  }, []);
+
+  // Load customer name → group mapping (for resolving group in DS hóa đơn)
+  useEffect(() => {
+    let mounted = true;
+    const loadCustomerGroups = async () => {
+      try {
+        const customers = await api.get(API_ENDPOINTS.customers);
+        if (!mounted || !customers) return;
+        const map = {};
+        customers.forEach(c => {
+          const n = (c.name || '').toString().trim().toLowerCase();
+          if (n && c.customerGroup) map[n] = c.customerGroup;
+        });
+        setCustomerNameToGroupMap(map);
+      } catch (e) {
+        console.error('Failed to load customers for group mapping:', e);
+      }
+    };
+    loadCustomerGroups();
     return () => { mounted = false; };
   }, []);
 
@@ -289,6 +315,7 @@ const InBangKeTong = () => {
     { id: 'tongTien', label: 'Tổng tiền', width: 130, visible: true, align: 'right' },
     { id: 'tongTienSauGiam', label: 'Tổng tiền sau giảm', width: 150, visible: true, align: 'right' },
     { id: 'nvSale', label: 'NV Sale', width: 120, visible: true, align: 'left' },
+    { id: 'customerGroup', label: 'Nhóm khách hàng', width: 140, visible: true, align: 'left' },
     { id: 'loaiHang', label: 'Loại hàng', width: 120, visible: true, align: 'left' },
   ];
   const [dshdColumns, setDshdColumns] = useState(() => {
@@ -459,6 +486,15 @@ const InBangKeTong = () => {
       case 'tongTien': return formatCurrency(item.tongTien);
       case 'tongTienSauGiam': return formatCurrency(item.tongTienSauGiam);
       case 'nvSale': return item.nvSale || '';
+      case 'customerGroup': {
+        // Resolve via: item field → customer name lookup → customerGroupsMap
+        let groupCode = item.customerGroup || item.customerGroupId || item.customerGroupCode || '';
+        if (!groupCode) {
+          const custName = (item.tenKhachHang || '').toString().trim().toLowerCase();
+          groupCode = customerNameToGroupMap[custName] || '';
+        }
+        return customerGroupsMap[groupCode] || item.customerGroupName || groupCode || '';
+      }
       case 'loaiHang': return item.loaiHang || '';
       default: return '';
     }
@@ -652,6 +688,14 @@ const InBangKeTong = () => {
     const noDataMsg = isBkt ? 'Không có dữ liệu bảng kê tổng' : 'Không có dữ liệu DS hóa đơn';
     const visibleCols = cols.filter(c => c.visible);
     const filteredItems = filterItems(dataItems || []);
+    // totals for visible DS hóa đơn items (used to render footer "Tổng cộng")
+    const totalTongTien = filteredItems.reduce((s, it) => s + (Number(it.tongTien || it.total || 0) || 0), 0);
+    const totalTongTienSauGiam = filteredItems.reduce((s, it) => s + (Number(it.tongTienSauGiam ?? it.tongTien ?? 0) || 0), 0);
+    // totals for Bảng kê tổng quantities
+    const totalSoLuongDVT1 = isBkt ? filteredItems.reduce((s, it) => s + (Number(it.soLuongDVT1) || 0), 0) : 0;
+    const totalSoLuongDVTGoc = isBkt ? filteredItems.reduce((s, it) => s + (Number(it.soLuongDVTGoc) || 0), 0) : 0;
+    const totalSlBanTheoDVTGoc = isBkt ? filteredItems.reduce((s, it) => s + (Number(it.slBanTheoDVTGoc) || 0), 0) : 0;
+    const footerLabelColId = (visibleCols && visibleCols.length) ? visibleCols[0].id : null;
 
     return (
       <div className="order-items-section">
@@ -736,6 +780,55 @@ const InBangKeTong = () => {
                 </tr>
               )}
             </tbody>
+            <tfoot>
+              <tr style={{ background: '#fafafa', fontWeight: 700 }}>
+                {visibleCols.map(col => {
+                  if (col.id === footerLabelColId) {
+                    return (
+                      <td key={col.id} style={{ border: '1px solid #d9d9d9', padding: '6px 8px', textAlign: 'left' }}>
+                        Tổng cộng
+                      </td>
+                    );
+                  }
+                  if (col.id === 'tongTien') {
+                    return (
+                      <td key={col.id} style={{ border: '1px solid #d9d9d9', padding: '6px 8px', textAlign: col.align || 'right', color: '#000' }}>
+                        {formatCurrency(totalTongTien)}
+                      </td>
+                    );
+                  }
+                  if (col.id === 'tongTienSauGiam') {
+                    return (
+                      <td key={col.id} style={{ border: '1px solid #d9d9d9', padding: '6px 8px', textAlign: col.align || 'right', color: '#000' }}>
+                        {formatCurrency(totalTongTienSauGiam)}
+                      </td>
+                    );
+                  }
+                  if (isBkt && col.id === 'soLuongDVT1') {
+                    return (
+                      <td key={col.id} style={{ border: '1px solid #d9d9d9', padding: '6px 8px', textAlign: 'right', color: '#000' }}>
+                        {(Number(totalSoLuongDVT1) || 0).toLocaleString('vi-VN')}
+                      </td>
+                    );
+                  }
+                  if (isBkt && col.id === 'soLuongDVTGoc') {
+                    return (
+                      <td key={col.id} style={{ border: '1px solid #d9d9d9', padding: '6px 8px', textAlign: 'right', color: '#000' }}>
+                        {(Number(totalSoLuongDVTGoc) || 0).toLocaleString('vi-VN')}
+                      </td>
+                    );
+                  }
+                  if (isBkt && col.id === 'slBanTheoDVTGoc') {
+                    return (
+                      <td key={col.id} style={{ border: '1px solid #d9d9d9', padding: '6px 8px', textAlign: 'right', color: '#000' }}>
+                        {(Number(totalSlBanTheoDVTGoc) || 0).toLocaleString('vi-VN')}
+                      </td>
+                    );
+                  }
+                  return <td key={col.id} style={{ border: '1px solid #d9d9d9', padding: '6px 8px', textAlign: col.align || 'center' }} />;
+                })}
+              </tr>
+            </tfoot>
           </table>
         </div>
         <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '6px 8px', borderTop: '1px solid #eee', fontSize: 12 }}>
@@ -2531,6 +2624,8 @@ const InBangKeTong = () => {
           tongTienSauGiam: h.tongTienSauGiam,
           nvSale: h.nvSale,
           loaiHang: h.loaiHang,
+          customerGroup: h.customerGroup || h.customerGroupId || h.customerGroupCode || '',
+          customerGroupName: h.customerGroupName || h.customerGroupTitle || h.customerGroup || ''
         })),
       }));
       setImports(mapped);
@@ -2628,6 +2723,8 @@ const InBangKeTong = () => {
             tongTienSauGiam: h.tongTienSauGiam,
             nvSale: h.nvSale,
             loaiHang: h.loaiHang,
+            customerGroup: h.customerGroup || h.customerGroupId || h.customerGroupCode || '',
+            customerGroupName: h.customerGroupName || h.customerGroupTitle || h.customerGroup || ''
           })),
         };
         setSelectedImport(mapped);
@@ -2948,7 +3045,7 @@ const InBangKeTong = () => {
         { header: 'Tổng tiền', key: 'tongTien', width: 18 },
         { header: 'Tổng tiền sau giảm', key: 'tongTienSauGiam', width: 22 },
         { header: 'NV Sale', key: 'nvSale', width: 18 },
-        { header: 'Loại hàng', key: 'loaiHang', width: 22 }
+        { header: 'Loại hàng', key: 'loaiHang', width: 36 }
       ];
 
       // Fetch company info
@@ -3051,57 +3148,145 @@ const InBangKeTong = () => {
 
       // Build rows for sheet2 from dsHoaDonItems
       const hoaDonItems = selectedImport.dsHoaDonItems || [];
-      hoaDonItems.forEach((item, idx) => {
-        sheet2.addRow({
-          stt: idx + 1,
-          maPhieu: item.maPhieu || '',
-          tenKhachHang: item.tenKhachHang || '',
-          tongTien: item.tongTien || 0,
-          tongTienSauGiam: item.tongTienSauGiam || 0,
-          nvSale: item.nvSale || '',
-          loaiHang: item.loaiHang || ''
+      // Ensure customerGroupsMap is populated (try to fetch if empty)
+      if (!customerGroupsMap || Object.keys(customerGroupsMap).length === 0) {
+        try {
+          const groupsResp = await api.get(API_ENDPOINTS.customerGroups);
+          const map = {};
+          if (groupsResp && Array.isArray(groupsResp)) {
+            groupsResp.forEach(g => {
+              if (g.id) map[g.id] = g.name || g.title || g.code || '';
+              if (g.code) map[g.code] = g.name || g.title || g.code || '';
+            });
+          }
+          setCustomerGroupsMap(prev => ({ ...(prev || {}), ...map }));
+          Object.assign(customerGroupsMap, map);
+        } catch (e) {
+          // ignore fetch error and proceed
+        }
+      }
+
+      // Enrich hoaDonItems by looking up customer → customerGroup from Customers API
+      try {
+        // Use already-loaded map, or fetch fresh if empty
+        let custNameToGroup = customerNameToGroupMap;
+        if (!custNameToGroup || Object.keys(custNameToGroup).length === 0) {
+          const customersResp = await api.get(API_ENDPOINTS.customers);
+          if (customersResp && Array.isArray(customersResp)) {
+            custNameToGroup = {};
+            customersResp.forEach(c => {
+              const n = (c.name || '').toString().trim().toLowerCase();
+              if (n && c.customerGroup) custNameToGroup[n] = c.customerGroup;
+            });
+          }
+        }
+        hoaDonItems.forEach(item => {
+          if (!item.customerGroup || String(item.customerGroup).trim() === '') {
+            const custName = (item.tenKhachHang || '').toString().trim().toLowerCase();
+            if (custName && custNameToGroup[custName]) {
+              item.customerGroup = custNameToGroup[custName];
+            }
+          }
+        });
+      } catch (e) {
+        // ignore enrichment errors
+      }
+
+      // Group dsHoaDonItems by customer group and render with group header rows
+      const groups = {};
+      const groupOrder = [];
+      hoaDonItems.forEach(item => {
+        const groupCode = item.customerGroup || '';
+        // Resolve friendly name: try customerGroupsMap (by id or code), then use raw value
+        const name = customerGroupsMap[groupCode] || item.customerGroupName || groupCode || 'Khác';
+        const key = groupCode || 'null';
+        if (!groups[key]) { groups[key] = { name, items: [] }; groupOrder.push(key); }
+        groups[key].items.push(item);
+      });
+
+      // Starting from row after top info (row 6 is header row produced by columns), write grouped rows
+      groupOrder.forEach(gk => {
+        const g = groups[gk];
+        const lastCol = sheet2.columns.length;
+        const headerRow = sheet2.addRow([`Nhóm khách hàng: ${g.name}`]);
+        const rIndex = headerRow.number;
+        sheet2.mergeCells(rIndex, 1, rIndex, lastCol);
+        sheet2.getRow(rIndex).font = { italic: true, bold: true };
+        g.items.forEach((item, idx) => {
+          sheet2.addRow({
+            stt: idx + 1,
+            maPhieu: item.maPhieu || '',
+            tenKhachHang: item.tenKhachHang || '',
+            tongTien: item.tongTien || 0,
+            tongTienSauGiam: item.tongTienSauGiam || 0,
+            nvSale: item.nvSale || '',
+            loaiHang: item.loaiHang || '',
+            
+          });
         });
       });
 
-      // Style headers for both sheets
+      // Insert a summary row of customer groups into sheet1 (if any)
+      try {
+        const lastCol1 = sheet1.columns.length;
+        const groupNames = Array.from(new Set(groupOrder.map(gk => groups[gk] && groups[gk].name).filter(Boolean)));
+        if (groupNames.length > 0) {
+          const label = `Nhóm khách hàng: ${groupNames.join(', ')}`;
+          const inserted = sheet1.insertRow(6, [label]);
+          sheet1.mergeCells(inserted.number, 1, inserted.number, lastCol1);
+          sheet1.getRow(inserted.number).font = { italic: true };
+          sheet1.getRow(inserted.number).getCell(1).alignment = { horizontal: 'left' };
+        }
+      } catch (e) { /* ignore */ }
+
+      // Style headers for both sheets separately (sheet1 header may shift if we inserted group row)
       const headerFill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF4472C4' } };
       const headerFontColor = { argb: 'FFFFFFFF' };
       const borderThin = { style: 'thin', color: { argb: 'FFBFBFBF' } };
       const allBorder = { top: borderThin, left: borderThin, bottom: borderThin, right: borderThin };
 
-      [sheet1, sheet2].forEach(s => {
-        const headerRowIndex = 6;
-        const hdr = s.getRow(headerRowIndex);
-        hdr.height = 20;
-        hdr.font = { bold: true, color: headerFontColor };
-        hdr.alignment = { vertical: 'middle', horizontal: 'center' };
-        hdr.eachCell((cell) => {
-          cell.fill = headerFill;
-          cell.border = allBorder;
-        });
-
-        s.views = [{ state: 'frozen', ySplit: headerRowIndex }];
-
-        s.eachRow({ includeEmpty: false }, (row, rowNumber) => {
-          if (rowNumber <= headerRowIndex) return;
+      // sheet1: header row is 6 unless we inserted a group row (then header moved to 7)
+      const sheet1HeaderRow = sheet1.getRow(6).values && String(sheet1.getRow(6).values[1] || '').toString().startsWith('Số TT') ? 6 : 7;
+      try {
+        const hdr1 = sheet1.getRow(sheet1HeaderRow);
+        hdr1.height = 20;
+        hdr1.font = { bold: true, color: headerFontColor };
+        hdr1.alignment = { vertical: 'middle', horizontal: 'center' };
+        hdr1.eachCell((cell) => { cell.fill = headerFill; cell.border = allBorder; });
+        sheet1.views = [{ state: 'frozen', ySplit: sheet1HeaderRow }];
+        sheet1.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+          if (rowNumber <= sheet1HeaderRow) return;
           row.eachCell((cell, colNumber) => {
             cell.border = allBorder;
-            const key = s.getColumn(colNumber).key;
-            if (['soLuongDVT1', 'soLuongDVTGoc', 'slBanTheoDVTGoc', 'tongTien', 'tongTienSauGiam'].includes(key)) {
-              cell.alignment = { horizontal: 'right', vertical: 'top' };
-            } else if (key === 'tenHang' || key === 'moTa' || key === 'tenKhachHang') {
-              cell.alignment = { wrapText: true, vertical: 'top', horizontal: 'left' };
-            } else {
-              cell.alignment = { vertical: 'top', horizontal: 'left' };
-            }
+            const key = sheet1.getColumn(colNumber).key;
+            if (['soLuongDVT1', 'soLuongDVTGoc', 'slBanTheoDVTGoc'].includes(key)) cell.alignment = { horizontal: 'right', vertical: 'top' };
+            else if (key === 'tenHang' || key === 'moTa') cell.alignment = { wrapText: true, vertical: 'top', horizontal: 'left' };
+            else cell.alignment = { vertical: 'top', horizontal: 'left' };
           });
         });
+        try { sheet1.autoFilter = { from: { row: sheet1HeaderRow, column: 1 }, to: { row: sheet1HeaderRow, column: sheet1.columns.length } }; } catch (e) {}
+      } catch (e) {}
 
-        try {
-          const lastCol = s.columns.length;
-          s.autoFilter = { from: { row: headerRowIndex, column: 1 }, to: { row: headerRowIndex, column: lastCol } };
-        } catch (e) {}
-      });
+      // sheet2: header row is 6
+      try {
+        const hdr2 = sheet2.getRow(6);
+        hdr2.height = 20;
+        hdr2.font = { bold: true, color: headerFontColor };
+        hdr2.alignment = { vertical: 'middle', horizontal: 'center' };
+        hdr2.eachCell((cell) => { cell.fill = headerFill; cell.border = allBorder; });
+        sheet2.views = [{ state: 'frozen', ySplit: 6 }];
+        sheet2.eachRow({ includeEmpty: false }, (row, rowNumber) => {
+          if (rowNumber <= 6) return;
+          row.eachCell((cell, colNumber) => {
+            cell.border = allBorder;
+            const key = sheet2.getColumn(colNumber).key;
+            if (['tongTien', 'tongTienSauGiam'].includes(key)) cell.alignment = { horizontal: 'right', vertical: 'top' };
+            else if (key === 'tenKhachHang' || key === 'customerGroup' || key === 'loaiHang') cell.alignment = { wrapText: true, vertical: 'top', horizontal: 'left' };
+            else cell.alignment = { vertical: 'top', horizontal: 'left' };
+          });
+        });
+        try { sheet2.autoFilter = { from: { row: 6, column: 1 }, to: { row: 6, column: sheet2.columns.length } }; } catch (e) {}
+      } catch (e) {}
 
       // Numeric formatting
       try { sheet1.getColumn('soLuongDVT1').numFmt = '#,##0'; } catch {}
@@ -3474,6 +3659,21 @@ const InBangKeTong = () => {
         bktIdx++;
       });
 
+      // Resolve customerGroup by customer name (use preloaded map or fetch)
+      let custNameToGroupMap = customerNameToGroupMap;
+      if (!custNameToGroupMap || Object.keys(custNameToGroupMap).length === 0) {
+        try {
+          const customersResp = await api.get(API_ENDPOINTS.customers);
+          if (customersResp && Array.isArray(customersResp)) {
+            custNameToGroupMap = {};
+            customersResp.forEach(c => {
+              const n = (c.name || '').toString().trim().toLowerCase();
+              if (n && c.customerGroup) custNameToGroupMap[n] = c.customerGroup;
+            });
+          }
+        } catch (e) { /* ignore */ }
+      }
+
       // Build dsHoaDonItems from selected orders (include promotion items for nvSale/loaiHang like PrintOrder)
       const dsHoaDonItems = ordersWithItems.map(({ order, items, promotionItems }) => {
         const allItems = [...(items || []), ...(promotionItems || [])];
@@ -3490,6 +3690,10 @@ const InBangKeTong = () => {
           if (product && product.category) catSet.add(product.category);
         });
         const loaiHangValue = catSet.size > 0 ? Array.from(catSet).join(', ') : (order.productType || '');
+        // Resolve customerGroup via customer name lookup
+        const custName = (order.customerName || order.customer || '').toString().trim().toLowerCase();
+        const custGroupCode = order.customerGroup || order.customerGroupId || order.customerGroupCode || custNameToGroupMap[custName] || '';
+        const custGroupName = customerGroupsMap[custGroupCode] || order.customerGroupName || custGroupCode || '';
         return {
           id: `dshd_${order.id}_${Date.now()}`,
           orderId: order.id,
@@ -3499,6 +3703,8 @@ const InBangKeTong = () => {
           tongTienSauGiam: order.totalAfterDiscount || order.totalAmount || 0,
           nvSale: nvSaleValue,
           loaiHang: loaiHangValue,
+          customerGroup: custGroupCode,
+          customerGroupName: custGroupName
         };
       });
 
@@ -3621,14 +3827,14 @@ const InBangKeTong = () => {
               <div className="search-panel-date-row" style={{ display: 'flex', gap: 8 }}>
                 <DatePicker.RangePicker
                   value={[dateFrom ? dayjs(dateFrom) : null, dateTo ? dayjs(dateTo) : null]}
-                  onChange={(dates, dateStrings) => {
+                  onChange={(dates) => {
                     if (!dates) {
                       setDateFrom(''); setDateTo('');
                     } else {
-                      setDateFrom(dateStrings[0]); setDateTo(dateStrings[1]);
+                      setDateFrom(dates[0].format('YYYY-MM-DD')); setDateTo(dates[1].format('YYYY-MM-DD'));
                     }
                   }}
-                  format="YYYY-MM-DD"
+                  format="DD/MM/YYYY"
                   placeholder={["Start date", "End date"]}
                   allowClear
                   separator=" — "
@@ -3807,8 +4013,7 @@ const InBangKeTong = () => {
           </div>
         </div>
         <div style={{padding: '8px 12px', borderTop: '1px dashed #eee', marginTop: 8, color: '#333', fontSize: 13}}>
-          <strong>Tổng tiền của tất cả các phiếu là: </strong>
-          <span style={{color: '#000', fontWeight: 700}}>{(Number(leftTotalSum) || 0).toLocaleString('vi-VN')}</span>
+          <strong>Tổng tiền: {formatCurrency(leftTotalSum)} VNĐ ({numberToVietnameseText(Math.round(leftTotalSum))})</strong>
         </div>
       </div>
 
@@ -4908,7 +5113,7 @@ const InBangKeTong = () => {
                     loadOrdersForSelect(dates[0], dates[1]);
                   }
                 }}
-                format="YYYY-MM-DD"
+                format="DD/MM/YYYY"
                 placeholder={["Start date", "End date"]}
                 allowClear
                 separator=" — "

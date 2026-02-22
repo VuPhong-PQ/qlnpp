@@ -2145,6 +2145,172 @@ const PrintOrder = () => {
     }
   };
 
+  // Export selected orders in the same layout as print (2 copies per order) to a single Excel file
+  const handleExportSelectedAsPrintExcel = async () => {
+    if ((selectedOrders || new Set()).size === 0) {
+      alert('Vui lòng chọn ít nhất một đơn hàng để xuất');
+      return;
+    }
+    setLoading(true);
+    try {
+      const ExcelJS = (await import('exceljs')).default;
+      const workbook = new ExcelJS.Workbook();
+      const sheet = workbook.addWorksheet('In_Don_Hang');
+
+      // set reasonable column widths matching print table
+      sheet.columns = [
+        { header: 'STT', key: 'stt', width: 5 },
+        { header: 'NVBH', key: 'nvbh', width: 14 },
+        { header: 'MV', key: 'mv', width: 14 },
+        { header: 'Tên hàng', key: 'name', width: 44 },
+        { header: 'ĐVT', key: 'unit', width: 8 },
+        { header: 'SL', key: 'qty', width: 10 },
+        { header: 'Đơn giá', key: 'price', width: 12 },
+        { header: '%CK', key: 'discPct', width: 8 },
+        { header: 'Giá sau CK', key: 'priceAfter', width: 12 },
+        { header: 'Thành tiền', key: 'total', width: 14 }
+      ];
+
+      const orderIds = Array.from(selectedOrders);
+      const orderDetailsPromises = orderIds.map(async id => {
+        try {
+          const r = await fetch(`${API_BASE_URL}/Orders/${id}`);
+          if (r.ok) return await r.json();
+        } catch (e) {}
+        return null;
+      });
+      const orderDetails = await Promise.all(orderDetailsPromises);
+      const validOrders = orderDetails.filter(o => o !== null);
+
+      const compName = companyInfo?.name || 'NPP THỊNH PHÚ QUỐC';
+      const compAddr = companyInfo?.address || '';
+      const compPhone = companyInfo?.phone || '';
+
+      const thinBorder = { style: 'thin', color: { argb: 'FF000000' } };
+
+      const setRangeBorder = (startRow, startCol, endRow, endCol) => {
+        for (let r = startRow; r <= endRow; r++) {
+          const row = sheet.getRow(r);
+          for (let c = startCol; c <= endCol; c++) {
+            const cell = row.getCell(c);
+            cell.border = { top: thinBorder, left: thinBorder, bottom: thinBorder, right: thinBorder };
+          }
+        }
+      };
+
+      let cursor = 1;
+      for (const od of validOrders) {
+        const order = od.order;
+        const items = od.items || [];
+
+        // two copies per order
+        for (let lien = 1; lien <= 2; lien++) {
+          // Header block (apply borders to merged cells)
+          sheet.mergeCells(cursor, 1, cursor, 10);
+          sheet.getCell(cursor, 1).value = compName; sheet.getRow(cursor).font = { bold: true };
+          cursor++;
+
+          sheet.mergeCells(cursor, 1, cursor, 10);
+          sheet.getCell(cursor, 1).value = `Địa chỉ: ${compAddr}    Điện thoại: ${compPhone}`; sheet.getRow(cursor).font = { italic: true };
+          cursor++;
+
+          sheet.mergeCells(cursor, 1, cursor, 10);
+          sheet.getCell(cursor, 1).value = `PHIẾU GIAO HÀNG KIỂM XÁC NHẬN CÔNG NỢ    Liên: ${lien}`; sheet.getRow(cursor).font = { bold: true };
+          cursor++;
+
+          sheet.mergeCells(cursor, 1, cursor, 10);
+          sheet.getCell(cursor, 1).value = `Số: ${order.orderNumber || ''}    Nhóm: ${getCustomerGroupName(order.customerGroup)}    STT In: ${getCurrentCustomerPrintIn(order)}`;
+          cursor++;
+
+          // Customer info
+          sheet.mergeCells(cursor, 1, cursor, 10);
+          sheet.getCell(cursor, 1).value = `Khách hàng: ${getCurrentCustomerName(order)}    Địa chỉ: ${getCurrentCustomerAddress(order)}    ĐT: ${order.phone || ''}`;
+          cursor += 1;
+
+          // Table header
+          const headerRow = sheet.getRow(cursor);
+          headerRow.values = ['STT','NVBH','MV','Tên hàng','ĐVT','SL','Đơn giá','%CK','Giá sau CK','Thành tiền'];
+          headerRow.font = { bold: true };
+          headerRow.alignment = { vertical: 'middle', horizontal: 'center' };
+          // header fill
+          for (let c = 1; c <= 10; c++) {
+            const cell = headerRow.getCell(c);
+            cell.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9E1F2' } };
+            cell.border = { top: thinBorder, left: thinBorder, bottom: thinBorder, right: thinBorder };
+          }
+          cursor++;
+
+          // Items
+          let stt = 1;
+          let totalAmount = 0;
+          for (const it of items) {
+            const row = sheet.getRow(cursor);
+            const qty = Number(it.quantity || 0);
+            const unitPrice = Number(it.unitPrice || 0);
+            const priceAfterCK = Number(it.priceAfterCK || it.priceAfter || 0);
+            const totalAfterCK = Number(it.totalAfterCK || it.total || 0);
+            row.values = [stt++, it.nvSales || '', it.barcode || '', it.productName || '', getUnitLabel(it.unit), qty, unitPrice, it.discountPercent || 0, priceAfterCK, totalAfterCK];
+            // number formats and alignment
+            for (let c = 1; c <= 10; c++) {
+              const cell = row.getCell(c);
+              cell.border = { top: thinBorder, left: thinBorder, bottom: thinBorder, right: thinBorder };
+              if ([6,7,9,10].includes(c)) {
+                cell.numFmt = '#,##0';
+                cell.alignment = { horizontal: 'right' };
+              } else if (c === 5) {
+                cell.alignment = { horizontal: 'center' };
+              } else {
+                cell.alignment = { horizontal: 'left' };
+              }
+            }
+            totalAmount += totalAfterCK;
+            cursor++;
+          }
+
+          // Totals block
+          const discountPercent = Number(order.discountPercent || 0);
+          const discountAmount = Number(order.discountAmount || 0);
+          const finalTotal = totalAmount - discountAmount;
+
+          // empty row separator with border
+          sheet.getRow(cursor).values = [];
+          cursor++;
+
+          // totals rows (apply borders and highlight final)
+          const r1 = sheet.getRow(cursor); r1.values = ['', '', '', '', '', 'Tổng cộng', '', '', '', totalAmount];
+          r1.getCell(10).numFmt = '#,##0'; r1.getCell(10).alignment = { horizontal: 'right' };
+          cursor++;
+
+          const r2 = sheet.getRow(cursor); r2.values = ['', '', '', '', '', `Chiết khấu: ${discountPercent}%`, '', '', '', discountAmount];
+          r2.getCell(10).numFmt = '#,##0'; r2.getCell(10).alignment = { horizontal: 'right' };
+          cursor++;
+
+          const r3 = sheet.getRow(cursor); r3.values = ['', '', '', '', '', 'Thành tiền', '', '', '', finalTotal];
+          r3.getCell(10).numFmt = '#,##0'; r3.getCell(10).font = { bold: true, color: { argb: 'FFCC0000' } }; r3.getCell(10).alignment = { horizontal: 'right' };
+          cursor++;
+
+          // Total in words (no border)
+          sheet.mergeCells(cursor, 1, cursor, 10);
+          sheet.getCell(cursor, 1).value = `Tổng tiền bằng chữ: ${numberToVietnamese(finalTotal)}`;
+          cursor += 2; // leave an extra blank row between copies
+        }
+        // Add an extra blank separation row between orders
+        sheet.addRow([]); cursor++;
+      }
+
+      // finalize download
+      const buf = await workbook.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a'); a.href = url; a.download = `In_Don_Hang_${Date.now()}.xlsx`; document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(url);
+
+    } catch (e) {
+      alert('Lỗi khi xuất Excel: ' + (e && e.message ? e.message : e));
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // Date picker functions
   const handleDateRangeClick = () => {
     setShowDatePicker(!showDatePicker);
@@ -2714,6 +2880,7 @@ const PrintOrder = () => {
             style={{ position: 'fixed', left: contextMenu.x, top: contextMenu.y, zIndex: 99999 }}
           >
             <div className="context-menu-item" onClick={(e) => { e.stopPropagation(); hideContextMenu(); handlePrintSelected(); }}>🖨️ In danh sách đã chọn (2 liên)</div>
+            <div className="context-menu-item" onClick={(e) => { e.stopPropagation(); hideContextMenu(); handleExportSelectedAsPrintExcel(); }}>📥 Xuất Excel danh sách đã chọn (2 liên)</div>
             <div className="context-menu-item" onClick={(e) => { e.stopPropagation(); hideContextMenu(); handleExportSummary(); }}>📋 In phiếu xuất hàng tổng hợp theo nhóm khách hàng</div>
             <div className="context-menu-item" onClick={(e) => { e.stopPropagation(); hideContextMenu(); handleExportExcel(); }}>📥 Xuất Excel bảng kê giao hàng</div>
             <div className="context-menu-item" onClick={async (e) => { e.stopPropagation(); hideContextMenu(); await handleExportGHTongHopExcel(); }}>📊 Xuất Excel phiếu xuất hàng tổng hợp</div>

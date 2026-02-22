@@ -2699,7 +2699,7 @@ const ExportGoods = () => {
       }
 
       const companyName = companyNameDynamic || 'NPP THỊNH PHÚ QUỐC';
-      const printedAt = formData.createdDate || new Date().toISOString().split('T')[0];
+      const printedAt = dayjs(formData.createdDate || undefined).format('DD/MM/YYYY');
       const exportNumber = formData.exportNumber || (selectedExport && selectedExport.exportNumber) || '';
       const customerName = (selectedExport && (selectedExport.customerName || selectedExport.customer)) || '';
       const employeeName = formData.employee || (selectedExport && (selectedExport.employee || '')) || '';
@@ -2901,7 +2901,7 @@ const ExportGoods = () => {
       }).join('');
 
       const companyName = companyNameDynamic || 'NPP THỊNH PHÚ QUỐC';
-      const printedAt = formData.createdDate || new Date().toISOString().split('T')[0];
+      const printedAt = dayjs(formData.createdDate || undefined).format('DD/MM/YYYY');
       const exportNumber = formData.exportNumber || '';
       const customerName = (selectedExport && (selectedExport.customerName || selectedExport.customer)) || '';
       const employeeName = formData.employee || '';

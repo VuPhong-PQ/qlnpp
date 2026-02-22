@@ -2730,7 +2730,7 @@ const ImportGoods = () => {
       }
 
       const companyName = companyNameDynamic || 'NPP THỊNH PHÚ QUỐC';
-      const printedAt = formData.createdDate || new Date().toISOString().split('T')[0];
+      const printedAt = dayjs(formData.createdDate || undefined).format('DD/MM/YYYY');
       const importNumber = formData.importNumber || (selectedImport && selectedImport.importNumber) || '';
       const supplierName = (selectedImport && (selectedImport.supplierName || selectedImport.supplier)) || '';
       const employeeName = formData.employee || (selectedImport && (selectedImport.employee || '')) || '';
@@ -2932,7 +2932,7 @@ const ImportGoods = () => {
       }).join('');
 
       const companyName = companyNameDynamic || 'NPP THỊNH PHÚ QUỐC';
-      const printedAt = formData.createdDate || new Date().toISOString().split('T')[0];
+      const printedAt = dayjs(formData.createdDate || undefined).format('DD/MM/YYYY');
       const importNumber = formData.importNumber || '';
       const supplierName = (selectedImport && (selectedImport.supplierName || selectedImport.supplier)) || '';
       const employeeName = formData.employee || '';

@@ -19,16 +19,20 @@ const empty = {
   isInactive: false
 };
 
-// Helper function to format date for display (dd-MM-yyyy)
+// Helper function to format date for display (dd/MM/yyyy)
 const formatDateForDisplay = (dateValue) => {
   if (!dateValue) return '';
   try {
-    // Handle dd-MM-yyyy format
-    if (/^\d{2}-\d{2}-\d{4}$/.test(dateValue)) return dateValue;
+    // Handle dd/MM/yyyy format
+    if (/^\d{2}\/\d{2}\/\d{4}$/.test(dateValue)) return dateValue;
     // Handle yyyy-MM-dd format
     if (/^\d{4}-\d{2}-\d{2}$/.test(dateValue)) {
       const [y, m, d] = dateValue.split('-');
-      return `${d}-${m}-${y}`;
+      return `${d}/${m}/${y}`;
+    }
+    // Handle old dd-MM-yyyy format (backward compat)
+    if (/^\d{2}-\d{2}-\d{4}$/.test(dateValue)) {
+      return dateValue.replace(/-/g, '/');
     }
     // Handle ISO format
     const date = new Date(dateValue);
@@ -36,19 +40,25 @@ const formatDateForDisplay = (dateValue) => {
     const d = String(date.getDate()).padStart(2, '0');
     const m = String(date.getMonth() + 1).padStart(2, '0');
     const y = date.getFullYear();
-    return `${d}-${m}-${y}`;
+    return `${d}/${m}/${y}`;
   } catch {
     return '';
   }
 };
 
-// Helper function to convert dd-MM-yyyy to ISO for API
+// Helper function to convert dd/MM/yyyy to ISO for API
 const parseDisplayDate = (dateStr) => {
   if (!dateStr) return null;
-  // Handle dd-MM-yyyy format
-  const match = dateStr.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  // Handle dd/MM/yyyy format
+  const match = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
   if (match) {
     const [, d, m, y] = match;
+    return new Date(`${y}-${m}-${d}T00:00:00`).toISOString();
+  }
+  // Handle old dd-MM-yyyy format (backward compat)
+  const matchOld = dateStr.match(/^(\d{2})-(\d{2})-(\d{4})$/);
+  if (matchOld) {
+    const [, d, m, y] = matchOld;
     return new Date(`${y}-${m}-${d}T00:00:00`).toISOString();
   }
   return null;
@@ -66,7 +76,7 @@ export default function UserModal({ show, onClose, onSave, initialData }) {
 
   useEffect(() => {
     if (initialData) {
-      // Format date fields properly for display (dd-MM-yyyy)
+      // Format date fields properly for display (dd/MM/yyyy)
       setForm({
         ...empty,
         ...initialData,
@@ -162,7 +172,7 @@ export default function UserModal({ show, onClose, onSave, initialData }) {
     const submitData = {
       ...form,
       passwordHash: form.password, // Map password -> passwordHash
-      // Convert dd-MM-yyyy date strings to ISO format for API
+      // Convert dd/MM/yyyy date strings to ISO format for API
       birthYear: parseDisplayDate(form.birthYear),
       idIssuedDate: parseDisplayDate(form.idIssuedDate),
       yearStarted: parseDisplayDate(form.yearStarted)
@@ -233,7 +243,7 @@ export default function UserModal({ show, onClose, onSave, initialData }) {
 
               <div className="form-group">
                 <label>Năm sinh</label>
-                <input name="birthYear" type="text" placeholder="dd-MM-yyyy" value={form.birthYear || ''} onChange={handleChange} />
+                <input name="birthYear" type="text" placeholder="dd/MM/yyyy" value={form.birthYear || ''} onChange={handleChange} />
               </div>
 
               <div className="form-group">
@@ -243,7 +253,7 @@ export default function UserModal({ show, onClose, onSave, initialData }) {
 
               <div className="form-group">
                 <label>Ngày cấp</label>
-                <input name="idIssuedDate" type="text" placeholder="dd-MM-yyyy" value={form.idIssuedDate || ''} onChange={handleChange} />
+                <input name="idIssuedDate" type="text" placeholder="dd/MM/yyyy" value={form.idIssuedDate || ''} onChange={handleChange} />
               </div>
 
               <div className="form-group">
@@ -253,7 +263,7 @@ export default function UserModal({ show, onClose, onSave, initialData }) {
 
               <div className="form-group">
                 <label>Năm vào làm</label>
-                <input name="yearStarted" type="text" placeholder="dd-MM-yyyy" value={form.yearStarted || ''} onChange={handleChange} />
+                <input name="yearStarted" type="text" placeholder="dd/MM/yyyy" value={form.yearStarted || ''} onChange={handleChange} />
               </div>
 
               <div className="form-group">

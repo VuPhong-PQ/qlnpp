@@ -227,11 +227,11 @@ export default function Users() {
       'Tên nhân viên': u.name || '',
       'Số điện thoại': u.phone || '',
       'Email': u.email || '',
-      'Năm sinh': u.birthYear ? new Date(u.birthYear).toLocaleDateString() : '',
+      'Năm sinh': u.birthYear ? new Date(u.birthYear).toLocaleDateString('vi-VN') : '',
       'Số CMND/CCCD': u.idNumber || '',
-      'Ngày cấp': u.idIssuedDate ? new Date(u.idIssuedDate).toLocaleDateString() : '',
+      'Ngày cấp': u.idIssuedDate ? new Date(u.idIssuedDate).toLocaleDateString('vi-VN') : '',
       'Nơi cấp': u.idIssuedPlace || '',
-      'Năm vào làm': u.yearStarted ? new Date(u.yearStarted).toLocaleDateString() : '',
+      'Năm vào làm': u.yearStarted ? new Date(u.yearStarted).toLocaleDateString('vi-VN') : '',
       'Chức vụ': u.position || '',
       'Ghi chú': u.note || ''
     }));
@@ -509,11 +509,11 @@ export default function Users() {
                   <td>{u.name || ''}</td>
                   <td>{u.phone || ''}</td>
                   <td>{u.email || ''}</td>
-                  <td>{u.birthYear ? new Date(u.birthYear).toLocaleDateString() : ''}</td>
+                  <td>{u.birthYear ? new Date(u.birthYear).toLocaleDateString('vi-VN') : ''}</td>
                   <td>{u.idNumber || ''}</td>
-                  <td>{u.idIssuedDate ? new Date(u.idIssuedDate).toLocaleDateString() : ''}</td>
+                  <td>{u.idIssuedDate ? new Date(u.idIssuedDate).toLocaleDateString('vi-VN') : ''}</td>
                   <td>{u.idIssuedPlace || ''}</td>
-                  <td>{u.yearStarted ? new Date(u.yearStarted).toLocaleDateString() : ''}</td>
+                  <td>{u.yearStarted ? new Date(u.yearStarted).toLocaleDateString('vi-VN') : ''}</td>
                   <td>{u.position || ''}</td>
                   <td>{u.note || ''}</td>
                   <td style={{ width: 64, position: 'sticky', right: 0, background: '#fff', zIndex: 3 }}>
