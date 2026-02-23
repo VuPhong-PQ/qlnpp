@@ -1970,9 +1970,11 @@ const ImportGoods = () => {
           ? Number(r.totalAmount)
           : (r.items || []).reduce((s,it) => s + (Number(it.total) || 0), 0);
 
+        const created = r.createdDate || '';
+        const createdFormatted = created ? (dayjs(created).isValid() ? dayjs(created).format('DD/MM/YYYY') : String(created)) : '';
         ws.addRow({
           importNumber: r.importNumber,
-          createdDate: r.createdDate,
+          createdDate: createdFormatted,
           importType: r.importType,
           total: totalVal,
           note: r.note || ''

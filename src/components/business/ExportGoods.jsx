@@ -97,9 +97,11 @@ const ExportGoods = () => {
       // Add data rows
       rows.forEach(r => {
         const total = (r.items || []).reduce((s, it) => s + (Number(it.total) || 0), 0);
+        const created = r.createdDate || r.date || '';
+        const createdFormatted = created ? (dayjs(created).isValid() ? dayjs(created).format('DD/MM/YYYY') : String(created)) : '';
         ws.addRow({
           exportNumber: r.exportNumber || r.receiptNumber || '',
-          createdDate: r.createdDate || r.date || '',
+          createdDate: createdFormatted,
           employee: r.employee || '',
           exportType: r.exportType || '',
           total: total,

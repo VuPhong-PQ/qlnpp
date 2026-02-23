@@ -987,7 +987,7 @@ const PrintOrder = () => {
       filteredOrders.forEach(order => {
         worksheet.addRow({
           id: order.id,
-          orderDate: formatDate(order.orderDate),
+          orderDate: formatInputToDDMMYYYY(order.orderDate),
           orderNumber: order.orderNumber,
           customerGroup: getCustomerGroupName(order.customerGroup),
           salesSchedule: order.salesSchedule || '-',
@@ -999,7 +999,7 @@ const PrintOrder = () => {
           deliveryVehicle: order.deliveryVehicle || '-',
           printOrder: getCurrentCustomerPrintIn(order),
           printCount: order.printCount || 0,
-          printDate: order.printDate ? formatDate(order.printDate) : '-',
+          printDate: order.printDate ? formatInputToDDMMYYYY(order.printDate) : '-',
           createdBy: order.createdBy || '-',
           salesStaff: order.salesStaff || order.SalesStaff || '-',
           productType: order.productType || order.ProductType || '-',

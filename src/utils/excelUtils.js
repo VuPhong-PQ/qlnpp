@@ -1,5 +1,6 @@
 import * as XLSX from 'xlsx';
 import ExcelJS from 'exceljs';
+import dayjs from 'dayjs';
 
 /**
  * Export data to Excel file with company header
@@ -92,12 +93,30 @@ export const exportToExcel = async (data, filename = 'export', sheetName = 'Shee
     const headers = Object.keys(data[0]);
     worksheet.addRow(headers);
 
-    // Add data rows (force values to strings so Excel won't drop leading zeros)
+    // Add data rows (format date-like values to DD/MM/YYYY and force values to strings so Excel won't drop leading zeros)
     data.forEach(row => {
       const rowData = headers.map(h => {
         const v = row[h];
         if (v === null || v === undefined) return '';
-        return typeof v === 'string' ? v : v.toString();
+
+        // If it's a Date object, format it
+        if (v instanceof Date) return dayjs(v).format('DD/MM/YYYY');
+
+        // If it's a string that looks like an ISO or common date format, parse and format
+        if (typeof v === 'string') {
+          // Trim whitespace
+          const s = v.trim();
+          // Check common date-like patterns: yyyy-mm-dd, yyyy/mm/dd, dd-mm-yyyy, dd/mm/yyyy
+          const likelyDate = /^\d{4}-\d{2}-\d{2}/.test(s) || /^\d{4}\/\d{2}\/\d{2}/.test(s) || /^\d{2}-\d{2}-\d{4}$/.test(s) || /^\d{2}\/\d{2}\/\d{4}$/.test(s);
+          if (likelyDate) {
+            const parsed = dayjs(s);
+            if (parsed.isValid()) return parsed.format('DD/MM/YYYY');
+          }
+          return s;
+        }
+
+        // For numbers and other types, convert to string
+        return v.toString();
       });
       worksheet.addRow(rowData);
     });

@@ -1888,9 +1888,11 @@ const WarehouseTransfer = () => {
 
       rows.forEach(r => {
         const total = (r.items || []).reduce((s, it) => s + (Number(it.total) || 0), 0);
+        const created = r.createdDate || r.date || '';
+        const createdFormatted = created ? (dayjs(created).isValid() ? dayjs(created).format('DD/MM/YYYY') : String(created)) : '';
         ws.addRow({
           importNumber: r.importNumber || r.transferNumber || r.id || '',
-          createdDate: r.createdDate || r.date || '',
+          createdDate: createdFormatted,
           sourceWarehouse: r.sourceWarehouseName || r.sourceWarehouse || '',
           destWarehouse: r.destWarehouseName || r.destWarehouse || '',
           total: total,

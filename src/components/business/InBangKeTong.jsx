@@ -333,6 +333,9 @@ const InBangKeTong = () => {
   // Source for DSHD column-search: 'selectedImport' (default) or 'orderSelect'
   const [dshdSearchSource, setDshdSearchSource] = useState('selectedImport');
   const [dshdSearchSourceRows, setDshdSearchSourceRows] = useState([]);
+  const [dshdSearchSelections, setDshdSearchSelections] = useState([]);
+  const [dshdSearchPage, setDshdSearchPage] = useState(1);
+  const [dshdSearchPageSize, setDshdSearchPageSize] = useState(50);
 
   // Save column settings to localStorage
   useEffect(() => { try { localStorage.setItem(BKT_COL_KEY, JSON.stringify(bktColumns)); } catch {} }, [bktColumns]);
@@ -554,6 +557,12 @@ const InBangKeTong = () => {
   const applyDshdSearch = () => {
     const nf = { ...dshdColumnFilters };
     const q = dshdSearchQuery.trim();
+    // If user selected multiple values in order-select source, use multi filter
+    if (dshdSearchSource === 'orderSelect' && Array.isArray(dshdSearchSelections) && dshdSearchSelections.length > 0) {
+      nf[dshdSearchColumn.id] = { type: 'multi', values: dshdSearchSelections.slice() };
+      setDshdColumnFilters(nf); setShowDshdSearchModal(false); resetDshdSearchSource(); setDshdSearchSelections([]); setDshdSearchPage(1);
+      return;
+    }
     if (q) {
       // derive unique values depending on source
       let uniques = [];
@@ -622,8 +631,11 @@ const InBangKeTong = () => {
     return items.filter(item => {
       return Object.entries(dshdColumnFilters).every(([colId, query]) => {
         const val = String(renderDshdCell(item, colId, 0) || '').toLowerCase();
-        if (query && typeof query === 'object' && query.type === 'exact') {
-          return val === String(query.value).toLowerCase();
+        if (query && typeof query === 'object') {
+          if (query.type === 'exact') return val === String(query.value).toLowerCase();
+          if (query.type === 'multi' && Array.isArray(query.values) && query.values.length > 0) {
+            return query.values.map(v => String(v).toLowerCase()).includes(val);
+          }
         }
         return val.includes(String(query).toLowerCase());
       });
@@ -654,8 +666,13 @@ const InBangKeTong = () => {
           default:
             val = String(order[colId] || '').toLowerCase();
         }
-        if (qObj && typeof qObj === 'object' && qObj.type === 'exact') {
-          return String(val).toLowerCase() === q;
+        if (qObj && typeof qObj === 'object') {
+          if (qObj.type === 'exact') {
+            return String(val).toLowerCase() === q;
+          }
+          if (qObj.type === 'multi' && Array.isArray(qObj.values) && qObj.values.length > 0) {
+            return qObj.values.map(v => String(v).toLowerCase()).includes(String(val).toLowerCase());
+          }
         }
         // If the user typed a numeric-only query (e.g., "42"), match against numeric suffixes like "...-000042"
         if (colId === 'maPhieu' && /^\d+$/.test(q)) {
@@ -1035,21 +1052,40 @@ const InBangKeTong = () => {
       // filter suggestions by query (support numeric-only queries matching numeric suffixes)
       const q = (query || '').toString().trim();
       if (q) {
+        const qNorm = removeVietnameseTones(q).toLowerCase();
         if (/^\d+$/.test(q)) {
           uniqueValues = uniqueValues.filter(v => {
             try {
-              const digits = (String(v).match(/\d+/g) || []).pop() || '';
-              const digitsNoZero = digits.replace(/^0+/, '') || digits;
-              return String(v).toLowerCase().includes(q.toLowerCase()) || String(digitsNoZero).includes(q);
+              const groups = (String(v).match(/\d+/g) || []);
+              const anyMatch = groups.some(g => {
+                const gNoZero = g.replace(/^0+/, '') || g;
+                return String(gNoZero).includes(q);
+              });
+              return String(v).toLowerCase().includes(q.toLowerCase()) || anyMatch;
             } catch (e) {
               return String(v).toLowerCase().includes(q.toLowerCase());
             }
           }).slice(0, 50);
         } else {
-          uniqueValues = uniqueValues.filter(v => String(v).toLowerCase().includes(q.toLowerCase())).slice(0, 50);
+          // If searching order numbers but user typed customer name, allow matching by customer name (diacritics-insensitive)
+          if (searchCol && searchCol.id === 'maPhieu') {
+            const matched = [];
+            dshdSearchSourceRows.forEach(order => {
+              const orderNum = (order.orderNumber || order.orderNo || '').toString();
+              const cust = (order.customerName || order.customer || '').toString();
+              const orderNorm = removeVietnameseTones(orderNum).toLowerCase();
+              const custNorm = removeVietnameseTones(cust).toLowerCase();
+              if (orderNorm.includes(q.toLowerCase()) || custNorm.includes(qNorm)) {
+                matched.push(orderNum || (order.id || '').toString());
+              }
+            });
+            uniqueValues = Array.from(new Set(matched)).slice(0, 50);
+          } else {
+            uniqueValues = uniqueValues.filter(v => removeVietnameseTones(String(v)).toLowerCase().includes(qNorm));
+          }
         }
       } else {
-        uniqueValues = uniqueValues.slice(0, 50);
+        // keep full list for pagination
       }
     } else {
       uniqueValues = getUniqueValues(searchCol.id).filter(v => {
@@ -1058,12 +1094,96 @@ const InBangKeTong = () => {
       }).slice(0, 50);
     }
 
+    // Check if this is 'Số phiếu' search from order-select context - always use expanded view
+    const isExpandedModal = !isBkt && searchCol && searchCol.id === 'maPhieu' && dshdSearchSource === 'orderSelect';
+
+    // resize handlers
+    const startDshdModalResize = (e) => {
+      try {
+        e.preventDefault();
+        e.stopPropagation();
+        const node = dshdSearchModalRef.current;
+        if (!node) return;
+        const rect = node.getBoundingClientRect();
+        dshdSearchResizingRef.current = {
+          active: true,
+          mode: 'corner',
+          startX: e.clientX,
+          startY: e.clientY,
+          startW: rect.width,
+          startH: rect.height,
+          startLeft: rect.left
+        };
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'se-resize';
+        window.addEventListener('mousemove', onDshdModalMouseMove);
+        window.addEventListener('mouseup', onDshdModalMouseUp);
+      } catch (err) { console.warn('start resize err', err); }
+    };
+
+    const startDshdModalLeftResize = (e) => {
+      try {
+        e.preventDefault();
+        e.stopPropagation();
+        const node = dshdSearchModalRef.current;
+        if (!node) return;
+        const rect = node.getBoundingClientRect();
+        dshdSearchResizingRef.current = {
+          active: true,
+          mode: 'left',
+          startX: e.clientX,
+          startY: e.clientY,
+          startW: rect.width,
+          startH: rect.height,
+          startLeft: rect.left
+        };
+        document.body.style.userSelect = 'none';
+        document.body.style.cursor = 'ew-resize';
+        window.addEventListener('mousemove', onDshdModalMouseMove);
+        window.addEventListener('mouseup', onDshdModalMouseUp);
+      } catch (err) { console.warn('start left resize err', err); }
+    };
+
+    const onDshdModalMouseMove = (ev) => {
+      try {
+        const ref = dshdSearchResizingRef.current;
+        if (!ref.active) return;
+        const dx = ev.clientX - ref.startX;
+        const dy = ev.clientY - ref.startY;
+        const maxW = Math.max(300, window.innerWidth - 40);
+        let newW = Math.max(300, Math.min(Math.round(ref.startW + dx), maxW));
+        // support left-edge resize: mode === 'left' means dragging left edge
+        if (ref.mode === 'left') {
+          newW = Math.max(300, Math.min(Math.round(ref.startW - dx), maxW));
+          const newLeft = Math.round(ref.startLeft + dx);
+          try { if (dshdSearchModalRef.current) dshdSearchModalRef.current.style.left = newLeft + 'px'; } catch(e) {}
+        }
+        const newH = Math.max(180, Math.round(ref.startH + dy));
+        setDshdSearchModalSize({ width: newW + 'px', height: newH + 'px' });
+      } catch (err) { /* ignore */ }
+    };
+
+    const onDshdModalMouseUp = () => {
+      try {
+        dshdSearchResizingRef.current.active = false;
+        document.body.style.userSelect = '';
+        document.body.style.cursor = '';
+        window.removeEventListener('mousemove', onDshdModalMouseMove);
+        window.removeEventListener('mouseup', onDshdModalMouseUp);
+        // prevent immediate overlay click from closing modal
+        try {
+          dshdWasResizedRef.current = true;
+          setTimeout(() => { dshdWasResizedRef.current = false; }, 150);
+        } catch (e) { /* ignore */ }
+      } catch (err) { /* ignore */ }
+    };
+
     return (
-      <div className="search-modal-overlay" onClick={closeModal}>
-        <div className="search-modal" onClick={(e) => e.stopPropagation()} style={{ background: '#fff', borderRadius: 10, width: 380, maxWidth: '90%', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden' }}>
+      <div className="search-modal-overlay" onClick={(e) => { if (dshdWasResizedRef.current || (dshdSearchResizingRef.current && dshdSearchResizingRef.current.active)) { e.stopPropagation(); return; } closeModal(); }}>
+        <div ref={dshdSearchModalRef} className={"search-modal" + (searchCol && searchCol.id === 'maPhieu' ? ' resizable' : '')} onClick={(e) => e.stopPropagation()} style={{ position: 'relative', background: '#fff', borderRadius: 10, width: isExpandedModal ? (dshdSearchModalSize.width || '60vw') : (dshdSearchModalSize.width || 380), maxWidth: (dshdSearchResizingRef.current && dshdSearchResizingRef.current.active) ? 'none' : '95vw', boxShadow: '0 10px 40px rgba(0,0,0,0.2)', overflow: 'hidden', height: isExpandedModal ? (dshdSearchModalSize.height || undefined) : undefined, maxHeight: isExpandedModal ? (dshdSearchModalSize.height || '80vh') : undefined }}>
           <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 16px', background: '#f8f9fa', borderBottom: '1px solid #e9ecef' }}>
             <h3 style={{ margin: 0, fontSize: 15 }}>🔍 Tìm kiếm theo "{searchCol.label}"</h3>
-            <button onClick={closeModal} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#666' }}>×</button>
+            <button onClick={() => { closeModal(); setDshdSearchShowAll(false); }} style={{ background: 'none', border: 'none', fontSize: 22, cursor: 'pointer', color: '#666' }}>×</button>
           </div>
           <div style={{ padding: '12px 16px' }}>
             <input
@@ -1075,41 +1195,122 @@ const InBangKeTong = () => {
               style={{ width: '100%', padding: '8px 12px', border: '1px solid #dde2e8', borderRadius: 6, fontSize: 13, boxSizing: 'border-box' }}
             />
           </div>
-          <div style={{ maxHeight: 250, overflowY: 'auto', padding: '0 16px' }}>
+          <div style={{ maxHeight: isExpandedModal ? '60vh' : 250, overflowY: 'auto', padding: '0 16px' }}>
             <div style={{ fontSize: 11, color: '#999', marginBottom: 6 }}>Các giá trị có trong cột (click để chọn):</div>
             {uniqueValues.length === 0 ? (
               <div style={{ padding: 10, color: '#999', textAlign: 'center' }}>Không có dữ liệu</div>
             ) : (
-              uniqueValues.map((value, i) => (
-                <div
-                  key={i}
-                  onClick={() => { setQuery(value); }}
-                  style={{ padding: '7px 10px', cursor: 'pointer', borderBottom: '1px solid #f0f0f0', background: query === value ? '#e3f2fd' : 'transparent', fontSize: 13 }}
-                  onMouseEnter={(e) => { e.target.style.background = '#f5f5f5'; }}
-                  onMouseLeave={(e) => { e.target.style.background = query === value ? '#e3f2fd' : 'transparent'; }}
-                >
-                  {value}
-                </div>
-              ))
+              (() => {
+                // Pagination
+                const page = dshdSearchPage || 1;
+                const pageSize = dshdSearchPageSize || 50;
+                const total = uniqueValues.length;
+                const totalPages = Math.max(1, Math.ceil(total / pageSize));
+                const startIdx = (page - 1) * pageSize;
+                const pageSlice = dshdSearchShowAll ? uniqueValues : uniqueValues.slice(startIdx, startIdx + pageSize);
+
+                return (
+                  <div>
+                    {pageSlice.map((value, i) => (
+                      <div key={startIdx + i} style={{ padding: '7px 10px', borderBottom: '1px solid #f0f0f0', display: 'flex', alignItems: 'center', gap: 8 }}>
+                        <input type="checkbox" checked={dshdSearchSelections.includes(value)} onChange={() => {
+                          setDshdSearchSelections(prev => prev.includes(value) ? prev.filter(x => x !== value) : [...prev, value]);
+                        }} />
+                        <div style={{ flex: 1, cursor: 'pointer' }} onClick={() => setDshdSearchSelections(prev => prev.includes(value) ? prev.filter(x => x !== value) : [...prev, value])}>
+                          {(() => {
+                            if (!isBkt && dshdSearchSource === 'orderSelect' && searchCol && searchCol.id === 'maPhieu') {
+                              const rows = Array.isArray(dshdSearchSourceRows) ? dshdSearchSourceRows : [];
+                              const row = rows.find(o => (o.orderNumber || o.orderNo || '') === value) || rows.find(o => (o.id || '') === value) || null;
+                              const cust = row ? (row.customerName || row.customer || '') : '';
+                              const amt = row ? (row.totalAfterDiscount || row.totalAmount || 0) : '';
+                              const amtStr = (amt === '' || amt === null || amt === undefined) ? '' : Number(amt).toLocaleString('vi-VN');
+                              return `${value}${cust ? ' - ' + cust : ''}${amtStr ? ' - ' + amtStr : ''}`;
+                            }
+                            return value;
+                          })()}
+                        </div>
+                      </div>
+                    ))}
+
+                    <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 10px', gap: 8 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+                        <div style={{ fontSize: 12, color: '#666' }}>{dshdSearchShowAll ? 'Tất cả' : `Trang ${dshdSearchPage}/${Math.max(1, Math.ceil(uniqueValues.length / dshdSearchPageSize))}`}</div>
+                        <div style={{ fontSize: 12, color: '#666' }}>Hiển thị:</div>
+                        <Select size="small" value={dshdSearchShowAll ? 'all' : String(dshdSearchPageSize)} style={{ width: 120 }} onChange={(val) => {
+                          if (val === 'all') {
+                            setDshdSearchShowAll(true);
+                            setDshdSearchPage(1);
+                          } else {
+                            const n = parseInt(val, 10) || 10;
+                            setDshdSearchPageSize(n);
+                            setDshdSearchShowAll(false);
+                            setDshdSearchPage(1);
+                          }
+                        }}>
+                          <Select.Option value="10">10</Select.Option>
+                          <Select.Option value="50">50</Select.Option>
+                          <Select.Option value="100">100</Select.Option>
+                          <Select.Option value="500">500</Select.Option>
+                          <Select.Option value="1000">1000</Select.Option>
+                          <Select.Option value="5000">5000</Select.Option>
+                          <Select.Option value="all">Tất cả</Select.Option>
+                        </Select>
+                      </div>
+                      {!dshdSearchShowAll && (
+                        <div style={{ display: 'flex', gap: 8 }}>
+                          <button disabled={dshdSearchPage <= 1} onClick={() => setDshdSearchPage(p => Math.max(1, p - 1))} style={{ padding: '4px 8px' }}>Prev</button>
+                          <button disabled={dshdSearchPage >= Math.max(1, Math.ceil(uniqueValues.length / dshdSearchPageSize))} onClick={() => setDshdSearchPage(p => Math.min(Math.max(1, Math.ceil(uniqueValues.length / dshdSearchPageSize)), p + 1))} style={{ padding: '4px 8px' }}>Next</button>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()
             )}
           </div>
           <div style={{ padding: '10px 16px', borderTop: '1px solid #eee', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
-            <button onClick={() => { setQuery(''); setFilters({}); closeModal(); resetDshdSearchSource(); }} style={{ padding: '6px 14px', background: '#6c757d', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+            <button onClick={() => { setQuery(''); setFilters({}); setDshdSearchSelections([]); /* keep modal open for further search */ }} style={{ padding: '6px 14px', background: '#6c757d', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
               Xóa bộ lọc
             </button>
-            <button onClick={applySearch} style={{ padding: '6px 14px', background: '#667eea', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+            {(!isBkt && searchCol && searchCol.id === 'maPhieu' && dshdSearchSource === 'orderSelect') && (
+              <button onClick={() => {
+                // expand modal to show all items but keep current selections
+                // clear the current query so uniqueValues will include all items
+                setQuery('');
+                setDshdSearchShowAll(true);
+                setDshdSearchPage(1);
+                setDshdSearchSelections(prev => Array.isArray(prev) ? prev : []);
+              }} style={{ padding: '6px 14px', background: '#fff', color: '#333', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+                Xem tất cả
+              </button>
+            )}
+            <button onClick={() => { applySearch(); setDshdSearchShowAll(false); }} style={{ padding: '6px 14px', background: '#667eea', color: '#fff', border: 'none', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
               Áp dụng
             </button>
-            <button onClick={closeModal} style={{ padding: '6px 14px', background: '#fff', color: '#333', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
+            <button onClick={() => { closeModal(); setDshdSearchShowAll(false); }} style={{ padding: '6px 14px', background: '#fff', color: '#333', border: '1px solid #ddd', borderRadius: 4, cursor: 'pointer', fontSize: 12 }}>
               Đóng
             </button>
           </div>
+          {/* resize handles: corner (diagonal) and right-edge (horizontal) */}
+          <div onMouseDown={startDshdModalResize} style={{ position: 'absolute', right: 8, bottom: 8, width: 20, height: 20, cursor: 'se-resize', zIndex: 30 }} title="Kéo để thay đổi kích thước"> 
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 21L21 3" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              <path d="M14 21H21V14" stroke="#999" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </div>
+          <div onMouseDown={startDshdModalResize} className="search-modal-right-resize" style={{ position: 'absolute', right: 0, top: 8, bottom: 8, width: 14, cursor: 'ew-resize', zIndex: 29 }} title="Kéo ngang để thay đổi chiều rộng" />
+          <div onMouseDown={startDshdModalLeftResize} className="search-modal-left-resize" style={{ position: 'absolute', left: 0, top: 8, bottom: 8, width: 14, cursor: 'ew-resize', zIndex: 29 }} title="Kéo ngang từ trái để thay đổi chiều rộng" />
         </div>
       </div>
     );
   };
 
   const [selectedProducts, setSelectedProducts] = useState({});
+  const [dshdSearchShowAll, setDshdSearchShowAll] = useState(false);
+  const [dshdSearchModalSize, setDshdSearchModalSize] = useState({ width: null, height: null });
+  const dshdSearchModalRef = useRef(null);
+  const dshdSearchResizingRef = useRef({ active: false, startX: 0, startY: 0, startW: 0, startH: 0 });
+  const dshdWasResizedRef = useRef(false);
   const [selectedDates, setSelectedDates] = useState({});
   const [formData, setFormData] = useState(() => {
     const today = new Date();
@@ -3061,7 +3262,11 @@ const InBangKeTong = () => {
         }
       } catch (e) {}
 
-      const printedAt = formData.createdDate || selectedImport.createdDate || dayjs().format('DD/MM/YYYY');
+      const printedAt = (formData.createdDate && dayjs(formData.createdDate).isValid())
+        ? dayjs(formData.createdDate).format('DD/MM/YYYY')
+        : ((selectedImport && selectedImport.createdDate && dayjs(selectedImport.createdDate).isValid())
+          ? dayjs(selectedImport.createdDate).format('DD/MM/YYYY')
+          : dayjs().format('DD/MM/YYYY'));
       const importNumber = formData.importNumber || selectedImport.importNumber || '';
 
       // Insert top info rows for sheet1 (xuất hàng tổng hợp)
@@ -3334,7 +3539,11 @@ const InBangKeTong = () => {
         }
       } catch (e) {}
 
-      const printedAt = formData.createdDate || selectedImport.createdDate || dayjs().format('DD/MM/YYYY');
+      const printedAt = (formData.createdDate && dayjs(formData.createdDate).isValid())
+        ? dayjs(formData.createdDate).format('DD/MM/YYYY')
+        : ((selectedImport && selectedImport.createdDate && dayjs(selectedImport.createdDate).isValid())
+          ? dayjs(selectedImport.createdDate).format('DD/MM/YYYY')
+          : dayjs().format('DD/MM/YYYY'));
       const importNumber = formData.importNumber || selectedImport.importNumber || '';
 
       // Get bangKeTongItems for product list (already aggregated)
@@ -3351,6 +3560,89 @@ const InBangKeTong = () => {
       };
 
       // Build print HTML
+      // Determine customer groups present in this import (for summary and grouping)
+      const hoaDonItemsForPrint = selectedImport.dsHoaDonItems || [];
+      // Ensure customerGroupsMap available
+      if (!customerGroupsMap || Object.keys(customerGroupsMap).length === 0) {
+        try {
+          const groupsResp = await api.get(API_ENDPOINTS.customerGroups);
+          const map = {};
+          if (groupsResp && Array.isArray(groupsResp)) {
+            groupsResp.forEach(g => {
+              if (g.id) map[g.id] = g.name || g.title || g.code || '';
+              if (g.code) map[g.code] = g.name || g.title || g.code || '';
+            });
+          }
+          Object.assign(customerGroupsMap, map);
+        } catch (e) { /* ignore */ }
+      }
+
+      // Build groups from hoaDonItems (preserve order)
+      const groupsMap = {};
+      const groupsOrder = [];
+      // Fetch fresh group list to ensure we can resolve codes/ids/names robustly
+      let freshGroups = [];
+      try {
+        const resp = await api.get(API_ENDPOINTS.customerGroups);
+        if (Array.isArray(resp)) freshGroups = resp;
+      } catch (e) { /* ignore */ }
+      const mapById = {};
+      const mapByCode = {};
+      const mapByNameLower = {};
+      (freshGroups || []).forEach(g => {
+        const name = g.name || g.title || g.code || '';
+        if (g.id) mapById[String(g.id)] = name;
+        if (g.code) mapByCode[String(g.code)] = name;
+        if (name) mapByNameLower[String(name).toLowerCase()] = name;
+      });
+
+      // Ensure we can resolve customer -> group code via customerNameToGroupMap (fallback to fetching customers)
+      let custNameToGroup = customerNameToGroupMap || {};
+      if (!custNameToGroup || Object.keys(custNameToGroup).length === 0) {
+        try {
+          const customersResp = await api.get(API_ENDPOINTS.customers);
+          if (customersResp && Array.isArray(customersResp)) {
+            custNameToGroup = {};
+            customersResp.forEach(c => {
+              const n = (c.name || '').toString().trim().toLowerCase();
+              if (n && c.customerGroup) custNameToGroup[n] = c.customerGroup;
+            });
+          }
+        } catch (e) { /* ignore */ }
+      }
+
+      // Enrich hoaDonItems with resolved group code/name when missing
+      hoaDonItemsForPrint.forEach(it => {
+        try {
+          if ((!it.customerGroup || String(it.customerGroup).trim() === '') && it.tenKhachHang) {
+            const n = (it.tenKhachHang || '').toString().trim().toLowerCase();
+            if (n && custNameToGroup[n]) it.customerGroup = custNameToGroup[n];
+          }
+          const gc = (it.customerGroup || '').toString();
+          if ((!it.customerGroupName || String(it.customerGroupName).trim() === '') && gc) {
+            it.customerGroupName = mapById[gc] || mapByCode[gc] || customerGroupsMap[gc] || mapByNameLower[gc.toLowerCase()] || it.customerGroupName || '';
+          }
+        } catch (e) { /* ignore per-item enrichment errors */ }
+      });
+
+      hoaDonItemsForPrint.forEach(item => {
+        const groupCode = (item.customerGroup || '').toString();
+        let resolvedName = '';
+        if (groupCode && mapById[groupCode]) resolvedName = mapById[groupCode];
+        else if (groupCode && mapByCode[groupCode]) resolvedName = mapByCode[groupCode];
+        else if (groupCode && mapByNameLower[groupCode.toLowerCase()]) resolvedName = mapByNameLower[groupCode.toLowerCase()];
+        else if (customerGroupsMap && customerGroupsMap[groupCode]) resolvedName = customerGroupsMap[groupCode];
+        else if (item.customerGroupName && item.customerGroupName.toString().trim() !== '') resolvedName = item.customerGroupName;
+        else resolvedName = '';
+
+        const name = resolvedName || groupCode || 'Khác';
+        const key = groupCode || 'null';
+        if (!groupsMap[key]) { groupsMap[key] = { name, items: [] }; groupsOrder.push(key); }
+        groupsMap[key].items.push(item);
+      });
+
+      // numberedGroupNames will be computed after we assign bkt items to groups (so we can show only groups with items)
+
       let printContent = `
         <!DOCTYPE html>
         <html>
@@ -3369,6 +3661,7 @@ const InBangKeTong = () => {
             .company-info { font-size: 11px; }
             .title { text-align: center; font-size: 16px; font-weight: bold; color: #0066cc; margin: 15px 0 10px; }
             .subtitle { text-align: center; margin-bottom: 15px; font-style: italic; }
+            .group-summary { text-align: center; margin-bottom: 8px; font-weight: 600; }
             table { width: 100%; border-collapse: collapse; margin-bottom: 15px; }
             th, td { border: 1px solid #000; padding: 5px 8px; }
             th { background-color: #d9e1f2; font-weight: bold; text-align: center; }
@@ -3386,6 +3679,7 @@ const InBangKeTong = () => {
           </div>
           
           <div class="title">PHIẾU XUẤT HÀNG TỔNG HỢP</div>
+          <div class="group-summary">Nhóm khách hàng: ##GROUP_SUMMARY##</div>
           <div class="subtitle">Số bảng kê: ${importNumber} - Ngày lập: ${printedAt}</div>
           
           <table>
@@ -3409,21 +3703,101 @@ const InBangKeTong = () => {
             <tbody>
       `;
 
-      // Add rows from bangKeTongItems
-      bktItems.forEach((item, index) => {
-        printContent += `
-          <tr>
-            <td class="text-center">${index + 1}</td>
-            <td>${item.maHang || ''}</td>
-            <td>${item.maVach || ''}</td>
-            <td class="product-name">${item.tenHang || ''}</td>
-            <td class="text-center">${item.donViTinh1 || ''}</td>
-            <td class="text-right">${formatQty(item.soLuongDVT1)}</td>
-            <td class="text-center">${item.donViGoc || ''}</td>
-            <td class="text-right">${formatQty(item.soLuongDVTGoc)}</td>
-            <td>${item.moTa || ''}</td>
-          </tr>
-        `;
+      // Re-aggregate bangKeTongItems PER customer group by fetching each order's items
+      // This ensures products shared across groups get correct per-group quantities
+      const perGroupBkt = {};
+      for (const gk of groupsOrder) {
+        const group = groupsMap[gk];
+        const orderIds = (group.items || []).map(it => it.orderId).filter(Boolean);
+        const groupProductMap = new Map();
+
+        for (const orderId of orderIds) {
+          try {
+            const response = await api.get(`${API_ENDPOINTS.orders}/${orderId}`);
+            const orderData = (response && response.order) ? response.order : {};
+            const items = (response && response.items) ? response.items : [];
+            const promotionItems = (response && response.promotionItems) ? response.promotionItems : [];
+            const allItems = [...items, ...promotionItems];
+            const shortOrderNum = (orderData.orderNumber || '').toString().slice(-3);
+
+            allItems.forEach(item => {
+              const product = products.find(p => p.barcode === item.barcode || p.code === item.productCode || p.name === item.productName) || {};
+              const key = item.barcode || item.productCode || item.productName;
+              if (!key) return;
+              const conversionToBase = parseFloat(item.conversion) || parseFloat(product.conversion1) || 1;
+              const convUnit1 = parseFloat(product.conversion1) || parseFloat(item.conversion) || 1;
+              const baseQty = (parseFloat(item.quantity) || 0) * conversionToBase;
+
+              if (groupProductMap.has(key)) {
+                const existing = groupProductMap.get(key);
+                if (!existing.orderNumbers.includes(shortOrderNum)) {
+                  existing.orderNumbers.push(shortOrderNum);
+                }
+                existing.totalBaseQty += baseQty;
+              } else {
+                groupProductMap.set(key, {
+                  orderNumbers: [shortOrderNum],
+                  maVach: item.barcode || '',
+                  maHang: item.productCode || '',
+                  tenHang: item.productName || '',
+                  donViTinh1: product.unit1 || product.defaultUnit || item.unit || '',
+                  donViGoc: product.baseUnit || item.baseUnit || item.unit || '',
+                  moTa: item.description || '',
+                  conv: convUnit1,
+                  totalBaseQty: baseQty,
+                });
+              }
+            });
+          } catch (e) {
+            console.warn('Failed to fetch order for print grouping', orderId, e);
+          }
+        }
+
+        // Convert map to array
+        const groupItems = [];
+        groupProductMap.forEach(data => {
+          const sl1 = Math.floor(data.totalBaseQty / data.conv);
+          const baseRemaining = data.totalBaseQty - (sl1 * data.conv);
+          groupItems.push({
+            maPhieu: data.orderNumbers.join(', '),
+            maVach: data.maVach,
+            maHang: data.maHang,
+            tenHang: data.tenHang,
+            donViTinh1: data.donViTinh1,
+            soLuongDVT1: sl1,
+            donViGoc: data.donViGoc,
+            soLuongDVTGoc: Math.round(baseRemaining * 1000) / 1000,
+          });
+        });
+        perGroupBkt[gk] = groupItems;
+      }
+
+      // Render grouped sections
+      let globalIndex = 1;
+      const visibleGroupsOrder = groupsOrder.filter(gk => (perGroupBkt[gk] || []).length > 0);
+      const visibleNumberedNames = visibleGroupsOrder.map((gk, idx) => `${idx + 1}-${groupsMap[gk].name}`);
+      printContent = printContent.replace('##GROUP_SUMMARY##', visibleNumberedNames.join(', '));
+
+      visibleGroupsOrder.forEach((gk, gi) => {
+        const itemsForGroup = perGroupBkt[gk] || [];
+        const gName = groupsMap[gk].name || 'Khác';
+        printContent += `<tr><td colspan="9" style="font-weight:bold; font-style:italic;">Nhóm khách hàng: ${gi + 1}-${gName}</td></tr>`;
+        let groupIdx = 1;
+        itemsForGroup.forEach((item) => {
+          printContent += `
+            <tr>
+              <td class="text-center">${groupIdx++}</td>
+              <td>${item.maHang || ''}</td>
+              <td>${item.maVach || ''}</td>
+              <td class="product-name">${item.tenHang || ''}</td>
+              <td class="text-center">${item.donViTinh1 || ''}</td>
+              <td class="text-right">${formatQty(item.soLuongDVT1)}</td>
+              <td class="text-center">${item.donViGoc || ''}</td>
+              <td class="text-right">${formatQty(item.soLuongDVTGoc)}</td>
+              <td></td>
+            </tr>
+          `;
+        });
       });
 
       printContent += `
@@ -3467,7 +3841,8 @@ const InBangKeTong = () => {
   // (history view removed) 
 
   // Load orders for selection modal
-  const loadOrdersForSelect = async (startDate, endDate) => {
+  // excludeBktId: when editing an existing BKT, pass its id to exclude it from the "already in use" check
+  const loadOrdersForSelect = async (startDate, endDate, excludeBktId = null) => {
     setLoadingOrders(true);
     try {
       const start = dayjs(startDate).format('YYYY-MM-DD');
@@ -3477,6 +3852,22 @@ const InBangKeTong = () => {
       const approvedOrders = (response || []).filter(o => 
         o.status && o.status.toLowerCase().includes('đã duyệt')
       );
+
+      // Fetch fresh BKT list from backend so alreadyInBkt check is always up-to-date
+      let freshBktList = imports || [];
+      try {
+        const bktData = await api.get(API_ENDPOINTS.bangKeTongs);
+        if (Array.isArray(bktData)) {
+          freshBktList = bktData.map(b => ({
+            id: b.id,
+            importNumber: b.importNumber,
+            dsHoaDonItems: (b.hoaDons || []).map(h => ({
+              orderId: h.orderId || null,
+              maPhieu: h.maPhieu,
+            })),
+          }));
+        }
+      } catch (e) { /* fallback to imports state */ }
 
       // Enrich each order by fetching its detailed info so modal can show full columns
       const enriched = await Promise.all(approvedOrders.map(async (order) => {
@@ -3504,6 +3895,9 @@ const InBangKeTong = () => {
 
           const taxRates = detailOrder.taxRates || detailOrder.TaxRates || '';
 
+          // determine if this order already belongs to an existing BKT (use fresh list from API)
+          const usedImport = freshBktList.find(imp => Array.isArray(imp.dsHoaDonItems) && imp.dsHoaDonItems.some(h => h.orderId && String(h.orderId) === String(order.id)));
+
           return {
             ...order,
             ...detailOrder,
@@ -3513,7 +3907,10 @@ const InBangKeTong = () => {
             totalM3,
             productType,
             salesStaff,
-            taxRates
+            taxRates,
+            alreadyInBkt: Boolean(usedImport && !(excludeBktId && String(excludeBktId) === String(usedImport.id))),
+            bktImportNumber: usedImport ? usedImport.importNumber : null,
+            bktImportId: usedImport ? usedImport.id : null,
           };
         } catch (e) {
           return order;
@@ -3535,11 +3932,18 @@ const InBangKeTong = () => {
     setOrderSelectDateRange([dayjs().startOf('month'), dayjs().endOf('month')]);
     setShowOrderSelectModal(true);
     // Load orders for the default date range
-    loadOrdersForSelect(dayjs().startOf('month'), dayjs().endOf('month'));
+    // Pass null for excludeBktId — when creating new BKT, ALL existing BKT orders should be flagged
+    loadOrdersForSelect(dayjs().startOf('month'), dayjs().endOf('month'), null);
   };
 
   // Toggle order selection
   const toggleOrderSelect = (orderId) => {
+    const order = ordersForSelect.find(o => String(o.id) === String(orderId));
+    if (order && order.alreadyInBkt) {
+      const importNum = order.bktImportNumber || '';
+      alert(`Đơn hàng này đã được tạo bảng kê${importNum ? (': ' + importNum) : ''}. Để tạo lại, vui lòng xóa bảng kê chứa đơn hàng này trước.`);
+      return;
+    }
     setSelectedOrderIds(prev => {
       const newSet = new Set(prev);
       if (newSet.has(orderId)) {
@@ -3554,7 +3958,9 @@ const InBangKeTong = () => {
   // Select/deselect all orders
   const toggleSelectAllOrders = (checked) => {
     if (checked) {
-      setSelectedOrderIds(new Set(ordersForSelect.map(o => o.id)));
+      // only select orders that are not already part of a BKT
+      const allowed = ordersForSelect.filter(o => !o.alreadyInBkt).map(o => o.id);
+      setSelectedOrderIds(new Set(allowed));
     } else {
       setSelectedOrderIds(new Set());
     }
@@ -3578,6 +3984,18 @@ const InBangKeTong = () => {
 
     try {
       const selectedOrders = ordersForSelect.filter(o => selectedOrderIds.has(o.id));
+      // Double-check that none of the selected orders are already part of another BKT
+      const conflicts = [];
+      selectedOrders.forEach(o => {
+        if (o.alreadyInBkt) {
+          conflicts.push({ order: o, importNumber: o.bktImportNumber });
+        }
+      });
+      if (conflicts.length > 0) {
+        const msg = conflicts.map(c => `${c.order.orderNumber || c.order.id} (BKT: ${c.importNumber || 'unknown'})`).join('\n');
+        alert('Không thể tạo bảng kê. Những đơn hàng sau đã được tạo bảng kê:\n' + msg + '\n\nBạn phải xóa bảng kê tương ứng trước khi thêm lại đơn hàng.');
+        return;
+      }
       
       // Fetch order details with items for each selected order
       const ordersWithItems = await Promise.all(
@@ -5110,7 +5528,7 @@ const InBangKeTong = () => {
                 onChange={(dates) => {
                   setOrderSelectDateRange(dates);
                   if (dates && dates[0] && dates[1]) {
-                    loadOrdersForSelect(dates[0], dates[1]);
+                    loadOrdersForSelect(dates[0], dates[1], null);
                   }
                 }}
                 format="DD/MM/YYYY"
@@ -5155,10 +5573,10 @@ const InBangKeTong = () => {
                         <table style={{ width: '100%', minWidth: 1200, borderCollapse: 'collapse', fontSize: 13 }}>
                           <thead>
                             <tr style={{ background: '#f0f5ff' }}>
-                              <th style={{ border: '1px solid #d9d9d9', padding: '8px', width: 40 }}>
+                                <th style={{ border: '1px solid #d9d9d9', padding: '8px', width: 40 }}>
                                 <input 
                                   type="checkbox" 
-                                  checked={selectedOrderIds.size === ordersForSelect.length && ordersForSelect.length > 0}
+                                  checked={selectedOrderIds.size === ordersForSelect.filter(o => !o.alreadyInBkt).length && ordersForSelect.length > 0}
                                   onChange={(e) => toggleSelectAllOrders(e.target.checked)}
                                 />
                               </th>
@@ -5207,6 +5625,8 @@ const InBangKeTong = () => {
                                     checked={selectedOrderIds.has(order.id)}
                                     onChange={() => toggleOrderSelect(order.id)}
                                     onClick={(e) => e.stopPropagation()}
+                                    disabled={order.alreadyInBkt}
+                                    title={order.alreadyInBkt ? `Đơn hàng này đã được tạo bảng kê: ${order.bktImportNumber || ''}` : ''}
                                   />
                                 </td>
                                 {modalDshdColumns.filter(c => c.visible).map((col) => (
@@ -5214,7 +5634,9 @@ const InBangKeTong = () => {
                                     {(() => {
                                       switch (col.id) {
                                         case 'orderDate': return order.orderDate ? dayjs(order.orderDate).format('DD/MM/YYYY') : '';
-                                        case 'maPhieu': return order.orderNumber || '';
+                                        case 'maPhieu': return (
+                                          <div style={{ fontWeight: order.alreadyInBkt ? 700 : 400, color: order.alreadyInBkt ? '#c9302c' : 'inherit' }}>{order.orderNumber || ''}</div>
+                                        );
                                         case 'tenKhachHang': return order.customerName || order.customer || '';
                                         case 'tongTienSauGiam': return (order.totalAfterDiscount || order.totalAmount || 0).toLocaleString('vi-VN');
                                         case 'status': return (<span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, background: order.status?.toLowerCase().includes('đã duyệt') ? '#d4edda' : '#f8d7da', color: order.status?.toLowerCase().includes('đã duyệt') ? '#155724' : '#721c24' }}>{order.status || ''}</span>);

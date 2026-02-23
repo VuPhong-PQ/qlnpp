@@ -864,6 +864,40 @@
   max-width: 420px !important;
   width: auto !important;
 }
+/* Allow a resizable search modal to grow beyond the default max-width */
+.in-bang-ke-tong-page .search-modal.resizable {
+  max-width: none !important;
+  width: auto !important;
+}
+
+.in-bang-ke-tong-page .search-modal .search-modal-right-resize {
+  background: transparent;
+  pointer-events: auto;
+}
+.in-bang-ke-tong-page .search-modal .search-modal-right-resize:hover {
+  background: rgba(0,0,0,0.03);
+}
+.in-bang-ke-tong-page .search-modal .search-modal-left-resize {
+  background: transparent;
+  pointer-events: auto;
+}
+.in-bang-ke-tong-page .search-modal .search-modal-left-resize:hover {
+  background: rgba(0,0,0,0.03);
+}
+
+/* Ensure long values in the search modal wrap instead of forcing horizontal growth */
+.in-bang-ke-tong-page .search-modal .search-item {
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+}
+
+.in-bang-ke-tong-page .search-modal .search-item .value-text {
+  display: block;
+  white-space: normal !important;
+  word-break: break-word !important;
+  overflow-wrap: anywhere !important;
+}
 .in-bang-ke-tong-page .column-settings-modal {
   position: fixed !important;
   z-index: 2147483002 !important;
