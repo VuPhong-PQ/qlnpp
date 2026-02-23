@@ -16,6 +16,8 @@ import { useAuth } from '../../contexts/AuthContext';
 dayjs.locale('vi');
 
 const InBangKeTong = () => {
+  // Auth context (provides `user` and `permissions` used throughout)
+  const { user, permissions } = useAuth();
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, record: null });
   const [isEditing, setIsEditing] = useState(false);
   const [treatNaiveIsoAsUtc, setTreatNaiveIsoAsUtc] = useState(true);
@@ -181,14 +183,15 @@ const InBangKeTong = () => {
 
   // Order selection modal state
   const [showOrderSelectModal, setShowOrderSelectModal] = useState(false);
+  const [isAddingToBkt, setIsAddingToBkt] = useState(false); // true when adding orders to existing BKT
   const [orderSelectDateRange, setOrderSelectDateRange] = useState([dayjs().startOf('month'), dayjs().endOf('month')]);
   const [ordersForSelect, setOrdersForSelect] = useState([]);
   const [selectedOrderIds, setSelectedOrderIds] = useState(new Set());
   const [loadingOrders, setLoadingOrders] = useState(false);
-  // Modal table pagination and filtering
   const [orderSelectPageSize, setOrderSelectPageSize] = useState(50);
   const [orderSelectCurrentPage, setOrderSelectCurrentPage] = useState(1);
-  // Modal-specific column settings (allow drag/resize inside order-select modal)
+
+  // Modal-specific column settings for order-select modal
   const defaultOrderSelectCols = [
     { id: 'orderDate', label: 'Ngày lập', width: 110, visible: true, align: 'center' },
     { id: 'maPhieu', label: 'Số phiếu', width: 140, visible: true, align: 'left' },
@@ -199,56 +202,19 @@ const InBangKeTong = () => {
     { id: 'taxRates', label: 'Thuế suất', width: 100, visible: true, align: 'left' },
     { id: 'loaiHang', label: 'Loại hàng', width: 120, visible: true, align: 'left' },
     { id: 'nvSale', label: 'Nhân viên sale', width: 140, visible: true, align: 'left' },
-    { id: 'customerGroup', label: 'Nhóm khách hàng', width: 120, visible: true, align: 'left' },
-    { id: 'salesSchedule', label: 'Lịch bán hàng', width: 140, visible: true, align: 'left' },
-    { id: 'tongTien', label: 'Tổng tiền', width: 120, visible: true, align: 'right' },
+    { id: 'customerGroup', label: 'Nhóm khách hàng', width: 140, visible: true, align: 'left' },
+    { id: 'salesSchedule', label: 'Lịch bán hàng', width: 120, visible: true, align: 'left' },
+    { id: 'totalAmount', label: 'Tổng tiền', width: 120, visible: true, align: 'right' },
     { id: 'totalKg', label: 'Tổng số kg', width: 100, visible: true, align: 'right' },
     { id: 'totalM3', label: 'Tổng số khối', width: 100, visible: true, align: 'right' },
-    { id: 'printOrder', label: 'STT in', width: 80, visible: true, align: 'center' },
-    { id: 'vehicle', label: 'Xe', width: 140, visible: true, align: 'left' },
-    { id: 'deliveryVehicle', label: 'Xe giao hàng', width: 140, visible: true, align: 'left' },
-    { id: 'printStatus', label: 'Trạng thái in', width: 120, visible: true, align: 'center' },
-    { id: 'printCount', label: 'Số lần in', width: 90, visible: true, align: 'center' },
-    { id: 'printDate', label: 'Ngày in', width: 110, visible: true, align: 'center' },
-    { id: 'actions', label: 'Thao tác', width: 110, visible: true, align: 'center' }
   ];
   const [modalDshdColumns, setModalDshdColumns] = useState(() => {
     try { const s = localStorage.getItem('order_select_cols_v1'); return s ? JSON.parse(s) : defaultOrderSelectCols; } catch { return defaultOrderSelectCols; }
   });
   const [modalDshdDragColumn, setModalDshdDragColumn] = useState(null);
   const [modalDshdSettingsDrag, setModalDshdSettingsDrag] = useState(null);
-  // map of customer group code/id -> group name for display in order-select modal
-  const [customerGroupsMap, setCustomerGroupsMap] = useState({});
-  
-
-  // current logged-in user and permissions
-  const { user, permissions } = useAuth();
-
-  // map: normalized customer name → customerGroup code (loaded from Customers API)
   const [customerNameToGroupMap, setCustomerNameToGroupMap] = useState({});
-
-  // Load customer groups mapping for displaying group names in modal
-  useEffect(() => {
-    let mounted = true;
-    const loadGroups = async () => {
-      try {
-        const groups = await api.get(API_ENDPOINTS.customerGroups);
-        if (!mounted || !groups) return;
-        const map = {};
-        groups.forEach(g => {
-          if (g.id) map[g.id] = g.name || g.title || g.code || '';
-          if (g.code) map[g.code] = g.name || g.title || g.code || '';
-          // Also map by name for reverse lookup
-          if (g.name) map[g.name] = g.name;
-        });
-        setCustomerGroupsMap(map);
-      } catch (e) {
-        console.error('Failed to load customer groups for modal:', e);
-      }
-    };
-    loadGroups();
-    return () => { mounted = false; };
-  }, []);
+  const [customerGroupsMap, setCustomerGroupsMap] = useState({});
 
   // Load customer name → group mapping (for resolving group in DS hóa đơn)
   useEffect(() => {
@@ -268,6 +234,27 @@ const InBangKeTong = () => {
       }
     };
     loadCustomerGroups();
+    return () => { mounted = false; };
+  }, []);
+
+  // Load customer groups id/code → name mapping
+  useEffect(() => {
+    let mounted = true;
+    const loadCustomerGroupsData = async () => {
+      try {
+        const groups = await api.get(API_ENDPOINTS.customerGroups);
+        if (!mounted || !groups) return;
+        const map = {};
+        groups.forEach(g => {
+          if (g.id) map[g.id] = g.name || g.groupName || g.id;
+          if (g.code) map[g.code] = g.name || g.groupName || g.code;
+        });
+        setCustomerGroupsMap(map);
+      } catch (e) {
+        console.error('Failed to load customer groups:', e);
+      }
+    };
+    loadCustomerGroupsData();
     return () => { mounted = false; };
   }, []);
 
@@ -309,6 +296,7 @@ const InBangKeTong = () => {
   // ===== Column management for DS hóa đơn tab =====
   const DSHD_COL_KEY = 'dshdColumnSettings_v2';
   const defaultDshdColumns = [
+    { id: 'select', label: '', width: 40, visible: true, align: 'center' },
     { id: 'stt', label: 'Số TT', width: 60, visible: true, align: 'center' },
     { id: 'maPhieu', label: 'Mã phiếu', width: 120, visible: true, align: 'center' },
     { id: 'tenKhachHang', label: 'Tên khách hàng', width: 200, visible: true, align: 'left' },
@@ -324,6 +312,7 @@ const InBangKeTong = () => {
   const [showDshdSettings, setShowDshdSettings] = useState(false);
   const [dshdDragColumn, setDshdDragColumn] = useState(null);
   const [dshdSettingsDrag, setDshdSettingsDrag] = useState(null);
+  const [dshdSelectedIds, setDshdSelectedIds] = useState(new Set());
   // Modal-specific settings visibility
   const [showModalDshdSettings, setShowModalDshdSettings] = useState(false);
   const [showDshdSearchModal, setShowDshdSearchModal] = useState(false);
@@ -340,6 +329,11 @@ const InBangKeTong = () => {
   // Save column settings to localStorage
   useEffect(() => { try { localStorage.setItem(BKT_COL_KEY, JSON.stringify(bktColumns)); } catch {} }, [bktColumns]);
   useEffect(() => { try { localStorage.setItem(DSHD_COL_KEY, JSON.stringify(dshdColumns)); } catch {} }, [dshdColumns]);
+
+  // Clear DS hóa đơn selection when switching BKT records
+  useEffect(() => {
+    setDshdSelectedIds(new Set());
+  }, [selectedImport?.id]);
 
   // Reset modal pagination when orders, filters or page size change
   React.useEffect(() => {
@@ -468,6 +462,26 @@ const InBangKeTong = () => {
   // DSHD cell renderer
   const renderDshdCell = (item, key, idx) => {
     switch (key) {
+      case 'select': {
+        // Use idx as the unique key since item.id may be undefined
+        const itemKey = item.id !== undefined && item.id !== null ? item.id : `idx_${idx}`;
+        const checked = dshdSelectedIds && dshdSelectedIds.has(itemKey);
+        return (
+          <input
+            type="checkbox"
+            checked={!!checked}
+            onChange={(e) => {
+              setDshdSelectedIds(prev => {
+                const s = new Set(Array.from(prev || []));
+                if (e.target.checked) s.add(itemKey);
+                else s.delete(itemKey);
+                return s;
+              });
+            }}
+            onClick={(e) => e.stopPropagation()}
+          />
+        );
+      }
       case 'stt': return idx + 1;
       case 'maPhieu': {
         const code = item.maPhieu || '';
@@ -501,6 +515,47 @@ const InBangKeTong = () => {
       case 'loaiHang': return item.loaiHang || '';
       default: return '';
     }
+  };
+
+  // Add orders to existing BKT - opens order selection modal
+  const handleAddOrdersToBkt = () => {
+    if (!selectedImport) {
+      alert('Vui lòng chọn một bảng kê tổng trước');
+      return;
+    }
+    setIsAddingToBkt(true);
+    setSelectedOrderIds(new Set());
+    setOrderSelectDateRange([dayjs().startOf('month'), dayjs().endOf('month')]);
+    setShowOrderSelectModal(true);
+    // Pass current BKT id to EXCLUDE it from "already used" check so we can add more orders to it
+    // But orders in OTHER BKTs should still be blocked
+    loadOrdersForSelect(dayjs().startOf('month'), dayjs().endOf('month'), selectedImport.id);
+  };
+
+  const handleDeleteDshd = () => {
+    const keys = Array.from(dshdSelectedIds || []);
+    if (keys.length === 0) { alert('Vui lòng chọn ít nhất một hóa đơn để xóa'); return; }
+    if (!confirm('Bạn chắc chắn muốn xóa ' + keys.length + ' hóa đơn đã chọn?')) return;
+    // Build set of indices to delete
+    const items = (selectedImport && selectedImport.dsHoaDonItems) || [];
+    const indicesToDelete = new Set();
+    keys.forEach(key => {
+      if (String(key).startsWith('idx_')) {
+        indicesToDelete.add(parseInt(String(key).replace('idx_', ''), 10));
+      } else {
+        const idx = items.findIndex(h => String(h.id) === String(key));
+        if (idx >= 0) indicesToDelete.add(idx);
+      }
+    });
+    setSelectedImport(si => {
+      if (!si) return si;
+      const newDs = (si.dsHoaDonItems || []).filter((h, idx) => !indicesToDelete.has(idx));
+      const updatedSi = { ...si, dsHoaDonItems: newDs };
+      setIsEditing(true);
+      return updatedSi;
+    });
+    setImports(prev => prev.map(im => im.id === (selectedImport && selectedImport.id) ? ({ ...im, dsHoaDonItems: (selectedImport.dsHoaDonItems || []).filter((h, idx) => !indicesToDelete.has(idx)) }) : im));
+    setDshdSelectedIds(new Set());
   };
 
   // Get unique values for column search
@@ -712,20 +767,36 @@ const InBangKeTong = () => {
     const totalSoLuongDVT1 = isBkt ? filteredItems.reduce((s, it) => s + (Number(it.soLuongDVT1) || 0), 0) : 0;
     const totalSoLuongDVTGoc = isBkt ? filteredItems.reduce((s, it) => s + (Number(it.soLuongDVTGoc) || 0), 0) : 0;
     const totalSlBanTheoDVTGoc = isBkt ? filteredItems.reduce((s, it) => s + (Number(it.slBanTheoDVTGoc) || 0), 0) : 0;
-    const footerLabelColId = (visibleCols && visibleCols.length) ? visibleCols[0].id : null;
+    const footerLabelColId = (visibleCols && visibleCols.length)
+      ? (visibleCols.find(c => c.id !== 'select') || visibleCols[0]).id
+      : null;
 
     return (
       <div className="order-items-section">
         <div className="order-items-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
           <span className="items-total">{tabLabel}</span>
-          <button
-            className="action-btn btn-settings"
-            title="Cài đặt cột"
-            onClick={() => setShowSettings(true)}
-            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}
-          >
-            ⚙️
-          </button>
+          <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
+            <button
+              className="btn btn-sm btn-success"
+              title="Thêm đơn hàng vào bảng kê"
+              onClick={() => handleAddOrdersToBkt()}
+              style={{ padding: '4px 8px', cursor: 'pointer', fontSize: 13, background: '#52c41a', color: '#fff', border: 'none', borderRadius: 4 }}
+            >Thêm</button>
+            <button
+              className="btn btn-sm btn-danger"
+              title="Xóa"
+              onClick={() => handleDeleteDshd()}
+              style={{ padding: '4px 8px', cursor: 'pointer', fontSize: 13 }}
+            >Xóa</button>
+            <button
+              className="action-btn btn-settings"
+              title="Cài đặt cột"
+              onClick={() => setShowSettings(true)}
+              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 16, padding: '2px 6px' }}
+            >
+              ⚙️
+            </button>
+          </div>
         </div>
         <div className="order-items-table-container" style={{ overflowX: 'auto' }}>
           <table className="order-items-table bkt-dynamic-table" style={{ borderCollapse: 'collapse', fontSize: 13, tableLayout: 'fixed', width: 'max-content', minWidth: '100%' }}>
@@ -746,28 +817,52 @@ const InBangKeTong = () => {
                     onDragEnd={h.colDragEnd}
                     className={dragCol === col.id ? 'dragging' : ''}
                   >
-                    <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-                      <span style={{ flex: 1 }}>{col.label}</span>
-                      {col.id !== 'stt' && (
-                        <React.Fragment>
-                          <button
-                            className="col-search-btn"
-                            onClick={(e) => { e.stopPropagation(); openSearch(col.id, col.label); }}
-                            title={`Tìm kiếm theo ${col.label}`}
-                            style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, opacity: 0.6, padding: '1px 2px' }}
-                          >🔍</button>
-                          {colFilters[col.id] && (
-                            <button
-                              className="col-clear-btn"
-                              onClick={(e) => { e.stopPropagation(); clearFilter(col.id); }}
-                              title="Xóa bộ lọc"
-                              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#c9302c', padding: '1px 2px' }}
-                            >✖</button>
-                          )}
-                        </React.Fragment>
-                      )}
-                    </div>
-                    {col.id !== 'stt' && (
+                    {col.id === 'select' ? (
+                          <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+                            {(() => {
+                              // Use same key logic as row checkboxes
+                              const itemKeys = (filteredItems || []).map((item, idx) => 
+                                item.id !== undefined && item.id !== null ? item.id : `idx_${idx}`
+                              );
+                              const allSelected = itemKeys.length > 0 && itemKeys.every(key => dshdSelectedIds && dshdSelectedIds.has(key));
+                              return (
+                                <input
+                                  type="checkbox"
+                                  checked={allSelected}
+                                  onChange={(e) => {
+                                    if (e.target.checked) setDshdSelectedIds(new Set(itemKeys));
+                                    else setDshdSelectedIds(new Set());
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  title="Chọn tất cả trang hiện tại"
+                                />
+                              );
+                            })()}
+                          </div>
+                        ) : (
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+                            <span style={{ flex: 1 }}>{col.label}</span>
+                            {col.id !== 'stt' && (
+                              <React.Fragment>
+                                <button
+                                  className="col-search-btn"
+                                  onClick={(e) => { e.stopPropagation(); openSearch(col.id, col.label); }}
+                                  title={`Tìm kiếm theo ${col.label}`}
+                                  style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, opacity: 0.6, padding: '1px 2px' }}
+                                >🔍</button>
+                                {colFilters[col.id] && (
+                                  <button
+                                    className="col-clear-btn"
+                                    onClick={(e) => { e.stopPropagation(); clearFilter(col.id); }}
+                                    title="Xóa bộ lọc"
+                                    style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: 11, color: '#c9302c', padding: '1px 2px' }}
+                                  >✖</button>
+                                )}
+                              </React.Fragment>
+                            )}
+                          </div>
+                        )}
+                    {col.id !== 'stt' && col.id !== 'select' && (
                       <div
                         className="resize-handle"
                         onMouseDown={(e) => { e.stopPropagation(); h.resizeStart(e, col.id, cols); }}
@@ -2817,7 +2912,8 @@ const InBangKeTong = () => {
           quyDoi: i.quyDoi,
           loaiHang: i.loaiHang,
         })),
-        dsHoaDonItems: (b.hoaDons || []).map(h => ({
+        dsHoaDonItems: (b.hoaDons || []).map((h, hIdx) => ({
+          id: h.id || (`dshd_${b.id}_${hIdx}`),
           orderId: h.orderId || null,
           maPhieu: h.maPhieu,
           tenKhachHang: h.tenKhachHang,
@@ -2876,9 +2972,94 @@ const InBangKeTong = () => {
     alert('Xuất mẫu/template từ server đã bị vô hiệu hóa cho trang In bảng kê tổng.');
   };
 
-  // Export selected imports (or filtered visible ones) as CSV
+  // Export selected imports (or filtered visible ones) as Excel workbooks (supports multiple selection)
   const exportSelectedImportsList = async () => {
-    alert('Xuất danh sách tới server đã bị vô hiệu hóa cho trang In bảng kê tổng.');
+    const selectedIds = Array.from(leftSelectedRows || []);
+    if (selectedIds.length === 0) {
+      alert('Vui lòng chọn ít nhất một bảng kê tổng ở cột bên trái để xuất.');
+      return;
+    }
+
+    let exported = 0;
+    for (const selectedId of selectedIds) {
+      const imp = (imports || []).find(i => String(i.id) === String(selectedId));
+      if (!imp) {
+        console.warn('Không tìm thấy bảng kê', selectedId);
+        continue;
+      }
+
+      try {
+        const info = {
+          'Số bảng kê tổng': imp.importNumber || '',
+          'Ngày lập': imp.createdDate || '',
+          'Người lập': imp.employee || '',
+          'Ghi chú': imp.note || '',
+          'Tổng tiền': (imp.totalAmount || 0).toLocaleString('vi-VN')
+        };
+
+        const workbook = new ExcelJS.Workbook();
+        workbook.creator = 'QLNPP';
+        workbook.created = new Date();
+
+        // Sheet 1: basic info
+        const ws1 = workbook.addWorksheet('Thông tin bảng kê');
+        ws1.columns = [{ header: 'Key', width: 30 }, { header: 'Value', width: 50 }];
+        Object.keys(info).forEach(k => ws1.addRow([k, info[k]]));
+
+        // Sheet 2: bangKeTongItems
+        const bktItems = imp.bangKeTongItems || [];
+        const ws2 = workbook.addWorksheet('Bảng kê tổng');
+        if (bktItems.length === 0) {
+          ws2.addRow(['(Không có dữ liệu bảng kê tổng)']);
+        } else {
+          const headers2 = Object.keys(bktItems[0]);
+          ws2.addRow(headers2);
+          bktItems.forEach(it => ws2.addRow(headers2.map(h => it[h] === undefined || it[h] === null ? '' : it[h])));
+        }
+
+        // Sheet 3: dsHoaDonItems
+        const ds = imp.dsHoaDonItems || [];
+        const ws3 = workbook.addWorksheet('DS hóa đơn');
+        if (ds.length === 0) {
+          ws3.addRow(['(Không có dữ liệu DS hóa đơn)']);
+        } else {
+          const headers3 = Object.keys(ds[0]);
+          ws3.addRow(headers3);
+          ds.forEach(r => ws3.addRow(headers3.map(h => r[h] === undefined || r[h] === null ? '' : r[h])));
+        }
+
+        // Auto-width
+        workbook.worksheets.forEach(sheet => {
+          sheet.columns.forEach(col => {
+            let maxLength = 10;
+            col.eachCell({ includeEmpty: true }, cell => {
+              const v = cell.value ? String(cell.value) : '';
+              maxLength = Math.max(maxLength, v.length + 2);
+            });
+            col.width = Math.min(maxLength, 80);
+          });
+        });
+
+        const buffer = await workbook.xlsx.writeBuffer();
+        const blob = new Blob([buffer], { type: 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        const safeName = (imp.importNumber || `BKT_${imp.id || 'export'}`).replace(/[^a-z0-9_\-\.]/gi, '_');
+        a.download = `${safeName}.xlsx`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        URL.revokeObjectURL(url);
+
+        exported++;
+      } catch (e) {
+        console.error('Export error for', selectedId, e);
+      }
+    }
+
+    if (exported > 0) alert(`Đã xuất ${exported} file.`);
+    else alert('Không có file nào được xuất.');
   };
 
   // Handle uploaded CSV/Excel template and import
@@ -3898,6 +4079,8 @@ const InBangKeTong = () => {
           // determine if this order already belongs to an existing BKT (use fresh list from API)
           const usedImport = freshBktList.find(imp => Array.isArray(imp.dsHoaDonItems) && imp.dsHoaDonItems.some(h => h.orderId && String(h.orderId) === String(order.id)));
 
+          // Check if order is in current BKT being edited (for visual marking)
+          const inCurrentBkt = Boolean(usedImport && excludeBktId && String(excludeBktId) === String(usedImport.id));
           return {
             ...order,
             ...detailOrder,
@@ -3909,6 +4092,7 @@ const InBangKeTong = () => {
             salesStaff,
             taxRates,
             alreadyInBkt: Boolean(usedImport && !(excludeBktId && String(excludeBktId) === String(usedImport.id))),
+            alreadyInCurrentBkt: inCurrentBkt,
             bktImportNumber: usedImport ? usedImport.importNumber : null,
             bktImportId: usedImport ? usedImport.id : null,
           };
@@ -3928,6 +4112,7 @@ const InBangKeTong = () => {
 
   // Show order selection modal when clicking "Tạo mới"
   const handleShowOrderSelectModal = () => {
+    setIsAddingToBkt(false); // Creating new BKT, not adding to existing
     setSelectedOrderIds(new Set());
     setOrderSelectDateRange([dayjs().startOf('month'), dayjs().endOf('month')]);
     setShowOrderSelectModal(true);
@@ -3936,12 +4121,18 @@ const InBangKeTong = () => {
     loadOrdersForSelect(dayjs().startOf('month'), dayjs().endOf('month'), null);
   };
 
+  
+
   // Toggle order selection
   const toggleOrderSelect = (orderId) => {
     const order = ordersForSelect.find(o => String(o.id) === String(orderId));
     if (order && order.alreadyInBkt) {
       const importNum = order.bktImportNumber || '';
       alert(`Đơn hàng này đã được tạo bảng kê${importNum ? (': ' + importNum) : ''}. Để tạo lại, vui lòng xóa bảng kê chứa đơn hàng này trước.`);
+      return;
+    }
+    if (order && order.alreadyInCurrentBkt) {
+      // Order already in current BKT - just ignore the click (no alert needed, visually marked)
       return;
     }
     setSelectedOrderIds(prev => {
@@ -3958,8 +4149,8 @@ const InBangKeTong = () => {
   // Select/deselect all orders
   const toggleSelectAllOrders = (checked) => {
     if (checked) {
-      // only select orders that are not already part of a BKT
-      const allowed = ordersForSelect.filter(o => !o.alreadyInBkt).map(o => o.id);
+      // only select orders that are not already part of a BKT and not in current BKT
+      const allowed = ordersForSelect.filter(o => !o.alreadyInBkt && !o.alreadyInCurrentBkt).map(o => o.id);
       setSelectedOrderIds(new Set(allowed));
     } else {
       setSelectedOrderIds(new Set());
@@ -4009,6 +4200,179 @@ const InBangKeTong = () => {
           }
         })
       );
+
+      // ========== ADDING TO EXISTING BKT ==========
+      if (isAddingToBkt && selectedImport) {
+        // Resolve customerGroup by customer name
+        let custNameToGroupMap = customerNameToGroupMap;
+        if (!custNameToGroupMap || Object.keys(custNameToGroupMap).length === 0) {
+          try {
+            const customersResp = await api.get(API_ENDPOINTS.customers);
+            if (customersResp && Array.isArray(customersResp)) {
+              custNameToGroupMap = {};
+              customersResp.forEach(c => {
+                const n = (c.name || '').toString().trim().toLowerCase();
+                if (n && c.customerGroup) custNameToGroupMap[n] = c.customerGroup;
+              });
+            }
+          } catch (e) { /* ignore */ }
+        }
+
+        // Build new dsHoaDonItems from selected orders
+        const existingDsHoaDon = selectedImport.dsHoaDonItems || [];
+        const existingOrderIds = new Set(existingDsHoaDon.map(h => h.orderId).filter(Boolean));
+        const newDsHoaDonItems = ordersWithItems
+          .filter(({ order }) => !existingOrderIds.has(order.id)) // Skip duplicates
+          .map(({ order, items, promotionItems }, orderIdx) => {
+            const allItems = [...(items || []), ...(promotionItems || [])];
+            let nvSaleValue = order.salesStaff || order.salesEmployee || order.employee || '';
+            if (!nvSaleValue && allItems.length > 0) {
+              const nvSet = new Set(allItems.map(i => i.nvSales || i.salesStaff).filter(Boolean));
+              nvSaleValue = Array.from(nvSet).join(', ');
+            }
+            const catSet = new Set();
+            allItems.forEach(item => {
+              const product = products.find(p => p.barcode === item.barcode || p.code === item.productCode || p.name === item.productName);
+              if (product && product.category) catSet.add(product.category);
+            });
+            const loaiHangValue = catSet.size > 0 ? Array.from(catSet).join(', ') : (order.productType || '');
+            const custName = (order.customerName || order.customer || '').toString().trim().toLowerCase();
+            const custGroupCode = order.customerGroup || order.customerGroupId || order.customerGroupCode || custNameToGroupMap[custName] || '';
+            const custGroupName = customerGroupsMap[custGroupCode] || order.customerGroupName || custGroupCode || '';
+            return {
+              id: `dshd_${order.id}_${Date.now()}_${orderIdx}`,
+              orderId: order.id,
+              maPhieu: order.orderNumber || '',
+              tenKhachHang: order.customerName || order.customer || '',
+              tongTien: order.totalAmount || 0,
+              tongTienSauGiam: order.totalAfterDiscount || order.totalAmount || 0,
+              nvSale: nvSaleValue,
+              loaiHang: loaiHangValue,
+              customerGroup: custGroupCode,
+              customerGroupName: custGroupName
+            };
+          });
+
+        // Build new bangKeTongItems - aggregate ALL orders (existing + new)
+        const allOrdersWithItems = [...existingDsHoaDon.map(h => ({ order: { orderNumber: h.maPhieu, id: h.orderId }, items: [], promotionItems: [] })), ...ordersWithItems];
+        const getShortOrderNumber = (orderNum) => String(orderNum || '').slice(-3);
+        const productMap = new Map();
+        
+        // Re-fetch items for existing orders to aggregate
+        for (const dsHd of existingDsHoaDon) {
+          if (dsHd.orderId) {
+            try {
+              const resp = await api.get(`${API_ENDPOINTS.orders}/${dsHd.orderId}`);
+              const orderItems = [...(resp.items || []), ...(resp.promotionItems || [])];
+              orderItems.forEach((item) => {
+                const product = products.find(p => p.barcode === item.barcode || p.code === item.productCode || p.name === item.productName) || {};
+                const key = item.barcode || item.productCode || item.productName;
+                if (!key) return;
+                const conversionToBase = parseFloat(item.conversion) || parseFloat(product.conversion1) || 1;
+                const convUnit1 = parseFloat(product.conversion1) || parseFloat(item.conversion) || 1;
+                const baseQty = (parseFloat(item.quantity) || 0) * conversionToBase;
+                const shortOrderNum = getShortOrderNumber(dsHd.maPhieu);
+                if (productMap.has(key)) {
+                  const existing = productMap.get(key);
+                  if (!existing.orderNumbers.includes(shortOrderNum)) existing.orderNumbers.push(shortOrderNum);
+                  existing.totalBaseQty += baseQty;
+                } else {
+                  productMap.set(key, {
+                    orderNumbers: [shortOrderNum],
+                    barcode: item.barcode || '',
+                    productCode: item.productCode || '',
+                    productName: item.productName || '',
+                    unit1: product.unit1 || product.defaultUnit || item.unit || '',
+                    baseUnit: product.baseUnit || item.baseUnit || item.unit || '',
+                    description: item.description || '',
+                    convUnit1: convUnit1,
+                    totalBaseQty: baseQty,
+                    productCategory: product.category || item.productType || '',
+                  });
+                }
+              });
+            } catch (e) { /* skip */ }
+          }
+        }
+        
+        // Add new orders' items
+        ordersWithItems.forEach(({ order, items, promotionItems }) => {
+          const allItems = [...(items || []), ...(promotionItems || [])];
+          allItems.forEach((item) => {
+            const product = products.find(p => p.barcode === item.barcode || p.code === item.productCode || p.name === item.productName) || {};
+            const key = item.barcode || item.productCode || item.productName;
+            if (!key) return;
+            const conversionToBase = parseFloat(item.conversion) || parseFloat(product.conversion1) || 1;
+            const convUnit1 = parseFloat(product.conversion1) || parseFloat(item.conversion) || 1;
+            const baseQty = (parseFloat(item.quantity) || 0) * conversionToBase;
+            const shortOrderNum = getShortOrderNumber(order.orderNumber);
+            if (productMap.has(key)) {
+              const existing = productMap.get(key);
+              if (!existing.orderNumbers.includes(shortOrderNum)) existing.orderNumbers.push(shortOrderNum);
+              existing.totalBaseQty += baseQty;
+            } else {
+              productMap.set(key, {
+                orderNumbers: [shortOrderNum],
+                barcode: item.barcode || '',
+                productCode: item.productCode || '',
+                productName: item.productName || '',
+                unit1: product.unit1 || product.defaultUnit || item.unit || '',
+                baseUnit: product.baseUnit || item.baseUnit || item.unit || '',
+                description: item.description || '',
+                convUnit1: convUnit1,
+                totalBaseQty: baseQty,
+                productCategory: product.category || item.productType || order.productType || '',
+              });
+            }
+          });
+        });
+
+        // Convert aggregated map to bangKeTongItems
+        const newBangKeTongItems = [];
+        let bktIdx = 0;
+        productMap.forEach((data) => {
+          const sl1 = Math.floor(data.totalBaseQty / data.convUnit1);
+          const baseRemaining = data.totalBaseQty - (sl1 * data.convUnit1);
+          newBangKeTongItems.push({
+            id: `bkt_${bktIdx}_${Date.now()}`,
+            maPhieu: data.orderNumbers.join(', '),
+            maVach: data.barcode,
+            maHang: data.productCode,
+            tenHang: data.productName,
+            donViTinh1: data.unit1,
+            soLuongDVT1: sl1,
+            donViGoc: data.baseUnit,
+            soLuongDVTGoc: Math.round(baseRemaining * 1000) / 1000,
+            moTa: data.description,
+            slBanTheoDVTGoc: Math.round(data.totalBaseQty * 1000) / 1000,
+            quyDoi: Math.round(data.convUnit1 * 1000) / 1000,
+            loaiHang: data.productCategory,
+          });
+          bktIdx++;
+        });
+
+        // Merge into existing import
+        const mergedDsHoaDonItems = [...existingDsHoaDon, ...newDsHoaDonItems];
+        const totalAmount = mergedDsHoaDonItems.reduce((s, h) => s + (Number(h.tongTienSauGiam || h.tongTien || 0) || 0), 0);
+
+        const updatedImport = {
+          ...selectedImport,
+          dsHoaDonItems: mergedDsHoaDonItems,
+          bangKeTongItems: newBangKeTongItems,
+          totalAmount: totalAmount,
+        };
+
+        setSelectedImport(updatedImport);
+        setImports(prev => prev.map(im => im.id === selectedImport.id ? updatedImport : im));
+        setIsEditing(true);
+        setIsEditMode(true);
+        setShowOrderSelectModal(false);
+        setSelectedOrderIds(new Set());
+        setIsAddingToBkt(false);
+        alert(`Đã thêm ${newDsHoaDonItems.length} đơn hàng vào bảng kê. Nhấn "Lưu lại" để hoàn tất.`);
+        return;
+      }
+      // ========== END ADDING TO EXISTING BKT ==========
       
       // Generate new import number
       const newImportNumber = generateImportNumber();
@@ -4093,7 +4457,7 @@ const InBangKeTong = () => {
       }
 
       // Build dsHoaDonItems from selected orders (include promotion items for nvSale/loaiHang like PrintOrder)
-      const dsHoaDonItems = ordersWithItems.map(({ order, items, promotionItems }) => {
+      const dsHoaDonItems = ordersWithItems.map(({ order, items, promotionItems }, orderIdx) => {
         const allItems = [...(items || []), ...(promotionItems || [])];
         // Get salesStaff from items' nvSales if order doesn't have it
         let nvSaleValue = order.salesStaff || order.salesEmployee || order.employee || '';
@@ -4113,7 +4477,7 @@ const InBangKeTong = () => {
         const custGroupCode = order.customerGroup || order.customerGroupId || order.customerGroupCode || custNameToGroupMap[custName] || '';
         const custGroupName = customerGroupsMap[custGroupCode] || order.customerGroupName || custGroupCode || '';
         return {
-          id: `dshd_${order.id}_${Date.now()}`,
+          id: `dshd_${order.id}_${orderIdx}`,
           orderId: order.id,
           maPhieu: order.orderNumber || '',
           tenKhachHang: order.customerName || order.customer || '',
@@ -4532,12 +4896,12 @@ const InBangKeTong = () => {
                 >
                   📋 Bảng kê tổng
                 </button>
-                <button
-                  className={`tab-btn ${activeTab === 'dsHoaDon' ? 'active' : ''}`}
-                  onClick={() => setActiveTab('dsHoaDon')}
-                >
-                  📄 DS hóa đơn
-                </button>
+                            <button
+                              className={`tab-btn ${activeTab === 'dsHoaDon' ? 'active' : ''}`}
+                              onClick={() => setActiveTab('dsHoaDon')}
+                            >
+                              📄 DS hóa đơn
+                            </button>
               </div>
 
               {/* Tab Content */}
@@ -4640,12 +5004,7 @@ const InBangKeTong = () => {
                     📁 Lưu lại
                   </button>
                 )}
-                <button className="btn btn-success" onClick={exportImportTemplate} style={{marginLeft:8}}>
-                  📄 Xuất chi tiết
-                </button>
-                <button className="btn btn-success" onClick={() => document.getElementById('template-file-input').click()} style={{marginLeft:4}}>
-                  📁 Nhập chi tiết
-                </button>
+                {/* Removed: Xuất chi tiết and Nhập chi tiết buttons as requested */}
                 <button className="btn btn-purple" onClick={handlePrint}>
                   🖨 In A4
                 </button>
@@ -5528,7 +5887,7 @@ const InBangKeTong = () => {
                 onChange={(dates) => {
                   setOrderSelectDateRange(dates);
                   if (dates && dates[0] && dates[1]) {
-                    loadOrdersForSelect(dates[0], dates[1], null);
+                    loadOrdersForSelect(dates[0], dates[1], isAddingToBkt && selectedImport ? selectedImport.id : null);
                   }
                 }}
                 format="DD/MM/YYYY"
@@ -5576,7 +5935,7 @@ const InBangKeTong = () => {
                                 <th style={{ border: '1px solid #d9d9d9', padding: '8px', width: 40 }}>
                                 <input 
                                   type="checkbox" 
-                                  checked={selectedOrderIds.size === ordersForSelect.filter(o => !o.alreadyInBkt).length && ordersForSelect.length > 0}
+                                  checked={selectedOrderIds.size === ordersForSelect.filter(o => !o.alreadyInBkt && !o.alreadyInCurrentBkt).length && ordersForSelect.filter(o => !o.alreadyInBkt && !o.alreadyInCurrentBkt).length > 0}
                                   onChange={(e) => toggleSelectAllOrders(e.target.checked)}
                                 />
                               </th>
@@ -5616,8 +5975,12 @@ const InBangKeTong = () => {
                             {pageItems.map((order) => (
                               <tr 
                                 key={order.id} 
-                                style={{ background: selectedOrderIds.has(order.id) ? '#e3f2fd' : 'transparent', cursor: 'pointer' }}
-                                onClick={() => toggleOrderSelect(order.id)}
+                                style={{ 
+                                  background: order.alreadyInCurrentBkt ? '#d4edda' : (selectedOrderIds.has(order.id) ? '#e3f2fd' : 'transparent'), 
+                                  cursor: order.alreadyInCurrentBkt ? 'not-allowed' : 'pointer',
+                                  opacity: order.alreadyInCurrentBkt ? 0.7 : 1
+                                }}
+                                onClick={() => !order.alreadyInCurrentBkt && toggleOrderSelect(order.id)}
                               >
                                 <td style={{ border: '1px solid #d9d9d9', padding: '6px', textAlign: 'center' }}>
                                   <input 
@@ -5625,8 +5988,8 @@ const InBangKeTong = () => {
                                     checked={selectedOrderIds.has(order.id)}
                                     onChange={() => toggleOrderSelect(order.id)}
                                     onClick={(e) => e.stopPropagation()}
-                                    disabled={order.alreadyInBkt}
-                                    title={order.alreadyInBkt ? `Đơn hàng này đã được tạo bảng kê: ${order.bktImportNumber || ''}` : ''}
+                                    disabled={order.alreadyInBkt || order.alreadyInCurrentBkt}
+                                    title={order.alreadyInBkt ? `Đơn hàng này đã được tạo bảng kê: ${order.bktImportNumber || ''}` : (order.alreadyInCurrentBkt ? 'Đơn hàng này đã có trong bảng kê hiện tại' : '')}
                                   />
                                 </td>
                                 {modalDshdColumns.filter(c => c.visible).map((col) => (
@@ -5635,7 +5998,9 @@ const InBangKeTong = () => {
                                       switch (col.id) {
                                         case 'orderDate': return order.orderDate ? dayjs(order.orderDate).format('DD/MM/YYYY') : '';
                                         case 'maPhieu': return (
-                                          <div style={{ fontWeight: order.alreadyInBkt ? 700 : 400, color: order.alreadyInBkt ? '#c9302c' : 'inherit' }}>{order.orderNumber || ''}</div>
+                                          <div style={{ fontWeight: (order.alreadyInBkt || order.alreadyInCurrentBkt) ? 700 : 400, color: (order.alreadyInBkt || order.alreadyInCurrentBkt) ? '#c9302c' : 'inherit' }}>
+                                            {order.orderNumber || ''}
+                                          </div>
                                         );
                                         case 'tenKhachHang': return order.customerName || order.customer || '';
                                         case 'tongTienSauGiam': return (order.totalAfterDiscount || order.totalAmount || 0).toLocaleString('vi-VN');
