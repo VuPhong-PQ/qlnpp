@@ -2989,6 +2989,31 @@ const InBangKeTong = () => {
       }
 
       try {
+        // helper to robustly parse numbers with different separators
+        const parseNumber = (val) => {
+          if (val === null || val === undefined) return null;
+          let s = String(val).trim();
+          if (s === '') return null;
+          // If contains both '.' and ',', decide which is thousand vs decimal
+          if (s.indexOf('.') !== -1 && s.indexOf(',') !== -1) {
+            // assume format like 1.234,56 -> '.' thousand, ',' decimal
+            if (s.lastIndexOf(',') > s.lastIndexOf('.')) {
+              s = s.replace(/\./g, '').replace(/,/g, '.');
+            } else {
+              s = s.replace(/,/g, '');
+            }
+          } else {
+            // remove common thousand separators (commas and spaces)
+            s = s.replace(/[,\s]/g, '');
+          }
+          // remove any non-digit/.- characters
+          s = s.replace(/[^0-9.\-]/g, '');
+          if (s === '' || s === '.' || s === '-' || s === '-.') return null;
+          const n = Number(s);
+          return isFinite(n) ? n : null;
+        };
+
+        // Build basic info and compute total quantity when possible
         const info = {
           'Số bảng kê tổng': imp.importNumber || '',
           'Ngày lập': imp.createdDate || '',
@@ -2996,6 +3021,59 @@ const InBangKeTong = () => {
           'Ghi chú': imp.note || '',
           'Tổng tiền': (imp.totalAmount || 0).toLocaleString('vi-VN')
         };
+
+        // Try to determine total quantity: prefer explicit field, otherwise sum common qty columns
+        let totalQuantity = imp.totalQuantity ?? imp.totalQty ?? imp.tongSoLuong ?? imp.totalSoLuong ?? null;
+        const bktItems = imp.bangKeTongItems || [];
+        if ((totalQuantity === null || totalQuantity === undefined) && bktItems.length > 0) {
+          const headers2 = Object.keys(bktItems[0] || {});
+          const qtyCandidates = headers2.filter(h => /soLuong|soluong|quantity|qty/i.test(h));
+          if (qtyCandidates.length > 0) {
+            const qh = qtyCandidates[0];
+            totalQuantity = bktItems.reduce((s, it) => {
+              const v = it[qh];
+              const n = parseNumber(v);
+              return s + (n === null ? 0 : n);
+            }, 0);
+          }
+        }
+        if (totalQuantity !== null && totalQuantity !== undefined) info['Tổng số lượng'] = Number(totalQuantity).toLocaleString('vi-VN');
+
+        // If total money not present, try sum from dsHoaDonItems fields
+        let totalMoney = imp.totalAmount ?? null;
+        if ((!totalMoney || Number(totalMoney) === 0) && Array.isArray(imp.dsHoaDonItems) && imp.dsHoaDonItems.length > 0) {
+          // prefer tongTienSauGiam then tongTien then amount-like fields
+          const moneyFields = ['tongTienSauGiam', 'tongTien', 'totalAmount', 'amount', 'tongTienSauGiamVND'];
+          const first = imp.dsHoaDonItems[0];
+          const candidates = Object.keys(first).filter(k => moneyFields.includes(k) || /tien|amount|total/i.test(k));
+          if (candidates.length > 0) {
+            const field = candidates[0];
+            totalMoney = imp.dsHoaDonItems.reduce((s, r) => {
+              const n = parseNumber(r[field]);
+              return s + (n === null ? 0 : n);
+            }, 0);
+          }
+        }
+        if (totalMoney !== null && totalMoney !== undefined) {
+          info['Tổng tiền'] = Number(totalMoney).toLocaleString('vi-VN');
+        }
+
+        // Load products once to fill missing descriptions (mô tả) from product catalog
+        let productsList = [];
+        try { productsList = await api.get(API_ENDPOINTS.products) || []; } catch (e) { console.error('Failed to load products for descriptions', e); productsList = []; }
+        const productDescMap = {};
+        (productsList || []).forEach(p => {
+          try {
+            const desc = p.description || '';
+            if (desc) {
+              // Map by both code and barcode (case-insensitive, trimmed)
+              if (p.code) productDescMap[String(p.code).toLowerCase().trim()] = desc;
+              if (p.barcode) productDescMap[String(p.barcode).toLowerCase().trim()] = desc;
+              if (p.sku) productDescMap[String(p.sku).toLowerCase().trim()] = desc;
+            }
+          } catch (e) {}
+        });
+        // productDescMap prepared
 
         const workbook = new ExcelJS.Workbook();
         workbook.creator = 'QLNPP';
@@ -3006,18 +3084,76 @@ const InBangKeTong = () => {
         ws1.columns = [{ header: 'Key', width: 30 }, { header: 'Value', width: 50 }];
         Object.keys(info).forEach(k => ws1.addRow([k, info[k]]));
 
-        // Sheet 2: bangKeTongItems
-        const bktItems = imp.bangKeTongItems || [];
+        // --- Sheet 2: Bảng kê tổng with totals and numeric formatting ---
         const ws2 = workbook.addWorksheet('Bảng kê tổng');
         if (bktItems.length === 0) {
           ws2.addRow(['(Không có dữ liệu bảng kê tổng)']);
         } else {
           const headers2 = Object.keys(bktItems[0]);
+          // headers and first item logged earlier during debug
+          // add header row
           ws2.addRow(headers2);
-          bktItems.forEach(it => ws2.addRow(headers2.map(h => it[h] === undefined || it[h] === null ? '' : it[h])));
+
+          // prepare sums array
+          const sums = new Array(headers2.length).fill(0);
+          const isNumericCol = new Array(headers2.length).fill(false);
+          // don't treat code/barcode/description columns as numeric even if numeric-looking
+          const excludeNumericRegex = /(maPhieu|maHang|maVach|ma_vach|ma_hang|productCode|barcode|sku|code|orderNumber|moTa|mota|description|note|ghiChu)/i;
+
+          // add data rows and detect numeric columns
+          bktItems.forEach((it, rowIdx) => {
+            const rowVals = headers2.map((h, idx) => {
+              let v = it[h];
+              // For moTa column, ALWAYS try to fill from product catalog (override any existing value)
+              if (/^moTa$/i.test(h)) {
+                const keysToTry = [it.maHang, it.maVach, it.ma_vach, it.code, it.barcode, it.sku, it.productCode, it.productId].filter(Boolean);
+                let foundDesc = '';
+                for (const key of keysToTry) {
+                  const lookupKey = String(key).toLowerCase().trim();
+                  const found = productDescMap[lookupKey];
+                  if (found) { foundDesc = found; break; }
+                }
+                // Use found description or clear the numeric garbage
+                v = foundDesc;
+              }
+              if (v === undefined || v === null || v === '') return '';
+              // avoid converting code/barcode columns
+              if (excludeNumericRegex.test(h)) return v;
+              const num = parseNumber(v);
+              if (num !== null) {
+                isNumericCol[idx] = true;
+                sums[idx] += num;
+                return num;
+              }
+              return v;
+            });
+            ws2.addRow(rowVals);
+          });
+
+          // style header
+          const headerRow2 = ws2.getRow(1);
+          headerRow2.font = { bold: true };
+          headerRow2.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9EAF7' } };
+
+          // apply number format and alignment, and add totals row
+          const totalsRow = [];
+          for (let i = 0; i < headers2.length; i++) {
+            const col = ws2.getColumn(i + 1);
+            if (isNumericCol[i]) {
+              try { col.numFmt = '#,##0'; } catch (e) {}
+              col.alignment = { horizontal: 'right' };
+              totalsRow.push(sums[i]);
+            } else {
+              totalsRow.push(i === 0 ? 'Tổng' : '');
+            }
+          }
+          ws2.addRow(totalsRow);
+
+          // autofilter
+          ws2.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers2.length } };
         }
 
-        // Sheet 3: dsHoaDonItems
+        // --- Sheet 3: DS hóa đơn with totals and numeric formatting ---
         const ds = imp.dsHoaDonItems || [];
         const ws3 = workbook.addWorksheet('DS hóa đơn');
         if (ds.length === 0) {
@@ -3025,7 +3161,54 @@ const InBangKeTong = () => {
         } else {
           const headers3 = Object.keys(ds[0]);
           ws3.addRow(headers3);
-          ds.forEach(r => ws3.addRow(headers3.map(h => r[h] === undefined || r[h] === null ? '' : r[h])));
+
+          const sums3 = new Array(headers3.length).fill(0);
+          const isNumeric3 = new Array(headers3.length).fill(false);
+          const excludeNumericRegex3 = /(maPhieu|maHang|maVach|ma_vach|ma_hang|productCode|barcode|sku|code|orderNumber|moTa|mota|description|note|ghiChu)/i;
+
+          ds.forEach(r => {
+            const rowVals = headers3.map((h, idx) => {
+              let v = r[h];
+              // For moTa column, ALWAYS try to fill from product catalog
+              if (/^moTa$/i.test(h)) {
+                const keysToTry = [r.maHang, r.maVach, r.ma_vach, r.code, r.barcode, r.sku, r.productCode, r.productId].filter(Boolean);
+                let foundDesc = '';
+                for (const key of keysToTry) {
+                  const found = productDescMap[String(key).toLowerCase().trim()];
+                  if (found) { foundDesc = found; break; }
+                }
+                v = foundDesc;
+              }
+              if (v === undefined || v === null || v === '') return '';
+              if (excludeNumericRegex3.test(h)) return v;
+              const num = parseNumber(v);
+              if (num !== null) {
+                isNumeric3[idx] = true;
+                sums3[idx] += num;
+                return num;
+              }
+              return v;
+            });
+            ws3.addRow(rowVals);
+          });
+
+          const headerRow3 = ws3.getRow(1);
+          headerRow3.font = { bold: true };
+          headerRow3.fill = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FFD9EAF7' } };
+
+          const totalsRow3 = [];
+          for (let i = 0; i < headers3.length; i++) {
+            const col = ws3.getColumn(i + 1);
+            if (isNumeric3[i]) {
+              try { col.numFmt = '#,##0'; } catch (e) {}
+              col.alignment = { horizontal: 'right' };
+              totalsRow3.push(sums3[i]);
+            } else {
+              totalsRow3.push(i === 0 ? 'Tổng' : '');
+            }
+          }
+          ws3.addRow(totalsRow3);
+          ws3.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: headers3.length } };
         }
 
         // Auto-width
@@ -3033,7 +3216,7 @@ const InBangKeTong = () => {
           sheet.columns.forEach(col => {
             let maxLength = 10;
             col.eachCell({ includeEmpty: true }, cell => {
-              const v = cell.value ? String(cell.value) : '';
+              const v = cell.value === null || cell.value === undefined ? '' : String(cell.value);
               maxLength = Math.max(maxLength, v.length + 2);
             });
             col.width = Math.min(maxLength, 80);
