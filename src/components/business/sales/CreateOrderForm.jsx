@@ -223,6 +223,7 @@ const CreateOrderForm = () => {
   const [promoSearchQuery, setPromoSearchQuery] = useState('');
   const [promoSearchResults, setPromoSearchResults] = useState([]);
   const [savedOrders, setSavedOrders] = useState([]); // Danh sách orders từ DB
+  const [orderNumberDuplicate, setOrderNumberDuplicate] = useState(false);
   const [showOrdersList, setShowOrdersList] = useState(false); // Hiển thị danh sách orders
   const [editingOrderId, setEditingOrderId] = useState(null); // ID của order đang sửa
   const [companyInfo, setCompanyInfo] = useState(null); // Thông tin công ty cho xuất Excel
@@ -607,9 +608,100 @@ const CreateOrderForm = () => {
       if (response.ok) {
         const orders = await response.json();
         const found = orders.find(o => o.orderNumber === orderNumber);
-        if (found && found.id) {
-          // Load the full order detail using the found id
-          loadOrderDetail(found.id);
+        if (found) {
+          // If found, load the detail but treat this as a COPY action:
+          // populate the form with data from found order but assign a new order number
+          // and clear editingOrderId so the form behaves as creating a new order.
+          try {
+            const r = await fetch(`${API_BASE_URL}/Orders/${found.id}`);
+            if (r.ok) {
+              const data = await r.json();
+              // populate form similarly to loadOrderDetail but as a new order (copy)
+              setOrderForm({
+                orderDate: data.order.orderDate ? data.order.orderDate.split('T')[0] : defaultOrderDate,
+                orderNumber: formatOrderNumber(data.order.orderDate ? data.order.orderDate.split('T')[0] : defaultOrderDate, reserveNextSerialForYear(new Date(data.order.orderDate || defaultOrderDate).getFullYear())),
+                customer: data.order.customer || '',
+                customerName: data.order.customerName || '',
+                phone: data.order.phone || '',
+                createdBy: data.order.createdBy || '',
+                address: data.order.address || '',
+                vehicle: data.order.vehicle || '',
+                customerGroup: data.order.customerGroup || '',
+                salesSchedule: data.order.salesSchedule || '',
+                printOrder: data.order.printOrder || 0,
+                deliveryVehicle: data.order.deliveryVehicle || '',
+                priceType: data.order.priceType || 'retail',
+                activeTab: 'products',
+                discountPercent: data.order.discountPercent || 0,
+                discountAmount: data.order.discountAmount || 0,
+                discountNote: data.order.discountNote || '',
+                totalKg: data.order.totalKg || 0,
+                totalM3: data.order.totalM3 || 0,
+                payment: data.order.payment || 0,
+                accountFund: data.order.accountFund || '',
+                notes: data.order.notes || '',
+                status: 'chưa duyệt',
+                promoDiscountPercent: data.order.promoDiscountPercent || 0,
+                promoDiscountAmount: data.order.promoDiscountAmount || 0,
+                promoDiscountNote: data.order.promoDiscountNote || '',
+                promoTotalKg: data.order.promoTotalKg || 0,
+                promoTotalM3: data.order.promoTotalM3 || 0,
+                promoNotes: data.order.promoNotes || ''
+              });
+
+              // Map items
+              const mapItemFromBackend = (item, index) => ({
+                id: index + 1,
+                productCode: item.productCode || '',
+                barcode: item.barcode || '',
+                productName: item.productName || '',
+                productType: item.productType || '',
+                warehouse: item.warehouse || '',
+                unit: item.unit || '',
+                quantity: item.quantity || 0,
+                unitPrice: item.unitPrice || 0,
+                discountPercent: item.discountPercent || 0,
+                priceAfterCK: item.priceAfterCK || 0,
+                totalAfterCK: item.totalAfterCK || 0,
+                totalAfterDiscount: item.totalAfterDiscount || 0,
+                nvSales: item.nvSales || '',
+                description: item.description || '',
+                conversion: item.conversion || '',
+                amount: item.amount || 0,
+                total: item.total || 0,
+                weight: item.weight || 0,
+                volume: item.volume || 0,
+                baseWeight: item.baseWeight || 0,
+                baseVolume: item.baseVolume || 0,
+                exportType: item.exportType || 'xuất bán',
+                stock: item.stock || 0,
+                tax: item.tax || 'KCT',
+                priceExcludeVAT: item.priceExcludeVAT || 0,
+                totalExcludeVAT: item.totalExcludeVAT || 0
+              });
+
+              if (data.items && data.items.length > 0) {
+                setOrderItems(data.items.map(mapItemFromBackend));
+              } else {
+                setOrderItems([{ id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }]);
+              }
+
+              if (data.promotionItems && data.promotionItems.length > 0) {
+                setPromotionItems(data.promotionItems.map(mapItemFromBackend));
+              } else {
+                setPromotionItems([{ id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'khuyến mãi', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }]);
+              }
+
+              // Ensure editingOrderId is cleared so form acts as new order (copy)
+              setEditingOrderId(null);
+
+            } else {
+              alert('Không thể tải chi tiết đơn hàng để copy');
+            }
+          } catch (err) {
+            console.error('Error loading order to copy:', err);
+            alert('Lỗi khi tải đơn hàng để copy: ' + err.message);
+          }
         } else {
           alert('Không tìm thấy đơn hàng với mã phiếu: ' + orderNumber);
         }
@@ -621,6 +713,21 @@ const CreateOrderForm = () => {
       alert('Lỗi khi tải đơn hàng: ' + error.message);
     }
   };
+
+  // Watch for duplicate orderNumber and mark state to prevent saving
+  useEffect(() => {
+    if (!orderForm || !orderForm.orderNumber) {
+      setOrderNumberDuplicate(false);
+      return;
+    }
+    const dup = (savedOrders || []).some(o => {
+      if (!o || !o.orderNumber) return false;
+      // if editing existing order, allow same number for same id
+      if (editingOrderId && o.id === editingOrderId) return false;
+      return String(o.orderNumber).trim() === String(orderForm.orderNumber).trim();
+    });
+    setOrderNumberDuplicate(Boolean(dup));
+  }, [orderForm && orderForm.orderNumber, savedOrders, editingOrderId]);
 
   // Auto-calculate totals for orderItems (hàng bán)
   useEffect(() => {
@@ -671,6 +778,61 @@ const CreateOrderForm = () => {
     }
   }, [searchParams]);
 
+  // Auto-fill missing productType for order items based on product category
+  // This handles legacy orders that don't have productType saved
+  useEffect(() => {
+    if (!products || products.length === 0) return;
+    if (!productCategories || productCategories.length === 0) return;
+    
+    // Check and update orderItems
+    const needsUpdateInOrderItems = orderItems.some(item => 
+      item.productCode && !item.productType
+    );
+    
+    if (needsUpdateInOrderItems) {
+      setOrderItems(prev => prev.map(item => {
+        if (item.productCode && !item.productType) {
+          // Find the product by code
+          const product = products.find(p => 
+            p.code === item.productCode || p.barcode === item.barcode
+          );
+          if (product && product.category) {
+            // Find category name
+            const category = productCategories.find(cat => 
+              cat.code === product.category || cat.id === product.category || cat.name === product.category
+            );
+            return { ...item, productType: category ? category.name : product.category };
+          }
+        }
+        return item;
+      }));
+    }
+    
+    // Check and update promotionItems
+    const needsUpdateInPromoItems = promotionItems.some(item => 
+      item.productCode && !item.productType
+    );
+    
+    if (needsUpdateInPromoItems) {
+      setPromotionItems(prev => prev.map(item => {
+        if (item.productCode && !item.productType) {
+          // Find the product by code
+          const product = products.find(p => 
+            p.code === item.productCode || p.barcode === item.barcode
+          );
+          if (product && product.category) {
+            // Find category name
+            const category = productCategories.find(cat => 
+              cat.code === product.category || cat.id === product.category || cat.name === product.category
+            );
+            return { ...item, productType: category ? category.name : product.category };
+          }
+        }
+        return item;
+      }));
+    }
+  }, [products, productCategories, orderItems.length, promotionItems.length]);
+
   // Fetch product categories - filtered by user permissions
   const fetchProductCategories = async () => {
     try {
@@ -712,10 +874,26 @@ const CreateOrderForm = () => {
     }
   };
 
+  // Fetch products for auto-fill productType
+  const fetchProducts = async () => {
+    try {
+      const response = await fetch(`${API_BASE_URL}/Products`);
+      if (response.ok) {
+        const data = await response.json();
+        setProducts(data);
+      } else {
+        console.error('Failed to fetch products:', response.statusText);
+      }
+    } catch (error) {
+      console.error('Error fetching products:', error);
+    }
+  };
+
   // Load initial data
   useEffect(() => {
     fetchProductCategories();
     fetchCompanyInfo();
+    fetchProducts();
   }, []);
 
   // Drag state for column reordering
@@ -3166,7 +3344,13 @@ const CreateOrderForm = () => {
                 value={orderForm.orderNumber}
                 onChange={(e) => { setOrderNumberEdited(true); handleOrderFormChange('orderNumber', e.target.value); }}
                 className="order-form-input"
+                style={orderNumberDuplicate ? { borderColor: '#dc3545', boxShadow: '0 0 0 2px rgba(220,53,69,0.05)' } : {}}
               />
+              {orderNumberDuplicate && (
+                <div style={{ color: '#dc3545', fontSize: 12, marginTop: 6 }}>
+                  Số phiếu <strong>{orderForm.orderNumber}</strong> đã tồn tại trong hệ thống. Vui lòng đổi số phiếu khác.
+                </div>
+              )}
               <span className="input-icon success">✓</span>
             </div>
           </div>
@@ -3976,13 +4160,38 @@ const CreateOrderForm = () => {
         <button className="modal-btn back" onClick={handleGoBack}>
           ← Quay lại
         </button>
-        <button className="modal-btn save" onClick={handleSaveOrder}>
+        <button className="modal-btn save" onClick={() => {
+          if (orderNumberDuplicate) {
+            alert('đơn hàng này này đã trùng với số phiếu ' + (orderForm.orderNumber || ''));
+            return;
+          }
+          if (typeof handleSaveOrder === 'function') handleSaveOrder();
+        }}
+        disabled={orderNumberDuplicate}
+        title={orderNumberDuplicate ? 'Số phiếu bị trùng, vui lòng sửa' : ''}
+        >
           💾 Lưu lại
         </button>
         <button className="modal-btn excel" onClick={handleExportExcel}>
           🧾 Xuất phiếu BH
         </button>
-        <button className="modal-btn copy" onClick={handleCopyOrder}>
+        <button className="modal-btn copy" onClick={() => {
+          // Copy: create a new order with same data but new orderNumber
+          // IMPORTANT: Clear editingOrderId first so next save creates NEW order, not update existing
+          setEditingOrderId(null);
+          try {
+            const year = new Date(orderForm.orderDate).getFullYear();
+            const newSerial = reserveNextSerialForYear(year);
+            const newNum = formatOrderNumber(orderForm.orderDate, newSerial);
+            setOrderForm(prev => ({ ...prev, orderNumber: newNum, status: 'chưa duyệt' }));
+          } catch (e) {
+            // fallback: generate a simple new number
+            const fallbackNum = `BH${Date.now()}`;
+            setOrderForm(prev => ({ ...prev, orderNumber: fallbackNum, status: 'chưa duyệt' }));
+          }
+          alert('Đã copy đơn hàng với số phiếu mới. Nhấn "Lưu lại" để tạo đơn mới.');
+        }}
+        >
           📋 Copy
         </button>
         <button className="modal-btn cancel" onClick={handleCancelOrder}>

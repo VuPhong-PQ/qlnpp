@@ -161,8 +161,8 @@ const Header = () => {
           path: '/business/sales',
           resourceKey: 'orders',
           submenu: [
-            { name: 'Quản lý bán hàng (User)', path: '/business/sales/sale-management-by-current-user', resourceKey: 'sale_management' },
-            { name: 'Quản lý bán hàng (Admin)', path: '/business/sales/sale-management', resourceKey: 'order_management' },
+            { name: 'Tạo đơn hàng', path: '/business/sales/sale-management-by-current-user', resourceKey: 'sale_management' },
+            { name: 'Quản lý bán hàng', path: '/business/sales/sale-management', resourceKey: 'order_management' },
             { name: 'In đơn hàng', path: '/business/sales/print-order', resourceKey: 'print_order' },
             { name: 'In đơn hàng theo xe', path: '/business/sales/print-order-by-vehicle', resourceKey: 'print_order' },
             { name: 'In bảng kê tổng', path: '/business/sales/in-bang-ke-tong', resourceKey: 'orders' }

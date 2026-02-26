@@ -1353,7 +1353,7 @@ const SaleManagement = () => {
     <div className="create-order-page">
       {/* Header */}
       <div className="page-header">
-        <h1>QUẢN LÝ BÁN HÀNG (ADMIN)</h1>
+        <h1>QUẢN LÝ BÁN HÀNG</h1>
       </div>
 
       {/* Search Form */}

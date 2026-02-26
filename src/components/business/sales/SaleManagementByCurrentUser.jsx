@@ -1110,7 +1110,7 @@ const SaleManagementByCurrentUser = () => {
     <div className="create-order-page">
       {/* Header */}
       <div className="page-header">
-        <h1>QUẢN LÝ BÁN HÀNG {currentUser ? `- ${currentUser}` : ''}</h1>
+        <h1>TẠO ĐƠN HÀNG</h1>
       </div>
 
       {/* Search Form */}

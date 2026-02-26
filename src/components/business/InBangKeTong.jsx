@@ -202,11 +202,22 @@ const InBangKeTong = () => {
     { id: 'taxRates', label: 'Thuế suất', width: 100, visible: true, align: 'left' },
     { id: 'loaiHang', label: 'Loại hàng', width: 120, visible: true, align: 'left' },
     { id: 'nvSale', label: 'Nhân viên sale', width: 140, visible: true, align: 'left' },
+    { id: 'mergeFrom', label: 'Gộp từ đơn', width: 130, visible: true, align: 'left' },
+    { id: 'mergeTo', label: 'Gộp vào đơn', width: 130, visible: true, align: 'left' },
     { id: 'customerGroup', label: 'Nhóm khách hàng', width: 140, visible: true, align: 'left' },
     { id: 'salesSchedule', label: 'Lịch bán hàng', width: 120, visible: true, align: 'left' },
     { id: 'totalAmount', label: 'Tổng tiền', width: 120, visible: true, align: 'right' },
     { id: 'totalKg', label: 'Tổng số kg', width: 100, visible: true, align: 'right' },
     { id: 'totalM3', label: 'Tổng số khối', width: 100, visible: true, align: 'right' },
+    { id: 'printOrder', label: 'STT in', width: 80, visible: true, align: 'center' },
+    { id: 'address', label: 'Địa chỉ', width: 180, visible: true, align: 'left' },
+    { id: 'paid', label: 'Đã thanh toán', width: 110, visible: true, align: 'center' },
+    { id: 'deliveryStaff', label: 'Nhân viên giao', width: 120, visible: true, align: 'left' },
+    { id: 'driver', label: 'Tài xế', width: 100, visible: true, align: 'left' },
+    { id: 'vehicle', label: 'Xe', width: 100, visible: true, align: 'left' },
+    { id: 'deliverySuccessful', label: 'Giao thành công', width: 120, visible: true, align: 'center' },
+    { id: 'vatExport', label: 'Xuất VAT', width: 90, visible: true, align: 'center' },
+    { id: 'position', label: 'Vị trí', width: 150, visible: true, align: 'left' },
   ];
   const [modalDshdColumns, setModalDshdColumns] = useState(() => {
     try { const s = localStorage.getItem('order_select_cols_v1'); return s ? JSON.parse(s) : defaultOrderSelectCols; } catch { return defaultOrderSelectCols; }
@@ -895,6 +906,13 @@ const InBangKeTong = () => {
             <tfoot>
               <tr style={{ background: '#fafafa', fontWeight: 700 }}>
                 {visibleCols.map(col => {
+                  if (isBkt && col.id === 'tenHang') {
+                    return (
+                      <td key={col.id} style={{ border: '1px solid #d9d9d9', padding: '6px 8px', textAlign: 'center', color: '#000' }}>
+                        {filteredItems.length}
+                      </td>
+                    );
+                  }
                   if (col.id === footerLabelColId) {
                     return (
                       <td key={col.id} style={{ border: '1px solid #d9d9d9', padding: '6px 8px', textAlign: 'left' }}>
@@ -4257,7 +4275,19 @@ const InBangKeTong = () => {
             salesStaff = Array.from(sset).join(', ');
           }
 
-          const taxRates = detailOrder.taxRates || detailOrder.TaxRates || '';
+          // Compute taxRates from items - get unique tax values
+          let taxRates = detailOrder.taxRates || detailOrder.TaxRates || '';
+          if (!taxRates && allItems.length > 0) {
+            const taxSet = new Set(allItems.map(i => i.tax || '').filter(Boolean));
+            const taxParts = Array.from(taxSet).map(t => {
+              const s = String(t).trim();
+              if (s.includes('%')) return s.replace(/\s*%/g, '%');
+              if (s === 'KCT' || s.toLowerCase() === 'kct') return 'KCT';
+              const num = s.replace(/[^0-9.\-]/g, '');
+              return num ? (num + '%') : s;
+            }).filter(Boolean);
+            taxRates = taxParts.join(', ');
+          }
 
           // determine if this order already belongs to an existing BKT (use fresh list from API)
           const usedImport = freshBktList.find(imp => Array.isArray(imp.dsHoaDonItems) && imp.dsHoaDonItems.some(h => h.orderId && String(h.orderId) === String(order.id)));
@@ -6111,11 +6141,11 @@ const InBangKeTong = () => {
                         </div>
                       </div>
 
-                      <div style={{ overflowX: 'auto' }}>
+                      <div style={{ overflowX: 'auto', overflowY: 'auto', maxHeight: 'calc(100vh - 300px)' }}>
                         <table style={{ width: '100%', minWidth: 1200, borderCollapse: 'collapse', fontSize: 13 }}>
-                          <thead>
+                          <thead style={{ position: 'sticky', top: 0, zIndex: 10 }}>
                             <tr style={{ background: '#f0f5ff' }}>
-                                <th style={{ border: '1px solid #d9d9d9', padding: '8px', width: 40 }}>
+                                <th style={{ border: '1px solid #d9d9d9', padding: '8px', width: 40, background: '#f0f5ff' }}>
                                 <input 
                                   type="checkbox" 
                                   checked={selectedOrderIds.size === ordersForSelect.filter(o => !o.alreadyInBkt && !o.alreadyInCurrentBkt).length && ordersForSelect.filter(o => !o.alreadyInBkt && !o.alreadyInCurrentBkt).length > 0}
@@ -6130,7 +6160,7 @@ const InBangKeTong = () => {
                                   onDragOver={modalH.colDragOver}
                                   onDrop={(e) => modalH.colDrop(e, col.id, modalDshdDragColumn)}
                                   onDragEnd={modalH.colDragEnd}
-                                  style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: col.align || 'left', position: 'relative', width: col.width + 'px', minWidth: col.width + 'px' }}
+                                  style={{ border: '1px solid #d9d9d9', padding: '8px', textAlign: col.align || 'left', position: 'relative', width: col.width + 'px', minWidth: col.width + 'px', background: '#f0f5ff' }}
                                 >
                                   <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
                                     <span style={{ flex: 1 }}>{col.label}</span>
@@ -6189,9 +6219,21 @@ const InBangKeTong = () => {
                                         case 'tongTienSauGiam': return (order.totalAfterDiscount || order.totalAmount || 0).toLocaleString('vi-VN');
                                         case 'status': return (<span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, background: order.status?.toLowerCase().includes('đã duyệt') ? '#d4edda' : '#f8d7da', color: order.status?.toLowerCase().includes('đã duyệt') ? '#155724' : '#721c24' }}>{order.status || ''}</span>);
                                         case 'createdBy': return order.createdBy || '';
-                                        case 'taxRates': return order.taxRates || order.TaxRates || '';
+                                        case 'taxRates': {
+                                          const raw = order.TaxRates || order.taxRates || '';
+                                          if (!raw) return '';
+                                          const parts = String(raw).split(/[,;\s]+/).map(p => p.trim()).filter(Boolean);
+                                          const mapped = parts.map(p => {
+                                            if (p.includes('%')) return p.replace(/\s*%/g, '%');
+                                            const num = p.replace(/[^0-9.\-]/g, '');
+                                            return num ? (num + '%') : p;
+                                          });
+                                          return mapped.join(', ');
+                                        }
                                         case 'loaiHang': return order.productType || '';
                                         case 'nvSale': return order.salesStaff || order.salesEmployee || '';
+                                        case 'mergeFrom': return order.mergeFromOrder || '';
+                                        case 'mergeTo': return order.mergeToOrder || '';
                                         case 'customerGroup': {
                                           const key = order.customerGroup || order.customerGroupId || order.customerGroupCode || (order.customerGroup || '').toString();
                                           return customerGroupsMap[key] || order.customerGroupName || order.customerGroup || '';
@@ -6201,7 +6243,14 @@ const InBangKeTong = () => {
                                         case 'totalKg': return Number(order.totalKg || 0).toLocaleString('vi-VN');
                                         case 'totalM3': return Number(order.totalM3 || 0).toLocaleString('vi-VN');
                                         case 'printOrder': return order.printOrder || '';
+                                        case 'address': return order.address || '';
+                                        case 'paid': return order.paid ? 'Đã TT' : (order.payment ? 'Đã TT' : 'Chưa TT');
+                                        case 'deliveryStaff': return order.deliveryStaff || '';
+                                        case 'driver': return order.driver || '';
                                         case 'vehicle': return order.vehicle || '';
+                                        case 'deliverySuccessful': return order.deliverySuccessful ? 'Có' : '';
+                                        case 'vatExport': return order.vatExport ? 'Có' : '';
+                                        case 'position': return order.location || order.position || '';
                                         case 'deliveryVehicle': return order.deliveryVehicle || '';
                                         case 'printStatus': return (<span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, background: (order.printCount || 0) > 0 ? '#d4edda' : '#f8d7da', color: (order.printCount || 0) > 0 ? '#155724' : '#721c24' }}>{(order.printCount || 0) > 0 ? 'Đã in' : 'Chưa in'}</span>);
                                         case 'printCount': return order.printCount || 0;
