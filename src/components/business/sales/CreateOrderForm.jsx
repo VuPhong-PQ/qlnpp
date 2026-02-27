@@ -2176,7 +2176,7 @@ const CreateOrderForm = () => {
     return w + ' đồng';
   };
 
-  const handleSaveOrder = async () => {
+  const handleSaveOrder = async (silent = false) => {
     try {
       // Commit serial from order number so next generated will be higher
       try { commitSerialFromOrderNumber(orderForm.orderNumber); } catch(e) {}
@@ -2287,8 +2287,9 @@ const CreateOrderForm = () => {
         });
         
         if (response.ok) {
-          alert('Đơn hàng đã được cập nhật thành công!');
+          if (!silent) alert('Đơn hàng đã được cập nhật thành công!');
           fetchOrders(); // Refresh orders list
+          return true; // Success
         } else {
           const errorData = await response.text();
           throw new Error(`Lỗi cập nhật: ${errorData}`);
@@ -2304,10 +2305,12 @@ const CreateOrderForm = () => {
         response = await api.post(`${API_ENDPOINTS.orders}/create-with-items`, createPayload);
         
         if (response) {
-          alert('Đơn hàng đã được tạo thành công!');
+          if (!silent) alert('Đơn hàng đã được tạo thành công!');
           fetchOrders(); // Refresh orders list after successful save
+          return true; // Success
         }
       }
+      return false; // Unexpected case
     } catch (error) {
       console.error('Full error details:', error);
       console.error('Error message:', error.message);
@@ -2321,7 +2324,8 @@ const CreateOrderForm = () => {
         errorMsg = error.response.data.message || error.response.data || errorMsg;
       }
       
-      alert(`Lỗi khi lưu đơn hàng: ${errorMsg}`);
+      if (!silent) alert(`Lỗi khi lưu đơn hàng: ${errorMsg}`);
+      return false; // Failed
     }
   };
 
@@ -4095,9 +4099,20 @@ const CreateOrderForm = () => {
             <div className="summary-field">
               <label>Giảm %</label>
               <input
-                type="number"
+                type="text"
                 value={orderForm.discountPercent}
-                onChange={(e) => handleOrderFormChange('discountPercent', e.target.value)}
+                onChange={(e) => {
+                  const raw = String(e.target.value).replace(',', '.');
+                  // Allow empty, lone minus, or numeric with optional leading minus and decimals
+                  if (raw === '' || raw === '-' || /^-?(\d+(?:\.\d*)?|\.\d+)$/.test(raw)) {
+                    handleOrderFormChange('discountPercent', raw);
+                  }
+                }}
+                onBlur={(e) => {
+                  const v = String(e.target.value).replace(',', '.').trim();
+                  const num = parseFloat(v);
+                  handleOrderFormChange('discountPercent', isNaN(num) ? 0 : num);
+                }}
                 className="summary-input"
               />
             </div>
@@ -4175,21 +4190,57 @@ const CreateOrderForm = () => {
         <button className="modal-btn excel" onClick={handleExportExcel}>
           🧾 Xuất phiếu BH
         </button>
-        <button className="modal-btn copy" onClick={() => {
-          // Copy: create a new order with same data but new orderNumber
-          // IMPORTANT: Clear editingOrderId first so next save creates NEW order, not update existing
-          setEditingOrderId(null);
-          try {
-            const year = new Date(orderForm.orderDate).getFullYear();
-            const newSerial = reserveNextSerialForYear(year);
-            const newNum = formatOrderNumber(orderForm.orderDate, newSerial);
-            setOrderForm(prev => ({ ...prev, orderNumber: newNum, status: 'chưa duyệt' }));
-          } catch (e) {
-            // fallback: generate a simple new number
-            const fallbackNum = `BH${Date.now()}`;
-            setOrderForm(prev => ({ ...prev, orderNumber: fallbackNum, status: 'chưa duyệt' }));
+        <button className="modal-btn copy" onClick={async () => {
+          // Copy behavior depends on whether this is a new order or editing existing order
+          
+          if (!editingOrderId) {
+            // CASE 1: New order - Save current order first, then copy to new order number
+            // Check for duplicate order number first
+            if (orderNumberDuplicate) {
+              alert('Số phiếu bị trùng, vui lòng sửa trước khi copy!');
+              return;
+            }
+            
+            // Save current order first (silent mode - no alert on success)
+            const saveSuccess = await handleSaveOrder(true);
+            
+            if (saveSuccess) {
+              // After saving successfully, generate new order number for the copy
+              const year = new Date(orderForm.orderDate).getFullYear();
+              const newSerial = reserveNextSerialForYear(year);
+              const newNum = formatOrderNumber(orderForm.orderDate, newSerial);
+              
+              // Clear editingOrderId so next save creates NEW order
+              setEditingOrderId(null);
+              setOrderForm(prev => ({ ...prev, orderNumber: newNum, status: 'chưa duyệt' }));
+              setOrderNumberEdited(true);
+              
+              alert(`Đã lưu đơn hàng gốc thành công và tạo bản copy với số phiếu mới: ${newNum}. Nhấn "Lưu lại" để lưu bản copy.`);
+            } else {
+              alert('Lưu đơn hàng gốc thất bại. Không thể tạo bản copy.');
+            }
+          } else {
+            // CASE 2: Existing order - Just prepare new order number, don't modify original
+            try {
+              const year = new Date(orderForm.orderDate).getFullYear();
+              const newSerial = reserveNextSerialForYear(year);
+              const newNum = formatOrderNumber(orderForm.orderDate, newSerial);
+              
+              // Clear editingOrderId so next save creates NEW order (not update existing)
+              setEditingOrderId(null);
+              setOrderForm(prev => ({ ...prev, orderNumber: newNum, status: 'chưa duyệt' }));
+              setOrderNumberEdited(true);
+              
+              alert(`Đã copy đơn hàng với số phiếu mới: ${newNum}. Đơn hàng cũ không thay đổi. Nhấn "Lưu lại" để tạo đơn mới.`);
+            } catch (e) {
+              // fallback: generate a simple new number
+              const fallbackNum = `BH${Date.now()}`;
+              setEditingOrderId(null);
+              setOrderForm(prev => ({ ...prev, orderNumber: fallbackNum, status: 'chưa duyệt' }));
+              setOrderNumberEdited(true);
+              alert('Đã copy đơn hàng với số phiếu mới. Nhấn "Lưu lại" để tạo đơn mới.');
+            }
           }
-          alert('Đã copy đơn hàng với số phiếu mới. Nhấn "Lưu lại" để tạo đơn mới.');
         }}
         >
           📋 Copy

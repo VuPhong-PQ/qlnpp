@@ -121,6 +121,7 @@ const SaleManagementByCurrentUser = () => {
     { id: 'payment', label: 'Tổng tiền sau giảm', width: 140, visible: true },
     { id: 'status', label: 'Trạng thái', width: 100, visible: true },
     { id: 'notes', label: 'Ghi chú đơn hàng', width: 150, visible: true },
+    { id: 'discountNote', label: 'Ghi chú giảm', width: 150, visible: true },
     { id: 'createdBy', label: 'Nhân viên lập', width: 120, visible: true },
     { id: 'taxRate', label: 'Thuế suất', width: 90, visible: true },
     { id: 'productType', label: 'Loại hàng', width: 120, visible: true },
@@ -471,6 +472,7 @@ const SaleManagementByCurrentUser = () => {
         { header: 'Tổng tiền sau giảm', key: 'payment', width: 18 },
         { header: 'Trạng thái', key: 'status', width: 12 },
         { header: 'Ghi chú', key: 'notes', width: 30 },
+        { header: 'Ghi chú giảm', key: 'discountNote', width: 25 },
         { header: 'Nhân viên lập', key: 'createdBy', width: 15 },
         { header: 'Nhân viên sale', key: 'salesStaff', width: 15 },
         { header: 'Thuế suất', key: 'taxRate', width: 10 },
@@ -510,6 +512,7 @@ const SaleManagementByCurrentUser = () => {
           payment: totalAfterDiscount > 0 ? totalAfterDiscount : (order.totalAmount || 0),
           status: order.status || 'chưa duyệt',
           notes: order.notes || '',
+          discountNote: order.discountNote || order.promoDiscountNote || '',
           createdBy: order.createdBy || '',
           salesStaff: order.salesStaff || '',
           taxRate: formatTaxRates(order) || (order.discountPercent ? `${order.discountPercent}%` : ''),
@@ -699,6 +702,9 @@ const SaleManagementByCurrentUser = () => {
         return totalAfterDiscount > 0 ? totalAfterDiscount.toString() : '';
       case 'status': return order.status || 'chưa duyệt';
       case 'notes': return order.notes || '';
+      case 'discountNote': return (
+        order.discountNote || order.promoDiscountNote || order.promoNotes || order.PromoNotes || order.PromoDiscountNote || order.PromoNotes || ''
+      );
       case 'createdBy': return order.createdBy || '';
       case 'productType': return order.productType || '';
       case 'taxRate': return formatTaxRates(order);
@@ -805,6 +811,9 @@ const SaleManagementByCurrentUser = () => {
           </span>
         );
       case 'notes': return order.notes || '-';
+      case 'discountNote': return (
+        order.discountNote || order.promoDiscountNote || order.promoNotes || order.PromoNotes || order.PromoDiscountNote || order.PromoNotes || '-'
+      );
       case 'createdBy': return order.createdBy || '-';
       case 'productType': return order.productType || '-';
       case 'taxRate': 

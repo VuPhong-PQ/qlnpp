@@ -198,6 +198,8 @@ const InBangKeTong = () => {
     { id: 'tenKhachHang', label: 'Khách hàng', width: 200, visible: true, align: 'left' },
     { id: 'tongTienSauGiam', label: 'Tổng tiền sau giảm', width: 140, visible: true, align: 'right' },
     { id: 'status', label: 'Trạng thái', width: 110, visible: true, align: 'center' },
+    { id: 'orderNote', label: 'Ghi chú đơn hàng', width: 200, visible: true, align: 'left' },
+    { id: 'discountNote', label: 'Ghi chú giảm', width: 180, visible: true, align: 'left' },
     { id: 'createdBy', label: 'Nhân viên lập', width: 140, visible: true, align: 'left' },
     { id: 'taxRates', label: 'Thuế suất', width: 100, visible: true, align: 'left' },
     { id: 'loaiHang', label: 'Loại hàng', width: 120, visible: true, align: 'left' },
@@ -6218,6 +6220,8 @@ const InBangKeTong = () => {
                                         case 'tenKhachHang': return order.customerName || order.customer || '';
                                         case 'tongTienSauGiam': return (order.totalAfterDiscount || order.totalAmount || 0).toLocaleString('vi-VN');
                                         case 'status': return (<span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, background: order.status?.toLowerCase().includes('đã duyệt') ? '#d4edda' : '#f8d7da', color: order.status?.toLowerCase().includes('đã duyệt') ? '#155724' : '#721c24' }}>{order.status || ''}</span>);
+                                        case 'orderNote': return order.orderNote || order.note || order.notes || '';
+                                        case 'discountNote': return order.discountNote || order.promoDiscountNote || order.promoNotes || '';
                                         case 'createdBy': return order.createdBy || '';
                                         case 'taxRates': {
                                           const raw = order.TaxRates || order.taxRates || '';
