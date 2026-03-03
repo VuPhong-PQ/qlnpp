@@ -51,9 +51,7 @@ const permissionGroups = [
     groupName: 'Báo cáo thống kê',
     icon: '📊',
     items: [
-      { key: 'sales_report', name: 'Báo cáo bán hàng' },
-      { key: 'inventory_report', name: 'Báo cáo tồn kho' },
-      { key: 'financial_report', name: 'Báo cáo tài chính' }
+      // Report pages removed per request
     ]
   },
   {

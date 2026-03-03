@@ -545,7 +545,7 @@ const InBangKeTong = () => {
     loadOrdersForSelect(dayjs().startOf('month'), dayjs().endOf('month'), selectedImport.id);
   };
 
-  const handleDeleteDshd = () => {
+  const handleDeleteDshd = async () => {
     const keys = Array.from(dshdSelectedIds || []);
     if (keys.length === 0) { alert('Vui lòng chọn ít nhất một hóa đơn để xóa'); return; }
     if (!confirm('Bạn chắc chắn muốn xóa ' + keys.length + ' hóa đơn đã chọn?')) return;
@@ -560,14 +560,88 @@ const InBangKeTong = () => {
         if (idx >= 0) indicesToDelete.add(idx);
       }
     });
-    setSelectedImport(si => {
-      if (!si) return si;
-      const newDs = (si.dsHoaDonItems || []).filter((h, idx) => !indicesToDelete.has(idx));
-      const updatedSi = { ...si, dsHoaDonItems: newDs };
-      setIsEditing(true);
-      return updatedSi;
+    
+    // Get remaining dsHoaDonItems after deletion
+    const newDsHoaDonItems = items.filter((h, idx) => !indicesToDelete.has(idx));
+    
+    // Recalculate bangKeTongItems from remaining orders
+    const getShortOrderNumber = (orderNum) => String(orderNum || '').slice(-3);
+    const productMap = new Map();
+    
+    for (const dsHd of newDsHoaDonItems) {
+      if (dsHd.orderId) {
+        try {
+          const resp = await api.get(`${API_ENDPOINTS.orders}/${dsHd.orderId}`);
+          const orderItems = [...(resp.items || []), ...(resp.promotionItems || [])];
+          orderItems.forEach((item) => {
+            const product = products.find(p => p.barcode === item.barcode || p.code === item.productCode || p.name === item.productName) || {};
+            const key = item.barcode || item.productCode || item.productName;
+            if (!key) return;
+            const conversionToBase = parseFloat(item.conversion) || parseFloat(product.conversion1) || 1;
+            const convUnit1 = parseFloat(product.conversion1) || parseFloat(item.conversion) || 1;
+            const baseQty = (parseFloat(item.quantity) || 0) * conversionToBase;
+            const shortOrderNum = getShortOrderNumber(dsHd.maPhieu);
+            if (productMap.has(key)) {
+              const existing = productMap.get(key);
+              if (!existing.orderNumbers.includes(shortOrderNum)) existing.orderNumbers.push(shortOrderNum);
+              existing.totalBaseQty += baseQty;
+            } else {
+              productMap.set(key, {
+                orderNumbers: [shortOrderNum],
+                barcode: item.barcode || '',
+                productCode: item.productCode || '',
+                productName: item.productName || '',
+                unit1: product.unit1 || product.defaultUnit || item.unit || '',
+                baseUnit: product.baseUnit || item.baseUnit || item.unit || '',
+                description: item.description || '',
+                convUnit1: convUnit1,
+                totalBaseQty: baseQty,
+                productCategory: product.category || item.productType || '',
+              });
+            }
+          });
+        } catch (e) { /* skip if order fetch fails */ }
+      }
+    }
+    
+    // Convert aggregated map to bangKeTongItems
+    const newBangKeTongItems = [];
+    let bktIdx = 0;
+    productMap.forEach((data) => {
+      const sl1 = Math.floor(data.totalBaseQty / data.convUnit1);
+      const baseRemaining = data.totalBaseQty - (sl1 * data.convUnit1);
+      newBangKeTongItems.push({
+        id: `bkt_${bktIdx}_${Date.now()}`,
+        maPhieu: data.orderNumbers.join(', '),
+        maVach: data.barcode,
+        maHang: data.productCode,
+        tenHang: data.productName,
+        donViTinh1: data.unit1,
+        soLuongDVT1: sl1,
+        donViGoc: data.baseUnit,
+        soLuongDVTGoc: Math.round(baseRemaining * 1000) / 1000,
+        moTa: data.description,
+        slBanTheoDVTGoc: Math.round(data.totalBaseQty * 1000) / 1000,
+        quyDoi: Math.round(data.convUnit1 * 1000) / 1000,
+        loaiHang: data.productCategory,
+      });
+      bktIdx++;
     });
-    setImports(prev => prev.map(im => im.id === (selectedImport && selectedImport.id) ? ({ ...im, dsHoaDonItems: (selectedImport.dsHoaDonItems || []).filter((h, idx) => !indicesToDelete.has(idx)) }) : im));
+    
+    // Calculate new total amount
+    const totalAmount = newDsHoaDonItems.reduce((s, h) => s + (Number(h.tongTienSauGiam || h.tongTien || 0) || 0), 0);
+    
+    // Update selectedImport with both dsHoaDonItems and bangKeTongItems
+    const updatedSi = { 
+      ...selectedImport, 
+      dsHoaDonItems: newDsHoaDonItems,
+      bangKeTongItems: newBangKeTongItems,
+      totalAmount: totalAmount
+    };
+    
+    setSelectedImport(updatedSi);
+    setImports(prev => prev.map(im => im.id === selectedImport?.id ? updatedSi : im));
+    setIsEditing(true);
     setDshdSelectedIds(new Set());
   };
 
@@ -3386,9 +3460,18 @@ const InBangKeTong = () => {
         loaiHang: h.loaiHang || '',
       }));
 
+      // For existing imports, preserve the original date if formData.createdDate is not set
+      const isNew = !selectedImport || !selectedImport.id || String(selectedImport.id).startsWith('temp_');
+      const originalDate = selectedImport?.date; // Raw ISO date from server
+      
+      // Use end of day (23:59:59) to avoid timezone issues and ensure correct date in reports
+      const getDateEndOfDay = (dateStr) => dayjs(dateStr).hour(23).minute(59).second(59).toISOString();
+      
       const payload = {
         importNumber: formData.importNumber || generateImportNumber(),
-        createdDate: formData.createdDate ? dayjs(formData.createdDate).toISOString() : new Date().toISOString(),
+        createdDate: formData.createdDate 
+          ? getDateEndOfDay(formData.createdDate)
+          : (isNew ? getDateEndOfDay(dayjs().format('YYYY-MM-DD')) : (originalDate || getDateEndOfDay(dayjs().format('YYYY-MM-DD')))),
         employee: formData.employee || '',
         importType: formData.importType || '',
         dsHoaDon: formData.dsHoaDon || '',
@@ -3397,8 +3480,6 @@ const InBangKeTong = () => {
         items: bktItems,
         hoaDons: hoaDonItems,
       };
-
-      const isNew = !selectedImport || !selectedImport.id || String(selectedImport.id).startsWith('temp_');
 
       if (isNew) {
         const created = await api.post(API_ENDPOINTS.bangKeTongs, payload);
@@ -4232,10 +4313,11 @@ const InBangKeTong = () => {
       const start = dayjs(startDate).format('YYYY-MM-DD');
       const end = dayjs(endDate).format('YYYY-MM-DD');
       const response = await api.get(`${API_ENDPOINTS.orders}/by-date-range?startDate=${start}&endDate=${end}`);
-      // Filter only "đã duyệt" status
-      const approvedOrders = (response || []).filter(o => 
-        o.status && o.status.toLowerCase().includes('đã duyệt')
-      );
+      // Filter only "đã duyệt" or "đã sửa" status
+      const approvedOrders = (response || []).filter(o => {
+        const status = (o.status || '').toLowerCase();
+        return status.includes('đã duyệt') || status.includes('đã sửa');
+      });
 
       // Fetch fresh BKT list from backend so alreadyInBkt check is always up-to-date
       let freshBktList = imports || [];
@@ -5037,12 +5119,12 @@ const InBangKeTong = () => {
                       <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Ngày lập</label>
                       <input
                         type="date"
-                        value={formData.createdDate || (selectedImport?.createdDate ? dayjs(selectedImport.createdDate).format('YYYY-MM-DD') : '')}
+                        value={formData.createdDate || (selectedImport?.date ? dayjs(selectedImport.date).format('YYYY-MM-DD') : '')}
                         onChange={(e) => {
                           if (!isEditMode) return;
                           const v = e.target.value;
                           setFormData(fd => ({ ...fd, createdDate: v }));
-                          setSelectedImport(si => si ? ({ ...si, createdDate: v }) : si);
+                          setSelectedImport(si => si ? ({ ...si, createdDate: v, date: dayjs(v).toISOString() }) : si);
                           setIsEditing(true);
                         }}
                         style={{width:'100%'}}
@@ -6114,7 +6196,7 @@ const InBangKeTong = () => {
                 getPopupContainer={(trigger) => trigger && trigger.parentElement ? trigger.parentElement : document.body}
               />
               <span style={{ fontSize: 12, color: '#888' }}>
-                (Chỉ hiển thị đơn hàng đã duyệt)
+                (Chỉ hiển thị đơn hàng đã duyệt hoặc đã sửa)
               </span>
             </div>
             
@@ -6123,7 +6205,7 @@ const InBangKeTong = () => {
               {loadingOrders ? (
                 <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Đang tải danh sách đơn hàng...</div>
               ) : ordersForSelect.length === 0 ? (
-                <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Không có đơn hàng đã duyệt trong khoảng thời gian này</div>
+                <div style={{ textAlign: 'center', padding: 40, color: '#888' }}>Không có đơn hàng đã duyệt hoặc đã sửa trong khoảng thời gian này</div>
               ) : (
                 (() => {
                   const filtered = filterOrdersForSelect(ordersForSelect);
@@ -6219,7 +6301,14 @@ const InBangKeTong = () => {
                                         );
                                         case 'tenKhachHang': return order.customerName || order.customer || '';
                                         case 'tongTienSauGiam': return (order.totalAfterDiscount || order.totalAmount || 0).toLocaleString('vi-VN');
-                                        case 'status': return (<span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, background: order.status?.toLowerCase().includes('đã duyệt') ? '#d4edda' : '#f8d7da', color: order.status?.toLowerCase().includes('đã duyệt') ? '#155724' : '#721c24' }}>{order.status || ''}</span>);
+                                        case 'status': {
+                                          const statusLower = (order.status || '').toLowerCase();
+                                          const isApproved = statusLower.includes('đã duyệt');
+                                          const isEdited = statusLower.includes('đã sửa');
+                                          const bgColor = isApproved ? '#d4edda' : isEdited ? '#ffe5cc' : '#f8d7da';
+                                          const textColor = isApproved ? '#155724' : isEdited ? '#7d4e24' : '#721c24';
+                                          return (<span style={{ padding: '2px 8px', borderRadius: 4, fontSize: 11, background: bgColor, color: textColor }}>{order.status || ''}</span>);
+                                        }
                                         case 'orderNote': return order.orderNote || order.note || order.notes || '';
                                         case 'discountNote': return order.discountNote || order.promoDiscountNote || order.promoNotes || '';
                                         case 'createdBy': return order.createdBy || '';

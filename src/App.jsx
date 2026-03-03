@@ -35,6 +35,8 @@ import PrintOrderByVehicle from './components/business/sales/PrintOrderByVehicle
 import ReceiptVoucher from './components/business/accounting/ReceiptVoucher';
 import ExpenseVoucher from './components/business/accounting/ExpenseVoucher';
 import CostCalculation from './components/business/CostCalculation';
+import XuatNhapTon from './components/reports/kho/XuatNhapTon';
+import BaoCaoXuatNhapTon from './components/reports/kho/BaoCaoXuatNhapTon';
 import './App.css';
 
 // Layout component with Header
@@ -219,6 +221,18 @@ function App() {
           <Route path="/business/cost-calculation" element={
             <ProtectedRoute requiredPermission="cost_calculation">
               <AppLayout><CostCalculation /></AppLayout>
+            </ProtectedRoute>
+          } />
+          
+          {/* Reports routes */}
+          <Route path="/reports/kho/chi-tiet-xuat-nhap" element={
+            <ProtectedRoute requiredPermission="xuat_nhap_ton">
+              <AppLayout><XuatNhapTon /></AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/kho/xuat-nhap-ton" element={
+            <ProtectedRoute requiredPermission="xuat_nhap_ton">
+              <AppLayout><BaoCaoXuatNhapTon /></AppLayout>
             </ProtectedRoute>
           } />
           

@@ -29,6 +29,8 @@ export const API_ENDPOINTS = {
   orders: `${API_BASE_URL}/orders`,
   geocoding: `${API_BASE_URL}/geocoding`,
   bangKeTongs: `${API_BASE_URL}/bangketongs`,
+  imports: `${API_BASE_URL}/imports`,
+  exports: `${API_BASE_URL}/exports`,
   
   // Permissions - Phân quyền
   permissionGroups: `${API_BASE_URL}/permissiongroups`,

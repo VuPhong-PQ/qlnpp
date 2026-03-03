@@ -460,7 +460,7 @@ const SaleManagement = () => {
     setSelectedOrders(newSelected);
   };
 
-  // Handle cancel selected orders (change status to "đã hủy")
+  // Handle cancel selected orders (change status to "hủy")
   const handleCancelSelected = async () => {
     if (selectedOrders.size === 0) {
       alert('Vui lòng chọn đơn hàng cần hủy!');
@@ -480,7 +480,7 @@ const SaleManagement = () => {
           headers: {
             'Content-Type': 'application/json'
           },
-          body: JSON.stringify({ status: 'đã hủy' })
+          body: JSON.stringify({ status: 'hủy' })
         });
         
         if (response.ok) {
@@ -496,7 +496,7 @@ const SaleManagement = () => {
       setSelectedOrders(new Set());
       
       if (failCount === 0) {
-        alert(`Đã hủy thành công ${successCount} đơn hàng!`);
+        alert(`Hủy thành công ${successCount} đơn hàng!`);
       } else {
         alert(`Hủy thành công ${successCount} đơn hàng, thất bại ${failCount} đơn hàng.`);
       }
@@ -1036,10 +1036,14 @@ const SaleManagement = () => {
         const statusValue = order.status || 'chưa duyệt';
         const statusColors = {
           'đã duyệt': { bg: '#28a745', color: '#fff' },
-          'đã hủy': { bg: '#dc3545', color: '#fff' },
+          'hủy': { bg: '#dc3545', color: '#fff' },
+          'đã hủy': { bg: '#dc3545', color: '#fff' }, // backward compatibility
+          'đã sửa': { bg: '#fd7e14', color: '#fff' },
           'chưa duyệt': { bg: '#ffc107', color: '#000' }
         };
         const statusStyle = statusColors[statusValue.toLowerCase()] || statusColors['chưa duyệt'];
+        // Display "hủy" instead of "đã hủy" for old orders
+        const displayStatus = statusValue.toLowerCase() === 'đã hủy' ? 'hủy' : statusValue;
         return (
           <span style={{
             display: 'inline-block',
@@ -1050,7 +1054,7 @@ const SaleManagement = () => {
             backgroundColor: statusStyle.bg,
             color: statusStyle.color
           }}>
-            {statusValue}
+            {displayStatus}
           </span>
         );
       case 'notes': return order.notes || '-';
@@ -1506,6 +1510,7 @@ const SaleManagement = () => {
                 <option value="">Tất cả trạng thái</option>
                 <option value="Chưa duyệt">Chưa duyệt</option>
                 <option value="Đã duyệt">Đã duyệt</option>
+                <option value="Đã sửa">Đã sửa</option>
                 <option value="Hủy">Hủy</option>
                 <option value="Đơn gộp">Đơn gộp</option>
                 <option value="Đơn đã gộp">Đơn đã gộp</option>

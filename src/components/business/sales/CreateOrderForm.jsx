@@ -137,45 +137,97 @@ const CreateOrderForm = () => {
     }
   };
 
-  const [orderForm, setOrderForm] = useState({
-    orderDate: defaultOrderDate,
-    orderNumber: formatOrderNumber(defaultOrderDate, peekNextSerialForYear(new Date(defaultOrderDate).getFullYear())),
-    customer: '',
-    customerName: '',
-    phone: '',
-    createdBy: '',
-    address: '',
-    vehicle: '',
-    customerGroup: '',
-    salesSchedule: '',
-    printOrder: 0,
-    deliveryVehicle: '',
-    priceType: 'retail', // retail or wholesale
-    activeTab: 'products', // products or promotions
-    // Thông tin cho hàng bán
-    discountPercent: 0,
-    discountAmount: 0,
-    discountNote: '',
-    totalKg: 0,
-    totalM3: 0,
-    payment: 0,
-    accountFund: '',
-    notes: '',
-    // Thông tin cho hàng khuyến mãi (riêng biệt)
-    promoDiscountPercent: 0,
-    promoDiscountAmount: 0,
-    promoDiscountNote: '',
-    promoTotalKg: 0,
-    promoTotalM3: 0,
-    promoNotes: '',
-    productType: '',
-    status: 'chưa duyệt' // chưa duyệt, đã duyệt, đã hủy
+  const [orderForm, setOrderForm] = useState(() => {
+    // Check URL directly INSIDE initializer to ensure correct timing
+    // This prevents generating new order number in edit mode
+    let isEditMode = false;
+    try {
+      const urlParams = new URLSearchParams(window.location.search);
+      isEditMode = !!urlParams.get('id') || !!urlParams.get('orderNumber');
+    } catch {}
+    
+    // Generate order number ONLY for new orders (not edit mode)
+    const initialOrderNumber = isEditMode ? '' : formatOrderNumber(defaultOrderDate, peekNextSerialForYear(new Date(defaultOrderDate).getFullYear()));
+    
+    return {
+      orderDate: defaultOrderDate,
+      orderNumber: initialOrderNumber,
+      customer: '',
+      customerName: '',
+      phone: '',
+      createdBy: '',
+      address: '',
+      vehicle: '',
+      customerGroup: '',
+      salesSchedule: '',
+      printOrder: 0,
+      deliveryVehicle: '',
+      priceType: 'retail', // retail or wholesale
+      activeTab: 'products', // products or promotions
+      // Thông tin cho hàng bán
+      discountPercent: 0,
+      discountAmount: 0,
+      discountNote: '',
+      totalKg: 0,
+      totalM3: 0,
+      payment: 0,
+      accountFund: '',
+      notes: '',
+      // Thông tin cho hàng khuyến mãi (riêng biệt)
+      promoDiscountPercent: 0,
+      promoDiscountAmount: 0,
+      promoDiscountNote: '',
+      promoTotalKg: 0,
+      promoTotalM3: 0,
+      promoNotes: '',
+      productType: '',
+      status: 'chưa duyệt' // chưa duyệt, đã duyệt, đã sửa, hủy
+    };
   });
 
   // Hàng bán (sale items)
   const [orderItems, setOrderItems] = useState([
     { id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'xuất bán', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }
   ]);
+
+  // Store the original order number from DB to prevent it being overwritten
+  const originalOrderNumberRef = useRef(null);
+
+  // Computed display order number - always use original from DB when editing
+  // This prevents flickering by always showing the correct value
+  const displayOrderNumber = (() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const isEditModeFromUrl = !!urlParams.get('id') || !!urlParams.get('orderNumber');
+    
+    // In edit mode: 
+    // - If we have original from DB, use it
+    // - If we don't have it yet (loading), show "Đang tải..."
+    // - This prevents any other number from showing
+    if (isEditModeFromUrl) {
+      if (originalOrderNumberRef.current) {
+        return originalOrderNumberRef.current;
+      }
+      return 'Đang tải...';
+    }
+    
+    // Create mode: use form's order number
+    return orderForm.orderNumber;
+  })();
+
+  // Sync orderForm.orderNumber with originalOrderNumberRef when in edit mode
+  // This ensures the form state is correct for saving
+  useEffect(() => {
+    const urlParams = new URLSearchParams(window.location.search);
+    const isEditModeFromUrl = !!urlParams.get('id');
+    
+    // If we're editing and have original, but form has different value, sync it
+    if (isEditModeFromUrl && originalOrderNumberRef.current && orderForm.orderNumber !== originalOrderNumberRef.current) {
+      setOrderForm(prev => ({
+        ...prev,
+        orderNumber: originalOrderNumberRef.current
+      }));
+    }
+  }, [orderForm.orderNumber]);
 
   // Hàng khuyến mãi (promotion items) - separate from sale items
   const [promotionItems, setPromotionItems] = useState([
@@ -203,6 +255,7 @@ const CreateOrderForm = () => {
   const [currentUser, setCurrentUser] = useState(null);
   const [discountNoteEdited, setDiscountNoteEdited] = useState(false);
   const [orderNumberEdited, setOrderNumberEdited] = useState(false);
+  
   // count only rows that contain actual data (not empty placeholder rows)
   // Use appropriate list based on activeTab
   const currentDisplayItems = orderForm.activeTab === 'promotions' ? promotionItems : orderItems;
@@ -229,6 +282,8 @@ const CreateOrderForm = () => {
   const [companyInfo, setCompanyInfo] = useState(null); // Thông tin công ty cho xuất Excel
   const [selectedItems, setSelectedItems] = useState([]); // Danh sách các item được chọn (checkbox)
   const isCustomerSelected = Boolean(orderForm.customer);
+  // Check if order is cancelled (status = "hủy" or "đã hủy") - read-only mode (case-insensitive)
+  const isOrderCancelled = ['hủy', 'đã hủy'].includes((orderForm.status || '').toLowerCase());
   // Added 140 for new column 'unitPriceExcludeVAT' after 'totalExcludeVAT'
   const initialColWidths = [40, 120, 120, 220, 120, 80, 90, 110, 100, 80, 120, 120, 90, 120, 100, 140, 180, 140, 90, 90, 100, 100, 120, 100, 130, 120];
   // Increase default width for 'Kho hàng' (index 5) so stock numbers are visible by default
@@ -501,10 +556,17 @@ const CreateOrderForm = () => {
       if (response.ok) {
         const data = await response.json();
         
+        // IMPORTANT: Store the original order number from DB to prevent overwriting
+        const dbOrderNumber = data.order.orderNumber || '';
+        originalOrderNumberRef.current = dbOrderNumber;
+        
+        // Set editing mode FIRST before setting form data
+        setEditingOrderId(orderId);
+        
         // Map order data to form
         setOrderForm({
           orderDate: data.order.orderDate ? data.order.orderDate.split('T')[0] : defaultOrderDate,
-          orderNumber: data.order.orderNumber || '',
+          orderNumber: dbOrderNumber,
           customer: data.order.customer || '',
           customerName: data.order.customerName || '',
           phone: data.order.phone || '',
@@ -582,9 +644,6 @@ const CreateOrderForm = () => {
           setPromotionItems([{ id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'khuyến mãi', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }]);
         }
         
-        // Set editing mode with order ID
-        setEditingOrderId(orderId);
-        
         // Update customer search if customer is selected
         if (data.order.customerName) {
           setCustomerSearch(`${data.order.customerName}${data.order.phone ? ' (' + data.order.phone + ')' : ''}`);
@@ -601,25 +660,32 @@ const CreateOrderForm = () => {
   };
 
   // Load order by orderNumber (fallback when orderId is not available)
-  const loadOrderByNumber = async (orderNumber) => {
+  // This is for EDITING existing orders, NOT copying
+  const loadOrderByNumber = async (orderNumberParam) => {
     try {
       // First, fetch all orders and find the one matching orderNumber
       const response = await fetch(`${API_BASE_URL}/Orders`);
       if (response.ok) {
         const orders = await response.json();
-        const found = orders.find(o => o.orderNumber === orderNumber);
+        const found = orders.find(o => o.orderNumber === orderNumberParam);
         if (found) {
-          // If found, load the detail but treat this as a COPY action:
-          // populate the form with data from found order but assign a new order number
-          // and clear editingOrderId so the form behaves as creating a new order.
+          // Found the order, now load detail for EDITING (keep original orderNumber)
           try {
             const r = await fetch(`${API_BASE_URL}/Orders/${found.id}`);
             if (r.ok) {
               const data = await r.json();
-              // populate form similarly to loadOrderDetail but as a new order (copy)
+              
+              // Store original order number to prevent overwriting
+              const dbOrderNumber = data.order.orderNumber || orderNumberParam;
+              originalOrderNumberRef.current = dbOrderNumber;
+              
+              // Set editing order ID so save operation updates existing order
+              setEditingOrderId(found.id);
+              
+              // Populate form with existing data (EDIT mode - keep orderNumber)
               setOrderForm({
                 orderDate: data.order.orderDate ? data.order.orderDate.split('T')[0] : defaultOrderDate,
-                orderNumber: formatOrderNumber(data.order.orderDate ? data.order.orderDate.split('T')[0] : defaultOrderDate, reserveNextSerialForYear(new Date(data.order.orderDate || defaultOrderDate).getFullYear())),
+                orderNumber: dbOrderNumber, // Keep original order number!
                 customer: data.order.customer || '',
                 customerName: data.order.customerName || '',
                 phone: data.order.phone || '',
@@ -640,7 +706,7 @@ const CreateOrderForm = () => {
                 payment: data.order.payment || 0,
                 accountFund: data.order.accountFund || '',
                 notes: data.order.notes || '',
-                status: 'chưa duyệt',
+                status: data.order.status || 'chưa duyệt', // Keep original status!
                 promoDiscountPercent: data.order.promoDiscountPercent || 0,
                 promoDiscountAmount: data.order.promoDiscountAmount || 0,
                 promoDiscountNote: data.order.promoDiscountNote || '',
@@ -692,18 +758,17 @@ const CreateOrderForm = () => {
                 setPromotionItems([{ id: 1, productCode: '', barcode: '', productName: '', warehouse: '', unit: '', quantity: 0, unitPrice: 0, discountPercent: 0, priceAfterCK: 0, totalAfterCK: 0, totalAfterDiscount: 0, nvSales: '', description: '', conversion: '', amount: 0, total: 0, weight: 0, volume: 0, baseWeight: 0, baseVolume: 0, exportType: 'khuyến mãi', stock: 0, tax: 'KCT', priceExcludeVAT: 0, totalExcludeVAT: 0 }]);
               }
 
-              // Ensure editingOrderId is cleared so form acts as new order (copy)
-              setEditingOrderId(null);
+              // editingOrderId already set above for editing mode
 
             } else {
-              alert('Không thể tải chi tiết đơn hàng để copy');
+              alert('Không thể tải chi tiết đơn hàng');
             }
           } catch (err) {
-            console.error('Error loading order to copy:', err);
-            alert('Lỗi khi tải đơn hàng để copy: ' + err.message);
+            console.error('Error loading order:', err);
+            alert('Lỗi khi tải đơn hàng: ' + err.message);
           }
         } else {
-          alert('Không tìm thấy đơn hàng với mã phiếu: ' + orderNumber);
+          alert('Không tìm thấy đơn hàng với mã phiếu: ' + orderNumberParam);
         }
       } else {
         alert('Không thể tải danh sách đơn hàng');
@@ -766,17 +831,37 @@ const CreateOrderForm = () => {
     fetchOrders();
   }, []);
 
+  // Track if we're in edit mode to prevent generating new order number
+  const [isEditingOrder, setIsEditingOrder] = useState(false);
+  
+  // Ref to track if order number has been initialized (prevent double generation in StrictMode)
+  const orderNumberInitialized = useRef(false);
+
   // Load order from URL param if present (edit mode)
+  // Order number is already generated in useState initialization for create mode
   useEffect(() => {
-    const orderId = searchParams.get('id');
-    const orderNumber = searchParams.get('orderNumber');
+    // Read directly from window.location to avoid timing issues with searchParams hook
+    const urlParams = new URLSearchParams(window.location.search);
+    const orderId = urlParams.get('id');
+    const orderNumberParam = urlParams.get('orderNumber');
+    
     if (orderId) {
+      // EDIT MODE: Load existing order (will get orderNumber from database)
+      setIsEditingOrder(true);
+      orderNumberInitialized.current = true;
       loadOrderDetail(parseInt(orderId));
-    } else if (orderNumber) {
+    } else if (orderNumberParam) {
       // Load order by orderNumber (fallback for old records without orderId)
-      loadOrderByNumber(orderNumber);
+      setIsEditingOrder(true);
+      orderNumberInitialized.current = true;
+      loadOrderByNumber(orderNumberParam);
+    } else {
+      // CREATE NEW MODE: Order number already generated in useState initialization
+      // Just set editing flag
+      setIsEditingOrder(false);
+      orderNumberInitialized.current = true;
     }
-  }, [searchParams]);
+  }, []); // Run only once on mount
 
   // Auto-fill missing productType for order items based on product category
   // This handles legacy orders that don't have productType saved
@@ -2091,9 +2176,19 @@ const CreateOrderForm = () => {
     setOrderForm(prev => ({ ...prev, discountNote: note }));
   }, [orderForm.discountAmount, orderForm.discountPercent, discountNoteEdited]);
 
-  // Auto-update order number when order date changes, unless user manually edited order number
+  // Auto-update order number when order date changes, unless:
+  // 1. User manually edited order number
+  // 2. We're in edit mode (editing existing order)
   useEffect(() => {
+    // Skip if user manually edited order number
     if (orderNumberEdited) return;
+    
+    // Skip if in edit mode - we want to keep the original order number from DB
+    const urlParams = new URLSearchParams(window.location.search);
+    const isEditModeFromUrl = !!urlParams.get('id') || !!urlParams.get('orderNumber');
+    if (isEditModeFromUrl) return;
+    
+    // Only auto-generate for new orders when date changes
     try {
       const d = new Date(orderForm.orderDate);
       if (isNaN(d)) return;
@@ -2265,12 +2360,22 @@ const CreateOrderForm = () => {
         PromoNotes: String(orderForm.promoNotes || ''),
         ProductType: mostCommonProductType,
         TotalAmount: calculateTotals(),
-        TotalAfterDiscount: calculateTotals()
+        TotalAfterDiscount: calculateTotals(),
+        // Status: for new orders use current status, for editing "đã duyệt" orders change to "đã sửa"
+        Status: String(orderForm.status || 'chưa duyệt')
       };
       
       let response;
       
       if (editingOrderId) {
+        // When editing an approved order, change status to "đã sửa"
+        const currentStatus = (orderForm.status || '').toLowerCase();
+        if (currentStatus === 'đã duyệt') {
+          orderData.Status = 'đã sửa';
+          // Also update local state to reflect the change
+          setOrderForm(prev => ({ ...prev, status: 'đã sửa' }));
+        }
+        
         // Update existing order - include ID in orderData
         const updatePayload = {
           Order: { ...orderData, Id: editingOrderId },
@@ -2305,6 +2410,12 @@ const CreateOrderForm = () => {
         response = await api.post(`${API_ENDPOINTS.orders}/create-with-items`, createPayload);
         
         if (response) {
+          // Set editingOrderId to the newly created order's ID so subsequent saves update instead of create
+          // and so the Copy button becomes enabled
+          if (response.orderId || response.id || (response.order && response.order.id)) {
+            const newOrderId = response.orderId || response.id || response.order.id;
+            setEditingOrderId(newOrderId);
+          }
           if (!silent) alert('Đơn hàng đã được tạo thành công!');
           fetchOrders(); // Refresh orders list after successful save
           return true; // Success
@@ -2536,12 +2647,13 @@ const CreateOrderForm = () => {
       return;
     }
     
-    if (orderForm.status === 'đã hủy') {
+    const statusLower = (orderForm.status || '').toLowerCase();
+    if (statusLower === 'hủy' || statusLower === 'đã hủy') {
       alert('Đơn hàng này đã bị hủy rồi!');
       return;
     }
     
-    if (orderForm.status === 'đã duyệt') {
+    if (statusLower === 'đã duyệt' || statusLower === 'đã sửa') {
       const confirmCancelApproved = window.confirm('Đơn hàng này đã được duyệt. Bạn vẫn muốn HỦY?');
       if (!confirmCancelApproved) return;
     }
@@ -2555,11 +2667,11 @@ const CreateOrderForm = () => {
         headers: {
           'Content-Type': 'application/json'
         },
-        body: JSON.stringify({ status: 'đã hủy' })
+        body: JSON.stringify({ status: 'hủy' })
       });
       
       if (response.ok) {
-        setOrderForm(prev => ({ ...prev, status: 'đã hủy' }));
+        setOrderForm(prev => ({ ...prev, status: 'hủy' }));
         alert('Đơn hàng đã được hủy!');
         fetchOrders(); // Refresh orders list
       } else {
@@ -3174,8 +3286,24 @@ const CreateOrderForm = () => {
         </div>
       </div>
 
+      {/* Warning banner for cancelled orders */}
+      {isOrderCancelled && (
+        <div style={{
+          backgroundColor: '#f8d7da',
+          color: '#721c24',
+          padding: '12px 16px',
+          borderRadius: '4px',
+          margin: '0 16px 16px 16px',
+          textAlign: 'center',
+          fontWeight: 'bold',
+          border: '1px solid #f5c6cb'
+        }}>
+          ⚠️ ĐƠN HÀNG NÀY ĐÃ BỊ HỦY - KHÔNG THỂ CHỈNH SỬA
+        </div>
+      )}
+
       {/* Form Body */}
-      <div className="order-form-body">
+      <div className="order-form-body" style={isOrderCancelled ? { pointerEvents: 'none', opacity: 0.6 } : {}}>
         <div className="order-form-top">
         {/* Row 1: Ngày lập, Khách hàng */}
         <div className="order-form-row">
@@ -3345,16 +3473,13 @@ const CreateOrderForm = () => {
             <div className="input-with-icon">
               <input
                 type="text"
-                value={orderForm.orderNumber}
-                onChange={(e) => { setOrderNumberEdited(true); handleOrderFormChange('orderNumber', e.target.value); }}
+                value={displayOrderNumber}
+                readOnly
+                disabled
                 className="order-form-input"
-                style={orderNumberDuplicate ? { borderColor: '#dc3545', boxShadow: '0 0 0 2px rgba(220,53,69,0.05)' } : {}}
+                style={{ backgroundColor: '#f5f5f5', cursor: 'not-allowed' }}
+                title="Số phiếu được hệ thống tự động tạo, không thể thay đổi"
               />
-              {orderNumberDuplicate && (
-                <div style={{ color: '#dc3545', fontSize: 12, marginTop: 6 }}>
-                  Số phiếu <strong>{orderForm.orderNumber}</strong> đã tồn tại trong hệ thống. Vui lòng đổi số phiếu khác.
-                </div>
-              )}
               <span className="input-icon success">✓</span>
             </div>
           </div>
@@ -4171,56 +4296,39 @@ const CreateOrderForm = () => {
       </div>
 
       {/* Footer */}
-      <div className="order-form-footer">
+      <div className="order-form-footer" style={isOrderCancelled ? { opacity: 0.7 } : {}}>
         <button className="modal-btn back" onClick={handleGoBack}>
           ← Quay lại
         </button>
         <button className="modal-btn save" onClick={() => {
+          if (isOrderCancelled) {
+            alert('Đơn hàng đã hủy, không thể chỉnh sửa!');
+            return;
+          }
           if (orderNumberDuplicate) {
             alert('đơn hàng này này đã trùng với số phiếu ' + (orderForm.orderNumber || ''));
             return;
           }
           if (typeof handleSaveOrder === 'function') handleSaveOrder();
         }}
-        disabled={orderNumberDuplicate}
-        title={orderNumberDuplicate ? 'Số phiếu bị trùng, vui lòng sửa' : ''}
+        disabled={orderNumberDuplicate || isOrderCancelled}
+        title={isOrderCancelled ? 'Đơn hàng đã hủy, không thể chỉnh sửa' : orderNumberDuplicate ? 'Số phiếu bị trùng, vui lòng sửa' : ''}
         >
           💾 Lưu lại
         </button>
         <button className="modal-btn excel" onClick={handleExportExcel}>
           🧾 Xuất phiếu BH
         </button>
-        <button className="modal-btn copy" onClick={async () => {
-          // Copy behavior depends on whether this is a new order or editing existing order
-          
-          if (!editingOrderId) {
-            // CASE 1: New order - Save current order first, then copy to new order number
-            // Check for duplicate order number first
-            if (orderNumberDuplicate) {
-              alert('Số phiếu bị trùng, vui lòng sửa trước khi copy!');
+        <button 
+          className="modal-btn copy" 
+          onClick={async () => {
+            // Copy is only available when editing an existing saved order
+            if (!editingOrderId) {
+              alert('Vui lòng lưu đơn hàng trước khi copy!');
               return;
             }
             
-            // Save current order first (silent mode - no alert on success)
-            const saveSuccess = await handleSaveOrder(true);
-            
-            if (saveSuccess) {
-              // After saving successfully, generate new order number for the copy
-              const year = new Date(orderForm.orderDate).getFullYear();
-              const newSerial = reserveNextSerialForYear(year);
-              const newNum = formatOrderNumber(orderForm.orderDate, newSerial);
-              
-              // Clear editingOrderId so next save creates NEW order
-              setEditingOrderId(null);
-              setOrderForm(prev => ({ ...prev, orderNumber: newNum, status: 'chưa duyệt' }));
-              setOrderNumberEdited(true);
-              
-              alert(`Đã lưu đơn hàng gốc thành công và tạo bản copy với số phiếu mới: ${newNum}. Nhấn "Lưu lại" để lưu bản copy.`);
-            } else {
-              alert('Lưu đơn hàng gốc thất bại. Không thể tạo bản copy.');
-            }
-          } else {
-            // CASE 2: Existing order - Just prepare new order number, don't modify original
+            // CASE: Existing order - Just prepare new order number, don't modify original
             try {
               const year = new Date(orderForm.orderDate).getFullYear();
               const newSerial = reserveNextSerialForYear(year);
@@ -4231,7 +4339,7 @@ const CreateOrderForm = () => {
               setOrderForm(prev => ({ ...prev, orderNumber: newNum, status: 'chưa duyệt' }));
               setOrderNumberEdited(true);
               
-              alert(`Đã copy đơn hàng với số phiếu mới: ${newNum}. Đơn hàng cũ không thay đổi. Nhấn "Lưu lại" để tạo đơn mới.`);
+              alert(`Đã copy đơn hàng với số phiếu mới: ${newNum}. Đơn hàng cũ không thay đổi. Nhấn "Lưu lại" để lưu bản copy.`);
             } catch (e) {
               // fallback: generate a simple new number
               const fallbackNum = `BH${Date.now()}`;
@@ -4240,15 +4348,29 @@ const CreateOrderForm = () => {
               setOrderNumberEdited(true);
               alert('Đã copy đơn hàng với số phiếu mới. Nhấn "Lưu lại" để tạo đơn mới.');
             }
-          }
-        }}
+          }}
+          disabled={!editingOrderId}
+          title={!editingOrderId ? 'Vui lòng lưu đơn hàng trước khi copy' : 'Copy đơn hàng'}
+          style={!editingOrderId ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
         >
           📋 Copy
         </button>
-        <button className="modal-btn cancel" onClick={handleCancelOrder}>
+        <button 
+          className="modal-btn cancel" 
+          onClick={handleCancelOrder}
+          disabled={isOrderCancelled}
+          title={isOrderCancelled ? 'Đơn hàng đã bị hủy' : 'Hủy đơn hàng'}
+          style={isOrderCancelled ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+        >
           🚫 Hủy
         </button>
-        <button className="modal-btn approve" onClick={handleApproveOrder}>
+        <button 
+          className="modal-btn approve" 
+          onClick={handleApproveOrder}
+          disabled={isOrderCancelled}
+          title={isOrderCancelled ? 'Đơn hàng đã bị hủy, không thể duyệt' : 'Duyệt đơn hàng'}
+          style={isOrderCancelled ? { opacity: 0.5, cursor: 'not-allowed' } : {}}
+        >
           ✓ Duyệt
         </button>
         <button className="modal-btn export-data" onClick={handleExportOrderData} style={{
@@ -4258,19 +4380,24 @@ const CreateOrderForm = () => {
           📊 Xuất DL Excel
         </button>
         {/* Order status indicator */}
-        {editingOrderId && (
-          <div className="order-status-indicator" style={{
-            marginLeft: 'auto',
-            padding: '8px 16px',
-            borderRadius: '4px',
-            fontWeight: 'bold',
-            backgroundColor: orderForm.status === 'đã duyệt' ? '#28a745' : 
-                           orderForm.status === 'đã hủy' ? '#dc3545' : '#ffc107',
-            color: orderForm.status === 'chưa duyệt' ? '#000' : '#fff'
-          }}>
-            Trạng thái: {orderForm.status || 'chưa duyệt'}
-          </div>
-        )}
+        {editingOrderId && (() => {
+          const statusLower = (orderForm.status || '').toLowerCase();
+          const isCancelled = statusLower === 'hủy' || statusLower === 'đã hủy';
+          return (
+            <div className="order-status-indicator" style={{
+              marginLeft: 'auto',
+              padding: '8px 16px',
+              borderRadius: '4px',
+              fontWeight: 'bold',
+              backgroundColor: statusLower === 'đã duyệt' ? '#28a745' : 
+                             isCancelled ? '#dc3545' : 
+                             statusLower === 'đã sửa' ? '#fd7e14' : '#ffc107',
+              color: statusLower === 'chưa duyệt' ? '#000' : '#fff'
+            }}>
+              Trạng thái: {orderForm.status || 'chưa duyệt'}
+            </div>
+          );
+        })()}
       </div>
       
       {/* Search Modal */}

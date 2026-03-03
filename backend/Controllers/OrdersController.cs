@@ -409,7 +409,7 @@ namespace QlnppApi.Controllers
                 return NotFound();
 
             // Validate status value
-            var validStatuses = new[] { "chưa duyệt", "đã duyệt", "đã hủy" };
+            var validStatuses = new[] { "chưa duyệt", "đã duyệt", "hủy", "đã hủy", "đã sửa" };
             if (!validStatuses.Contains(request.Status.ToLower()))
                 return BadRequest($"Invalid status. Valid values are: {string.Join(", ", validStatuses)}");
 

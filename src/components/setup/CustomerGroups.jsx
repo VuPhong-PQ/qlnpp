@@ -1,22 +1,41 @@
 import React, { useState, useRef, useEffect } from 'react';
 import './SetupPage.css';
+import './CustomerGroups.css';
 import { API_ENDPOINTS, api } from '../../config/api';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
 import { exportToExcelWithHeader, importFromExcel } from '../../utils/excelUtils';
 import { Pagination } from '../common/Pagination';
 
+// Hàm xóa dấu tiếng Việt để tìm kiếm
+const removeVietnameseTones = (str) => {
+  if (!str) return '';
+  return str.normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/đ/g, 'd')
+    .replace(/Đ/g, 'D')
+    .toLowerCase();
+};
+
 const CustomerGroups = () => {
   const [showModal, setShowModal] = useState(false);
   const [editingItem, setEditingItem] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
+  const [showSearchBox, setShowSearchBox] = useState(false);
   const [loading, setLoading] = useState(false);
   const [customerGroups, setCustomerGroups] = useState([]);
   const [companyInfo, setCompanyInfo] = useState(null);
-  const { applyFilters, renderFilterPopup, setShowFilterPopup, columnFilters } = useColumnFilter();
+  const { applyFilters, renderFilterPopup, setShowFilterPopup, showFilterPopup, columnFilters } = useColumnFilter();
   
   // Pagination state
   const [currentPage, setCurrentPage] = useState(1);
   const [itemsPerPage, setItemsPerPage] = useState(10);
+  
+  // Column Settings Modal
+  const [showColumnSettings, setShowColumnSettings] = useState(false);
+  const [settingsDragItem, setSettingsDragItem] = useState(null);
+  
+  // Search input ref
+  const searchInputRef = useRef(null);
 
   useEffect(() => {
     fetchCustomerGroups();
@@ -217,7 +236,17 @@ const CustomerGroups = () => {
     }
   };
 
-  const filteredGroups = applyFilters(customerGroups, searchTerm, ['name', 'code', 'salesSchedule', 'note']);
+  // Filter with Vietnamese tone removal
+  const filteredGroups = customerGroups.filter(group => {
+    if (!searchTerm.trim()) return true;
+    const search = removeVietnameseTones(searchTerm);
+    return (
+      removeVietnameseTones(group.name || '').includes(search) ||
+      removeVietnameseTones(group.code || '').includes(search) ||
+      removeVietnameseTones(group.salesSchedule || '').includes(search) ||
+      removeVietnameseTones(group.note || '').includes(search)
+    );
+  });
   
   // Pagination calculations
   const totalPages = Math.ceil(filteredGroups.length / itemsPerPage);
@@ -234,363 +263,461 @@ const CustomerGroups = () => {
     // Logic import from Excel
     alert('Chức năng import Excel đang được phát triển');
   };
-
-
+  
+  // Focus search input when opened
+  useEffect(() => {
+    if (showSearchBox && searchInputRef.current) {
+      searchInputRef.current.focus();
+    }
+  }, [showSearchBox]);
 
   // --- Kéo-thả, hiển thị, lưu cấu hình cột bảng nhóm khách hàng ---
   const groupTableRef = useRef(null);
-  const defaultGroupColumns = [
-    { key: 'code', label: 'Mã nhóm' },
-    { key: 'name', label: 'Tên nhóm' },
-    { key: 'salesSchedule', label: 'Lịch bán hàng' },
-    { key: 'note', label: 'Ghi chú' },
-    { key: 'status', label: 'Trạng thái' },
-    { key: 'actions', label: 'Thao tác', fixed: true }
+  const COLUMN_SETTINGS_KEY = 'customerGroupsColumnSettings';
+  
+  const defaultColumns = [
+    { id: 'code', label: 'Mã nhóm', width: 100, visible: true },
+    { id: 'name', label: 'Tên nhóm', width: 140, visible: true },
+    { id: 'salesSchedule', label: 'Lịch bán hàng', width: 140, visible: true },
+    { id: 'note', label: 'Ghi chú', width: 180, visible: true },
+    { id: 'status', label: 'Trạng thái', width: 110, visible: true },
+    { id: 'actions', label: 'Thao tác', width: 110, visible: true }
   ];
-  const defaultGroupWidths = [100, 140, 140, 180, 110, 110];
-  const [groupColumns, setGroupColumns] = useState(() => {
-    const saved = localStorage.getItem('groupColumns');
-    if (saved) {
-      try {
-        const arr = JSON.parse(saved);
-        return arr.map(col => {
-          const def = defaultGroupColumns.find(d => d.key === col.key);
-          return def ? { ...def, ...col } : col;
-        });
-      } catch {
-        return defaultGroupColumns;
-      }
+  
+  const loadColumnSettings = () => {
+    try {
+      const s = localStorage.getItem(COLUMN_SETTINGS_KEY);
+      if (!s) return null;
+      return JSON.parse(s);
+    } catch (error) {
+      return null;
     }
-    return defaultGroupColumns;
-  });
-  const [groupColWidths, setGroupColWidths] = useState(() => {
-    const saved = localStorage.getItem('groupColWidths');
-    if (saved) {
-      try {
-        const arr = JSON.parse(saved);
-        if (Array.isArray(arr) && arr.length === defaultGroupWidths.length) return arr;
-      } catch {}
+  };
+
+  const saveColumnSettings = (cols) => {
+    try {
+      localStorage.setItem(COLUMN_SETTINGS_KEY, JSON.stringify(cols));
+    } catch (error) {
+      console.error('Error saving column settings:', error);
     }
-    return defaultGroupWidths;
+  };
+
+  const [columns, setColumns] = useState(() => {
+    const saved = loadColumnSettings();
+    return saved || defaultColumns;
   });
-  const defaultGroupVisible = defaultGroupColumns.map(col => col.key);
-  const [groupVisibleCols, setGroupVisibleCols] = useState(() => {
-    const saved = localStorage.getItem('groupVisibleCols');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch {}
-    }
-    return defaultGroupVisible;
-  });
-  const [showGroupColSetting, setShowGroupColSetting] = useState(false);
-  const groupColSettingRef = useRef(null);
-  // Drag state
-  const [dragColIdx, setDragColIdx] = useState(null);
-  const [dragOverIdx, setDragOverIdx] = useState(null);
+  
+  // Column header drag / resize
+  const [dragColumn, setDragColumn] = useState(null);
+  const [resizingColumn, setResizingColumn] = useState(null);
+  const [startX, setStartX] = useState(0);
+  const [startWidth, setStartWidth] = useState(0);
 
-  // Lưu cấu hình cột vào localStorage
   useEffect(() => {
-    localStorage.setItem('groupColumns', JSON.stringify(groupColumns));
-  }, [groupColumns]);
-  useEffect(() => {
-    localStorage.setItem('groupColWidths', JSON.stringify(groupColWidths));
-  }, [groupColWidths]);
-  useEffect(() => {
-    localStorage.setItem('groupVisibleCols', JSON.stringify(groupVisibleCols));
-  }, [groupVisibleCols]);
+    saveColumnSettings(columns);
+  }, [columns]);
 
-  // Đóng popup + tự động lưu khi click ra ngoài cho popup cài đặt cột nhóm khách hàng
-  useEffect(() => {
-    if (!showGroupColSetting) return;
-    const handleClickOutside = (e) => {
-      if (groupColSettingRef.current && !groupColSettingRef.current.contains(e.target)) {
-        setShowGroupColSetting(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, [showGroupColSetting]);
+  const toggleColumnVisibility = (id) => {
+    setColumns(prev => prev.map(c => c.id === id ? { ...c, visible: !c.visible } : c));
+  };
 
-  // Kéo cột
-  const handleGroupMouseDown = (index, e, edge) => {
+  const resetColumns = () => {
+    setColumns(defaultColumns);
+  };
+
+  const handleSettingsDragStart = (e, index) => {
+    setSettingsDragItem(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleSettingsDragOver = (e) => {
     e.preventDefault();
-    const startX = e.clientX;
-    const startWidths = [...groupColWidths];
-    const onMouseMove = (moveEvent) => {
-      const delta = moveEvent.clientX - startX;
-      setGroupColWidths((widths) => {
-        const newWidths = [...widths];
-        if (edge === 'right' && index < widths.length - 1) {
-          newWidths[index] = Math.max(50, startWidths[index] + delta);
-          newWidths[index + 1] = Math.max(50, startWidths[index + 1] - delta);
-        } else if (edge === 'left' && index > 0) {
-          newWidths[index] = Math.max(50, startWidths[index] - delta);
-          newWidths[index - 1] = Math.max(50, startWidths[index - 1] + delta);
-        }
-        return newWidths;
-      });
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleSettingsDrop = (e, index) => {
+    e.preventDefault();
+    if (settingsDragItem === null || settingsDragItem === index) return;
+    setColumns(prev => {
+      const arr = [...prev];
+      const item = arr.splice(settingsDragItem, 1)[0];
+      arr.splice(index, 0, item);
+      return arr;
+    });
+    setSettingsDragItem(null);
+  };
+
+  const handleSettingsDragEnd = () => {
+    setSettingsDragItem(null);
+  };
+
+  // Column reorder handlers
+  const handleColumnDragStart = (e, id) => {
+    setDragColumn(id);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleColumnDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleColumnDrop = (e, id) => {
+    e.preventDefault();
+    if (!dragColumn || dragColumn === id) return;
+    setColumns(prev => {
+      const arr = [...prev];
+      const from = arr.findIndex(c => c.id === dragColumn);
+      const to = arr.findIndex(c => c.id === id);
+      if (from < 0 || to < 0) return prev;
+      const [item] = arr.splice(from, 1);
+      arr.splice(to, 0, item);
+      return arr;
+    });
+    setDragColumn(null);
+  };
+
+  const handleColumnDragEnd = () => {
+    setDragColumn(null);
+  };
+
+  // Column resize handlers
+  const handleResizeStart = (e, id) => {
+    e.preventDefault();
+    const col = columns.find(c => c.id === id);
+    const initialX = e.clientX;
+    const initialWidth = col ? col.width : 120;
+    
+    const onMouseMove = (ev) => {
+      const dx = ev.clientX - initialX;
+      setColumns(prev => prev.map(c => c.id === id ? { ...c, width: Math.max(60, initialWidth + dx) } : c));
     };
+
     const onMouseUp = () => {
       document.removeEventListener('mousemove', onMouseMove);
       document.removeEventListener('mouseup', onMouseUp);
     };
+
     document.addEventListener('mousemove', onMouseMove);
     document.addEventListener('mouseup', onMouseUp);
   };
 
+  // Legacy variables for compatibility
+  const groupColumns = columns;
+  const groupVisibleCols = columns.filter(c => c.visible).map(c => c.id);
+  const groupColWidths = columns.map(c => c.width);
+  
+  const setGroupVisibleCols = (newCols) => {
+    if (typeof newCols === 'function') {
+      setColumns(prev => {
+        const currentVisible = prev.filter(c => c.visible).map(c => c.id);
+        const updated = newCols(currentVisible);
+        return prev.map(c => ({ ...c, visible: updated.includes(c.id) }));
+      });
+    } else {
+      setColumns(prev => prev.map(c => ({ ...c, visible: newCols.includes(c.id) })));
+    }
+  };
+
   return (
-    <div className="setup-page">
-      <div className="page-header">
-        <h1>Nhóm khách hàng</h1>
-        <p>Quản lý danh sách nhóm khách hàng</p>
+    <div className="setup-page customer-groups-page">
+      {/* Search Panel - PrintOrder style header */}
+      <div className="search-panel">
+        <div className="search-header">
+          <h1>Nhóm khách hàng</h1>
+          <div className="header-search-wrapper">
+            {showSearchBox ? (
+              <div className="header-search-input-container">
+                <input
+                  ref={searchInputRef}
+                  type="text"
+                  placeholder="Tìm kiếm theo tên, mã nhóm, lịch bán hàng..."
+                  className="header-search-input"
+                  value={searchTerm}
+                  onChange={(e) => setSearchTerm(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Escape') {
+                      setShowSearchBox(false);
+                      setSearchTerm('');
+                    }
+                  }}
+                />
+                <button 
+                  className="header-search-close"
+                  onClick={() => {
+                    setShowSearchBox(false);
+                    setSearchTerm('');
+                  }}
+                >
+                  ✕
+                </button>
+              </div>
+            ) : (
+              <button 
+                className="header-search-btn"
+                onClick={() => setShowSearchBox(true)}
+                title="Tìm kiếm"
+              >
+                🔍
+              </button>
+            )}
+          </div>
+        </div>
       </div>
 
-      <div className="data-table-container">
-        <div className="table-header" style={{ position: 'relative' }}>
-          <input
-            type="text"
-            placeholder="Tìm kiếm theo tên hoặc mã nhóm..."
-            className="search-box"
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-          />
-          <div className="table-actions">
-            <button 
-              className="btn btn-primary"
-              onClick={() => {
-                resetForm();
-                setShowModal(true);
-                setEditingItem(null);
-              }}
-            >
-              + Thêm nhóm
-            </button>
-            <button 
-              className="btn btn-success" 
-              onClick={handleExportExcel}
-              disabled={loading}
-            >
-              📤 Export Excel
-            </button>
-            <button 
-              className="btn btn-secondary" 
-              onClick={handleImportExcel}
-              disabled={loading}
-            >
-              📥 Import Excel
-            </button>
-            <input
-              type="file"
-              ref={fileInputRef}
-              style={{ display: 'none' }}
-              accept=".xlsx, .xls"
-              onChange={handleFileChange}
-            />
-            <button
-              className="btn btn-settings"
-              style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}
-              title="Cài đặt cột hiển thị"
-              onClick={() => setShowGroupColSetting(v => !v)}
-            >
-              <span role="img" aria-label="settings">⚙️</span>
-            </button>
-          </div>
-
-          {/* Popup chọn cột hiển thị */}
-          {showGroupColSetting && (
-            <div
-              ref={groupColSettingRef}
-              style={{
-                position: 'fixed',
-                top: '80px',
-                right: '40px',
-                background: '#fff',
-                border: '1px solid #eee',
-                borderRadius: 8,
-                boxShadow: '0 6px 24px rgba(0,0,0,0.18)',
-                zIndex: 9999,
-                minWidth: 220,
-                padding: 14
-              }}
-            >
-              <div style={{ display: 'flex', alignItems: 'center', marginBottom: 8 }}>
-                <input
-                  type="checkbox"
-                  checked={groupVisibleCols.length === groupColumns.length}
-                  onChange={e => setGroupVisibleCols(e.target.checked ? defaultGroupVisible : [])}
-                  style={{ marginRight: 6 }}
-                />
-                <span style={{ fontWeight: 500 }}>Cột hiển thị</span>
-                <button
-                  style={{ marginLeft: 'auto', background: 'none', border: 'none', color: '#1890ff', cursor: 'pointer' }}
-                  onClick={() => {
-                    setGroupVisibleCols(defaultGroupVisible);
-                    setGroupColumns(defaultGroupColumns);
-                    setGroupColWidths(defaultGroupWidths);
-                  }}
-                >Làm lại</button>
-              </div>
-              <div style={{ fontSize: 13, color: '#888', marginBottom: 4 }}>Chưa cố định</div>
-              {groupColumns.filter(col => !col.fixed).map((col, idx) => (
-                <div
-                  key={col.key}
-                  style={{ display: 'flex', alignItems: 'center', marginBottom: 2, background: dragOverIdx === idx ? '#f0f7ff' : undefined }}
-                  draggable
-                  onDragStart={() => setDragColIdx(idx)}
-                  onDragOver={e => { e.preventDefault(); setDragOverIdx(idx); }}
-                  onDrop={() => {
-                    if (dragColIdx === null || dragColIdx === idx) return;
-                    const newCols = [...groupColumns];
-                    const [moved] = newCols.splice(dragColIdx, 1);
-                    newCols.splice(idx, 0, moved);
-                    setGroupColumns(newCols);
-                    // Cập nhật width theo thứ tự mới
-                    const newWidths = [...groupColWidths];
-                    const [w] = newWidths.splice(dragColIdx, 1);
-                    newWidths.splice(idx, 0, w);
-                    setGroupColWidths(newWidths);
-                    setDragColIdx(null);
-                    setDragOverIdx(null);
-                  }}
-                  onDragEnd={() => { setDragColIdx(null); setDragOverIdx(null); }}
-                >
-                  <span style={{ color: '#ccc', marginRight: 4, fontSize: 15, cursor: 'grab' }}>⋮⋮</span>
-                  <input
-                    type="checkbox"
-                    checked={groupVisibleCols.includes(col.key)}
-                    onChange={e => {
-                      if (e.target.checked) setGroupVisibleCols(cols => [...cols, col.key]);
-                      else setGroupVisibleCols(cols => cols.filter(k => k !== col.key));
-                    }}
-                    style={{ marginRight: 6 }}
-                  />
-                  <span>{col.label}</span>
-                </div>
-              ))}
-              <div style={{ fontSize: 13, color: '#888', margin: '6px 0 2px' }}>Cố định phải</div>
-              <div style={{ display: 'flex', alignItems: 'center', opacity: 0.7 }}>
-                <span style={{ color: '#ccc', marginRight: 4, fontSize: 15 }}>⋮⋮</span>
-                <input type="checkbox" checked disabled style={{ marginRight: 6 }} />
-                <span>Thao tác</span>
-              </div>
-            </div>
-          )}
+      {/* Action Header - PrintOrder style */}
+      <div className="action-header">
+        <div className="total-info">
+          Tổng {filteredGroups.length} nhóm khách hàng
         </div>
+        <div className="action-buttons">
+          <button 
+            className="action-btn btn-add"
+            onClick={() => {
+              resetForm();
+              setShowModal(true);
+              setEditingItem(null);
+            }}
+            title="Thêm nhóm"
+          >
+            ➕
+          </button>
+          <button 
+            className="action-btn btn-export" 
+            onClick={handleExportExcel}
+            disabled={loading}
+            title="Xuất Excel"
+          >
+            📊
+          </button>
+          <button 
+            className="action-btn btn-import" 
+            onClick={handleImportExcel}
+            disabled={loading}
+            title="Import Excel"
+          >
+            📥
+          </button>
+          <input
+            type="file"
+            ref={fileInputRef}
+            style={{ display: 'none' }}
+            accept=".xlsx, .xls"
+            onChange={handleFileChange}
+          />
+          <button 
+            className="action-btn btn-refresh"
+            onClick={fetchCustomerGroups}
+            title="Làm mới"
+          >
+            🔄
+          </button>
+          <button 
+            className="action-btn btn-settings" 
+            title="Cài đặt cột" 
+            onClick={() => setShowColumnSettings(true)}
+          >
+            ⚙️
+          </button>
+        </div>
+      </div>
 
-        <table className="data-table" ref={groupTableRef}>
-          <colgroup>
-            {groupColumns.map((col, i) => (
-              groupVisibleCols.includes(col.key) ? <col key={col.key} style={{ width: groupColWidths[i] }} /> : null
-            ))}
-          </colgroup>
-          <thead>
-            <tr>
-              {groupColumns.map((col, idx, arr) => (
-                groupVisibleCols.includes(col.key) ? (
-                  <th key={col.key} style={{ position: 'relative' }}>
-                    {/* Mép trái */}
-                    {idx > 0 && groupVisibleCols.includes(arr[idx - 1].key) && (
-                      <span
-                        className="col-resizer left"
-                        onMouseDown={e => handleGroupMouseDown(idx, e, 'left')}
-                        style={{ position: 'absolute', left: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
-                      />
-                    )}
-                    <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: '4px' }}>
+      {/* Table Container */}
+      <div className="table-container">
+        {loading ? (
+          <div className="loading-spinner">
+            <div className="spinner"></div>
+            <span>Đang tải dữ liệu...</span>
+          </div>
+        ) : (
+          <table className="data-table" ref={groupTableRef}>
+            <thead>
+              <tr>
+                {columns.filter(c => c.visible).map(col => (
+                  <th 
+                    key={col.id}
+                    style={{ 
+                      width: col.width + 'px', 
+                      minWidth: col.width + 'px', 
+                      position: 'relative', 
+                      cursor: dragColumn === col.id ? 'grabbing' : (col.id !== 'actions' ? 'grab' : 'default') 
+                    }}
+                    draggable={col.id !== 'actions'}
+                    onDragStart={(e) => handleColumnDragStart(e, col.id)}
+                    onDragOver={handleColumnDragOver}
+                    onDrop={(e) => handleColumnDrop(e, col.id)}
+                    onDragEnd={handleColumnDragEnd}
+                    className={dragColumn === col.id ? 'dragging' : ''}
+                  >
+                    <div className="th-content">
                       <span>{col.label}</span>
-                      {col.key !== 'actions' && (
-                        <span 
+                      {col.id !== 'actions' && (
+                        <button 
+                          className="col-search-btn" 
                           onClick={(e) => {
                             e.stopPropagation();
-                            setShowFilterPopup(showFilterPopup === col.key ? null : col.key);
-                          }}
-                          style={{ 
-                            cursor: 'pointer', 
-                            fontSize: '14px', 
-                            opacity: columnFilters[col.key] ? 1 : 0.5,
-                            color: columnFilters[col.key] ? '#1890ff' : 'inherit'
-                          }}
+                            setShowFilterPopup(showFilterPopup === col.id ? null : col.id);
+                          }} 
+                          title={`Tìm kiếm theo ${col.label}`}
                         >
                           🔍
-                        </span>
+                        </button>
                       )}
                     </div>
-                    {col.key !== 'actions' && renderFilterPopup(col.key, col.label)}
-                    {/* Mép phải */}
-                    {idx < arr.length - 1 && groupVisibleCols.includes(arr[idx + 1].key) && (
-                      <span
-                        className="col-resizer right"
-                        onMouseDown={e => handleGroupMouseDown(idx, e, 'right')}
-                        style={{ position: 'absolute', right: 0, top: 0, height: '100%', width: 6, cursor: 'col-resize', zIndex: 2 }}
+                    {col.id !== 'actions' && renderFilterPopup(col.id, col.label)}
+                    {col.id !== 'actions' && (
+                      <div 
+                        className="resize-handle" 
+                        onMouseDown={(e) => handleResizeStart(e, col.id)}
                       />
                     )}
                   </th>
-                ) : null
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {paginatedGroups.map((group) => (
-              <tr key={group.id}>
-                {groupColumns.map((col, idx) => {
-                  if (!groupVisibleCols.includes(col.key)) return null;
-                  if (col.key === 'status') {
-                    return (
-                      <td key={col.key}>
-                        <span className={`status-badge ${group.status === 'active' ? 'status-active' : 'status-inactive'}`}>
-                          {group.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
-                        </span>
-                      </td>
-                    );
-                  }
-                  if (col.key === 'actions') {
-                    return (
-                      <td key={col.key}>
-                        <div className="action-buttons">
-                          <button 
-                            className="btn btn-secondary btn-small"
-                            onClick={() => handleEdit(group)}
-                          >
-                            Sửa
-                          </button>
-                          <button 
-                            className="btn btn-danger btn-small"
-                            onClick={() => handleDelete(group.id)}
-                          >
-                            Xóa
-                          </button>
-                        </div>
-                      </td>
-                    );
-                  }
-                  return <td key={col.key}>{group[col.key]}</td>;
-                })}
+                ))}
               </tr>
-            ))}
-          </tbody>
-        </table>
-
-        {filteredGroups.length === 0 && (
-          <div style={{ textAlign: 'center', padding: '40px', color: '#6c757d' }}>
-            Không tìm thấy nhóm khách hàng nào
-          </div>
-        )}
-        
-        {filteredGroups.length > 0 && (
-          <Pagination
-            currentPage={currentPage}
-            setCurrentPage={setCurrentPage}
-            itemsPerPage={itemsPerPage}
-            setItemsPerPage={setItemsPerPage}
-            totalItems={filteredGroups.length}
-            startIndex={startIndex}
-            endIndex={endIndex}
-          />
+            </thead>
+            <tbody>
+              {paginatedGroups.length === 0 ? (
+                <tr>
+                  <td colSpan={columns.filter(c => c.visible).length} className="no-data">
+                    Không tìm thấy nhóm khách hàng nào
+                  </td>
+                </tr>
+              ) : (
+                paginatedGroups.map((group) => (
+                  <tr key={group.id}>
+                    {columns.filter(c => c.visible).map(col => {
+                      if (col.id === 'status') {
+                        return (
+                          <td key={col.id}>
+                            <span className={`status-badge ${group.status === 'active' ? 'status-active' : 'status-inactive'}`}>
+                              {group.status === 'active' ? 'Hoạt động' : 'Ngưng hoạt động'}
+                            </span>
+                          </td>
+                        );
+                      }
+                      if (col.id === 'actions') {
+                        return (
+                          <td key={col.id}>
+                            <div className="table-actions">
+                              <button 
+                                className="action-btn btn-edit"
+                                onClick={() => handleEdit(group)}
+                                title="Sửa"
+                              >
+                                ✏️
+                              </button>
+                              <button 
+                                className="action-btn btn-delete"
+                                onClick={() => handleDelete(group.id)}
+                                title="Xóa"
+                              >
+                                🗑️
+                              </button>
+                            </div>
+                          </td>
+                        );
+                      }
+                      return <td key={col.id}>{group[col.id] || '-'}</td>;
+                    })}
+                  </tr>
+                ))
+              )}
+            </tbody>
+          </table>
         )}
       </div>
 
-      {/* Modal */}
+      {/* Pagination */}
+      {!loading && filteredGroups.length > 0 && (
+        <Pagination
+          currentPage={currentPage}
+          setCurrentPage={setCurrentPage}
+          itemsPerPage={itemsPerPage}
+          setItemsPerPage={setItemsPerPage}
+          totalItems={filteredGroups.length}
+          startIndex={startIndex}
+          endIndex={endIndex}
+        />
+      )}
+
+      {/* Column Settings Modal - PrintOrder style */}
+      {showColumnSettings && (
+        <div className="search-modal-overlay" onClick={() => setShowColumnSettings(false)}>
+          <div className="column-settings-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="search-modal-header">
+              <h3 className="search-modal-title">⚙️ Cài đặt hiển thị cột</h3>
+              <button className="search-modal-close" onClick={() => setShowColumnSettings(false)}>×</button>
+            </div>
+
+            <div className="column-settings-body">
+              <div className="column-settings-actions">
+                <button 
+                  className="reset-columns-btn"
+                  onClick={resetColumns}
+                  title="Khôi phục cài đặt mặc định"
+                >
+                  🔄 Reset về mặc định
+                </button>
+                <div className="column-count">
+                  Hiển thị {columns.filter(col => col.visible).length}/{columns.length} cột
+                </div>
+              </div>
+              
+              <div className="column-settings-list">
+                <div className="column-settings-help">
+                  💡 Kéo thả để sắp xếp, tick/untick để ẩn/hiện cột
+                </div>
+                
+                {columns.map((column, index) => (
+                  <div
+                    key={column.id}
+                    className={`column-settings-item ${settingsDragItem === index ? 'dragging' : ''}`}
+                    draggable={true}
+                    onDragStart={(e) => handleSettingsDragStart(e, index)}
+                    onDragOver={handleSettingsDragOver}
+                    onDrop={(e) => handleSettingsDrop(e, index)}
+                    onDragEnd={handleSettingsDragEnd}
+                  >
+                    <div className="column-drag-handle" title="Kéo để sắp xếp">
+                      ⋮⋮
+                    </div>
+                    
+                    <label className="column-checkbox-label">
+                      <input
+                        type="checkbox"
+                        checked={column.visible}
+                        onChange={() => toggleColumnVisibility(column.id)}
+                        className="column-checkbox"
+                      />
+                      <span className="column-name">{column.label}</span>
+                    </label>
+                    
+                    <div className="column-info">
+                      <span className="column-width" title="Độ rộng hiện tại">
+                        {column.width}px
+                      </span>
+                      {!column.visible && (
+                        <span className="column-hidden-badge">Ẩn</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+              
+              <div className="column-settings-footer">
+                <button 
+                  className="apply-settings-btn"
+                  onClick={() => setShowColumnSettings(false)}
+                >
+                  ✓ Áp dụng
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Add/Edit Modal */}
       {showModal && (
         <div className="modal-overlay">
           <div className="modal-content">

@@ -181,9 +181,16 @@ const Header = () => {
       title: 'Báo cáo thống kê',
       icon: '📊',
       items: [
-        { name: 'Báo cáo bán hàng', path: '/reports/sales', resourceKey: 'sales_report' },
-        { name: 'Báo cáo tồn kho', path: '/reports/inventory', resourceKey: 'inventory_report' },
-        { name: 'Báo cáo tài chính', path: '/reports/financial', resourceKey: 'financial_report' }
+        // Removed specific report pages per request
+        {
+          name: 'Kho',
+          path: '/reports/kho',
+          resourceKey: 'warehouse_report',
+          submenu: [
+            { name: 'Xuất nhập tồn', path: '/reports/kho/xuat-nhap-ton', resourceKey: 'xuat_nhap_ton' },
+            { name: 'Chi tiết xuất nhập', path: '/reports/kho/chi-tiet-xuat-nhap', resourceKey: 'xuat_nhap_ton' }
+          ]
+        }
       ]
     },
     {

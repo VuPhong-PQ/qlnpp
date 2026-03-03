@@ -1601,52 +1601,27 @@ const Products = () => {
       <div className="page-header">
         <h1>Danh sách hàng hóa</h1>
         <p>Quản lý thông tin chi tiết sản phẩm và hàng hóa</p>
-        <div style={{ display: 'flex', gap: '12px', alignItems: 'center', marginTop: '12px' }}>
-          <div style={{ 
-            padding: '8px 16px',
-            background: '#e6f7ff',
-            border: '1px solid #91d5ff',
-            borderRadius: '4px',
-            fontSize: '14px',
-            color: '#0050b3',
-            fontWeight: 500
-          }}>
+      </div>
+
+      <div className="data-table-container">
+        <div className="product-summary-row">
+          <div className="product-count-badge">
             Tổng {products.length > 0 ? products.length.toLocaleString('vi-VN') : 0} sản phẩm
           </div>
           {selectedRows.length > 0 && (
             <>
-              <div style={{ 
-                padding: '8px 16px',
-                background: '#fff7e6',
-                border: '1px solid #ffd591',
-                borderRadius: '4px',
-                fontSize: '14px',
-                color: '#d46b08',
-                fontWeight: 500
-              }}>
-                Đang hiển thị {selectedRows.length} sản phẩm đã chọn
+              <div className="product-selected-badge">
+                Đã chọn {selectedRows.length}
               </div>
               <button
                 onClick={() => setSelectedRows([])}
-                style={{
-                  padding: '6px 12px',
-                  background: '#ff4d4f',
-                  color: 'white',
-                  border: 'none',
-                  borderRadius: '4px',
-                  cursor: 'pointer',
-                  fontSize: '13px',
-                  fontWeight: 500
-                }}
+                className="btn-clear-filter"
               >
                 ✕ Xóa bộ lọc
               </button>
             </>
           )}
         </div>
-      </div>
-
-      <div className="data-table-container">
         <div className="table-header" style={{ position: 'relative' }}>
           <input
             type="text"
@@ -1677,14 +1652,12 @@ const Products = () => {
             <button
               className="btn btn-danger"
               onClick={handleDeleteAll}
-              style={{ marginLeft: 8, background: '#ff4d4f', border: 'none', color: '#fff', padding: '8px 12px', borderRadius: 4, cursor: 'pointer' }}
               title="Xóa toàn bộ sản phẩm"
             >
               🗑️ Xóa toàn bộ
             </button>
             <button
               className="btn btn-settings"
-              style={{ background: 'transparent', border: 'none', marginLeft: 8, fontSize: 20, cursor: 'pointer' }}
               title="Cài đặt cột hiển thị"
               onClick={() => setShowProductColSetting(v => !v)}
             >
