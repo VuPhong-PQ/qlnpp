@@ -53,7 +53,7 @@ const CustomerGroups = () => {
         });
       }
     } catch (error) {
-      console.error('Error fetching company info:', error);
+        // error fetching company info
     }
   };
 
@@ -63,7 +63,7 @@ const CustomerGroups = () => {
       const data = await api.get(API_ENDPOINTS.customerGroups);
       setCustomerGroups(data);
     } catch (error) {
-      console.error('Error fetching customer groups:', error);
+        // error fetching customer groups
       alert('Không thể tải dữ liệu nhóm khách hàng. Vui lòng kiểm tra kết nối API.');
     } finally {
       setLoading(false);
@@ -138,7 +138,7 @@ const CustomerGroups = () => {
             await api.post(API_ENDPOINTS.customerGroups, newItem);
             successCount++;
           } catch (error) {
-            console.error('Error importing row:', error);
+            // error importing row
             errors.push(`Lỗi: ${error.message}`);
             errorCount++;
           }
@@ -157,7 +157,7 @@ const CustomerGroups = () => {
       }, 7); // Skip 7 rows (company info + title + headers)
       
     } catch (error) {
-      console.error('Error importing:', error);
+      // error importing file
       alert('Lỗi khi import file: ' + error.message);
     } finally {
       setLoading(false);
@@ -197,7 +197,7 @@ const CustomerGroups = () => {
       setEditingItem(null);
       resetForm();
     } catch (error) {
-      console.error('Error saving customer group:', error);
+      // error saving customer group
       alert('Có lỗi xảy ra khi lưu dữ liệu. Vui lòng thử lại.');
     } finally {
       setLoading(false);
@@ -228,7 +228,7 @@ const CustomerGroups = () => {
         alert('Xóa nhóm khách hàng thành công!');
         await fetchCustomerGroups();
       } catch (error) {
-        console.error('Error deleting customer group:', error);
+        // error deleting customer group
         alert('Có lỗi xảy ra khi xóa dữ liệu. Vui lòng thử lại.');
       } finally {
         setLoading(false);
@@ -298,7 +298,7 @@ const CustomerGroups = () => {
     try {
       localStorage.setItem(COLUMN_SETTINGS_KEY, JSON.stringify(cols));
     } catch (error) {
-      console.error('Error saving column settings:', error);
+      // error saving column settings
     }
   };
 

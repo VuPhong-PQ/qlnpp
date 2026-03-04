@@ -67,7 +67,6 @@ export const exportToExcelWithHeader = (data, filename = 'export', sheetName = '
     
     return true;
   } catch (error) {
-    console.error('Error exporting to Excel:', error);
     alert('Lỗi khi xuất file Excel: ' + error.message);
     return false;
   }
@@ -176,7 +175,6 @@ export const exportToExcel = async (data, filename = 'export', sheetName = 'Shee
 
     return true;
   } catch (error) {
-    console.error('Error exporting to Excel:', error);
     alert('Lỗi khi xuất file Excel: ' + (error.message || error));
     return false;
   }
@@ -215,19 +213,16 @@ export const importFromExcel = (file, callback, skipRows = 0) => {
         // Call callback with imported data
         callback(jsonData);
       } catch (error) {
-        console.error('Error parsing Excel file:', error);
         alert('Lỗi khi đọc file Excel: ' + error.message);
       }
     };
     
     reader.onerror = (error) => {
-      console.error('Error reading file:', error);
       alert('Lỗi khi đọc file: ' + error.message);
     };
     
     reader.readAsArrayBuffer(file);
   } catch (error) {
-    console.error('Error importing from Excel:', error);
     alert('Lỗi khi nhập file Excel: ' + error.message);
   }
 };
@@ -250,7 +245,6 @@ export const downloadTemplate = (headers, filename = 'template', sheetName = 'Te
     
     return true;
   } catch (error) {
-    console.error('Error downloading template:', error);
     alert('Lỗi khi tải template: ' + error.message);
     return false;
   }

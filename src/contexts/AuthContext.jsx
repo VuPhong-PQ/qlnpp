@@ -34,13 +34,14 @@ export function AuthProvider({ children }) {
           setCategoryPermissions(storedCategoryPermissions ? JSON.parse(storedCategoryPermissions) : []);
           setIsAuthenticated(true);
           
-          // Reload category permissions from server to ensure fresh data
+          // Reload permissions from server to ensure fresh data
           if (parsedUser?.id) {
             await loadCategoryPermissions(parsedUser.id);
+            // Also refresh permissions from server
+            await refreshPermissionsForUser(parsedUser.id);
           }
         }
       } catch (error) {
-        console.error('Error initializing auth:', error);
         logout();
       } finally {
         setLoading(false);
@@ -49,6 +50,45 @@ export function AuthProvider({ children }) {
 
     initAuth();
   }, []);
+
+  // Auto-refresh permissions when window gains focus (user comes back to tab)
+  useEffect(() => {
+    const handleFocus = async () => {
+      const storedUser = localStorage.getItem('user');
+      if (storedUser) {
+        try {
+          const parsedUser = JSON.parse(storedUser);
+          if (parsedUser?.id) {
+            await refreshPermissionsForUser(parsedUser.id);
+          }
+        } catch (e) {
+          // ignore
+        }
+      }
+    };
+
+    window.addEventListener('focus', handleFocus);
+    return () => window.removeEventListener('focus', handleFocus);
+  }, []);
+
+  // Helper function to refresh permissions for a specific user ID
+  const refreshPermissionsForUser = async (userId) => {
+    if (!userId) return;
+    try {
+      const token = localStorage.getItem('token');
+      const response = await fetch(`${API_BASE_URL}/auth/permissions/${userId}`, {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {},
+      });
+      
+      if (response.ok) {
+        const perms = await response.json();
+        setPermissions(perms);
+        localStorage.setItem('permissions', JSON.stringify(perms));
+      }
+    } catch (error) {
+      // Error refreshing permissions
+    }
+  };
 
   const login = async (username, password, rememberMe = false) => {
     try {
@@ -86,7 +126,6 @@ export function AuthProvider({ children }) {
         return { success: false, message: data.message };
       }
     } catch (error) {
-      console.error('Login error:', error);
       return { success: false, message: 'Không thể kết nối đến server' };
     }
   };
@@ -157,7 +196,7 @@ export function AuthProvider({ children }) {
         localStorage.setItem('categoryPermissions', JSON.stringify(allowedIds));
       }
     } catch (error) {
-      console.error('Error loading category permissions:', error);
+      // Error loading category permissions
     }
   };
 
@@ -232,22 +271,7 @@ export function AuthProvider({ children }) {
 
   const refreshPermissions = async () => {
     if (!user?.id) return;
-    
-    try {
-      const token = localStorage.getItem('token');
-      const response = await fetch(`${API_BASE_URL}/auth/permissions/${user.id}`, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-      
-      if (response.ok) {
-        const perms = await response.json();
-        updatePermissions(perms);
-      }
-    } catch (error) {
-      console.error('Error refreshing permissions:', error);
-    }
+    await refreshPermissionsForUser(user.id);
   };
 
   const changePassword = async (oldPassword, newPassword) => {
@@ -269,7 +293,6 @@ export function AuthProvider({ children }) {
       const data = await response.json();
       return data;
     } catch (error) {
-      console.error('Change password error:', error);
       return { success: false, message: 'Không thể kết nối đến server' };
     }
   };

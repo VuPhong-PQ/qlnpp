@@ -7,6 +7,7 @@ import GroupPermissionModal from './GroupPermissionModal';
 import { API_ENDPOINTS, api, API_BASE_URL } from '../../config/api';
 import { exportToExcel, importFromExcel } from '../../utils/excelUtils';
 import { useColumnFilter } from '../../hooks/useColumnFilter.jsx';
+import { useAuth } from '../../contexts/AuthContext';
 
 export default function Users() {
   const navigate = useNavigate();
@@ -42,18 +43,23 @@ export default function Users() {
   const fileInputRef = React.useRef(null);
   // Selected rows for export
   const [selectedIds, setSelectedIds] = useState(new Set());
+  const { user: authUser } = useAuth();
 
   useEffect(() => {
     loadUsers();
-  }, []);
+  }, [authUser]);
 
   const loadUsers = async () => {
     try {
       setLoading(true);
       const data = await api.get(API_ENDPOINTS.users);
-      setUsers(data || []);
+      let list = data || [];
+      const isSuper = authUser && ((authUser.username || authUser.name || '').toString().toLowerCase() === 'superadmin');
+      if (!isSuper) {
+        list = list.filter(u => ((u.username || u.name || '').toString().toLowerCase() !== 'superadmin'));
+      }
+      setUsers(list);
     } catch (err) {
-      console.error('Load users failed', err);
       setUsers([]);
     } finally {
       setLoading(false);
@@ -77,7 +83,6 @@ export default function Users() {
       await api.delete(API_ENDPOINTS.users, id);
       await loadUsers();
     } catch (err) {
-      console.error('Delete failed', err);
       alert('Xóa thất bại');
     } finally {
       setLoading(false);
@@ -99,7 +104,6 @@ export default function Users() {
       await loadUsers();
       alert('Đã xóa toàn bộ nhân viên');
     } catch (err) {
-      console.error('Delete all failed', err);
       alert('Xóa toàn bộ thất bại: ' + (err.message || err));
     } finally {
       setLoading(false);
@@ -118,7 +122,6 @@ export default function Users() {
       setEditing(null);
       await loadUsers();
     } catch (err) {
-      console.error('Save failed', err);
       alert('Lưu thất bại');
     } finally {
       setLoading(false);
@@ -166,7 +169,6 @@ export default function Users() {
         setResetPwError(data.message || 'Đặt lại mật khẩu thất bại');
       }
     } catch (err) {
-      console.error('Reset password failed', err);
       setResetPwError('Có lỗi xảy ra. Vui lòng thử lại.');
     } finally {
       setResetPwLoading(false);
@@ -418,7 +420,9 @@ export default function Users() {
             <button className="btn btn-primary" onClick={handleAdd}>+ Thêm nhân viên</button>
             <button className="btn btn-success" onClick={handleExport} style={{ marginLeft: 8 }}>📤 Export Excel</button>
             <button className="btn btn-secondary" onClick={handleImportClick} style={{ marginLeft: 8 }}>📥 Import NV</button>
-            <button className="btn btn-danger" onClick={handleDeleteAll} style={{ marginLeft: 8 }} disabled={loading}>🗑 Xóa toàn bộ NV</button>
+            {(authUser && ((authUser.username || authUser.name || '').toString().toLowerCase() === 'superadmin')) && (
+              <button className="btn btn-danger" onClick={handleDeleteAll} style={{ marginLeft: 8 }} disabled={loading}>🗑 Xóa toàn bộ NV</button>
+            )}
             <input type="file" ref={fileInputRef} style={{ display: 'none' }} accept=".xlsx,.xls" onChange={handleFileChange} />
             {selectedIds && selectedIds.size > 0 && (
               <div style={{ display: 'inline-block', marginLeft: 12, color: '#555' }}>Đã chọn: {selectedIds.size}</div>

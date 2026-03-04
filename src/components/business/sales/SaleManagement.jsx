@@ -1561,10 +1561,13 @@ const SaleManagement = () => {
             <i className="icon">📄</i>
             <span>Thêm</span>
           </button>
-          <button className="action-btn red-btn" title="Xóa đơn hàng" onClick={handleDeleteSelected}>
-            <i className="icon">🗑️</i>
-            <span>Xóa ĐH</span>
-          </button>
+          {/* Only show Delete button for superadmin */}
+          {(authUser?.username || authUser?.name || '').toLowerCase() === 'superadmin' && (
+            <button className="action-btn red-btn" title="Xóa đơn hàng" onClick={handleDeleteSelected}>
+              <i className="icon">🗑️</i>
+              <span>Xóa ĐH</span>
+            </button>
+          )}
           <button className="action-btn pink-btn" title="Export ra Excel" onClick={handleExport}>
             <i className="icon">📊</i>
             <span>Export</span>

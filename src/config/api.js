@@ -52,7 +52,6 @@ export const api = {
       }
       return await response.json();
     } catch (error) {
-      console.error('API GET Error:', error);
       throw error;
     }
   },
@@ -73,7 +72,6 @@ export const api = {
         try {
           const errorData = await response.text();
           if (errorData) {
-            console.error('Server error response:', errorData);
             errorMessage = errorData;
           }
         } catch (e) {
@@ -84,7 +82,6 @@ export const api = {
       
       return await response.json();
     } catch (error) {
-      console.error('API POST Error:', error);
       throw error;
     }
   },
@@ -104,7 +101,6 @@ export const api = {
       }
       return response.ok;
     } catch (error) {
-      console.error('API PUT Error:', error);
       throw error;
     }
   },
@@ -120,7 +116,6 @@ export const api = {
       }
       return response.ok;
     } catch (error) {
-      console.error('API DELETE Error:', error);
       throw error;
     }
   },

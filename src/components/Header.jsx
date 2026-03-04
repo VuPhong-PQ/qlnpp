@@ -64,7 +64,7 @@ const Header = () => {
         const data = await api.get(API_ENDPOINTS.products);
         setAllProducts(data);
       } catch (error) {
-        console.error('Error fetching products:', error);
+        // Error fetching products
       }
     };
     fetchProducts();

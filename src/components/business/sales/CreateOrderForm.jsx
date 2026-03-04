@@ -2518,7 +2518,9 @@ const CreateOrderForm = () => {
         OrderItems: validOrderItems
       };
       
-      console.log('Copying order with data:', requestPayload);
+      if (process.env.NODE_ENV === 'development') {
+        console.log('Copying order with data:', requestPayload);
+      }
       
       // Call API to create copy of order
       const response = await api.post(`${API_ENDPOINTS.orders}/create-with-items`, requestPayload);
@@ -2534,9 +2536,11 @@ const CreateOrderForm = () => {
         setOrderNumberEdited(true); // Prevent auto-generation of order number
       }
     } catch (error) {
-      console.error('Full error details:', error);
-      console.error('Error message:', error.message);
-      console.error('Error response:', error.response);
+      if (process.env.NODE_ENV === 'development') {
+        console.error('Full error details:', error);
+        console.error('Error message:', error.message);
+        console.error('Error response:', error.response);
+      }
       
       let errorMsg = 'Vui lòng thử lại';
       if (error.message) {

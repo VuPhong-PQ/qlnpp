@@ -279,12 +279,15 @@ namespace QlnppApi.Controllers
                     "product_categories", "products", "units", "transaction_contents", "warehouses", "vehicles",
                     // Quản lý nghiệp vụ (Business)
                     "quotations", "imports", "exports", "warehouse_transfers", "orders",
-                    "sale_management", "print_order", "receipt_voucher", "expense_voucher",
+                    "sale_management", "order_management", "print_order", "in-bang-ke-tong",
+                    "mo_khoa_ngay_lap", "chon_nhan_vien_sale",
+                    "receipt_voucher", "expense_voucher",
                     "cost_calculation", "adjustments", "returns",
                     // Báo cáo thống kê (Reports)
                     "sales_report", "inventory_report", "financial_report", "reports",
+                    "warehouse_report", "xuat_nhap_ton",
                     // Admin
-                    "manage_data", "permission_groups", "user_permissions", "users"
+                    "manage_data", "permission_groups", "user_permissions", "users", "admin"
                 };
                 var allActions = new[] { "view", "add", "edit", "delete", "print", "import", "export" };
 
