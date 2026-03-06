@@ -52,6 +52,12 @@ const XuatNhapTon = () => {
   const [selectedCategory, setSelectedCategory] = useState(null);
   const [categorySearchText, setCategorySearchText] = useState('');
   const [selectedTransactionType, setSelectedTransactionType] = useState(null);
+  const [customerGroups, setCustomerGroups] = useState([]);
+  const [selectedCustomerGroup, setSelectedCustomerGroup] = useState(null);
+  const [selectedCustomerGroupSearch, setSelectedCustomerGroupSearch] = useState('');
+
+  const [selectedCustomerForProduct, setSelectedCustomerForProduct] = useState(null);
+  const [customerSearchTextForProduct, setCustomerSearchTextForProduct] = useState('');
 
   // Data states
   const [warehouses, setWarehouses] = useState([]);
@@ -161,18 +167,20 @@ const XuatNhapTon = () => {
 
   const loadInitialData = async () => {
     try {
-      const [warehouseData, productData, categoryData, transactionData, customerData] = await Promise.all([
+      const [warehouseData, productData, categoryData, transactionData, customerData, customerGroupData] = await Promise.all([
         api.get(API_ENDPOINTS.warehouses),
         api.get(API_ENDPOINTS.products),
         api.get(API_ENDPOINTS.productCategories),
         api.get(API_ENDPOINTS.transactionContents),
-        api.get(API_ENDPOINTS.customers)
+        api.get(API_ENDPOINTS.customers),
+        api.get(API_ENDPOINTS.customerGroups)
       ]);
       setWarehouses(warehouseData || []);
       setProducts(productData || []);
       setCategories(categoryData || []);
       setTransactionContents(transactionData || []);
       setCustomers(customerData || []);
+      setCustomerGroups(customerGroupData || []);
     } catch (error) {
       console.error('Error loading initial data:', error);
     }
@@ -450,6 +458,34 @@ const XuatNhapTon = () => {
       label: w.name
     }));
   }, [warehouses]);
+
+  // Customer group options (searchable)
+  const customerGroupOptions = useMemo(() => {
+    const searchNormalized = removeVietnameseTones((selectedCustomerGroupSearch || '').toLowerCase());
+    return customerGroups
+      .filter(g => {
+        if (!selectedCustomerGroupSearch) return true;
+        return removeVietnameseTones((g.name || '').toLowerCase()).includes(searchNormalized);
+      })
+      .map(g => ({ value: g.name, label: g.name }));
+  }, [customerGroups, selectedCustomerGroupSearch]);
+
+  // Customer options for product-area selection (show name - phone)
+  const customerOptionsForProduct = useMemo(() => {
+    const searchNormalized = removeVietnameseTones((customerSearchTextForProduct || '').toLowerCase());
+    return customers
+      .filter(c => {
+        if (!customerSearchTextForProduct) return true;
+        const nameNormalized = removeVietnameseTones((c.name || '').toLowerCase());
+        const phone = (c.phone || c.phoneNumber || c.mobile || '').toString();
+        const phoneNormalized = removeVietnameseTones(phone);
+        return `${nameNormalized} ${phoneNormalized}`.includes(searchNormalized);
+      })
+      .map(c => {
+        const phone = c.phone || c.phoneNumber || c.mobile || '';
+        return { value: c.id || c.name, label: `${c.name}${phone ? ` - ${phone}` : ''}` };
+      });
+  }, [customers, customerSearchTextForProduct]);
 
   // Date picker handlers
   const handleDateRangeClick = () => {
@@ -961,8 +997,38 @@ const XuatNhapTon = () => {
               onSearch={setProductSearchText}
               options={productOptions}
               style={{ width: '100%' }}
-              dropdownStyle={{ minWidth: 350 }}
+              dropdownStyle={{ minWidth: 350, width: '50vw' }}
               notFoundContent={productSearchText ? 'Không tìm thấy sản phẩm' : null}
+            />
+          </div>
+
+          <div className="filter-item customer-small">
+            <Select
+              placeholder="Tên khách hàng"
+              value={selectedCustomerForProduct}
+              onChange={setSelectedCustomerForProduct}
+              allowClear
+              showSearch
+              filterOption={false}
+              onSearch={setCustomerSearchTextForProduct}
+              options={customerOptionsForProduct}
+              style={{ width: '100%' }}
+              dropdownStyle={{ width: '50vw' }}
+            />
+          </div>
+
+          <div className="filter-item group-small">
+            <Select
+              placeholder="Nhóm khách hàng"
+              value={selectedCustomerGroup}
+              onChange={setSelectedCustomerGroup}
+              allowClear
+              showSearch
+              filterOption={false}
+              onSearch={setSelectedCustomerGroupSearch}
+              options={customerGroupOptions}
+              style={{ width: '100%' }}
+              dropdownStyle={{ width: '50vw' }}
             />
           </div>
 
@@ -1001,6 +1067,9 @@ const XuatNhapTon = () => {
           <Tooltip title="Làm mới">
             <Button icon={<ReloadOutlined />} onClick={handleSearch} />
           </Tooltip>
+        </div>
+
+        <div className="settings-corner">
           <Popover
             content={columnSettingsContent}
             trigger="click"
