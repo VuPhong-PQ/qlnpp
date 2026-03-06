@@ -37,6 +37,7 @@ import ExpenseVoucher from './components/business/accounting/ExpenseVoucher';
 import CostCalculation from './components/business/CostCalculation';
 import XuatNhapTon from './components/reports/kho/XuatNhapTon';
 import BaoCaoXuatNhapTon from './components/reports/kho/BaoCaoXuatNhapTon';
+import FilterSales from './components/reports/FilterSales';
 import './App.css';
 
 // Layout component with Header
@@ -228,6 +229,11 @@ function App() {
           <Route path="/reports/kho/chi-tiet-xuat-nhap" element={
             <ProtectedRoute requiredPermission="xuat_nhap_ton">
               <AppLayout><XuatNhapTon /></AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/filter-sales" element={
+            <ProtectedRoute requiredPermission="xuat_nhap_ton">
+              <AppLayout><FilterSales /></AppLayout>
             </ProtectedRoute>
           } />
           <Route path="/reports/kho/xuat-nhap-ton" element={

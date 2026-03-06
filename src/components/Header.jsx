@@ -181,7 +181,7 @@ const Header = () => {
       title: 'Báo cáo thống kê',
       icon: '📊',
       items: [
-        // Removed specific report pages per request
+        { name: 'Trích lọc dữ liệu BH', path: '/reports/filter-sales', resourceKey: 'xuat_nhap_ton' },
         {
           name: 'Kho',
           path: '/reports/kho',
