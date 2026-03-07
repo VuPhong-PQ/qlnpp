@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import { Table, Button, Select, Input, Space, Popover, Checkbox, Tooltip, Spin } from 'antd';
+import { Table, Button, Select, Input, Space, Popover, Checkbox, Tooltip, Spin, Modal } from 'antd';
 import { SearchOutlined, SettingOutlined, FilterOutlined, ReloadOutlined, FileExcelOutlined, CloseOutlined } from '@ant-design/icons';
 import dayjs from 'dayjs';
 import 'dayjs/locale/vi';
@@ -117,6 +117,15 @@ const BaoCaoXuatNhapTon = () => {
   const [showSearchModal, setShowSearchModal] = useState(false);
   const [searchColumn, setSearchColumn] = useState(null);
   const [columnSearchQuery, setColumnSearchQuery] = useState('');
+
+  // Context menu and modal detail state
+  const [contextMenuVisible, setContextMenuVisible] = useState(false);
+  const [contextMenuPos, setContextMenuPos] = useState({ x: 0, y: 0 });
+  const [contextMenuRow, setContextMenuRow] = useState(null);
+
+  const [showRowDetailModal, setShowRowDetailModal] = useState(false);
+  const [modalProductCode, setModalProductCode] = useState(null);
+  const [modalColumnFilters, setModalColumnFilters] = useState({});
 
   // Column drag-drop reordering
   const [dragColumn, setDragColumn] = useState(null);
@@ -237,6 +246,10 @@ const BaoCaoXuatNhapTon = () => {
         rows.push({
           key: `imp-${imp.id}-${item.id}`,
           type: 'import',
+          soPhieu: imp.code || imp.id,
+          date: imp.date ? dayjs(imp.date).format('DD/MM/YYYY') : '',
+          customerName: imp.customerName || imp.customer || '',
+          warehouse: item.warehouse || imp.warehouse || '',
           category: product?.category || '',
           barcode: item.barcode,
           productCode: item.productCode,
@@ -297,6 +310,10 @@ const BaoCaoXuatNhapTon = () => {
         rows.push({
           key: `exp-${exp.id}-${item.id}`,
           type: 'export',
+          soPhieu: exp.code || exp.id,
+          date: exp.date ? dayjs(exp.date).format('DD/MM/YYYY') : '',
+          customerName: exp.customerName || exp.customer || '',
+          warehouse: item.warehouse || exp.warehouse || '',
           category: product?.category || '',
           barcode: item.barcode,
           productCode: item.productCode,
@@ -948,7 +965,7 @@ const BaoCaoXuatNhapTon = () => {
               onSearch={setProductSearchText}
               options={productOptions}
               style={{ width: '100%' }}
-              dropdownStyle={{ minWidth: 350 }}
+              styles={{ popup: { root: { minWidth: 350 } } }}
               notFoundContent={productSearchText ? 'Không tìm thấy sản phẩm' : null}
             />
           </div>
@@ -1059,7 +1076,16 @@ const BaoCaoXuatNhapTon = () => {
                 </tr>
               ) : (
                 paginatedData.map((row, idx) => (
-                  <tr key={row.key} className={row.type === 'import' ? 'import-row' : 'export-row'}>
+                  <tr
+                    key={row.key}
+                    className={row.type === 'import' ? 'import-row' : 'export-row'}
+                    onContextMenu={(e) => {
+                      e.preventDefault();
+                      setContextMenuVisible(true);
+                      setContextMenuPos({ x: e.clientX, y: e.clientY });
+                      setContextMenuRow(row);
+                    }}
+                  >
                     {columns.filter(c => c.visible).map(col => (
                       <td key={col.id} style={{ textAlign: col.align }}>
                         {renderCell(row, col.id)}
@@ -1173,6 +1199,71 @@ const BaoCaoXuatNhapTon = () => {
           />
         </div>
       </div>
+
+      {/* Context Menu for rows */}
+      {contextMenuVisible && (
+        <div
+          style={{
+            position: 'fixed',
+            top: contextMenuPos.y,
+            left: contextMenuPos.x,
+            background: '#fff',
+            border: '1px solid #ccc',
+            boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+            zIndex: 2000,
+          }}
+          onMouseLeave={() => setContextMenuVisible(false)}
+        >
+          <div
+            style={{ padding: '8px 12px', cursor: 'pointer' }}
+            onClick={() => {
+              setContextMenuVisible(false);
+              if (contextMenuRow) {
+                setModalProductCode(contextMenuRow.productCode || contextMenuRow.barcode || null);
+                setModalColumnFilters({});
+                setShowRowDetailModal(true);
+              }
+            }}
+          >
+            Xem chi tiết
+          </div>
+        </div>
+      )}
+
+      {/* Row Detail Modal */}
+      <Modal
+        title={contextMenuRow ? `Chi tiết: ${contextMenuRow.productName || contextMenuRow.productCode || contextMenuRow.barcode || ''}` : 'Chi tiết'}
+        visible={showRowDetailModal}
+        width={1000}
+        onCancel={() => setShowRowDetailModal(false)}
+        footer={null}
+      >
+        <div style={{ maxHeight: '60vh', overflow: 'auto' }}>
+          <table className="detail-modal-table" style={{ width: '100%', borderCollapse: 'collapse' }}>
+            <thead>
+              <tr>
+                {[
+                  'Số phiếu','Ngày lập','Tên khách hàng','Mã hàng','Mã vạch','Tên hàng','ĐVT','Số lượng','Tồn cuối','Kho','Loại nghiệp vụ','Số lượng quy đổi','Mô tả','Tên nhân viên','Mã khách hàng','Quy đổi','Đơn giá','CK','Giá sau CK','Thành tiền sau CK','% giảm','Giá sau giảm','Thành tiền sau giảm','Số khối','Số Kg'
+                ].map((h, i) => (
+                  <th key={i} style={{ borderBottom: '1px solid #eee', padding: '8px', textAlign: 'left' }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {flattenedData.filter(r => {
+                if (!modalProductCode) return false;
+                return r.productCode === modalProductCode || r.barcode === modalProductCode;
+              }).map(r => (
+                <tr key={r.key}>
+                  {[ 'soPhieu','date','customerName','productCode','barcode','productName','unit','importQty','endingBalance','warehouse','transactionType','specification','description','employeeName','customerCode','conversion','salePrice','discount','priceAfterDiscount','amountAfterDiscount','percentOff','priceAfterPercent','totalAfterPercent','volume','weight' ].map((c, idx) => (
+                    <td key={idx} style={{ padding: '6px 8px', borderBottom: '1px solid #f5f5f5' }}>{r[c] ?? ''}</td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </Modal>
 
       {/* Column Search Modal */}
       {showSearchModal && searchColumn && (

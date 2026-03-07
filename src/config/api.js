@@ -31,6 +31,8 @@ export const API_ENDPOINTS = {
   bangKeTongs: `${API_BASE_URL}/bangketongs`,
   imports: `${API_BASE_URL}/imports`,
   exports: `${API_BASE_URL}/exports`,
+  // Sales reports
+  salesByCategory: `${API_BASE_URL}/reports/sales/by-category`,
   
   // Permissions - Phân quyền
   permissionGroups: `${API_BASE_URL}/permissiongroups`,

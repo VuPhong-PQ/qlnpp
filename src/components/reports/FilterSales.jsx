@@ -1095,7 +1095,7 @@ const FilterSales = () => {
               onSearch={setProductSearchText}
               options={productOptions}
               style={{ width: '100%' }}
-              dropdownStyle={{ minWidth: 350, width: '50vw' }}
+              styles={{ popup: { root: { minWidth: 350, width: '50vw' } } }}
               notFoundContent={productSearchText ? 'Không tìm thấy sản phẩm' : null}
             />
           </div>
@@ -1111,7 +1111,7 @@ const FilterSales = () => {
               onSearch={setCustomerSearchTextForProduct}
               options={customerOptionsForProduct}
               style={{ width: '100%' }}
-              dropdownStyle={{ width: '50vw' }}
+              styles={{ popup: { root: { width: '50vw' } } }}
             />
           </div>
 
@@ -1126,7 +1126,7 @@ const FilterSales = () => {
               onSearch={setSelectedCustomerGroupSearch}
               options={customerGroupOptions}
               style={{ width: '100%' }}
-              dropdownStyle={{ width: '50vw' }}
+              styles={{ popup: { root: { width: '50vw' } } }}
             />
           </div>
 

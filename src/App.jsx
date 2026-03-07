@@ -38,6 +38,7 @@ import CostCalculation from './components/business/CostCalculation';
 import XuatNhapTon from './components/reports/kho/XuatNhapTon';
 import BaoCaoXuatNhapTon from './components/reports/kho/BaoCaoXuatNhapTon';
 import FilterSales from './components/reports/FilterSales';
+import BcTheoLoaiHang from './components/reports/sales/BcTheoLoaiHang';
 import './App.css';
 
 // Layout component with Header
@@ -229,6 +230,11 @@ function App() {
           <Route path="/reports/kho/chi-tiet-xuat-nhap" element={
             <ProtectedRoute requiredPermission="xuat_nhap_ton">
               <AppLayout><XuatNhapTon /></AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/reports/sales/by-category" element={
+            <ProtectedRoute requiredPermission="sales_report">
+              <AppLayout><BcTheoLoaiHang /></AppLayout>
             </ProtectedRoute>
           } />
           <Route path="/reports/filter-sales" element={

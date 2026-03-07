@@ -182,6 +182,14 @@ const Header = () => {
       icon: '📊',
       items: [
         { name: 'Trích lọc dữ liệu BH', path: '/reports/filter-sales', resourceKey: 'xuat_nhap_ton' },
+          {
+            name: 'Báo cáo doanh số',
+            path: '/reports/sales',
+            resourceKey: 'sales_report',
+            submenu: [
+              { name: 'BC theo loại hàng', path: '/reports/sales/by-category', resourceKey: 'sales_report' }
+            ]
+          },
         {
           name: 'Kho',
           path: '/reports/kho',
