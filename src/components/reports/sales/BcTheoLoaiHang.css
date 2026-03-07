@@ -16,9 +16,9 @@
   box-shadow: 0 1px 3px rgba(0,0,0,0.1);
 }
 .bc-loai-hang-page .filter-row { display: flex; gap: 10px; align-items: center; }
-.bc-loai-hang-page .filter-item { flex: 1; min-width: 0; }
-.bc-loai-hang-page .filter-item.small { flex: 0.5; }
-.bc-loai-hang-page .filter-item.search-btn-container { flex: 0 0 auto; min-width: auto; }
+.bc-loai-hang-page .filter-item { flex: 1 1 0; min-width: 0; }
+.bc-loai-hang-page .filter-item.small { flex: 1 1 0; }
+.bc-loai-hang-page .filter-item.search-btn-container { flex: 1 1 0; display: flex; justify-content: flex-end; }
 
 /* Date Range */
 .bc-loai-hang-page .date-range-container { position: relative; }
