@@ -173,8 +173,8 @@ const ExportGoods = () => {
   const [dateDraft, setDateDraft] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchCode, setSearchCode] = useState('');
-  const [dateFrom, setDateFrom] = useState('2025-01-01');
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0]);
+  const [dateFrom, setDateFrom] = useState('01/01/2025');
+  const [dateTo, setDateTo] = useState(() => dayjs().format('DD/MM/YYYY'));
   const [exportType, setexportType] = useState('');
   const [employee, setEmployee] = useState('');
 
@@ -1414,7 +1414,7 @@ const ExportGoods = () => {
                 <span 
                   onClick={() => {
                     const today = dayjs();
-                    setSelectedDates(prev => ({ ...prev, [colKey]: today.format('YYYY-MM-DD') }));
+                    setSelectedDates(prev => ({ ...prev, [colKey]: today.format('DD/MM/YYYY') }));
                     handleDateSelect(colKey, today);
                   }} 
                   style={{
@@ -1438,7 +1438,7 @@ const ExportGoods = () => {
   const handleDateSelect = (colKey, date) => {
     setSelectedDates(prev => ({ 
       ...prev, 
-      [colKey]: date ? date.format('YYYY-MM-DD') : null 
+      [colKey]: date ? date.format('DD/MM/YYYY') : null 
     }));
     
     if (date && selectedExport) {
@@ -1452,7 +1452,7 @@ const ExportGoods = () => {
         quantity: 1,
         unitPrice: 0,
         transportCost: 0,
-        noteDate: date.format('YYYY-MM-DD'),
+        noteDate: date.format('DD/MM/YYYY'),
         total: 0,
         totalTransport: 0,
         weight: 0,
@@ -2059,7 +2059,7 @@ const ExportGoods = () => {
       setShowRightContent(true);
       setFormData({
         exportNumber: detail.exportNumber || detail.exportNumber || generateexportNumber(),
-        createdDate: detail.date ? dayjs(detail.date).format('YYYY-MM-DD') : (detail.createdDate || new Date().toISOString().split('T')[0]),
+        createdDate: detail.date ? dayjs(detail.date).format('DD/MM/YYYY') : (detail.createdDate || dayjs().format('DD/MM/YYYY')),
         employee: detail.employee || detail.Employee || formData.employee,
         exportType: detail.exportType || detail.exportType || '',
         totalWeight: detail.totalWeight || 0,
@@ -2142,7 +2142,7 @@ const ExportGoods = () => {
       // Update form data
       setFormData({
         exportNumber: detail.exportNumber || detail.exportNumber || generateexportNumber(),
-        createdDate: detail.date ? dayjs(detail.date).format('YYYY-MM-DD') : (detail.createdDate || new Date().toISOString().split('T')[0]),
+        createdDate: detail.date ? dayjs(detail.date).format('DD/MM/YYYY') : (detail.createdDate || dayjs().format('DD/MM/YYYY')),
         employee: detail.employee || detail.Employee || formData.employee,
         exportType: detail.exportType || detail.exportType || '',
         totalWeight: detail.totalWeight || 0,
@@ -2547,27 +2547,23 @@ const ExportGoods = () => {
     const normalizedCode = removeVietnameseTones((searchCode || '').toLowerCase());
     const matchesCode = !searchCode || normalizedNumber.includes(normalizedCode);
 
-    // Lọc theo khoảng Ngày xuất (so sánh yyyy-mm-dd)
+    // Lọc theo khoảng Ngày xuất (dateFrom/dateTo stored as DD/MM/YYYY)
     let matchesDate = true;
     if (dateFrom && dateTo) {
-      let importDate = null;
-      if (exportItem.createdDate && typeof exportItem.createdDate === 'string' && exportItem.createdDate.includes('/')) {
-        const parts = exportItem.createdDate.split('/');
-        if (parts.length === 3) {
-          const [d, m, y] = parts;
-          importDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-        }
-      } else if (exportItem.date) {
-        try {
-          importDate = dayjs(exportItem.date).format('YYYY-MM-DD');
-        } catch (e) {
-          importDate = null;
-        }
+      const from = dayjs(dateFrom, 'DD/MM/YYYY').startOf('day');
+      const to = dayjs(dateTo, 'DD/MM/YYYY').endOf('day');
+      let parsed = null;
+      if (exportItem.createdDate && typeof exportItem.createdDate === 'string') {
+        parsed = dayjs(exportItem.createdDate, ['DD/MM/YYYY','YYYY-MM-DD','YYYY/MM/DD']);
       }
-      if (!importDate) {
+      if ((!parsed || !parsed.isValid()) && exportItem.date) {
+        parsed = dayjs(exportItem.date);
+      }
+      if (!parsed || !parsed.isValid()) {
         matchesDate = false;
       } else {
-        matchesDate = importDate >= dateFrom && importDate <= dateTo;
+        const ts = parsed.valueOf();
+        matchesDate = ts >= from.valueOf() && ts <= to.valueOf();
       }
     }
 
@@ -3037,9 +3033,9 @@ const ExportGoods = () => {
       id: `temp_${Date.now()}`,
       receiptNumber: newexportNumber,
       exportNumber: newexportNumber,
-      importDate: dayjs().format('YYYY-MM-DD'),
+      importDate: dayjs().format('DD/MM/YYYY'),
       createdDate: dayjs().format('DD/MM/YYYY'),
-      date: dayjs().format('YYYY-MM-DD'),
+      date: dayjs().format('DD/MM/YYYY'),
       totalAmount: 0,
       customerName: 'Chưa chọn',
       employee: 'admin 66',
@@ -3050,7 +3046,7 @@ const ExportGoods = () => {
     };
     
     const newFormData = {
-      createdDate: dayjs().format('YYYY-MM-DD'),
+      createdDate: dayjs().format('DD/MM/YYYY'),
       employee: 'admin 66',
       exportType: '',
       exportNumber: newexportNumber,
@@ -3300,8 +3296,18 @@ const ExportGoods = () => {
           <div className="search-controls-grid">
             <div className="search-left">
               <div className="search-panel-date-row">
-                <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} />
-                <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} />
+                <DatePicker
+                  format="DD/MM/YYYY"
+                  placeholder="dd/mm/yyyy"
+                  value={dateFrom ? dayjs(dateFrom, 'DD/MM/YYYY') : null}
+                  onChange={(d) => setDateFrom(d ? d.format('DD/MM/YYYY') : '')}
+                />
+                <DatePicker
+                  format="DD/MM/YYYY"
+                  placeholder="dd/mm/yyyy"
+                  value={dateTo ? dayjs(dateTo, 'DD/MM/YYYY') : null}
+                  onChange={(d) => setDateTo(d ? d.format('DD/MM/YYYY') : '')}
+                />
               </div>
               <div className="search-panel-select-row">
                 <select value={exportType} onChange={e=>setexportType(e.target.value)}>
@@ -3491,18 +3497,19 @@ const ExportGoods = () => {
                 <div style={{display:'flex',gap:12}}>
                   <div style={{flex:'0 0 20%'}}>
                       <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Ngày lập</label>
-                      <input
-                        type="date"
-                        value={formData.createdDate || (selectedExport?.createdDate ? dayjs(selectedExport.createdDate).format('YYYY-MM-DD') : '')}
-                        onChange={(e) => {
+                      <DatePicker
+                        format="DD/MM/YYYY"
+                        placeholder="dd/mm/yyyy"
+                        value={formData.createdDate ? dayjs(formData.createdDate, 'DD/MM/YYYY') : (selectedExport?.createdDate ? dayjs(selectedExport.createdDate, ['DD/MM/YYYY','YYYY-MM-DD']) : null)}
+                        onChange={(date, dateString) => {
                           if (!isEditMode) return;
-                          const v = e.target.value;
+                          const v = date ? date.format('DD/MM/YYYY') : '';
                           setFormData(fd => ({ ...fd, createdDate: v }));
                           setselectedExport(si => si ? ({ ...si, createdDate: v }) : si);
                           setIsEditing(true);
                         }}
-                        style={{width:'100%'}}
-                        readOnly={!isEditMode}
+                        style={{ width: '100%' }}
+                        disabled={!isEditMode}
                       />
                   </div>
                   <div style={{flex:'0 0 20%'}}>
@@ -3949,7 +3956,7 @@ const ExportGoods = () => {
                                 <td key={colKey} style={baseCellStyle}>
                                   <DatePicker
                                     value={row.values[colKey] ? dayjs(row.values[colKey]) : null}
-                                    onChange={(d) => handleHeaderRowChange(rIdx, colKey, d ? d.format('YYYY-MM-DD') : null)}
+                                    onChange={(d) => handleHeaderRowChange(rIdx, colKey, d ? d.format('DD/MM/YYYY') : null)}
                                     format="DD/MM/YYYY"
                                     placeholder="Chọn ngày"
                                     size="small"
@@ -4245,7 +4252,7 @@ const ExportGoods = () => {
                     <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Ngày lập</label>
                     <input
                       type="date"
-                      value={formData.createdDate || dayjs().format('YYYY-MM-DD')}
+                      value={formData.createdDate || dayjs().format('DD/MM/YYYY')}
                       onChange={(e) => {
                         const v = e.target.value;
                         setFormData(fd => ({ ...fd, createdDate: v }));

@@ -92,8 +92,8 @@ const WarehouseAdjustment = () => {
   const [dateDraft, setDateDraft] = useState(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [searchCode, setSearchCode] = useState('');
-  const [dateFrom, setDateFrom] = useState('2025-01-01');
-  const [dateTo, setDateTo] = useState(() => new Date().toISOString().split('T')[0]);
+  const [dateFrom, setDateFrom] = useState('01/01/2025');
+  const [dateTo, setDateTo] = useState(() => dayjs().format('DD/MM/YYYY'));
   const [importType, setImportType] = useState('');
   const [employee, setEmployee] = useState('');
 
@@ -202,6 +202,7 @@ const WarehouseAdjustment = () => {
 
   // Core data state
   const [imports, setImports] = useState([]);
+  const [importRecords, setImportRecords] = useState([]); // Actual import records for price lookup
   const [items, setItems] = useState([]);
   const [products, setProducts] = useState([]);
   const [warehouses, setWarehouses] = useState([]);
@@ -353,7 +354,7 @@ const WarehouseAdjustment = () => {
       return {
         weight: baseWeight, // weight gốc × 1
         volume: baseVolume, // volume gốc × 1  
-        price: parseFloat(product.price) || 0,
+        price: parseFloat(product.importPrice) || parseFloat(product.price) || 0,
         conversion: 1
       };
     }
@@ -365,7 +366,7 @@ const WarehouseAdjustment = () => {
       return {
         weight: baseWeight * unit1Conversion, // weight gốc × quy đổi 1
         volume: baseVolume * unit1Conversion, // volume gốc × quy đổi 1
-        price: parseFloat(product.unit1Price || product.price1 || product.dvt1Price) || 0,
+        price: parseFloat(product.importPrice1 || product.unit1Price || product.price1 || product.dvt1Price) || 0,
         conversion: unit1Conversion
       };
     }
@@ -377,7 +378,7 @@ const WarehouseAdjustment = () => {
       return {
         weight: baseWeight * unit2Conversion, // weight gốc × quy đổi 2
         volume: baseVolume * unit2Conversion, // volume gốc × quy đổi 2
-        price: parseFloat(product.unit2Price || product.price2 || product.dvt2Price) || 0,
+        price: parseFloat(product.importPrice2 || product.unit2Price || product.price2 || product.dvt2Price) || 0,
         conversion: unit2Conversion
       };
     }
@@ -386,7 +387,7 @@ const WarehouseAdjustment = () => {
     return {
       weight: baseWeight,
       volume: baseVolume,
-      price: parseFloat(product.price) || 0,
+      price: parseFloat(product.importPrice) || parseFloat(product.price) || 0,
       conversion: 1
     };
   };
@@ -395,6 +396,22 @@ const WarehouseAdjustment = () => {
     if (amount === null || amount === undefined || amount === '') return '0';
     const num = Number(amount) || 0;
     return new Intl.NumberFormat('vi-VN').format(num);
+  };
+
+  // Find the last import item matching a product from actual import records (for price lookup)
+  const findLastImportMatch = (selectedProduct) => {
+    if (!importRecords || importRecords.length === 0 || !selectedProduct) return null;
+    // importRecords already sorted by date desc from API
+    for (const imp of importRecords) {
+      const itemsList = imp.items || imp.Items || [];
+      const match = itemsList.find(it =>
+        (it.productCode && it.productCode === selectedProduct.code) ||
+        (it.barcode && it.barcode === selectedProduct.barcode) ||
+        (it.productName && it.productName === selectedProduct.name)
+      );
+      if (match) return match;
+    }
+    return null;
   };
 
   // Helper function to format weight (2 decimal places)
@@ -717,24 +734,18 @@ const WarehouseAdjustment = () => {
           
           const productData = getProductDataByUnit(selectedProduct, defaultUnit);
           
-          // Quy đổi giá từ lastMatch về đơn vị nhỏ nhất (conversion = 1)
+          // Quy đổi giá từ lastMatch hoặc lấy từ phiếu nhập hoặc sản phẩm
           let convertedUnitPrice = 0;
-
           
-          // Kiểm tra loại nhập có phải "Nhập mua" không
-          const importType = formData.importType || selectedImport?.importType || '';
-          const isNhapMua = importType.toLowerCase().includes('nhập mua') || importType.toLowerCase() === 'nhập mua';
+          // Also search actual import records if no adjustment history match
+          const priceMatch = lastMatch || findLastImportMatch(selectedProduct);
           
-          if (lastMatch) {
-            const lastMatchConversion = parseFloat(lastMatch.conversion || lastMatch.Conversion) || 1;
-            const lastMatchUnitPrice = parseFloat(lastMatch.unitPrice || lastMatch.UnitPrice) || 0;
-
-            
-            // Quy đổi về đơn vị nhỏ nhất: giá_mới = giá_cũ / hệ_số_cũ × hệ_số_mới
-            // Đơn giá: chỉ copy nếu loại nhập là "Nhập mua" và không phải KM
-            if (isNhapMua && !isKMImport) {
-              convertedUnitPrice = (lastMatchUnitPrice / lastMatchConversion) * productData.conversion;
-            }
+          if (priceMatch) {
+            const matchConversion = parseFloat(priceMatch.conversion || priceMatch.Conversion) || 1;
+            const matchUnitPrice = parseFloat(priceMatch.unitPrice || priceMatch.UnitPrice) || 0;
+            convertedUnitPrice = (matchUnitPrice / matchConversion) * productData.conversion;
+          } else if (productData.price) {
+            convertedUnitPrice = productData.price;
           }
           
           const newItem = {
@@ -935,24 +946,18 @@ const WarehouseAdjustment = () => {
         // Update with correct unit-specific data including conversion
         copy[rowIndex].values['conversion'] = productData.conversion.toString();
         
-        // Quy đổi giá từ lastMatch về đơn vị nhỏ nhất
+        // Quy đổi giá từ lastMatch hoặc lấy từ phiếu nhập hoặc sản phẩm
         let convertedUnitPrice = 0;
-
         
-        // Kiểm tra loại nhập có phải "Nhập mua" không
-        const importType = formData.importType || selectedImport?.importType || '';
-        const isNhapMua = importType.toLowerCase().includes('nhập mua') || importType.toLowerCase() === 'nhập mua';
+        // Also search actual import records if no adjustment history match
+        const priceMatch = lastMatch || findLastImportMatch(selectedProduct);
         
-        if (lastMatch) {
-          const lastMatchConversion = parseFloat(lastMatch.conversion || lastMatch.Conversion) || 1;
-          const lastMatchUnitPrice = parseFloat(lastMatch.unitPrice || lastMatch.UnitPrice) || 0;
-
-          
-          // Quy đổi: giá_mới = giá_cũ / hệ_số_cũ × hệ_số_mới
-          // Đơn giá: chỉ copy nếu loại nhập là "Nhập mua" và không phải KM
-          if (isNhapMua && !isKMImport) {
-            convertedUnitPrice = (lastMatchUnitPrice / lastMatchConversion) * productData.conversion;
-          }
+        if (priceMatch) {
+          const matchConversion = parseFloat(priceMatch.conversion || priceMatch.Conversion) || 1;
+          const matchUnitPrice = parseFloat(priceMatch.unitPrice || priceMatch.UnitPrice) || 0;
+          convertedUnitPrice = (matchUnitPrice / matchConversion) * productData.conversion;
+        } else if (productData.price) {
+          convertedUnitPrice = productData.price;
         }
         
         copy[rowIndex].values['unitPrice'] = convertedUnitPrice;
@@ -1320,6 +1325,7 @@ const WarehouseAdjustment = () => {
   React.useEffect(() => {
     loadImports();
     loadProducts();
+    loadImportRecords();
     loadWarehouses();
     loadTransactionContents();
     loadEmployees();
@@ -1624,7 +1630,7 @@ const WarehouseAdjustment = () => {
     const updatedItems = items.map((item, idx) => {
       try {
         const quantity = parseFloat(item.quantity) || 0;
-        if (quantity <= 0) return item;
+        if (quantity === 0) return item;
         
         // Find product by multiple possible identifiers
         let prod = products.find(p => p.code === item.productCode || p.barcode === item.barcode || p.name === item.productName);
@@ -1712,7 +1718,7 @@ const WarehouseAdjustment = () => {
 
   const handleDelete = async (id, e) => {
     e.stopPropagation();
-    if (!window.confirm('Bạn có chắc chắn muốn xóa phiếu nhập này?')) return;
+    if (!window.confirm('Bạn có chắc chắn muốn xóa phiếu điều chỉnh này?')) return;
     try {
       const res = await fetch(`/api/Adjustments/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Xóa thất bại');
@@ -1722,7 +1728,7 @@ const WarehouseAdjustment = () => {
         setSelectedImport(imports.length > 0 ? imports[0] : null);
       }
     } catch (err) {
-      alert('Xóa phiếu nhập thất bại');
+      alert('Xóa phiếu điều chỉnh thất bại');
     }
   };
 
@@ -1739,13 +1745,13 @@ const WarehouseAdjustment = () => {
         const total = items.reduce((s, it) => s + (Number(it.total) || 0), 0);
         return {
           ...imp,
-          importNumber: imp.importNumber || imp.receiptNumber || imp.importNumber || '',
+          importNumber: imp.adjustmentNumber || imp.importNumber || imp.receiptNumber || '',
           createdDate: imp.createdDate || (imp.date ? dayjs(imp.date).format('DD/MM/YYYY') : ''),
           date: imp.date || imp.createdDate || null,
           totalAmount: total,
           note: imp.note || imp.Note || '',
           employee: imp.employee || imp.Employee || '',
-          importType: imp.importType || imp.ImportType || '',
+          importType: imp.adjustmentType || imp.importType || imp.ImportType || '',
           items: items
         };
       });
@@ -1797,9 +1803,19 @@ const WarehouseAdjustment = () => {
       const data = await res.json();
       setProducts(data || []);
     } catch (err) {
-      // Silent error handling
-      // Keep empty array as fallback
       setProducts([]);
+    }
+  };
+
+  // Load import records for price lookup (from actual imports, not adjustments)
+  const loadImportRecords = async () => {
+    try {
+      const res = await fetch('/api/Imports');
+      if (!res.ok) throw new Error('Failed to load imports');
+      const data = await res.json();
+      setImportRecords(data || []);
+    } catch (err) {
+      setImportRecords([]);
     }
   };
 
@@ -1856,7 +1872,7 @@ const WarehouseAdjustment = () => {
       
       // Priority 1: If user has selected rows via checkboxes, export those
       if (selectedRowKeys && selectedRowKeys.length > 0) {
-        const exportSelected = window.confirm('Bạn có muốn xuất phiếu nhập này ra exel?');
+        const exportSelected = window.confirm('Bạn có muốn xuất phiếu điều chỉnh này ra Excel?');
         if (exportSelected) {
           const ids = selectedRowKeys.join(',');
           url += `&ids=${ids}`;
@@ -1865,7 +1881,7 @@ const WarehouseAdjustment = () => {
       }
       // Priority 2: If a single import is selected, offer to export just that import
       else if (selectedImport && selectedImport.id) {
-        const exportSingleImport = window.confirm('Bạn có muốn xuất phiếu nhập này ra exel?');
+        const exportSingleImport = window.confirm('Bạn có muốn xuất phiếu điều chỉnh này ra Excel?');
         if (exportSingleImport) {
           url += `&ids=${selectedImport.id}`;
           fileName = `import_${selectedImport.importNumber}.xlsx`;
@@ -1875,7 +1891,7 @@ const WarehouseAdjustment = () => {
       }
       // Priority 3: No selection, ask for all
       else {
-        const exportAll = window.confirm('Bạn có muốn xuất phiếu nhập này ra exel?');
+        const exportAll = window.confirm('Bạn có muốn xuất tất cả phiếu điều chỉnh ra Excel?');
         if (exportAll) {
           url += '&exportAll=true';
           fileName = 'import_all_template.xlsx';
@@ -2013,7 +2029,7 @@ const WarehouseAdjustment = () => {
         }
         // Check for missing product error returned by backend
         if (text && text.includes('Sản phẩm có mã hàng')) {
-          alert('Phiếu nhập có sản phẩm chưa có trong hệ thống, vui lòng thêm sản phẩm vào trước');
+          alert('Phiếu điều chỉnh có sản phẩm chưa có trong hệ thống, vui lòng thêm sản phẩm vào trước');
           if (e.target) e.target.value = null;
           return;
         }
@@ -2024,18 +2040,18 @@ const WarehouseAdjustment = () => {
       
       // If duplicate detected, notify and stop (no confirm/overwrite)
       if (data.isDuplicate) {
-        alert('Phiếu nhập này đã có trong hệ thống');
+        alert('Phiếu điều chỉnh này đã có trong hệ thống');
         if (e.target) e.target.value = null;
         return;
       }
       
-      alert('Import phiếu nhập thành công');
+      alert('Import phiếu điều chỉnh thành công');
       await loadImports();
     } catch (err) {
       // If the thrown error contains server text, show it; otherwise show generic message
       const msg = (err && err.message) ? err.message : null;
       if (msg && msg.includes('Sản phẩm có mã hàng')) {
-        alert('Phiếu nhập có sản phẩm chưa có trong hệ thống, vui lòng thêm sản phẩm vào trước');
+        alert('Phiếu điều chỉnh có sản phẩm chưa có trong hệ thống, vui lòng thêm sản phẩm vào trước');
       } else if (msg) {
         alert(msg);
       } else {
@@ -2063,10 +2079,10 @@ const WarehouseAdjustment = () => {
       // show right layout when loading details for edit/view
       setShowRightContent(true);
       setFormData({
-        importNumber: detail.importNumber || detail.ImportNumber || generateImportNumber(),
+        importNumber: detail.adjustmentNumber || detail.importNumber || detail.ImportNumber || generateImportNumber(),
         createdDate: detail.date ? dayjs(detail.date).format('YYYY-MM-DD') : (detail.createdDate || new Date().toISOString().split('T')[0]),
         employee: detail.employee || detail.Employee || formData.employee,
-        importType: detail.importType || detail.ImportType || '',
+        importType: detail.adjustmentType || detail.importType || detail.ImportType || '',
         totalWeight: detail.totalWeight || 0,
         totalVolume: detail.totalVolume || 0,
         note: detail.note || detail.Note || ''
@@ -2078,7 +2094,7 @@ const WarehouseAdjustment = () => {
         const updatedItems = detail.items.map(item => {
           try {
             const quantity = parseFloat(item.quantity) || 0;
-            if (quantity <= 0) return item;
+            if (quantity === 0) return item;
             
             // Find product by multiple possible identifiers
             let prod = products.find(p => p.code === item.productCode || p.barcode === item.barcode || p.name === item.productName);
@@ -2121,7 +2137,7 @@ const WarehouseAdjustment = () => {
       
       setIsEditing(false);
     } catch (err) {
-      alert('Không thể tải chi tiết phiếu nhập');
+      alert('Không thể tải chi tiết phiếu điều chỉnh');
     }
   };
 
@@ -2146,10 +2162,10 @@ const WarehouseAdjustment = () => {
       
       // Update form data
       setFormData({
-        importNumber: detail.importNumber || detail.ImportNumber || generateImportNumber(),
+        importNumber: detail.adjustmentNumber || detail.importNumber || detail.ImportNumber || generateImportNumber(),
         createdDate: detail.date ? dayjs(detail.date).format('YYYY-MM-DD') : (detail.createdDate || new Date().toISOString().split('T')[0]),
         employee: detail.employee || detail.Employee || formData.employee,
-        importType: detail.importType || detail.ImportType || '',
+        importType: detail.adjustmentType || detail.importType || detail.ImportType || '',
         totalWeight: detail.totalWeight || 0,
         totalVolume: detail.totalVolume || 0,
         note: detail.note || detail.Note || ''
@@ -2193,14 +2209,14 @@ const WarehouseAdjustment = () => {
       setIsEditMode(true);
       setIsEditing(true);
     } catch (err) {
-      alert('Không thể chỉnh sửa phiếu nhập');
+      alert('Không thể chỉnh sửa phiếu điều chỉnh');
     }
   };
 
   const createNewImport = async () => {
     try {
       const payload = {
-        importNumber: generateImportNumber(),
+        adjustmentNumber: generateImportNumber(),
         date: new Date().toISOString(),
         note: '',
         employee: formData.employee || '',
@@ -2221,7 +2237,7 @@ const WarehouseAdjustment = () => {
       await loadImportDetails(created.id);
       setIsEditing(true);
     } catch (err) {
-      alert('Tạo phiếu nhập mới thất bại');
+      alert('Tạo phiếu điều chỉnh mới thất bại');
     }
   };
 
@@ -2258,9 +2274,9 @@ const WarehouseAdjustment = () => {
       // In edit mode, use headerRows as the items (they are the edited items)
       // In view mode, use existing items 
       const headerRowsItems = headerRows.filter(row => {
-        // Only include rows that have at least product name/code/barcode AND quantity > 0
+        // Only include rows that have at least product name/code/barcode AND quantity !== 0 (allow negative for adjustments)
         const hasProduct = row.values.productName?.trim() || row.values.productCode?.trim() || row.values.barcode?.trim();
-        const hasQuantity = Number(row.values.quantity) > 0;
+        const hasQuantity = Number(row.values.quantity) !== 0;
         return hasProduct && hasQuantity;
       }).map(row => ({
         barcode: row.values.barcode || '',
@@ -2284,7 +2300,7 @@ const WarehouseAdjustment = () => {
 
       // Validate có ít nhất 1 sản phẩm
       if (allItems.length === 0) {
-        alert('Vui lòng thêm ít nhất một sản phẩm vào phiếu nhập');
+        alert('Vui lòng thêm ít nhất một sản phẩm vào phiếu điều chỉnh');
         return;
       }
       const totalAmount = allItems.reduce((s, it) => s + (Number(it.total) || 0), 0);
@@ -2298,11 +2314,11 @@ const WarehouseAdjustment = () => {
       Object.freeze(totalText);
 
       const payload = {
-        importNumber: formData.importNumber || generateImportNumber(),
-        date: formData.createdDate ? new Date(formData.createdDate).toISOString() : new Date().toISOString(),
+        adjustmentNumber: formData.importNumber || generateImportNumber(),
+        date: formData.createdDate ? (dayjs(formData.createdDate, 'DD/MM/YYYY').isValid() ? dayjs(formData.createdDate, 'DD/MM/YYYY').toISOString() : new Date().toISOString()) : new Date().toISOString(),
         note: formData.note || '',
         employee: formData.employee || 'admin 66',
-        importType: formData.importType,
+        adjustmentType: formData.importType,
         supplier: formData.supplier || '',
         invoice: formData.invoice || '',
         invoiceDate: formData.invoiceDate ? new Date(formData.invoiceDate).toISOString() : new Date().toISOString(),
@@ -2310,7 +2326,6 @@ const WarehouseAdjustment = () => {
         totalWeight: totalWeight,
         totalVolume: totalVolume,
         totalText: totalText,
-        TotalText: totalText, // Try with capital T
         items: allItems
       };
 
@@ -2359,19 +2374,11 @@ const WarehouseAdjustment = () => {
         }
         // Fetch updated import and update local imports list so it appears on left
         try {
-          const updatedRes = await fetch(`/api/Adjustments/${selectedImport.id}`);
-          if (updatedRes.ok) {
-            const updatedImport = await updatedRes.json();
-            // suppress auto-select before mutating imports state
-            suppressAutoSelectRef.current = true;
-            setImports(prev => (prev || []).map(i => i.id === updatedImport.id ? updatedImport : i));
-          } else {
-            // fallback: refresh list without auto-select
-            suppressAutoSelectRef.current = true;
-            await loadImports(false);
-          }
+          // Reload full list and auto-select the updated record
+          await loadImports(false);
+          // Select the updated record to show it on the right
+          await loadImportDetails(selectedImport.id);
         } catch (e) {
-          suppressAutoSelectRef.current = true;
           await loadImports(false);
         }
 
@@ -2381,10 +2388,7 @@ const WarehouseAdjustment = () => {
         setImportType('');
         setEmployee('');
 
-        // Reset form to a new import state (clear right layout)
-        resetFormForNewImport();
-
-        alert('Lưu phiếu nhập thành công! Phiếu đã được cập nhật.');
+        alert('Lưu phiếu điều chỉnh thành công! Phiếu đã được cập nhật.');
       } else {
         const res = await fetch('/api/Adjustments', {
           method: 'POST',
@@ -2399,39 +2403,20 @@ const WarehouseAdjustment = () => {
         }
         const newImport = await res.json();
 
-        // Remove temporary import and add the real saved import
-        suppressAutoSelectRef.current = true;
-        setImports(prev => {
-          try {
-            // Remove temporary import if exists
-            const withoutTemp = (prev || []).filter(i => !i.isTemp || i.id !== selectedImport?.id);
-            // Add new saved import
-            const exists = withoutTemp.some(i => i.id === newImport.id);
-            if (exists) return withoutTemp;
-            return [newImport, ...withoutTemp];
-          } catch (e) { return [newImport]; }
-        });
-
-        // After successful save, refresh the imports list from server but do NOT auto-select
+        // Reload full list and auto-select the newly created record
         await loadImports(false);
+        await loadImportDetails(newImport.id);
 
         // Reset filters to ensure new import is visible
         setSearchTerm('');
         setSearchCode('');
         setImportType('');
         setEmployee('');
-        // Update date range to include today
-        const today = new Date().toISOString().split('T')[0];
-        setDateFrom('2025-01-01'); // Set broader range
-        setDateTo(today);
 
-        // Reset form to create a new import
-        resetFormForNewImport();
-
-        alert('Lưu phiếu nhập thành công! Phiếu đã được thêm vào danh sách bên trái.');
+        alert('Lưu phiếu điều chỉnh thành công! Phiếu đã được thêm vào danh sách bên trái.');
       }
     } catch (err) {
-      alert(`Lưu phiếu nhập thất bại: ${err.message}`);
+      alert(`Lưu phiếu điều chỉnh thất bại: ${err.message}`);
     }
   };
 
@@ -2547,27 +2532,23 @@ const WarehouseAdjustment = () => {
     const normalizedCode = removeVietnameseTones((searchCode || '').toLowerCase());
     const matchesCode = !searchCode || normalizedNumber.includes(normalizedCode);
 
-    // Lọc theo khoảng ngày nhập (so sánh yyyy-mm-dd)
+    // Lọc theo khoảng ngày nhập (dateFrom/dateTo stored as DD/MM/YYYY)
     let matchesDate = true;
     if (dateFrom && dateTo) {
-      let importDate = null;
-      if (importItem.createdDate && typeof importItem.createdDate === 'string' && importItem.createdDate.includes('/')) {
-        const parts = importItem.createdDate.split('/');
-        if (parts.length === 3) {
-          const [d, m, y] = parts;
-          importDate = `${y}-${m.padStart(2, '0')}-${d.padStart(2, '0')}`;
-        }
-      } else if (importItem.date) {
-        try {
-          importDate = dayjs(importItem.date).format('YYYY-MM-DD');
-        } catch (e) {
-          importDate = null;
-        }
+      const from = dayjs(dateFrom, 'DD/MM/YYYY').startOf('day');
+      const to = dayjs(dateTo, 'DD/MM/YYYY').endOf('day');
+      let parsed = null;
+      if (importItem.createdDate && typeof importItem.createdDate === 'string') {
+        parsed = dayjs(importItem.createdDate, ['DD/MM/YYYY','YYYY-MM-DD','YYYY/MM/DD']);
       }
-      if (!importDate) {
+      if ((!parsed || !parsed.isValid()) && importItem.date) {
+        parsed = dayjs(importItem.date);
+      }
+      if (!parsed || !parsed.isValid()) {
         matchesDate = false;
       } else {
-        matchesDate = importDate >= dateFrom && importDate <= dateTo;
+        const ts = parsed.valueOf();
+        matchesDate = ts >= from.valueOf() && ts <= to.valueOf();
       }
     }
 
@@ -2702,7 +2683,7 @@ const WarehouseAdjustment = () => {
         <html>
         <head>
           <meta charset="utf-8" />
-          <title>Phiếu nhập</title>
+          <title>Phiếu điều chỉnh</title>
           <style>
             /* A4-like print/export styles (default font-size 10px) */
             html, body { font-family: 'Times New Roman', Times, serif; font-size:10pt; }
@@ -3277,7 +3258,7 @@ const WarehouseAdjustment = () => {
           <Space>
             <Button icon={<EditOutlined />} size="small" onClick={e => { e.stopPropagation(); editImport(record); }} title="Sửa" />
             {!record.isTemp && (
-              <Popconfirm title="Bạn có chắc chắn muốn xóa phiếu nhập này?" onConfirm={e => handleDelete(record.id, e)} okText="Có" cancelText="Không">
+              <Popconfirm title="Bạn có chắc chắn muốn xóa phiếu điều chỉnh này?" onConfirm={e => handleDelete(record.id, e)} okText="Có" cancelText="Không">
                 <Button icon={<DeleteOutlined />} danger size="small" onClick={e => e.stopPropagation()} title="Xóa" />
               </Popconfirm>
             )}
@@ -3307,8 +3288,18 @@ const WarehouseAdjustment = () => {
           <div className="search-controls-grid">
             <div className="search-left">
               <div className="search-panel-date-row">
-                <input type="date" value={dateFrom} onChange={e=>setDateFrom(e.target.value)} />
-                <input type="date" value={dateTo} onChange={e=>setDateTo(e.target.value)} />
+                <DatePicker
+                  format="DD/MM/YYYY"
+                  placeholder="dd/mm/yyyy"
+                  value={dateFrom ? dayjs(dateFrom, 'DD/MM/YYYY') : null}
+                  onChange={(d) => setDateFrom(d ? d.format('DD/MM/YYYY') : '')}
+                />
+                <DatePicker
+                  format="DD/MM/YYYY"
+                  placeholder="dd/mm/yyyy"
+                  value={dateTo ? dayjs(dateTo, 'DD/MM/YYYY') : null}
+                  onChange={(d) => setDateTo(d ? d.format('DD/MM/YYYY') : '')}
+                />
               </div>
               <div className="search-panel-select-row">
                 <select value={importType} onChange={e=>setImportType(e.target.value)}>
@@ -3386,7 +3377,7 @@ const WarehouseAdjustment = () => {
                   }
                 } else if (info.key === 'delete') {
                   if (contextMenu.record && !contextMenu.record.isTemp) {
-                    if (window.confirm('Bạn có chắc chắn muốn xóa phiếu nhập này?')) {
+                    if (window.confirm('Bạn có chắc chắn muốn xóa phiếu điều chỉnh này?')) {
                       handleDelete(contextMenu.record.id);
                     }
                   }
@@ -3498,18 +3489,18 @@ const WarehouseAdjustment = () => {
                 <div style={{display:'flex',gap:12}}>
                   <div style={{flex:'0 0 20%'}}>
                       <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Ngày lập</label>
-                      <input
-                        type="date"
-                        value={formData.createdDate || (selectedImport?.createdDate ? dayjs(selectedImport.createdDate).format('YYYY-MM-DD') : '')}
-                        onChange={(e) => {
+                      <DatePicker
+                        format="DD/MM/YYYY"
+                        value={formData.createdDate ? dayjs(formData.createdDate, 'YYYY-MM-DD') : (selectedImport?.createdDate ? dayjs(selectedImport.createdDate) : null)}
+                        onChange={(d) => {
                           if (!isEditMode) return;
-                          const v = e.target.value;
+                          const v = d ? d.format('YYYY-MM-DD') : '';
                           setFormData(fd => ({ ...fd, createdDate: v }));
                           setSelectedImport(si => si ? ({ ...si, createdDate: v }) : si);
                           setIsEditing(true);
                         }}
                         style={{width:'100%'}}
-                        readOnly={!isEditMode}
+                        disabled={!isEditMode}
                       />
                   </div>
                   <div style={{flex:'0 0 20%'}}>
@@ -4180,11 +4171,11 @@ const WarehouseAdjustment = () => {
               <div style={{display:'flex',gap:12}}>
                 <div style={{flex:'0 0 20%'}}>
                     <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Ngày lập</label>
-                    <input
-                      type="date"
-                      value={formData.createdDate || dayjs().format('YYYY-MM-DD')}
-                      onChange={(e) => {
-                        const v = e.target.value;
+                    <DatePicker
+                      format="DD/MM/YYYY"
+                      value={formData.createdDate ? dayjs(formData.createdDate, 'YYYY-MM-DD') : dayjs()}
+                      onChange={(d) => {
+                        const v = d ? d.format('YYYY-MM-DD') : '';
                         setFormData(fd => ({ ...fd, createdDate: v }));
                         setIsEditing(true);
                       }}
@@ -4744,12 +4735,12 @@ const WarehouseAdjustment = () => {
         <div className="modal-overlay">
           <div className="modal-content">
             <div className="modal-header">
-              <h3>Tạo mới phiếu nhập</h3>
+              <h3>Tạo mới phiếu điều chỉnh</h3>
               <button className="close-btn" onClick={() => setShowModal(false)}>×</button>
             </div>
             <div className="modal-body">
               <div style={{marginBottom: 16}}>
-                <strong>Thông tin phiếu nhập:</strong>
+                <strong>Thông tin phiếu điều chỉnh:</strong>
                 <div style={{display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px', marginTop: '8px'}}>
                   <div>
                     <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4}}>
@@ -4766,10 +4757,10 @@ const WarehouseAdjustment = () => {
                     <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4}}>
                       <span style={{color: 'red', marginRight: 4}}>*</span>Ngày lập
                     </label>
-                    <input
-                      type="date"
-                      value={formData.createdDate}
-                      onChange={(e) => setFormData(prev => ({...prev, createdDate: e.target.value}))}
+                    <DatePicker
+                      format="DD/MM/YYYY"
+                      value={formData.createdDate ? dayjs(formData.createdDate, 'YYYY-MM-DD') : null}
+                      onChange={(d) => setFormData(prev => ({...prev, createdDate: d ? d.format('YYYY-MM-DD') : ''}))}
                       style={{width: '100%', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
                     />
                   </div>
@@ -4843,7 +4834,7 @@ const WarehouseAdjustment = () => {
                 Hủy
               </button>
               <button onClick={handleCreateNewImport} className="btn btn-primary">
-                Tạo phiếu nhập
+                Tạo phiếu điều chỉnh
               </button>
             </div>
           </div>
@@ -5069,23 +5060,17 @@ const WarehouseAdjustment = () => {
                     const productData = getProductDataByUnit(firstProduct, defaultUnit);
                     copy[productModalRowIndex].values['conversion'] = productData.conversion.toString();
                     
-                    // Quy đổi giá từ lastMatch về đơn vị nhỏ nhất
+                    // Quy đổi giá từ lastMatch hoặc lấy từ phiếu nhập hoặc sản phẩm
                     let convertedUnitPrice = 0;
-          
                     
-                    // Kiểm tra loại nhập có phải "Nhập mua" không
-                    const importType = formData.importType || selectedImport?.importType || '';
-                    const isNhapMua = importType.toLowerCase().includes('Nhập mua') || importType.toLowerCase() === 'nhập mua';
+                    const priceMatch = lastMatch || findLastImportMatch(firstProduct);
                     
-                    if (lastMatch) {
-                      const lastMatchConversion = parseFloat(lastMatch.conversion || lastMatch.Conversion) || 1;
-                      const lastMatchUnitPrice = parseFloat(lastMatch.unitPrice || lastMatch.UnitPrice) || 0;
-          
-                      
-                      // Đơn giá: chỉ copy nếu loại nhập là "Nhập mua" và không phải KM
-                      if (isNhapMua && !isKMImport) {
-                        convertedUnitPrice = (lastMatchUnitPrice / lastMatchConversion) * productData.conversion;
-                      }
+                    if (priceMatch) {
+                      const matchConversion = parseFloat(priceMatch.conversion || priceMatch.Conversion) || 1;
+                      const matchUnitPrice = parseFloat(priceMatch.unitPrice || priceMatch.UnitPrice) || 0;
+                      convertedUnitPrice = (matchUnitPrice / matchConversion) * productData.conversion;
+                    } else if (productData.price) {
+                      convertedUnitPrice = productData.price;
                     }
                     
                     copy[productModalRowIndex].values['unitPrice'] = convertedUnitPrice;
@@ -5167,9 +5152,6 @@ const WarehouseAdjustment = () => {
                         // ignore
                       }
 
-                      const isKMImport = (formData.importType && formData.importType.toLowerCase().includes('km')) || 
-                                         (selectedImport?.importType && selectedImport.importType.toLowerCase().includes('km'));
-
                       // Always prioritize base unit first
                       const baseUnit = product.baseUnit || product.defaultUnit || product.unit || '';
                       const defaultUnit = baseUnit || ((lastMatch && (lastMatch.unit || lastMatch.Unit)) || '');
@@ -5177,23 +5159,17 @@ const WarehouseAdjustment = () => {
                       // Get product data for correct conversion based on unit
                       const productData = getProductDataByUnit(product, defaultUnit);
                       
-                      // Quy đổi giá từ lastMatch về đơn vị nhỏ nhất
+                      // Quy đổi giá từ lastMatch hoặc lấy từ phiếu nhập hoặc sản phẩm
                       let convertedUnitPrice = 0;
-            
                       
-                      // Kiểm tra loại nhập có phải "Nhập mua" không
-                      const importType = formData.importType || selectedImport?.importType || '';
-                      const isNhapMua = importType.toLowerCase().includes('nhập mua') || importType.toLowerCase() === 'nhập mua';
+                      const priceMatch = lastMatch || findLastImportMatch(product);
                       
-                      if (lastMatch) {
-                        const lastMatchConversion = parseFloat(lastMatch.conversion || lastMatch.Conversion) || 1;
-                        const lastMatchUnitPrice = parseFloat(lastMatch.unitPrice || lastMatch.UnitPrice) || 0;
-            
-                        
-                        // Đơn giá: chỉ copy nếu loại nhập là "Nhập mua" và không phải KM
-                        if (isNhapMua && !isKMImport) {
-                          convertedUnitPrice = (lastMatchUnitPrice / lastMatchConversion) * productData.conversion;
-                        }
+                      if (priceMatch) {
+                        const matchConversion = parseFloat(priceMatch.conversion || priceMatch.Conversion) || 1;
+                        const matchUnitPrice = parseFloat(priceMatch.unitPrice || priceMatch.UnitPrice) || 0;
+                        convertedUnitPrice = (matchUnitPrice / matchConversion) * productData.conversion;
+                      } else if (productData.price) {
+                        convertedUnitPrice = productData.price;
                       }
 
                       const newRow = { id: Date.now() + Math.random(), values: {} };
@@ -5266,8 +5242,6 @@ const WarehouseAdjustment = () => {
             </Select>
           </div>
           
-          
-          
           <div style={{display: 'flex', alignItems: 'center', padding: '6px 12px', background: '#f0f8ff', borderRadius: '4px', border: '1px solid #d1ecf1'}}>
             <span style={{fontSize: 13, color: '#0c5460', fontWeight: 500}}>
               Bạn đã chọn: <strong>{selectedModalProducts.length}</strong> sản phẩm
@@ -5294,7 +5268,7 @@ const WarehouseAdjustment = () => {
                   checked={selectedModalProducts.includes(product.id.toString())}
                   onChange={(e) => {
                     if (e.target.checked) {
-                      setSelectedModalProducts(prev => [...prev, product.id.toString()]); // Allow multiple selection
+                      setSelectedModalProducts(prev => [...prev, product.id.toString()]);
                     } else {
                       setSelectedModalProducts(prev => prev.filter(id => id !== product.id.toString()));
                     }
