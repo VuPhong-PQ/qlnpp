@@ -23,6 +23,7 @@ import UserPermissionsPage from './components/permissions/UserPermissionsPage';
 import AdminPage from './components/Admin/AdminPage';
 import QuotationTable from './components/business/QuotationTable';
 import ImportGoods from './components/business/ImportGoods';
+import WarehouseAdjustment from './components/business/WarehouseAdjustment';
 import InBangKeTong from './components/business/InBangKeTong';
 import ResizableTable from './components/business/ResizableTable';
 import WarehouseTransfer from './components/business/WarehouseTransfer';
@@ -163,6 +164,11 @@ function App() {
           <Route path="/business/import-goods" element={
             <ProtectedRoute requiredPermission="imports">
               <AppLayout><ImportGoods /></AppLayout>
+            </ProtectedRoute>
+          } />
+          <Route path="/business/adjustments" element={
+            <ProtectedRoute requiredPermission="adjustments">
+              <AppLayout><WarehouseAdjustment /></AppLayout>
             </ProtectedRoute>
           } />
           <Route path="/business/sales/in-bang-ke-tong" element={

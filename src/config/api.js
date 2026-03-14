@@ -30,6 +30,7 @@ export const API_ENDPOINTS = {
   geocoding: `${API_BASE_URL}/geocoding`,
   bangKeTongs: `${API_BASE_URL}/bangketongs`,
   imports: `${API_BASE_URL}/imports`,
+  adjustments: `${API_BASE_URL}/adjustments`,
   exports: `${API_BASE_URL}/exports`,
   // Sales reports
   salesByCategory: `${API_BASE_URL}/reports/sales/by-category`,

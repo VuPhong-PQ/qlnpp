@@ -31,6 +31,8 @@ namespace QlnppApi.Data
         public DbSet<QuotationItem> QuotationItems { get; set; }
         public DbSet<Import> Imports { get; set; }
         public DbSet<ImportItem> ImportItems { get; set; }
+        public DbSet<Adjustment> Adjustments { get; set; }
+        public DbSet<AdjustmentItem> AdjustmentItems { get; set; }
         public DbSet<WarehouseTransfer> WarehouseTransfers { get; set; }
         public DbSet<WarehouseTransferItem> WarehouseTransferItems { get; set; }
         public DbSet<Export> Exports { get; set; }
@@ -369,6 +371,28 @@ namespace QlnppApi.Data
 
             // Import header precision
             modelBuilder.Entity<Import>()
+                .Property(i => i.Total)
+                .HasPrecision(18, 2);
+
+            // Adjustment / AdjustmentItem configuration
+            modelBuilder.Entity<AdjustmentItem>()
+                .Property(i => i.UnitPrice)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<AdjustmentItem>()
+                .Property(i => i.Total)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<AdjustmentItem>()
+                .Property(i => i.Weight)
+                .HasPrecision(18, 2);
+
+            modelBuilder.Entity<AdjustmentItem>()
+                .Property(i => i.Volume)
+                .HasPrecision(18, 2);
+
+            // Adjustment header precision
+            modelBuilder.Entity<Adjustment>()
                 .Property(i => i.Total)
                 .HasPrecision(18, 2);
 

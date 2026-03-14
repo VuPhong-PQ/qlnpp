@@ -87,7 +87,7 @@ const BaoCaoXuatNhapTon = () => {
     { id: 'endingBalance', label: 'Cuối kỳ', width: 100, visible: true, align: 'right' },
     { id: 'exportQty', label: 'Xuất', width: 90, visible: true, align: 'right' },
     { id: 'exportBoxes', label: 'Xuất thùng', width: 100, visible: true, align: 'right' },
-    { id: 'specification', label: 'Định lượng', width: 100, visible: true, align: 'right' },
+    { id: 'specification', label: 'Quy đổi', width: 100, visible: true, align: 'right' },
     { id: 'salePrice', label: 'Giá bán', width: 110, visible: true, align: 'right' },
     { id: 'openingBalance', label: 'Đầu kỳ', width: 100, visible: true, align: 'right' },
     { id: 'importQty', label: 'Nhập', width: 90, visible: true, align: 'right' },

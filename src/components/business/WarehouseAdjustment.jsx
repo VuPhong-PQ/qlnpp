@@ -1,8 +1,8 @@
-import React, { useState, useRef } from 'react';
+﻿import React, { useState, useRef } from 'react';
 import ExcelJS from 'exceljs';
 import { Menu } from 'antd';
 import './BusinessPage.css';
-import './ImportGoods.css';
+import './WarehouseAdjustment.css';
 import { Table, Button, Space, Popconfirm, Input, Modal, Popover, DatePicker, Select } from 'antd';
 import ProductModal from '../common/ProductModal';
 import { SearchOutlined, EditOutlined, DeleteOutlined } from '@ant-design/icons';
@@ -14,7 +14,7 @@ import { removeVietnameseTones } from '../../utils/searchUtils';
 // Set Vietnamese locale for dayjs
 dayjs.locale('vi');
 
-const ImportGoods = () => {
+const WarehouseAdjustment = () => {
   const [contextMenu, setContextMenu] = useState({ visible: false, x: 0, y: 0, record: null });
   const [isEditing, setIsEditing] = useState(false);
   const [treatNaiveIsoAsUtc, setTreatNaiveIsoAsUtc] = useState(true);
@@ -43,8 +43,6 @@ const ImportGoods = () => {
     volume: 0,
     warehouse: '',
     note: '',
-    transportCost: 0,
-    totalTransport: 0,
     noteDate: null
   });
 
@@ -70,7 +68,7 @@ const ImportGoods = () => {
   // Load column order from localStorage
   React.useEffect(() => {
     try {
-      const savedColOrder = localStorage.getItem('import_leftColOrder');
+      const savedColOrder = localStorage.getItem('adjustment_leftColOrder');
       if (savedColOrder) {
         let parsedOrder = JSON.parse(savedColOrder);
         if (Array.isArray(parsedOrder) && !parsedOrder.includes('importType')) {
@@ -78,7 +76,7 @@ const ImportGoods = () => {
           const newOrder = [...parsedOrder];
           newOrder.splice(idx >= 0 ? idx + 1 : 1, 0, 'importType');
           parsedOrder = newOrder;
-          try { localStorage.setItem('import_leftColOrder', JSON.stringify(parsedOrder)); } catch {}
+          try { localStorage.setItem('adjustment_leftColOrder', JSON.stringify(parsedOrder)); } catch {}
         }
         if (Array.isArray(parsedOrder)) setLeftColOrder(parsedOrder);
       }
@@ -100,17 +98,17 @@ const ImportGoods = () => {
   const [employee, setEmployee] = useState('');
 
   // Column visibility & header filters for left table
-  const IMPORT_LEFT_COLS_KEY = 'import_goods_left_cols_v1';
+  const ADJUSTMENT_LEFT_COLS_KEY = 'adjustment_left_cols_v1';
   const defaultLeftCols = ['checkbox','importNumber','createdDate','importType','total','note','actions'];
   const [leftVisibleCols, setLeftVisibleCols] = useState(() => {
     try {
-      const v = JSON.parse(localStorage.getItem(IMPORT_LEFT_COLS_KEY));
+      const v = JSON.parse(localStorage.getItem(ADJUSTMENT_LEFT_COLS_KEY));
       if (Array.isArray(v)) {
         if (!v.includes('importType')) {
           const idx = v.indexOf('createdDate');
           const newV = [...v];
           newV.splice(idx >= 0 ? idx + 1 : 1, 0, 'importType');
-          try { localStorage.setItem(IMPORT_LEFT_COLS_KEY, JSON.stringify(newV)); } catch {}
+          try { localStorage.setItem(ADJUSTMENT_LEFT_COLS_KEY, JSON.stringify(newV)); } catch {}
           return newV;
         }
         return v;
@@ -126,7 +124,7 @@ const ImportGoods = () => {
   const [modalSelections, setModalSelections] = useState([]);
   const [modalAvailableItems, setModalAvailableItems] = useState([]);
   const [leftPageSize, setLeftPageSize] = useState(() => {
-    try { const v = parseInt(localStorage.getItem('import_left_page_size')||'10',10); return isNaN(v)?10:v; } catch { return 10; }
+    try { const v = parseInt(localStorage.getItem('adjustment_left_page_size')||'10',10); return isNaN(v)?10:v; } catch { return 10; }
   });
 
   // Drag & drop for columns
@@ -136,7 +134,7 @@ const ImportGoods = () => {
   // Left table column widths (resizable)
   const [leftColWidths, setLeftColWidths] = useState(() => {
     try {
-      const saved = localStorage.getItem('import_left_col_widths');
+      const saved = localStorage.getItem('adjustment_left_col_widths');
       if (saved) return JSON.parse(saved);
     } catch (e) {}
     return {
@@ -164,9 +162,9 @@ const ImportGoods = () => {
     setLeftVisibleCols(defaultLeftCols);
     setLeftColOrder(defaultLeftCols);
     setLeftColWidths(defaultWidths);
-    try { localStorage.setItem(IMPORT_LEFT_COLS_KEY, JSON.stringify(defaultLeftCols)); } catch {}
-    try { localStorage.setItem('import_leftColOrder', JSON.stringify(defaultLeftCols)); } catch {}
-    try { localStorage.setItem('import_left_col_widths', JSON.stringify(defaultWidths)); } catch {}
+    try { localStorage.setItem(ADJUSTMENT_LEFT_COLS_KEY, JSON.stringify(defaultLeftCols)); } catch {}
+    try { localStorage.setItem('adjustment_leftColOrder', JSON.stringify(defaultLeftCols)); } catch {}
+    try { localStorage.setItem('adjustment_left_col_widths', JSON.stringify(defaultWidths)); } catch {}
   };
 
   // Drag & drop handlers
@@ -198,7 +196,7 @@ const ImportGoods = () => {
     setLeftColOrder(newOrder);
     setDraggedColumnIndex(null);
     try {
-      localStorage.setItem('import_leftColOrder', JSON.stringify(newOrder));
+      localStorage.setItem('adjustment_leftColOrder', JSON.stringify(newOrder));
     } catch (error) {}
   };
 
@@ -219,7 +217,7 @@ const ImportGoods = () => {
     const timestamp = Date.now().toString().slice(-4);
     
     return { 
-      importNumber: `PN-${day}${month}${year}-${timestamp}`, 
+      importNumber: `CK-${day}${month}${year}-${timestamp}`, 
       createdDate: new Date().toISOString().split('T')[0], 
       employee: 'admin 66', 
       importType: '', 
@@ -233,7 +231,7 @@ const ImportGoods = () => {
   const ensureImportTypeSelected = () => {
     const it = (selectedImport && selectedImport.importType) || formData.importType;
     if (!it || String(it).trim() === '') {
-      Modal.warning({ title: 'Chưa chọn loại nhập', content: 'vui lòng chọn loại nhập trước khi thao tác' });
+      Modal.warning({ title: 'Chưa chọn loại điều chỉnh', content: 'vui lòng chọn loại điều chỉnh trước khi thao tác' });
       return false;
     }
     return true;
@@ -326,22 +324,18 @@ const ImportGoods = () => {
       const weight = parseFloat(item.weight) || 0; 
       const volume = parseFloat(item.volume) || 0;
       const unitPrice = parseFloat(item.unitPrice) || 0;
-      const transportCost = parseFloat(item.transportCost) || 0;
-      
       return {
         totalWeight: totals.totalWeight + weight, // Don't round yet
         totalVolume: totals.totalVolume + volume, // Don't round yet
         totalAmount: totals.totalAmount + (quantity * unitPrice),
-        totalTransport: totals.totalTransport + (transportCost * quantity)
       };
-    }, { totalWeight: 0, totalVolume: 0, totalAmount: 0, totalTransport: 0 });
+    }, { totalWeight: 0, totalVolume: 0, totalAmount: 0 });
     
     // No rounding - preserve exact values
     return {
       totalWeight: result.totalWeight,
       totalVolume: result.totalVolume,
       totalAmount: result.totalAmount,
-      totalTransport: result.totalTransport
     };
   };
 
@@ -725,7 +719,7 @@ const ImportGoods = () => {
           
           // Quy đổi giá từ lastMatch về đơn vị nhỏ nhất (conversion = 1)
           let convertedUnitPrice = 0;
-          let convertedTransportCost = 0;
+
           
           // Kiểm tra loại nhập có phải "Nhập mua" không
           const importType = formData.importType || selectedImport?.importType || '';
@@ -734,15 +728,13 @@ const ImportGoods = () => {
           if (lastMatch) {
             const lastMatchConversion = parseFloat(lastMatch.conversion || lastMatch.Conversion) || 1;
             const lastMatchUnitPrice = parseFloat(lastMatch.unitPrice || lastMatch.UnitPrice) || 0;
-            const lastMatchTransportCost = parseFloat(lastMatch.transportCost || lastMatch.TransportCost) || 0;
+
             
             // Quy đổi về đơn vị nhỏ nhất: giá_mới = giá_cũ / hệ_số_cũ × hệ_số_mới
             // Đơn giá: chỉ copy nếu loại nhập là "Nhập mua" và không phải KM
             if (isNhapMua && !isKMImport) {
               convertedUnitPrice = (lastMatchUnitPrice / lastMatchConversion) * productData.conversion;
             }
-            // Tiền vận chuyển: luôn copy cho tất cả loại nhập (kể cả KM)
-            convertedTransportCost = (lastMatchTransportCost / lastMatchConversion) * productData.conversion;
           }
           
           const newItem = {
@@ -756,10 +748,10 @@ const ImportGoods = () => {
             quantity: 1,
             // Sử dụng giá đã quy đổi về đơn vị nhỏ nhất
             unitPrice: convertedUnitPrice,
-            transportCost: convertedTransportCost,
+
             noteDate: (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null,
             total: convertedUnitPrice,
-            totalTransport: convertedTransportCost,
+
             weight: productData.weight * 1, // số kg = weight_theo_đơn_vị × số_lượng (1)
             volume: productData.volume * 1, // số khối = volume_theo_đơn_vị × số_lượng (1)
             warehouse: getDefaultWarehouseName(),
@@ -777,10 +769,8 @@ const ImportGoods = () => {
             unit: '',
             quantity: 1,
             unitPrice: 0,
-            transportCost: 0,
             noteDate: null,
             total: '',
-            totalTransport: '',
             weight: '',
             volume: '',
             warehouse: getDefaultWarehouseName(),
@@ -947,7 +937,7 @@ const ImportGoods = () => {
         
         // Quy đổi giá từ lastMatch về đơn vị nhỏ nhất
         let convertedUnitPrice = 0;
-        let convertedTransportCost = 0;
+
         
         // Kiểm tra loại nhập có phải "Nhập mua" không
         const importType = formData.importType || selectedImport?.importType || '';
@@ -956,26 +946,24 @@ const ImportGoods = () => {
         if (lastMatch) {
           const lastMatchConversion = parseFloat(lastMatch.conversion || lastMatch.Conversion) || 1;
           const lastMatchUnitPrice = parseFloat(lastMatch.unitPrice || lastMatch.UnitPrice) || 0;
-          const lastMatchTransportCost = parseFloat(lastMatch.transportCost || lastMatch.TransportCost) || 0;
+
           
           // Quy đổi: giá_mới = giá_cũ / hệ_số_cũ × hệ_số_mới
           // Đơn giá: chỉ copy nếu loại nhập là "Nhập mua" và không phải KM
           if (isNhapMua && !isKMImport) {
             convertedUnitPrice = (lastMatchUnitPrice / lastMatchConversion) * productData.conversion;
           }
-          // Tiền vận chuyển: luôn copy cho tất cả loại nhập (kể cả KM)
-          convertedTransportCost = (lastMatchTransportCost / lastMatchConversion) * productData.conversion;
         }
         
         copy[rowIndex].values['unitPrice'] = convertedUnitPrice;
-        copy[rowIndex].values['transportCost'] = convertedTransportCost;
+
         copy[rowIndex].values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || copy[rowIndex].values.noteDate || null;
         
         // Auto-calculate initial totals
         const quantity = parseFloat(copy[rowIndex].values.quantity) || 1;
         
         copy[rowIndex].values.total = (quantity * convertedUnitPrice).toString();
-        copy[rowIndex].values.totalTransport = (quantity * convertedTransportCost).toString();
+
         // calculate derived fields based on selected product
         try {
           const prodId = copy[rowIndex].values.productName_id || copy[rowIndex].values.productCode_id || copy[rowIndex].values.barcode_id || null;
@@ -1019,18 +1007,15 @@ const ImportGoods = () => {
       copy[rowIndex] = targetRow;
       
       // Auto-calculate when price/quantity related fields change
-      const needsRecalc = ['quantity', 'unitPrice', 'transportCost'].includes(colKey);
+      const needsRecalc = ['quantity', 'unitPrice'].includes(colKey);
       const needsWeightRecalc = ['quantity', 'unit'].includes(colKey); // Add 'unit' to trigger recalc
       
       if (needsRecalc) {
         const row = targetRow.values;
         const quantity = parseFloat(row.quantity) || 0;
         const unitPrice = parseFloat(row.unitPrice) || 0;
-        const transportCost = parseFloat(row.transportCost) || 0;
-        
         // Calculate totals only when needed
         targetRow.values.total = (quantity * unitPrice).toString();
-        targetRow.values.totalTransport = (quantity * transportCost).toString();
       }
       
       // Auto-calculate weight and volume: số kg/khối = weight/volume_theo_đơn_vị × số_lượng
@@ -1082,30 +1067,26 @@ const ImportGoods = () => {
               
               targetRow.values.conversion = newConversion.toString();
               
-              // Đơn giản: Phiếu đã lưu = có số phiếu hợp lệ (PN-...)
+              // Đơn giản: Phiếu đã lưu = có số phiếu hợp lệ (CK-...)
               const currentImportNumber = formData?.importNumber || '';
-              const isSavedImport = currentImportNumber.startsWith('PN-') && !currentImportNumber.includes('temp_');
+              const isSavedImport = currentImportNumber.startsWith('CK-') && !currentImportNumber.includes('temp_');
               
               const currentPrice = parseFloat(targetRow.values.unitPrice) || 0;
-              const currentTransport = parseFloat(targetRow.values.transportCost) || 0;
+
               
               if (isSavedImport) {
                 // Phiếu đã lưu: áp dụng công thức quy đổi
                 if (currentConversion > 0 && newConversion > 0) {
                   const newPrice = (currentPrice / currentConversion) * newConversion;
-                  const newTransport = (currentTransport / currentConversion) * newConversion;
+
                   
                   targetRow.values.unitPrice = newPrice.toString();
-                  targetRow.values.transportCost = newTransport.toString();
                   targetRow.values.total = (quantity * newPrice).toString();
-                  targetRow.values.totalTransport = (quantity * newTransport).toString();
                 }
               } else {
                 // Phiếu chưa lưu: reset về 0
                 targetRow.values.unitPrice = '0';
-                targetRow.values.transportCost = '0';
                 targetRow.values.total = '0';
-                targetRow.values.totalTransport = '0';
               }
             }
           }
@@ -1135,10 +1116,8 @@ const ImportGoods = () => {
           conversion: 1,
           quantity: 1,
           unitPrice: 0,
-          transportCost: 0,
           noteDate: null,
           total: 0,
-          totalTransport: 0,
           weight: 0,
           volume: 0,
           warehouse: String(selectedWarehouse.id),
@@ -1243,10 +1222,8 @@ const ImportGoods = () => {
         conversion: 1,
         quantity: 1,
         unitPrice: 0,
-        transportCost: 0,
         noteDate: date.format('YYYY-MM-DD'),
         total: 0,
-        totalTransport: 0,
         weight: 0,
         volume: 0,
         warehouse: getDefaultWarehouseName(),
@@ -1305,10 +1282,8 @@ const ImportGoods = () => {
         conversion: colKey === 'conversion' ? numValue : 1,
         quantity: colKey === 'quantity' ? numValue : 1,
         unitPrice: colKey === 'unitPrice' ? numValue : 0,
-        transportCost: colKey === 'transportCost' ? numValue : 0,
         noteDate: null,
         total: colKey === 'total' ? numValue : 0,
-        totalTransport: colKey === 'totalTransport' ? numValue : 0,
         weight: colKey === 'weight' ? numValue : 0,
         volume: colKey === 'volume' ? numValue : 0,
         warehouse: getDefaultWarehouseName(),
@@ -1330,10 +1305,8 @@ const ImportGoods = () => {
         conversion: 1,
         quantity: 1,
         unitPrice: 0,
-        transportCost: 0,
         noteDate: null,
         total: 0,
-        totalTransport: 0,
         weight: 0,
         volume: 0,
         warehouse: getDefaultWarehouseName(),
@@ -1365,7 +1338,7 @@ const ImportGoods = () => {
 
   // Cập nhật số phiếu sau khi imports được load (chỉ khi đang tạo mới)
   React.useEffect(() => {
-    if (imports && imports.length > 0 && !selectedImport && formData.importNumber.includes('PN-')) {
+    if (imports && imports.length > 0 && !selectedImport && formData.importNumber.includes('CK-')) {
       const newImportNumber = generateImportNumber();
       setFormData(prev => ({
         ...prev,
@@ -1380,8 +1353,8 @@ const ImportGoods = () => {
   }, [selectedImport]);
 
   // Right-side columns & filters (for items table header filters)
-  const RIGHT_COLS_KEY = 'import_goods_right_cols_v1';
-  const defaultRightCols = ['barcode','productCode','productName','unit','quantity','unitPrice','transportCost','noteDate','total','totalTransport','weight','volume','warehouse','description','conversion','actions'];
+  const RIGHT_COLS_KEY = 'adjustment_right_cols_v1';
+  const defaultRightCols = ['barcode','productCode','productName','unit','quantity','unitPrice','noteDate','total','weight','volume','warehouse','description','conversion','actions'];
   const [rightVisibleCols, setRightVisibleCols] = useState(() => {
     try {
       const saved = JSON.parse(localStorage.getItem(RIGHT_COLS_KEY));
@@ -1422,7 +1395,7 @@ const ImportGoods = () => {
   // Column resize state for right table
   const [rightColWidths, setRightColWidths] = useState(() => {
     try {
-      const saved = localStorage.getItem('import_right_col_widths');
+      const saved = localStorage.getItem('adjustment_right_col_widths');
       if (saved) return JSON.parse(saved);
     } catch (e) {}
     
@@ -1443,7 +1416,7 @@ const ImportGoods = () => {
   React.useEffect(() => {
     const timeoutId = setTimeout(() => {
       try {
-        localStorage.setItem('import_right_col_widths', JSON.stringify(rightColWidths));
+        localStorage.setItem('adjustment_right_col_widths', JSON.stringify(rightColWidths));
       } catch (e) {}
     }, 300); // Save after 300ms of no changes
     return () => clearTimeout(timeoutId);
@@ -1453,7 +1426,7 @@ const ImportGoods = () => {
   React.useEffect(() => {
     const timeoutId = setTimeout(() => {
       try {
-        localStorage.setItem('import_left_col_widths', JSON.stringify(leftColWidths));
+        localStorage.setItem('adjustment_left_col_widths', JSON.stringify(leftColWidths));
       } catch (e) {}
     }, 300);
     return () => clearTimeout(timeoutId);
@@ -1741,7 +1714,7 @@ const ImportGoods = () => {
     e.stopPropagation();
     if (!window.confirm('Bạn có chắc chắn muốn xóa phiếu nhập này?')) return;
     try {
-      const res = await fetch(`/api/Imports/${id}`, { method: 'DELETE' });
+      const res = await fetch(`/api/Adjustments/${id}`, { method: 'DELETE' });
       if (!res.ok) throw new Error('Xóa thất bại');
       // reload list
       await loadImports();
@@ -1757,7 +1730,7 @@ const ImportGoods = () => {
   // if `autoSelectFirst` is true (default) load details of the first import automatically
   const loadImports = async (autoSelectFirst = true) => {
     try {
-      const res = await fetch('/api/Imports');
+      const res = await fetch('/api/Adjustments');
       if (!res.ok) throw new Error('Failed to load imports');
       const data = await res.json();
       // normalize imports: ensure fields used by UI exist and compute totals
@@ -1795,7 +1768,7 @@ const ImportGoods = () => {
         if (idsToFetch.length > 0) {
           await Promise.all(idsToFetch.map(async (id) => {
             try {
-              const r = await fetch(`/api/Imports/${id}`);
+              const r = await fetch(`/api/Adjustments/${id}`);
               if (!r.ok) return;
               const d = await r.json();
               const items = d.items || d.Items || [];
@@ -1878,7 +1851,7 @@ const ImportGoods = () => {
   // Export Excel template for imports
   const exportImportTemplate = async () => {
     try {
-      let url = '/api/Imports/template?format=xlsx';
+      let url = '/api/Adjustments/template?format=xlsx';
       let fileName = 'import_template.xlsx';
       
       // Priority 1: If user has selected rows via checkboxes, export those
@@ -1944,13 +1917,13 @@ const ImportGoods = () => {
       // Build XLSX with ExcelJS
       const wb = new ExcelJS.Workbook();
       wb.creator = 'QLNPP';
-      const ws = wb.addWorksheet('Danh sách PN');
+      const ws = wb.addWorksheet('Danh sách CK');
 
       // Define columns
       ws.columns = [
         { header: 'Số phiếu', key: 'importNumber', width: 20 },
         { header: 'Ngày nhập', key: 'createdDate', width: 15 },
-        { header: 'Loại nhập', key: 'importType', width: 18 },
+        { header: 'Loại điều chỉnh', key: 'importType', width: 18 },
         { header: 'Tổng tiền', key: 'total', width: 15 },
         { header: 'Ghi chú', key: 'note', width: 30 }
       ];
@@ -2024,7 +1997,7 @@ const ImportGoods = () => {
       const fd = new FormData();
       fd.append('file', file);
       
-      let url = '/api/Imports/import-template';
+      let url = '/api/Adjustments/import-template';
       if (forceOverwrite) {
         url += '?forceOverwrite=true';
       }
@@ -2077,7 +2050,7 @@ const ImportGoods = () => {
   const loadImportDetails = async (id) => {
     try {
       // Simple cache buster for fresh data
-      const res = await fetch(`/api/Imports/${id}?_=${Date.now()}`);
+      const res = await fetch(`/api/Adjustments/${id}?_=${Date.now()}`);
       if (!res.ok) throw new Error('Failed to load import details');
       const data = await res.json();
       // normalize to frontend shape
@@ -2158,7 +2131,7 @@ const ImportGoods = () => {
     
     try {
       // Force fresh load from server to avoid stale data
-      const res = await fetch(`/api/Imports/${importItem.id}?_=${Date.now()}`);
+      const res = await fetch(`/api/Adjustments/${importItem.id}?_=${Date.now()}`);
       if (!res.ok) throw new Error('Failed to load import details');
       const data = await res.json();
       
@@ -2198,9 +2171,7 @@ const ImportGoods = () => {
           quantity: item.quantity || 1,
           conversion: item.conversion || 1,
           unitPrice: item.unitPrice || 0,
-          transportCost: item.transportCost || 0,
           total: item.total || 0,
-          totalTransport: item.totalTransport || 0,
           weight: item.weight || 0,
           volume: item.volume || 0,
           warehouse: item.warehouse ? String(item.warehouse) : '',
@@ -2236,7 +2207,7 @@ const ImportGoods = () => {
         total: 0,
         items: []
       };
-      const res = await fetch('/api/Imports', {
+      const res = await fetch('/api/Adjustments', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
@@ -2266,7 +2237,7 @@ const ImportGoods = () => {
         return;
       }
       if (!formData.importType) {
-        alert('Vui lòng chọn loại nhập');
+        alert('Vui lòng chọn loại điều chỉnh');
         return;
       }
 
@@ -2280,7 +2251,7 @@ const ImportGoods = () => {
         return;
       }
       if (!formData.importType) {
-        alert('Vui lòng chọn loại nhập');
+        alert('Vui lòng chọn loại điều chỉnh');
         return;
       }
 
@@ -2300,10 +2271,8 @@ const ImportGoods = () => {
         conversion: Number(row.values.conversion) || 1,
         quantity: Number(row.values.quantity) || 1,
         unitPrice: Number(row.values.unitPrice) || 0,
-        transportCost: Number(row.values.transportCost) || 0,
         noteDate: row.values.noteDate || null,
         total: Number(row.values.total) || 0,
-        totalTransport: Number(row.values.totalTransport) || 0,
         weight: Number(row.values.weight) || 0,
         volume: Number(row.values.volume) || 0,
         warehouse: row.values.warehouse ? String(row.values.warehouse) : '',
@@ -2359,14 +2328,14 @@ const ImportGoods = () => {
         // Ensure we have the most current data by refetching before update
         let currentImport;
         try {
-          const currentRes = await fetch(`/api/Imports/${selectedImport.id}`);
+          const currentRes = await fetch(`/api/Adjustments/${selectedImport.id}`);
           if (currentRes.ok) {
             currentImport = await currentRes.json();
           }
         } catch (e) {
         }
 
-        const res = await fetch(`/api/Imports/${selectedImport.id}`, {
+        const res = await fetch(`/api/Adjustments/${selectedImport.id}`, {
           method: 'PUT',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ 
@@ -2390,7 +2359,7 @@ const ImportGoods = () => {
         }
         // Fetch updated import and update local imports list so it appears on left
         try {
-          const updatedRes = await fetch(`/api/Imports/${selectedImport.id}`);
+          const updatedRes = await fetch(`/api/Adjustments/${selectedImport.id}`);
           if (updatedRes.ok) {
             const updatedImport = await updatedRes.json();
             // suppress auto-select before mutating imports state
@@ -2417,7 +2386,7 @@ const ImportGoods = () => {
 
         alert('Lưu phiếu nhập thành công! Phiếu đã được cập nhật.');
       } else {
-        const res = await fetch('/api/Imports', {
+        const res = await fetch('/api/Adjustments', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify(payload)
@@ -2621,11 +2590,11 @@ const ImportGoods = () => {
   });
 
   React.useEffect(() => {
-    localStorage.setItem(IMPORT_LEFT_COLS_KEY, JSON.stringify(leftVisibleCols));
+    localStorage.setItem(ADJUSTMENT_LEFT_COLS_KEY, JSON.stringify(leftVisibleCols));
   }, [leftVisibleCols]);
 
   React.useEffect(() => {
-    localStorage.setItem('import_left_page_size', String(leftPageSize));
+    localStorage.setItem('adjustment_left_page_size', String(leftPageSize));
     setLeftPage(1);
   }, [leftPageSize]);
 
@@ -2639,10 +2608,8 @@ const ImportGoods = () => {
         unit: it.unit || it.defaultUnit || it.unitName || it.unit1Name || '',
         quantity: it.quantity || it.qty || '',
         unitPrice: it.unitPrice || it.importPrice || it.price || 0,
-        transportCost: it.transportCost || 0,
         noteDate: it.noteDate || it.note || '',
         total: it.total || ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)),
-        totalTransport: it.totalTransport || 0,
         weight: it.weight || 0,
         volume: it.volume || 0,
         warehouse: it.warehouse || (it.warehouseName || ''),
@@ -2657,10 +2624,8 @@ const ImportGoods = () => {
         unit: h.unit || h.defaultUnit || '',
         quantity: h.quantity || h.qty || '',
         unitPrice: h.unitPrice || 0,
-        transportCost: h.transportCost || 0,
         noteDate: h.noteDate || '',
         total: h.total || 0,
-        totalTransport: h.totalTransport || 0,
         weight: h.weight || 0,
         volume: h.volume || 0,
         warehouse: h.warehouse || '',
@@ -2675,15 +2640,11 @@ const ImportGoods = () => {
         try { if (noteDate) noteDate = dayjs(noteDate).format('DD/MM/YYYY'); } catch (e) {}
         // Use raw numeric values for Excel and let mso-number-format style them.
         const unitPriceRaw = v.unitPrice ? Number(v.unitPrice) : 0;
-        const transportRaw = v.transportCost ? Number(v.transportCost) : 0;
         const amountRaw = v.total ? Number(v.total) : ((Number(v.quantity)||0) * (Number(v.unitPrice)||0));
-        const totalTransportRaw = v.totalTransport ? Number(v.totalTransport) : 0;
         const weightRaw = v.weight ? Number(v.weight) : 0;
         const volumeRaw = v.volume ? Number(v.volume) : 0;
         const unitPrice = unitPriceRaw;
-        const transport = transportRaw;
         const amount = amountRaw;
-        const totalTransport = totalTransportRaw;
         const weight = weightRaw;
         const volume = volumeRaw;
         const warehouseName = (() => {
@@ -2703,10 +2664,8 @@ const ImportGoods = () => {
           <td style="border:1px solid #ccc;padding:6px 8px">${v.unit||''}</td>
           <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0'">${v.quantity || 0}</td>
           <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0'">${unitPrice}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0'">${transport}</td>
           <td style="border:1px solid #ccc;padding:6px 8px;text-align:center">${noteDate}</td>
           <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0'">${amount}</td>
-          <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0'">${totalTransport}</td>
           <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0.00'">${weight}</td>
           <td style="border:1px solid #ccc;padding:6px 8px;text-align:right; mso-number-format:'#,##0.0000'">${volume}</td>
           <td style="border:1px solid #ccc;padding:6px 8px">${warehouseName}</td>
@@ -2763,20 +2722,20 @@ const ImportGoods = () => {
                 <div class="company" style="margin:0; padding:0;">${companyName}</div>
                 <div class="small" style="margin:0; padding:0;">Địa chỉ: ${companyAddressDynamic || ''}</div>
                 <div class="small" style="margin:0; padding:0;">Điện thoại: ${companyPhoneDynamic || ''}</div>
-                <div class="small" style="margin-top:8px; padding:0;"><strong>Ghi chú PN:</strong> ${formData.note || (selectedImport && (selectedImport.note || '')) || ''}</div>
+                <div class="small" style="margin-top:8px; padding:0;"><strong>Ghi chú CK:</strong> ${formData.note || (selectedImport && (selectedImport.note || '')) || ''}</div>
               </td>
               <td style="border:none; vertical-align:top; padding:0; width:35%; text-align:right;">
                 <div style="display:inline-block; text-align:right; white-space:nowrap;">
                   <div class="small" style="margin:0; padding:0;">Số phiếu: <strong>${importNumber}</strong></div>
                   <div class="small" style="margin:0; padding:0;">Ngày lập: <strong>${printedAt}</strong></div>
                   <div class="small" style="margin:0; padding:0;">Nhân viên: <strong>${employeeName}</strong></div>
-                  <div class="small" style="margin:0; padding:0;">Loại nhập: <strong>${importTypeName}</strong></div>
+                  <div class="small" style="margin:0; padding:0;">Loại điều chỉnh: <strong>${importTypeName}</strong></div>
                 </div>
               </td>
             </tr>
           </table>
 
-          <h3 style="text-align:center;margin:12px 0">PHIẾU NHẬP HÀNG</h3>
+          <h3 style="text-align:center;margin:12px 0">PHIẾU ĐIỀU CHỈNH KHO</h3>
 
           <table>
             <thead>
@@ -2788,10 +2747,8 @@ const ImportGoods = () => {
                 <th>Đơn vị tính</th>
                 <th>Số lượng</th>
                 <th>Đơn giá</th>
-                <th>Tiền vận chuyển</th>
-                <th>Ghi chú date PN</th>
+                <th>Ghi chú date CK</th>
                 <th>Thành tiền</th>
-                <th>TT vận chuyển</th>
                 <th>Số kg</th>
                 <th>Số khối</th>
                 <th>Kho hàng</th>
@@ -2854,10 +2811,8 @@ const ImportGoods = () => {
         unit: it.unit || it.defaultUnit || it.unitName || it.unit1Name || '',
         quantity: it.quantity || it.qty || '',
         unitPrice: it.unitPrice || it.importPrice || it.price || 0,
-        transportCost: it.transportCost || 0,
         noteDate: it.noteDate || it.note || '',
         total: it.total || ((Number(it.quantity) || 0) * (Number(it.unitPrice) || 0)),
-        totalTransport: it.totalTransport || 0,
         weight: it.weight || 0,
         volume: it.volume || 0,
         warehouse: it.warehouse || (it.warehouseName || ''),
@@ -2873,10 +2828,8 @@ const ImportGoods = () => {
         unit: h.unit || h.defaultUnit || '',
         quantity: h.quantity || h.qty || '',
         unitPrice: h.unitPrice || 0,
-        transportCost: h.transportCost || 0,
         noteDate: h.noteDate || '',
         total: h.total || 0,
-        totalTransport: h.totalTransport || 0,
         weight: h.weight || 0,
         volume: h.volume || 0,
         warehouse: h.warehouse || '',
@@ -2893,13 +2846,11 @@ const ImportGoods = () => {
       const htmlRows = combined.map((v, idx) => {
         const qty = v.quantity || '';
         const unitPrice = v.unitPrice ? formatCurrency(Number(v.unitPrice)) : '';
-        const transport = v.transportCost ? formatCurrency(Number(v.transportCost)) : '';
         let noteDate = v.noteDate || '';
         try {
           if (noteDate) noteDate = dayjs(noteDate).format('DD/MM/YYYY');
         } catch (e) { }
         const amount = v.total ? formatCurrency(Number(v.total)) : '';
-        const totalTransport = v.totalTransport ? formatCurrency(Number(v.totalTransport)) : '';
         const weight = v.weight ? formatWeight(Number(v.weight)) : '';
         const volume = v.volume ? formatVolume(Number(v.volume)) : '';
         // Resolve warehouse name if warehouses list available
@@ -2920,10 +2871,8 @@ const ImportGoods = () => {
             <td style="text-align:center;padding:4px;border:1px solid #000">${v.unit || ''}</td>
             <td style="text-align:center;padding:4px;border:1px solid #000">${qty}</td>
             <td style="text-align:right;padding:4px;border:1px solid #000">${unitPrice}</td>
-            <td style="text-align:right;padding:4px;border:1px solid #000">${transport}</td>
             <td style="text-align:center;padding:4px;border:1px solid #000">${noteDate}</td>
             <td style="text-align:right;padding:4px;border:1px solid #000">${amount}</td>
-            <td style="text-align:right;padding:4px;border:1px solid #000">${totalTransport}</td>
             <td style="text-align:right;padding:4px;border:1px solid #000">${weight}</td>
             <td style="text-align:right;padding:4px;border:1px solid #000">${volume}</td>
             <td style="text-align:left;padding:4px;border:1px solid #000">${warehouseName || ''}</td>
@@ -2970,14 +2919,14 @@ const ImportGoods = () => {
               <div class="small">Số phiếu: <strong>${importNumber}</strong></div>
               <div class="small">Ngày lập: <strong>${printedAt}</strong></div>
               <div class="small">Nhân viên: <strong>${employeeName}</strong></div>
-              <div class="small">Loại nhập: <strong>${importTypeName}</strong></div>
+              <div class="small">Loại điều chỉnh: <strong>${importTypeName}</strong></div>
               <div class="small">Nhà cung cấp: <strong>${supplierName}</strong></div>
             </div>
           </div>
 
-          <div class="title">PHIẾU NHẬP HÀNG</div>
+          <div class="title">PHIẾU ĐIỀU CHỈNH KHO</div>
           <div style="text-align:left;margin-bottom:8px;font-size:12px">
-            <strong>Ghi chú PN:</strong>
+            <strong>Ghi chú CK:</strong>
             <span style="margin-left:8px">${(formData.note && formData.note) || (selectedImport && (selectedImport.note || selectedImport.description)) || ''}</span>
           </div>
 
@@ -2991,10 +2940,8 @@ const ImportGoods = () => {
                 <th style="width:6%">Đơn vị tính</th>
                 <th style="width:4%">Số lượng</th>
                 <th style="width:6%">Đơn giá</th>
-                <th style="width:6%">Tiền vận chuyển</th>
-                <th style="width:7%">Ghi chú date PN</th>
+                <th style="width:7%">Ghi chú date CK</th>
                 <th style="width:7%">Thành tiền</th>
-                <th style="width:5%">TT vận chuyển</th>
                 <th style="width:4%">Số kg</th>
                 <th style="width:4%">Số khối</th>
                 <th style="width:6%">Kho hàng</th>
@@ -3008,10 +2955,8 @@ const ImportGoods = () => {
                 <td colspan="5" style="text-align:left;padding:6px">Tổng tiền bằng chữ: <strong>${numberToVietnameseText(Math.round(totalAmount))}</strong></td>
                 <td style="text-align:center;padding:6px"></td>
                 <td style="text-align:right;padding:6px"><strong>Tổng</strong></td>
-                <td style="text-align:right;padding:6px">${formatCurrency(combined.reduce((s,r)=>s+(Number(r.transportCost)||0),0))}</td>
                 <td style="text-align:center;padding:6px"></td>
                 <td style="text-align:right;padding:6px"><strong>${formatCurrency(totalAmount)}</strong></td>
-                <td style="text-align:right;padding:6px">${formatCurrency(combined.reduce((s,r)=>s+(Number(r.totalTransport)||0),0))}</td>
                 <td style="text-align:right;padding:6px">${formatWeight(totalWeight)}</td>
                 <td style="text-align:right;padding:6px">${formatVolume(totalVolume)}</td>
                 <td colspan="3" style="text-align:left;padding:6px"></td>
@@ -3130,7 +3075,7 @@ const ImportGoods = () => {
     const random = Math.floor(Math.random() * 1000).toString().padStart(3, '0');
     const uniqueId = timestamp + random.slice(-1); // 4 digits unique
     
-    return `PN-${day}${month}${year}-${uniqueId}`;
+    return `CK-${day}${month}${year}-${uniqueId}`;
   };
 
   // Table row selection
@@ -3276,7 +3221,7 @@ const ImportGoods = () => {
     createDraggableColumn({
       title: (
         <div style={{display:'flex',alignItems:'center',gap:8}}>
-          <span>⋮⋮ Loại nhập</span>
+          <span>⋮⋮ Loại điều chỉnh</span>
           <SearchOutlined style={{color:'#888', cursor:'pointer'}} onClick={() => openHeaderModal('importType')} />
           {leftFilterLists.importType && leftFilterLists.importType.length > 0 && <span style={{marginLeft:6,color:'#1677ff'}}>({leftFilterLists.importType.length})</span>}
         </div>
@@ -3352,7 +3297,7 @@ const ImportGoods = () => {
     .filter(col => leftVisibleCols.includes(col.key || col.dataIndex));
 
   return (
-    <div className="import-goods-page">
+    <div className="warehouse-adjustment-page">
       {/* Left Panel - Table Search */}
   <div className="search-panel">
         <div className="panel-header">
@@ -3387,7 +3332,7 @@ const ImportGoods = () => {
         <div className="search-panel-total" style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
           <span>Tổng {filteredLeft.length} phiếu</span>
           <div style={{display:'flex',alignItems:'center',gap:8}}>
-            <Button className="xuatsd-btn" size="small" onClick={exportSelectedImportsList} title="Xuất DS PN">Xuất DS PN</Button>
+            <Button className="xuatsd-btn" size="small" onClick={exportSelectedImportsList} title="Xuất DS CK">Xuất DS CK</Button>
             {/* template import/export buttons moved to right detail panel */}
             <input 
               id="template-file-input"
@@ -3512,7 +3457,7 @@ const ImportGoods = () => {
         >
           <div style={{display:'flex',flexDirection:'column',gap:8}}>
             {defaultLeftCols.map(colKey=>{
-              const label = colKey==='checkbox'?'':(colKey==='importNumber'?'Số phiếu':colKey==='createdDate'?'Ngày nhập':colKey==='note'?'Ghi chú PN':colKey==='total'?'Tổng tiền':colKey==='actions'?'Thao tác':colKey);
+              const label = colKey==='checkbox'?'':(colKey==='importNumber'?'Số phiếu':colKey==='createdDate'?'Ngày nhập':colKey==='note'?'Ghi chú CK':colKey==='total'?'Tổng tiền':colKey==='actions'?'Thao tác':colKey);
               return (
                 <label key={colKey} style={{display:'flex',alignItems:'center',gap:8}}>
                   <input type="checkbox" checked={leftVisibleCols.includes(colKey)} onChange={()=>{
@@ -3530,10 +3475,10 @@ const ImportGoods = () => {
         </Modal>
       </div>
 
-      {/* Right Panel - Import Details */}
-  <div className="import-detail-panel">
+      {/* Right Panel - Adjustment Details */}
+  <div className="adjustment-detail-panel">
         <div className="detail-header">
-          <h2>THÔNG TIN NHẬP HÀNG</h2>
+          <h2>THÔNG TIN ĐIỀU CHỈNH KHO</h2>
           <div className="header-actions">
             <button className="btn btn-primary" onClick={resetFormForNewImport}>
               + Tạo mới
@@ -3541,7 +3486,7 @@ const ImportGoods = () => {
             <button className="btn btn-success" onClick={handleAddItem} title="Click để thêm hàng hóa | Ctrl+Click để mở tab mới">
               📦 Thêm hàng hóa
             </button>
-            {/* Removed redundant "Xem lịch sử nhập hàng" button */}
+            {/* Removed redundant "Xem lịch sử điều chỉnh kho" button */}
           </div>
         </div>
         {selectedImport && showRightContent ? (
@@ -3583,7 +3528,7 @@ const ImportGoods = () => {
                     </select>
                   </div>
                   <div style={{flex:'0 0 20%'}}>
-                    <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Loại nhập</label>
+                    <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Loại điều chỉnh</label>
                     <select 
                       value={formData.importType || selectedImport.importType || ''}
                       onChange={(e) => {
@@ -3596,7 +3541,7 @@ const ImportGoods = () => {
                       style={{width:'100%'}}
                       disabled={!isEditMode}
                     >
-                      <option value="">Chọn loại nhập</option>
+                      <option value="">Chọn loại điều chỉnh</option>
                       {transactionContents.map(tc => (
                         <option key={tc.id} value={tc.name}>{tc.name}</option>
                       ))}
@@ -3772,7 +3717,7 @@ const ImportGoods = () => {
                     </div>
                   </div>
                   <div style={{flex:'1 1 80%'}}>
-                    <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú PN</label>
+                    <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú CK</label>
                     <input
                       type="text"
                       value={formData.note || ''}
@@ -3783,7 +3728,7 @@ const ImportGoods = () => {
                         setIsEditing(true);
                       }}
                       style={{width:'100%'}}
-                      placeholder="Nhập ghi chú cho phiếu nhập"
+                      placeholder="Nhập ghi chú cho phiếu điều chỉnh"
                       readOnly={!isEditMode}
                     />
                   </div>
@@ -3797,7 +3742,7 @@ const ImportGoods = () => {
                   <div style={{margin: '8px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 14}}>
                     <span>Tổng {rightTotal} mặt hàng ({rightStart}-{rightEnd})</span>
                     <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
-                      <button className="icon-btn settings-btn" onClick={()=>setShowRightSettings(true)} title="Cài đặt hiển thị cột" style={{border: 'none', background: '#333', color: 'white', borderRadius: 4, width: 28, height: 28, fontWeight: 'bold'}}>
+                      <button id="adjustments-right-settings-btn" className="icon-btn settings-btn" onClick={(e)=>{ e.stopPropagation(); setShowRightSettings(true); }} title="Cài đặt hiển thị cột" style={{border: 'none', background: '#333', color: 'white', borderRadius: 4, width: 28, height: 28, fontWeight: 'bold'}}>
                         <span>⚙</span>
                       </button>
                       <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.max(1, p - 1))}>{'<'}</button>
@@ -3878,10 +3823,8 @@ const ImportGoods = () => {
                           if (key === 'unit') return <th key="unit" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Đơn vị tính</span></th>;
                           if (key === 'quantity') return <th key="quantity" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Số lượng</span></th>;
                           if (key === 'unitPrice') return <th key="unitPrice" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Đơn giá</span></th>;
-                          if (key === 'transportCost') return <th key="transportCost" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Tiền vận chuyển</span></th>;
-                          if (key === 'noteDate') return <th key="noteDate" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Ghi chú date PN</span></th>;
+                          if (key === 'noteDate') return <th key="noteDate" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Ghi chú date CK</span></th>;
                           if (key === 'total') return <th key="total" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Thành tiền</span></th>;
-                          if (key === 'totalTransport') return <th key="totalTransport" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>TT vận chuyển</span></th>;
                           if (key === 'weight') return <th key="weight" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Số kg</span></th>;
                           if (key === 'volume') return <th key="volume" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Số khối</span></th>;
                           if (key === 'warehouse') return <th key="warehouse" {...resizeProps} style={{...resizeProps.style, textAlign: 'center'}}><span>Kho hàng</span></th>;
@@ -4097,13 +4040,13 @@ const ImportGoods = () => {
                                     if (rawValue === '') return '';
                                     
                                     // For currency fields - show formatted only when not editing
-                                    if (['unitPrice', 'transportCost'].includes(colKey)) {
+                                    if (['unitPrice'].includes(colKey)) {
                                       // For user input fields, show with minimal formatting to allow easy editing
                                       const numValue = parseFloat(rawValue) || 0;
                                       return numValue === 0 ? '' : formatCurrency(numValue);
                                     }
-                                    // For calculated fields (total, totalTransport) - always show formatted
-                                    if (['total', 'totalTransport'].includes(colKey)) {
+                                    // For calculated fields (total) - always show formatted
+                                    if (['total'].includes(colKey)) {
                                       return formatInputDisplay(rawValue, 'currency');
                                     }
                                     // Format weight fields  
@@ -4123,7 +4066,7 @@ const ImportGoods = () => {
                                     const inputValue = e.target.value;
                                     
                                     // For currency fields, allow user to type freely but parse for calculation
-                                    if (['unitPrice', 'transportCost', 'total', 'totalTransport'].includes(colKey)) {
+                                    if (['unitPrice', 'total'].includes(colKey)) {
                                       // Allow only digits and comma
                                       const sanitizedValue = inputValue.replace(/[^0-9,]/g, '');
                                       // Store the raw value (without formatting) for calculation
@@ -4141,8 +4084,8 @@ const ImportGoods = () => {
                                   }}
                                   size="small"
                                   style={{ width: '100%' }}
-                                  readOnly={['total', 'totalTransport', 'volume', 'weight'].includes(colKey)}
-                                  placeholder={['total', 'totalTransport'].includes(colKey) ? 'Tự động tính' : colKey === 'volume' ? 'Lấy từ sản phẩm' : colKey === 'weight' ? 'Số kg SP × Số lượng' : ''}
+                                  readOnly={['total', 'volume', 'weight'].includes(colKey)}
+                                  placeholder={['total'].includes(colKey) ? 'Tự động tính' : colKey === 'volume' ? 'Lấy từ sản phẩm' : colKey === 'weight' ? 'Số kg SP × Số lượng' : ''}
                                 />
                               </td>
                             );
@@ -4264,7 +4207,7 @@ const ImportGoods = () => {
                   </select>
                 </div>
                 <div style={{flex:'0 0 20%'}}>
-                  <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Loại nhập</label>
+                  <label style={{display:'block',fontSize:12,fontWeight:600}}><span style={{color:'red',marginRight:6}}>*</span>Loại điều chỉnh</label>
                   <select 
                     value={formData.importType || ''}
                     onChange={(e) => {
@@ -4274,7 +4217,7 @@ const ImportGoods = () => {
                     }}
                     style={{width:'100%'}}
                   >
-                    <option value="">Chọn loại nhập</option>
+                    <option value="">Chọn loại điều chỉnh</option>
                     {transactionContents.map(tc => (
                       <option key={tc.id} value={tc.name}>{tc.name}</option>
                     ))}
@@ -4330,7 +4273,7 @@ const ImportGoods = () => {
                   </div>
                 </div>
                 <div style={{flex:'1 1 80%'}}>
-                  <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú PN</label>
+                  <label style={{display:'block',fontSize:12,fontWeight:600}}>Ghi chú CK</label>
                   <input
                     type="text"
                     value={formData.note || ''}
@@ -4340,7 +4283,7 @@ const ImportGoods = () => {
                       setIsEditing(true);
                     }}
                     style={{width:'100%'}}
-                    placeholder="Nhập ghi chú cho phiếu nhập"
+                    placeholder="Nhập ghi chú cho phiếu điều chỉnh"
                   />
                 </div>
               </div>
@@ -4351,7 +4294,7 @@ const ImportGoods = () => {
                 <div style={{margin: '8px 0 8px 0', display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 8, fontSize: 14}}>
                   <span>Tổng {rightTotal} mặt hàng ({rightStart}-{rightEnd})</span>
                   <div style={{display: 'flex', alignItems: 'center', gap: 8}}>
-                    <button className="icon-btn settings-btn" onClick={()=>setShowRightSettings(true)} title="Cài đặt hiển thị cột" style={{border: 'none', background: '#333', color: 'white', borderRadius: 4, width: 28, height: 28, fontWeight: 'bold'}}>
+                    <button id="adjustments-right-settings-btn-2" className="icon-btn settings-btn" onClick={(e)=>{ e.stopPropagation(); setShowRightSettings(true); }} title="Cài đặt hiển thị cột" style={{border: 'none', background: '#333', color: 'white', borderRadius: 4, width: 28, height: 28, fontWeight: 'bold'}}>
                       <span>⚙</span>
                     </button>
                     <button style={{border: 'none', background: '#f0f0f0', borderRadius: 4, width: 28, height: 28}} onClick={() => setRightCurrentPage(p => Math.max(1, p - 1))}>{'<'}</button>
@@ -4389,10 +4332,8 @@ const ImportGoods = () => {
                           unit: 'Đơn vị tính',
                           quantity: 'Số lượng',
                           unitPrice: 'Đơn giá',
-                          transportCost: 'Tiền vận chuyển',
-                          noteDate: 'Ghi chú date PN',
+                          noteDate: 'Ghi chú date CK',
                           total: 'Thành tiền',
-                          totalTransport: 'TT vận chuyển',
                           weight: 'Số kg',
                           volume: 'Số khối',
                           warehouse: 'Kho hàng',
@@ -4627,11 +4568,11 @@ const ImportGoods = () => {
                                   const rawValue = row.values[colKey] || '';
                                   if (rawValue === '') return '';
                                   
-                                  if (['unitPrice', 'transportCost'].includes(colKey)) {
+                                  if (['unitPrice'].includes(colKey)) {
                                     const numValue = parseFloat(rawValue) || 0;
                                     return numValue === 0 ? '' : formatCurrency(numValue);
                                   }
-                                  if (['total', 'totalTransport'].includes(colKey)) {
+                                  if (['total'].includes(colKey)) {
                                     return formatInputDisplay(rawValue, 'currency');
                                   }
                                   if (colKey === 'weight') {
@@ -4646,14 +4587,14 @@ const ImportGoods = () => {
                                 })()}
                                 onChange={(e) => {
                                   // Skip onChange for read-only fields like volume
-                                  if (['total', 'totalTransport', 'volume'].includes(colKey)) {
+                                  if (['total', 'volume'].includes(colKey)) {
                                     return;
                                   }
                                   
                                   const inputValue = e.target.value;
                                   
                                   // For currency fields, allow user to type freely but parse for calculation
-                                  if (['unitPrice', 'transportCost'].includes(colKey)) {
+                                  if (['unitPrice'].includes(colKey)) {
                                     // Allow only digits and comma
                                     const sanitizedValue = inputValue.replace(/[^0-9,]/g, '');
                                     // Store the raw value (without formatting) for calculation
@@ -4665,8 +4606,8 @@ const ImportGoods = () => {
                                 }}
                                 size="small"
                                 style={{ width: '100%' }}
-                                readOnly={['total', 'totalTransport', 'volume', 'weight'].includes(colKey)}
-                                placeholder={['total', 'totalTransport'].includes(colKey) ? 'Tự động tính' : colKey === 'volume' ? 'Lấy từ sản phẩm' : colKey === 'weight' ? 'Số kg SP × Số lượng' : ''}
+                                readOnly={['total', 'volume', 'weight'].includes(colKey)}
+                                placeholder={['total'].includes(colKey) ? 'Tự động tính' : colKey === 'volume' ? 'Lấy từ sản phẩm' : colKey === 'weight' ? 'Số kg SP × Số lượng' : ''}
                               />
                             </td>
                           );
@@ -4733,7 +4674,7 @@ const ImportGoods = () => {
                 <div style={{fontSize:13,color:'#888',marginBottom:6}}>Chưa cố định</div>
                 <div>
                   {rightColOrder.filter(key => !fixedRight.includes(key)).map((key, idx) => {
-                    const label = key==='barcode'?'Mã vạch':key==='productCode'?'Mã hàng':key==='productName'?'Hàng hóa':key==='description'?'Mô tả':key==='conversion'?'Quy đổi':key==='quantity'?'Số lượng':key==='unitPrice'?'Đơn giá':key==='transportCost'?'Tiền vận chuyển':key==='noteDate'?'Ghi chú date PN':key==='total'?'Thành tiền':key==='totalTransport'?'Thành tiền vận chuyển':key==='weight'?'Số kg':key==='volume'?'Số khối':key==='warehouse'?'Kho hàng':key;
+                    const label = key==='barcode'?'Mã vạch':key==='productCode'?'Mã hàng':key==='productName'?'Hàng hóa':key==='description'?'Mô tả':key==='conversion'?'Quy đổi':key==='quantity'?'Số lượng':key==='unitPrice'?'Đơn giá':key==='noteDate'?'Ghi chú date CK':key==='total'?'Thành tiền':key==='weight'?'Số kg':key==='volume'?'Số khối':key==='warehouse'?'Kho hàng':key;
                     const draggableEnabled = rightColOrder.filter(k => !fixedRight.includes(k)).length > 1;
                     return (
                       <div
@@ -4848,14 +4789,14 @@ const ImportGoods = () => {
                   </div>
                   <div>
                     <label style={{display: 'block', fontSize: 12, fontWeight: 600, marginBottom: 4}}>
-                      <span style={{color: 'red', marginRight: 4}}>*</span>Loại nhập
+                      <span style={{color: 'red', marginRight: 4}}>*</span>Loại điều chỉnh
                     </label>
                     <select
                       value={formData.importType}
                       onChange={(e) => setFormData(prev => ({...prev, importType: e.target.value}))}
                       style={{width: '100%', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
                     >
-                      <option value="">-- Chọn loại nhập --</option>
+                      <option value="">-- Chọn loại điều chỉnh --</option>
                       {transactionContents.map(tc => (
                         <option key={tc.id} value={tc.name}>{tc.name}</option>
                       ))}
@@ -4867,7 +4808,7 @@ const ImportGoods = () => {
                       type="text"
                       value={formData.note}
                       onChange={(e) => setFormData(prev => ({...prev, note: e.target.value}))}
-                      placeholder="Nhập ghi chú cho phiếu nhập"
+                      placeholder="Nhập ghi chú cho phiếu điều chỉnh"
                       style={{width: '100%', padding: '4px 8px', border: '1px solid #d9d9d9', borderRadius: '4px'}}
                     />
                   </div>
@@ -5130,7 +5071,7 @@ const ImportGoods = () => {
                     
                     // Quy đổi giá từ lastMatch về đơn vị nhỏ nhất
                     let convertedUnitPrice = 0;
-                    let convertedTransportCost = 0;
+          
                     
                     // Kiểm tra loại nhập có phải "Nhập mua" không
                     const importType = formData.importType || selectedImport?.importType || '';
@@ -5139,18 +5080,15 @@ const ImportGoods = () => {
                     if (lastMatch) {
                       const lastMatchConversion = parseFloat(lastMatch.conversion || lastMatch.Conversion) || 1;
                       const lastMatchUnitPrice = parseFloat(lastMatch.unitPrice || lastMatch.UnitPrice) || 0;
-                      const lastMatchTransportCost = parseFloat(lastMatch.transportCost || lastMatch.TransportCost) || 0;
+          
                       
                       // Đơn giá: chỉ copy nếu loại nhập là "Nhập mua" và không phải KM
                       if (isNhapMua && !isKMImport) {
                         convertedUnitPrice = (lastMatchUnitPrice / lastMatchConversion) * productData.conversion;
                       }
-                      // Tiền vận chuyển: luôn copy cho tất cả loại nhập (kể cả KM)
-                      convertedTransportCost = (lastMatchTransportCost / lastMatchConversion) * productData.conversion;
                     }
                     
                     copy[productModalRowIndex].values['unitPrice'] = convertedUnitPrice;
-                    copy[productModalRowIndex].values['transportCost'] = convertedTransportCost;
                     copy[productModalRowIndex].values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null;
                     // weight and volume will be calculated after we determine quantity below
                     copy[productModalRowIndex].values['warehouse'] = copy[productModalRowIndex].values['warehouse'] || getDefaultWarehouseName();
@@ -5159,7 +5097,6 @@ const ImportGoods = () => {
                     const quantity = parseFloat(copy[productModalRowIndex].values.quantity) || 1;
                     
                     copy[productModalRowIndex].values.total = (quantity * convertedUnitPrice).toString();
-                    copy[productModalRowIndex].values.totalTransport = (quantity * convertedTransportCost).toString();
                     // calculate derived fields based on the product
                     try {
                       if (firstProduct) {
@@ -5242,7 +5179,7 @@ const ImportGoods = () => {
                       
                       // Quy đổi giá từ lastMatch về đơn vị nhỏ nhất
                       let convertedUnitPrice = 0;
-                      let convertedTransportCost = 0;
+            
                       
                       // Kiểm tra loại nhập có phải "Nhập mua" không
                       const importType = formData.importType || selectedImport?.importType || '';
@@ -5251,14 +5188,12 @@ const ImportGoods = () => {
                       if (lastMatch) {
                         const lastMatchConversion = parseFloat(lastMatch.conversion || lastMatch.Conversion) || 1;
                         const lastMatchUnitPrice = parseFloat(lastMatch.unitPrice || lastMatch.UnitPrice) || 0;
-                        const lastMatchTransportCost = parseFloat(lastMatch.transportCost || lastMatch.TransportCost) || 0;
+            
                         
                         // Đơn giá: chỉ copy nếu loại nhập là "Nhập mua" và không phải KM
                         if (isNhapMua && !isKMImport) {
                           convertedUnitPrice = (lastMatchUnitPrice / lastMatchConversion) * productData.conversion;
                         }
-                        // Tiền vận chuyển: luôn copy cho tất cả loại nhập (kể cả KM)
-                        convertedTransportCost = (lastMatchTransportCost / lastMatchConversion) * productData.conversion;
                       }
 
                       const newRow = { id: Date.now() + Math.random(), values: {} };
@@ -5270,7 +5205,6 @@ const ImportGoods = () => {
                       newRow.values['unit'] = defaultUnit;
                       newRow.values['conversion'] = productData.conversion;
                       newRow.values['unitPrice'] = convertedUnitPrice;
-                      newRow.values['transportCost'] = convertedTransportCost;
                       newRow.values['noteDate'] = (lastMatch && (lastMatch.noteDate || lastMatch.NoteDate)) || null;
                       newRow.values['weight'] = productData.weight * 1;
                       newRow.values['volume'] = productData.volume * 1;
@@ -5279,7 +5213,6 @@ const ImportGoods = () => {
                       
                       // Auto-calculate initial totals
                       newRow.values.total = convertedUnitPrice.toString();
-                      newRow.values.totalTransport = convertedTransportCost.toString();
                       
                       copy.push(newRow);
                     }
@@ -5298,7 +5231,7 @@ const ImportGoods = () => {
             }
             setShowProductModal(false);
             setProductModalScope('all');
-          }} style={{padding: '6px 16px', border: 'none', borderRadius: '4px', background: '#1677ff', color: '#fff'}}>{productModalScope === 'currentImport' ? 'Tìm' : 'Thêm vào PN'}</button>
+          }} style={{padding: '6px 16px', border: 'none', borderRadius: '4px', background: '#1677ff', color: '#fff'}}>{productModalScope === 'currentImport' ? 'Tìm' : 'Thêm vào CK'}</button>
         ]}
       >
         
@@ -5433,4 +5366,4 @@ const ImportGoods = () => {
   );
 };
 
-export default ImportGoods;
+export default WarehouseAdjustment;
